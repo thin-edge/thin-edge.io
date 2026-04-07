@@ -47,7 +47,7 @@ mod default_location_mode {
         use super::*;
 
         #[tokio::test]
-        async fn mapper_config_is_not_created_if_tedge_toml_does_not_exist() {
+        async fn mapper_config_is_created_if_tedge_toml_does_not_exist() {
             let ttd = TempTedgeDir::new();
 
             let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
@@ -61,8 +61,8 @@ mod default_location_mode {
                 .unwrap();
 
             assert!(
-                !ttd.path().join("mappers").exists(),
-                "mappers dir should not have been created"
+                ttd.path().join("mappers").exists(),
+                "mappers dir should have been created"
             );
         }
 
@@ -140,7 +140,10 @@ mod default_location_mode {
                     .await
                     .unwrap();
             assert_eq!(tedge_toml, "");
-            assert_eq!(c8y_mapper_toml.trim(), "url = \"example.com\"");
+            assert_eq!(
+                c8y_mapper_toml.trim(),
+                "cloud_type = \"c8y\"\nurl = \"example.com\""
+            );
         }
 
         #[tokio::test]
@@ -175,7 +178,10 @@ mod default_location_mode {
                     .await
                     .unwrap();
             assert!(!tedge_toml.contains("c8y"));
-            assert_eq!(c8y_mapper_toml.trim(), "url = \"example.com\"");
+            assert_eq!(
+                c8y_mapper_toml.trim(),
+                "cloud_type = \"c8y\"\nurl = \"example.com\""
+            );
         }
 
         #[tokio::test]

@@ -501,7 +501,10 @@ mod tests {
 
         let migrated_toml =
             std::fs::read_to_string(temp_dir.path().join(format!("mappers/{cloud}/mapper.toml")))?;
-        assert_eq!(migrated_toml.trim(), "url = \"new.example.com\"");
+        assert_eq!(
+            migrated_toml.trim(),
+            format!("cloud_type = \"{cloud}\"\nurl = \"new.example.com\"")
+        );
 
         // tedge.toml will be created when `tedge config set` runs
         let tedge_toml = std::fs::read_to_string(temp_dir.path().join("tedge.toml"))?;
@@ -538,7 +541,10 @@ mod tests {
                 .join(format!("mappers/{cloud}.profile/mapper.toml")),
         )
         .unwrap();
-        assert_eq!(migrated_toml.trim(), "url = \"new.example.com\"");
+        assert_eq!(
+            migrated_toml.trim(),
+            format!("cloud_type = \"{cloud}\"\nurl = \"new.example.com\"")
+        );
 
         // tedge.toml will be created when `tedge config set` runs
         let tedge_toml = std::fs::read_to_string(temp_dir.path().join("tedge.toml"))?;
@@ -575,7 +581,10 @@ mod tests {
                 .join(format!("mappers/{cloud}.profile/mapper.toml")),
         )
         .unwrap();
-        assert_eq!(migrated_toml.trim(), "url = \"new.example.com\"");
+        assert_eq!(
+            migrated_toml.trim(),
+            format!("cloud_type = \"{cloud}\"\nurl = \"new.example.com\"")
+        );
 
         // tedge.toml will be created when `tedge config set` runs
         let tedge_toml = std::fs::read_to_string(temp_dir.path().join("tedge.toml"))?;

@@ -271,24 +271,12 @@ impl TEdgeConfigLocation {
             match cloud_type {
                 CloudType::C8y => {
                     dto.c8y.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
-                    dto.c8y.non_profile.cloud_type = Some(CloudType::C8y);
-                    dto.c8y.profiles.iter_mut().for_each(|(_name, profile)| {
-                        profile.cloud_type = Some(CloudType::C8y);
-                    });
                 }
                 CloudType::Aws => {
                     dto.aws.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
-                    dto.aws.non_profile.cloud_type = Some(CloudType::Aws);
-                    dto.aws.profiles.iter_mut().for_each(|(_name, profile)| {
-                        profile.cloud_type = Some(CloudType::Aws);
-                    });
                 }
                 CloudType::Az => {
                     dto.az.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
-                    dto.az.non_profile.cloud_type = Some(CloudType::Az);
-                    dto.az.profiles.iter_mut().for_each(|(_name, profile)| {
-                        profile.cloud_type = Some(CloudType::Az);
-                    });
                 }
             }
             Ok(())
@@ -483,7 +471,8 @@ impl TEdgeConfigLocation {
     where
         S: Serialize + HasPath + Default + PartialEq,
     {
-        if let Some(paths) = cloud.non_profile.config_path() {
+        if let Some(paths) = cloud.non_profile.config_path().map(|p| p.into_owned()) {
+            cloud.non_profile.set_cloud_type();
             self.store_in(
                 &paths.toml_path_for(None::<&ProfileName>),
                 &cloud.non_profile,
@@ -491,6 +480,7 @@ impl TEdgeConfigLocation {
             )
             .await?;
             for (name, profile) in &mut cloud.profiles {
+                profile.set_cloud_type();
                 self.store_in(
                     &paths.toml_path_for(Some(name)),
                     profile,
