@@ -1,7 +1,7 @@
 ---
 title: MQTT Topics
 tags: [Reference, Mappers, MQTT]
-sidebar_position: 4
+sidebar_position: 6
 ---
 
 # MQTT topics
