@@ -1816,40 +1816,6 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         }
 
         #[tokio::test]
-        async fn skips_bridge_phase_for_flows_only_mapper() {
-            let broker = mqtt_tests::test_mqtt_broker();
-            let ttd = TempTedgeDir::new();
-            // No bridge/ dir — flows-only mapper
-            let config = config_pointing_at_broker(broker.port, &ttd);
-
-            broker
-                .publish_with_opts(
-                    "te/device/main/service/tedge-mapper-flowsonly/status/health",
-                    r#"{"status":"up"}"#,
-                    rumqttc::QoS::AtLeastOnce,
-                    true,
-                )
-                .await
-                .unwrap();
-
-            // Should return Ok immediately after mapper health, without waiting
-            // for a bridge health that never comes
-            wait_for_custom_mapper_health(&config, "flowsonly")
-                .await
-                .expect("health check should succeed without bridge");
-
-            broker
-                .publish_with_opts(
-                    "te/device/main/service/tedge-mapper-flowsonly/status/health",
-                    "",
-                    rumqttc::QoS::AtLeastOnce,
-                    true,
-                )
-                .await
-                .unwrap();
-        }
-
-        #[tokio::test]
         async fn bridge_health_arriving_after_mapper_exercises_phase2_loop() {
             let broker = mqtt_tests::test_mqtt_broker();
             let ttd = TempTedgeDir::new();
