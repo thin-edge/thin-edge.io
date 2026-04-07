@@ -25,6 +25,8 @@ pub enum AuthMethodConfig {
     /// Mutual TLS — requires `device.cert_path` and `device.key_path`.
     Certificate,
     /// Username/password in the MQTT CONNECT packet — requires `credentials_path`.
+    // For compatibility with the c8y config, "basic" is accepted as an alias for "password"
+    #[serde(alias = "basic")]
     Password,
 }
 
