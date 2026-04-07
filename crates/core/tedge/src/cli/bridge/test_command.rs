@@ -120,6 +120,7 @@ async fn run_test(
                 }
                 Ok(Status::NoMatches)
             }
+            Cloud::Custom(_) => unreachable!("resolve_cloud never returns Custom"),
         },
         None => {
             if let Some((rules, non_expansions)) =
@@ -602,7 +603,7 @@ direction = "outbound"
     }
 
     #[test]
-    fn non_expansions_are_not_shown_outside_of_debug_mode() {
+    fn non_expansions_are_not_shown_outside_of_show_all_mode() {
         let tmp = tempfile::tempdir().unwrap();
         let config = config_with_root(tmp.path(), &c8y_toml("c8y.auth_method = 'certificate'"));
         let cloud = Cloud::c8y(None);
@@ -626,8 +627,8 @@ direction = "outbound"
             "Output should not mention skipped rules: {output}"
         );
         assert!(
-            output.contains("--debug"),
-            "Output should suggest running with '--debug': {output}"
+            output.contains("--show-all"),
+            "Output should suggest running with '--show-all': {output}"
         );
     }
 
