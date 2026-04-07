@@ -428,18 +428,25 @@ impl TEdgeConfigLocation {
             }
         }
 
-        // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
+        let system_config = SystemConfig::try_new(&self.tedge_config_root_path).unwrap_or_default();
+
+        // Create `$HOME/.tedge`, `/etc/tedge` or `/etc/tedge/mappers/{cloud}`
+        // directory in case it does not exist yet
+        let parent_dir = toml_path.parent().expect("provided path must have parent");
         if !tokio::fs::try_exists(toml_path).await.unwrap_or(false) {
-            let parent_dir = toml_path.parent().expect("provided path must have parent");
             tokio::fs::create_dir_all(parent_dir)
                 .await
                 .with_context(|| format!("Failed to create directory {parent_dir}"))?;
         }
+        let directory_permissions =
+            file::permissions(&system_config.user, &system_config.group, 0o755);
+        if let Err(err) = directory_permissions.apply(parent_dir.as_std_path()).await {
+            warn!("failed to set file ownership for '{parent_dir}': {err}");
+        }
 
+        let permissions = file::permissions(&system_config.user, &system_config.group, 0o644);
         atomically_write_file_async(toml_path, toml.as_bytes()).await?;
 
-        let system_config = SystemConfig::try_new(&self.tedge_config_root_path).unwrap_or_default();
-        let permissions = file::permissions(&system_config.user, &system_config.group, 0o644);
         if let Err(err) = permissions.apply(toml_path.as_std_path()).await {
             warn!("failed to set file ownership/permissions for '{toml_path}': {err}");
         }
