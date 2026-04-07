@@ -90,7 +90,7 @@ impl TEdgeConfigLocation {
             tedge_config_file_path: Utf8Path::from_path(tedge_config_root_path.as_ref())
                 .unwrap()
                 .join(TEDGE_CONFIG_FILE),
-            mapper_config_default_location: MapperConfigLocation::TedgeToml,
+            mapper_config_default_location: MapperConfigLocation::SeparateFile,
         }
     }
 
