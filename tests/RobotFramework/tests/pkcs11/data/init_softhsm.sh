@@ -9,6 +9,12 @@ export GNUTLS_SO_PIN="${GNUTLS_SO_PIN:-123456}"
 export TOKEN_LABEL="${TOKEN_LABEL:-tedge}"
 PKCS_URI=
 
+# support either awk or gawk
+AWK="awk"
+if ! command -V awk >/dev/null 2>&1 && command -V gawk >/dev/null 2>&1; then
+    AWK="gawk"
+fi
+
 #
 # Parse arguments
 #
@@ -38,11 +44,13 @@ while [ $# -gt 0 ]; do
 done
 
 get_token() {
-    p11tool --list-tokens | grep "token=$TOKEN_LABEL" | awk '{ print $2 }' | head -n1
+    # shellcheck disable=SC2016
+    p11tool --list-tokens | grep "token=$TOKEN_LABEL" | "$AWK" '{ print $2 }' | head -n1
 }
 
 get_key() {
-    p11tool --login --list-all "$PKCS_URI" | grep type=private | awk '{ print $2 }'
+    # shellcheck disable=SC2016
+    p11tool --login --list-all "$PKCS_URI" | grep type=private | "$AWK" '{ print $2 }'
 }
 
 #

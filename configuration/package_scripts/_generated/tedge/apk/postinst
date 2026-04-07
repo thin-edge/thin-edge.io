@@ -18,8 +18,14 @@ if [ -f /etc/mosquitto/mosquitto.conf ]; then
 
         # Check if `include_dir` or `#include_dir` (as the latter could be a future problem if the user uncomments it)
         if grep -qE '^#?include_dir' /etc/mosquitto/mosquitto.conf; then
+            # support awk or gawk
+            AWK="awk"
+            if ! command -V awk >/dev/null 2>&1 && command -V gawk >/dev/null 2>&1; then
+                AWK="gawk"
+            fi
+
             # insert tedge include_dir before the first `included_dir` (but only the first!)
-            mosquitto_conf=$(awk '!found && /^#?include_dir/ \
+            mosquitto_conf=$("$AWK" '!found && /^#?include_dir/ \
             { print "include_dir /etc/tedge/mosquitto-conf"; found=1 }1' \
             /etc/mosquitto/mosquitto.conf)
             echo "$mosquitto_conf" > /etc/mosquitto/mosquitto.conf

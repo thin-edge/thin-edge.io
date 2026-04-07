@@ -37,7 +37,15 @@ list_log_types() {
         exit 1
     fi
     status=0
-    { systemctl list-units --type=service --no-legend --no-pager --plain || status=$?; } | awk '{ sub(/\.service$/, "", $1); print $1 }' || status=$?
+
+    # support awk or gawk
+    AWK="awk"
+    if ! command -V awk >/dev/null 2>&1 && command -V gawk >/dev/null 2>&1; then
+        AWK="gawk"
+    fi
+
+    # shellcheck disable=SC2016
+    { systemctl list-units --type=service --no-legend --no-pager --plain || status=$?; } | "$AWK" '{ sub(/\.service$/, "", $1); print $1 }' || status=$?
     if [ "$status" -ne 0 ]; then
         echo "Pipeline failed with $status" >&2
         exit "$status"
