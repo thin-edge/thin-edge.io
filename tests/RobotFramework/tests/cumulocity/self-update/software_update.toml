@@ -16,6 +16,14 @@ on_success = "self-update"
 # Note: update tedge as it is used by the tedge-agent (as tedge is a multi-call binary)
 # Note: installing the new tedge package will not restart the tedge-agent service
 script = "sudo /etc/tedge/sm-plugins/apt install tedge"
+on_success = "restart-tedge-mapper"
+
+[restart-tedge-mapper]
+# Note: update tedge as it is used by the tedge-agent (as tedge is a multi-call binary)
+# Note: installing the new tedge package will not restart the tedge-agent service
+# Note: when using the built-in bridge, restart tedge-mapper-c8y as we're only installing the tedge package
+# and the tedge-mapper-c8y won't be restarted (as that is typically done within the tedge-mapper package)
+script = """sh -c 'if [ "$(tedge config get mqtt.bridge.built_in)" = "true" ]; then sudo systemctl restart tedge-mapper-c8y; fi'"""
 on_success = "restart-agent"
 
 [restart-agent]
