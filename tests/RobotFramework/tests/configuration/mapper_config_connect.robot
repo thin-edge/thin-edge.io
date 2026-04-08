@@ -31,6 +31,7 @@ Connect Output Shows Legacy Config Path Before Migration
     Setup Test Config    c8y    test.c8y.io
 
     # Run connect in test mode
+    Start Service    tedge-mapper-c8y
     ${output}=    Execute Command    tedge connect c8y --test    stderr=${True}    stdout=${False}
 
     # Verify: Shows tedge.toml as config source
@@ -44,6 +45,7 @@ Connect Output Shows Migrated Config Path After Migration
     Migrate Cloud Configs
 
     # Run connect in test mode
+    Start Service    tedge-mapper-c8y
     ${output}=    Execute Command    tedge connect c8y --test    stderr=${True}    stdout=${False}
 
     # Verify: Shows mapper config file as source
@@ -75,6 +77,7 @@ Connect Test Mode Works With Migrated Config
     Migrate Cloud Configs
 
     # Run connect in test mode - should succeed even with fake URL
+    Start Service    tedge-mapper-c8y
     ${output}=    Execute Command    tedge connect c8y --test    stderr=${True}    stdout=${False}
 
     # Verify: Test mode completes and shows config
