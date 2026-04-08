@@ -28,6 +28,6 @@ Custom Setup
     Device Should Exist    ${DEVICE_SN}
     Enable Service    ssh
     Start Service    ssh
-    Execute Command    sed -i 's/\\[c8y\\]/\[c8y.profiles.test\]/g' /etc/tedge/tedge.toml
     Execute Command    tedge disconnect c8y
+    Execute Command    sudo mv /etc/tedge/mappers/c8y /etc/tedge/mappers/c8y.test
     Execute Command    tedge connect c8y --profile test    timeout=0

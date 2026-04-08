@@ -108,7 +108,7 @@ pub trait SpecialisedCloudConfig:
     ) -> Self::CloudConfigReader;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MapperConfigPath<'a> {
     pub(crate) base_dir: Cow<'a, Utf8Path>,
     pub(crate) cloud_type: CloudType,
@@ -140,10 +140,20 @@ impl MapperConfigPath<'_> {
     }
 }
 
+impl MapperConfigPath<'_> {
+    pub fn into_owned(self) -> MapperConfigPath<'static> {
+        MapperConfigPath {
+            base_dir: Cow::Owned(self.base_dir.into_owned()),
+            cloud_type: self.cloud_type,
+        }
+    }
+}
+
 pub trait HasPath {
     fn set_mappers_root_dir(&mut self, path: Utf8PathBuf);
     fn config_path(&self) -> Option<MapperConfigPath<'_>>;
     fn set_mapper_config_file(&mut self, path: Utf8PathBuf);
+    fn set_cloud_type(&mut self);
 }
 
 impl HasPath for TEdgeConfigDtoC8y {
@@ -160,6 +170,10 @@ impl HasPath for TEdgeConfigDtoC8y {
 
     fn set_mapper_config_file(&mut self, path: Utf8PathBuf) {
         self.mapper_config_file = Some(path)
+    }
+
+    fn set_cloud_type(&mut self) {
+        self.cloud_type = Some(CloudType::C8y);
     }
 }
 
@@ -178,6 +192,10 @@ impl HasPath for TEdgeConfigDtoAz {
     fn set_mapper_config_file(&mut self, path: Utf8PathBuf) {
         self.mapper_config_file = Some(path)
     }
+
+    fn set_cloud_type(&mut self) {
+        self.cloud_type = Some(CloudType::Az);
+    }
 }
 
 impl HasPath for TEdgeConfigDtoAws {
@@ -194,6 +212,10 @@ impl HasPath for TEdgeConfigDtoAws {
 
     fn set_mapper_config_file(&mut self, path: Utf8PathBuf) {
         self.mapper_config_file = Some(path)
+    }
+
+    fn set_cloud_type(&mut self) {
+        self.cloud_type = Some(CloudType::Aws);
     }
 }
 

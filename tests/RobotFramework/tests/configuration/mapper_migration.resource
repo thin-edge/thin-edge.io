@@ -148,9 +148,14 @@ Migration Suite Teardown
     Execute Command    rm -rf /tmp/tedge-backup
 
 Prepare Clean Environment
-    [Documentation]    Prepare a clean environment for testing
+    [Documentation]    Prepare a clean environment for testing (pre-migration state)
+
+    # Reverse-migrate: move c8y config from mappers back to tedge.toml
+    Execute Command    sudo cp /tmp/tedge-backup/tedge.toml /etc/tedge/
+    Execute Command    sudo cp -r /tmp/tedge-backup/mappers /etc/tedge/
+    Execute Command
+    ...    sudo sh -c 'printf "[c8y]\\n" >> /etc/tedge/tedge.toml && grep -v "cloud_type" /etc/tedge/mappers/c8y/mapper.toml >> /etc/tedge/tedge.toml'
     Execute Command    sudo rm -rf /etc/tedge/mappers
-    # Ensure tedge is initialized
     Execute Command    sudo tedge init
 
 Test Cleanup

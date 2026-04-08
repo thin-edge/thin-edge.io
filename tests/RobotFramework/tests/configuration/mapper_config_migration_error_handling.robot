@@ -81,7 +81,7 @@ Migration Fails When First Profile Succeeds But Second Profile Fails
     # Create a read-only directory that will block the named profile
     # Note: We create c8y.prod directory but make it read-only so the config file can't be written
     Execute Command    sudo -u tedge mkdir -p /etc/tedge/mappers/c8y.prod
-    Execute Command    sudo -u tedge chmod 555 /etc/tedge/mappers/c8y.prod
+    Execute Command    sudo chattr +i /etc/tedge/mappers/c8y.prod
 
     # Attempt migration
     ${result}=    Execute Command
@@ -90,7 +90,7 @@ Migration Fails When First Profile Succeeds But Second Profile Fails
     ...    stderr=${True}
     ...    stdout=${False}
     ...    retries=0
-    Should Contain    ${result}    Permission denied
+    Should Contain    ${result}    Operation not permitted
     Should Contain    ${result}    /etc/tedge/mappers/c8y.prod
 
     # 1. Verify the named profile config was NOT created
@@ -102,7 +102,7 @@ Migration Fails When First Profile Succeeds But Second Profile Fails
     Verify Tedge Toml Contains Section    c8y.profiles.prod
 
     # Cleanup: Restore permissions
-    Execute Command    sudo chmod 755 /etc/tedge/mappers/c8y.prod
+    Execute Command    sudo chattr -i /etc/tedge/mappers/c8y.prod
 
 Migration Fails When Multiple Clouds Have Permission Issues
     [Documentation]    Test migration with multiple clouds where some fail

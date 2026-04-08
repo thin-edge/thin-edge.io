@@ -47,9 +47,9 @@ impl TEdgeConfig {
     pub async fn load_prefer_separate_mapper_config(
         config_dir: impl AsRef<StdPath>,
     ) -> Result<Self, TEdgeConfigError> {
-        let mut config_location = TEdgeConfigLocation::from_custom_root(config_dir.as_ref());
-        config_location.default_to_mapper_config_dir();
-        config_location.load().await
+        TEdgeConfigLocation::from_custom_root(config_dir.as_ref())
+            .load()
+            .await
     }
 
     pub async fn update_toml(

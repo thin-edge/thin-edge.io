@@ -26,6 +26,8 @@ impl FromStr for AuthMethod {
         match input {
             "certificate" => Ok(AuthMethod::Certificate),
             "basic" => Ok(AuthMethod::Basic),
+            // For compatibility with custom mapper config, password is an alias for basic
+            "password" => Ok(AuthMethod::Basic),
             "auto" => Ok(AuthMethod::Auto),
             _ => Err(InvalidRegistrationMode {
                 input: input.to_string(),

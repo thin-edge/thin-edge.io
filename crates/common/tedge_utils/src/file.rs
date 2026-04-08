@@ -222,7 +222,6 @@ pub async fn move_file(
     };
 
     file_permissions
-        .clone()
         .apply(dest_path)
         .await
         .map_err(|err| FileMoveError::new(src_path, dest_path, err))?;
@@ -279,8 +278,8 @@ impl PermissionEntry {
         self
     }
 
-    pub async fn apply(self, path: &Path) -> Result<(), FileError> {
-        match (self.user, self.group) {
+    pub async fn apply(&self, path: &Path) -> Result<(), FileError> {
+        match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
                 change_user_and_group(path, user, group).await?;
             }
@@ -300,16 +299,16 @@ impl PermissionEntry {
         Ok(())
     }
 
-    pub fn apply_sync(self, path: &Path) -> Result<(), FileError> {
-        match (self.user, self.group) {
+    pub fn apply_sync(&self, path: &Path) -> Result<(), FileError> {
+        match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
-                change_user_and_group_sync(path, &user, &group)?;
+                change_user_and_group_sync(path, user, group)?;
             }
             (Some(user), None) => {
-                change_user_sync(path, &user)?;
+                change_user_sync(path, user)?;
             }
             (None, Some(group)) => {
-                change_group_sync(path, &group)?;
+                change_group_sync(path, group)?;
             }
             (None, None) => {}
         }
@@ -338,7 +337,7 @@ impl PermissionEntry {
                     "Applying desired user and group for newly created dir: {:?}",
                     dir
                 );
-                self.clone().apply(&dir).await?;
+                self.apply(&dir).await?;
                 Ok(())
             }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
@@ -347,7 +346,7 @@ impl PermissionEntry {
                         "Updating user and group for already existing dir: {:?}",
                         dir
                     );
-                    self.clone().apply(&dir).await?;
+                    self.apply(&dir).await?;
                 }
                 Ok(())
             }
@@ -373,7 +372,7 @@ impl PermissionEntry {
         let file = file.as_ref();
         match options.create_new(true).write(true).open(file).await {
             Ok(mut f) => {
-                self.clone().apply(file).await?;
+                self.apply(file).await?;
                 if let Some(default_content) = default_content {
                     f.write_all(default_content.as_bytes())
                         .map_err(|e| FileError::WriteContentFailed {

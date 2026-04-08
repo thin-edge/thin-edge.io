@@ -64,14 +64,6 @@ pub(crate) struct TEdgeConfigLocation {
 
     /// Full path to the `tedge.toml` file.
     tedge_config_file_path: Utf8PathBuf,
-
-    mapper_config_default_location: MapperConfigLocation,
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum MapperConfigLocation {
-    TedgeToml,
-    SeparateFile,
 }
 
 impl Default for TEdgeConfigLocation {
@@ -90,13 +82,7 @@ impl TEdgeConfigLocation {
             tedge_config_file_path: Utf8Path::from_path(tedge_config_root_path.as_ref())
                 .unwrap()
                 .join(TEDGE_CONFIG_FILE),
-            mapper_config_default_location: MapperConfigLocation::TedgeToml,
         }
-    }
-
-    #[cfg(feature = "test")]
-    pub(crate) fn default_to_mapper_config_dir(&mut self) {
-        self.mapper_config_default_location = MapperConfigLocation::SeparateFile;
     }
 
     pub(crate) fn tedge_config_root_path(&self) -> &Utf8Path {
@@ -141,13 +127,9 @@ impl TEdgeConfigLocation {
     /// 2. If new format exists for some profiles but not the requested one, returns NotFound
     /// 3. If the config directory is inaccessible due to a permissions error, return Error
     ///
-    /// If no new format exists, we then look at the
-    /// `mapper_config_default_location` field of [TEdgeConfigLocation]:
-    /// 1. If this is set to [MapperConfigLocation::TedgeToml], we fall back to the root mapper.toml
-    /// 2. If this is set to [MapperConfigLocation::SeparateFile] and no cloud configurations
-    ///    exist in mapper.toml, we use the new mapper config format
-    /// 3. If cloud configurations (for any cloud) do already exist in mapper.toml, we use
-    ///    mapper.toml until the configuration is explicitly migrated
+    /// If no new format configs exist for this cloud and no cloud configurations exist in
+    /// `tedge.toml`, we use the new mapper config format. If cloud configurations do exist in
+    /// `tedge.toml`, we use it until the configuration is explicitly migrated.
     pub async fn decide_config_source<T>(&self, profile: Option<&ProfileName>) -> ConfigDecision
     where
         T: ExpectedCloudType,
@@ -188,12 +170,10 @@ impl TEdgeConfigLocation {
 
             // No new format configs exist for this cloud, use legacy
             (Ok(false), _) => {
-                if self.mapper_config_default_location == MapperConfigLocation::SeparateFile
-                    && !self.tedge_toml_contains_cloud_config().await
-                {
-                    ConfigDecision::LoadNew { path }
-                } else {
+                if self.tedge_toml_contains_cloud_config().await {
                     ConfigDecision::LoadLegacy
+                } else {
+                    ConfigDecision::LoadNew { path }
                 }
             }
 
@@ -271,24 +251,12 @@ impl TEdgeConfigLocation {
             match cloud_type {
                 CloudType::C8y => {
                     dto.c8y.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
-                    dto.c8y.non_profile.cloud_type = Some(CloudType::C8y);
-                    dto.c8y.profiles.iter_mut().for_each(|(_name, profile)| {
-                        profile.cloud_type = Some(CloudType::C8y);
-                    });
                 }
                 CloudType::Aws => {
                     dto.aws.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
-                    dto.aws.non_profile.cloud_type = Some(CloudType::Aws);
-                    dto.aws.profiles.iter_mut().for_each(|(_name, profile)| {
-                        profile.cloud_type = Some(CloudType::Aws);
-                    });
                 }
                 CloudType::Az => {
                     dto.az.non_profile.mapper_config_dir = Some(self.mappers_config_dir());
-                    dto.az.non_profile.cloud_type = Some(CloudType::Az);
-                    dto.az.profiles.iter_mut().for_each(|(_name, profile)| {
-                        profile.cloud_type = Some(CloudType::Az);
-                    });
                 }
             }
             Ok(())
@@ -460,18 +428,25 @@ impl TEdgeConfigLocation {
             }
         }
 
-        // Create `$HOME/.tedge` or `/etc/tedge` directory in case it does not exist yet
+        let system_config = SystemConfig::try_new(&self.tedge_config_root_path).unwrap_or_default();
+
+        // Create `$HOME/.tedge`, `/etc/tedge` or `/etc/tedge/mappers/{cloud}`
+        // directory in case it does not exist yet
+        let parent_dir = toml_path.parent().expect("provided path must have parent");
         if !tokio::fs::try_exists(toml_path).await.unwrap_or(false) {
-            let parent_dir = toml_path.parent().expect("provided path must have parent");
             tokio::fs::create_dir_all(parent_dir)
                 .await
                 .with_context(|| format!("Failed to create directory {parent_dir}"))?;
         }
+        let directory_permissions =
+            file::permissions(&system_config.user, &system_config.group, 0o755);
+        if let Err(err) = directory_permissions.apply(parent_dir.as_std_path()).await {
+            warn!("failed to set file ownership for '{parent_dir}': {err}");
+        }
 
+        let permissions = file::permissions(&system_config.user, &system_config.group, 0o644);
         atomically_write_file_async(toml_path, toml.as_bytes()).await?;
 
-        let system_config = SystemConfig::try_new(&self.tedge_config_root_path).unwrap_or_default();
-        let permissions = file::permissions(&system_config.user, &system_config.group, 0o644);
         if let Err(err) = permissions.apply(toml_path.as_std_path()).await {
             warn!("failed to set file ownership/permissions for '{toml_path}': {err}");
         }
@@ -483,7 +458,8 @@ impl TEdgeConfigLocation {
     where
         S: Serialize + HasPath + Default + PartialEq,
     {
-        if let Some(paths) = cloud.non_profile.config_path() {
+        if let Some(paths) = cloud.non_profile.config_path().map(|p| p.into_owned()) {
+            cloud.non_profile.set_cloud_type();
             self.store_in(
                 &paths.toml_path_for(None::<&ProfileName>),
                 &cloud.non_profile,
@@ -491,6 +467,7 @@ impl TEdgeConfigLocation {
             )
             .await?;
             for (name, profile) in &mut cloud.profiles {
+                profile.set_cloud_type();
                 self.store_in(
                     &paths.toml_path_for(Some(name)),
                     profile,
@@ -1103,30 +1080,6 @@ type = "a-service-type""#;
     }
 
     #[tokio::test]
-    async fn profiled_c8y_config_migration_includes_cloud_type() {
-        let (_dir, location) =
-            create_temp_tedge_config("c8y.profiles.test.url = \"test.c8y.io\"").unwrap();
-        let _env_lock = EnvSandbox::new().await;
-
-        location
-            .migrate_mapper_config(CloudType::C8y)
-            .await
-            .unwrap();
-
-        let test_tedge_toml =
-            tokio::fs::read_to_string(location.mappers_config_dir().join("c8y.test/mapper.toml"))
-                .await
-                .unwrap();
-        assert_eq!(
-            toml::from_str::<toml::Table>(&test_tedge_toml).unwrap(),
-            toml::toml! {
-                url = "test.c8y.io"
-                cloud_type = "c8y"
-            }
-        );
-    }
-
-    #[tokio::test]
     async fn az_config_can_be_migrated() {
         let (_dir, location) = create_temp_tedge_config("az.url = \"example.com\"").unwrap();
         let _env_lock = EnvSandbox::new().await;
@@ -1344,8 +1297,7 @@ type = "a-service-type""#;
 
         #[tokio::test]
         async fn main_tedge_toml_stored_even_when_empty() {
-            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
-            location.default_to_mapper_config_dir();
+            let (_dir, location) = create_temp_tedge_config("").unwrap();
             let _env_lock = EnvSandbox::new().await;
 
             location.update_toml(&|_dto, _rdr| Ok(())).await.unwrap();
@@ -1356,8 +1308,7 @@ type = "a-service-type""#;
 
         #[tokio::test]
         async fn empty_default_profile_config_is_removed() {
-            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
-            location.default_to_mapper_config_dir();
+            let (_dir, location) = create_temp_tedge_config("").unwrap();
             let _env_lock = EnvSandbox::new().await;
 
             location
@@ -1386,8 +1337,7 @@ type = "a-service-type""#;
 
         #[tokio::test]
         async fn empty_named_profile_config_is_removed() {
-            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
-            location.default_to_mapper_config_dir();
+            let (_dir, location) = create_temp_tedge_config("").unwrap();
             let _env_lock = EnvSandbox::new().await;
 
             location
@@ -1424,8 +1374,7 @@ type = "a-service-type""#;
 
         #[tokio::test]
         async fn profile_directory_preserved_if_non_empty_after_deleting_config() {
-            let (dir, mut location) = create_temp_tedge_config("").unwrap();
-            location.default_to_mapper_config_dir();
+            let (dir, location) = create_temp_tedge_config("").unwrap();
             let _env_lock = EnvSandbox::new().await;
 
             location
@@ -1469,8 +1418,7 @@ type = "a-service-type""#;
 
         #[tokio::test]
         async fn multiple_profiles_cleaned_up_correctly() {
-            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
-            location.default_to_mapper_config_dir();
+            let (_dir, location) = create_temp_tedge_config("").unwrap();
             let _env_lock = EnvSandbox::new().await;
 
             location
@@ -1512,8 +1460,7 @@ type = "a-service-type""#;
 
         #[tokio::test]
         async fn multiple_clouds_cleaned_up_independently() {
-            let (_dir, mut location) = create_temp_tedge_config("").unwrap();
-            location.default_to_mapper_config_dir();
+            let (_dir, location) = create_temp_tedge_config("").unwrap();
             let _env_lock = EnvSandbox::new().await;
 
             location
