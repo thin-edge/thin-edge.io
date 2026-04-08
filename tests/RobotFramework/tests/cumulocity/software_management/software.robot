@@ -11,8 +11,8 @@ Test Tags           theme:c8y    theme:software    theme:plugins
 
 
 *** Test Cases ***
-Supported software types should not be declared during startup when disabled
-    [Setup]    Custom Setup With Software Types Disabled
+Supported software types should be declared during startup
+    [Documentation]    c8y_SupportedSoftwareTypes should NOT be created by default #2654
     Should Have MQTT Messages
     ...    topic=te/device/main///cmd/software_list
     ...    minimum=1
@@ -30,7 +30,7 @@ Supported software types should not be declared during startup when disabled
 
 Supported software types and c8y_SupportedSoftwareTypes should be declared during startup
     [Documentation]    c8y_SupportedSoftwareTypes should be created if the relevant config is set to true #2654
-    # note: c8y.software_management.with_types is enabled by default as of 2.x
+    Execute Command    tedge config set c8y.software_management.with_types true
     Restart Service    tedge-mapper-c8y
     Device Should Have Fragment Values    c8y_SupportedSoftwareTypes\=["apt", "flow"]
 
@@ -209,16 +209,12 @@ Supports disabling the Cumulocity c8y_SoftwareUpdate Command
 
 *** Keywords ***
 Custom Setup
-    [Arguments]    ${tedge_config}=
-    ${DEVICE_SN}=    Setup    tedge_config=${tedge_config}
+    ${DEVICE_SN}=    Setup
     Device Should Exist    ${DEVICE_SN}
     Set Test Variable    $DEVICE_SN
     Should Have MQTT Messages    te/device/main/service/tedge-mapper-c8y/status/health
     Execute Command    sudo start-http-server.sh
     Execute Command    tedge config set software.plugin.default apt
-
-Custom Setup With Software Types Disabled
-    Custom Setup    tedge_config=["c8y.software_management.with_types=false"]
 
 Stop tedge-agent
     [Timeout]    5 seconds

@@ -836,7 +836,6 @@ class ThinEdgeIO(DeviceLibrary):
         register: bool = True,
         register_using: str = "c8y-ca",
         connect: bool = True,
-        tedge_config: Optional[str] = None,
         **adaptor_config,
     ) -> str:
         """_summary_
@@ -854,8 +853,6 @@ class ThinEdgeIO(DeviceLibrary):
             register (bool, optional): Register the device with Cumulocity. Defaults to True.
             register_using (str, optional): Registration method. Supported values: [c8y-ca, self-signed]. Defaults to "c8y-ca".
             connect (bool, optional): Connect the mapper to Cumulocity. Defaults to True.
-            tedge_config (str, optional): Additional tedge settings to set before bootstrapping.
-                It accepts a JSON string representing a list of strings in the format 'key=value'. Defaults to None.
 
         Raises:
             ValueError: Invalid 'register_using'
@@ -871,15 +868,6 @@ class ThinEdgeIO(DeviceLibrary):
             env_file=env_file,
             **adaptor_config,
         )
-
-        if tedge_config:
-            tedge_config = json.loads(tedge_config)
-            if not isinstance(tedge_config, list):
-                raise ValueError(
-                    "Settings should be a json array of strings in the format 'key=value'"
-                )
-            for setting in tedge_config:
-                self.tedge_update_settings(*setting.split("=", 1))
 
         if not skip_bootstrap:
             if register:
