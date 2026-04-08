@@ -799,7 +799,7 @@ define_tedge_config! {
             api: SoftwareManagementApiFlag,
 
             /// Enable publishing c8y_SupportedSoftwareTypes fragment to the c8y inventory API
-            #[tedge_config(example = "false", default(value = true))]
+            #[tedge_config(example = "true", default(value = false))]
             with_types: bool,
         },
 
