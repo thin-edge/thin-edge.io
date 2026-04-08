@@ -180,29 +180,6 @@ pub async fn load_mapper_config(
         credentials_path,
     };
 
-    // Validate that cert_path and key_path are either both set or both absent.
-    // A half-configured TLS identity silently falls back to no client auth,
-    // causing a confusing cloud-side rejection.
-    if let Some(device) = &config.device {
-        match (&device.cert_path, &device.key_path) {
-            (Some(_), None) => {
-                anyhow::bail!(
-                    "Invalid configuration in {config_path}: \
-                     'device.cert_path' is set but 'device.key_path' is missing. \
-                     Both must be provided for certificate authentication."
-                );
-            }
-            (None, Some(_)) => {
-                anyhow::bail!(
-                    "Invalid configuration in {config_path}: \
-                     'device.key_path' is set but 'device.cert_path' is missing. \
-                     Both must be provided for certificate authentication."
-                );
-            }
-            _ => {}
-        }
-    }
-
     Ok(Some(config))
 }
 
@@ -532,52 +509,6 @@ credentials_path = "/etc/tedge/mappers/pw/creds.toml"
         assert!(
             format!("{err}").contains("credentials"),
             "Error should mention credentials: {err}"
-        );
-    }
-
-    #[tokio::test]
-    async fn errors_when_cert_path_set_without_key_path() {
-        let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/halfcert");
-        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        tokio::fs::write(
-            mapper_dir.join("mapper.toml"),
-            r#"url = "mqtt.example.com"
-[device]
-cert_path = "/etc/tedge/device-certs/tedge-certificate.pem"
-"#,
-        )
-        .await
-        .unwrap();
-
-        let err = load_mapper_config(&mapper_dir).await.unwrap_err();
-        let msg = format!("{err}");
-        assert!(
-            msg.contains("cert_path") && msg.contains("key_path"),
-            "Error should mention both cert_path and key_path: {msg}"
-        );
-    }
-
-    #[tokio::test]
-    async fn errors_when_key_path_set_without_cert_path() {
-        let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/halfkey");
-        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        tokio::fs::write(
-            mapper_dir.join("mapper.toml"),
-            r#"url = "mqtt.example.com"
-[device]
-key_path = "/etc/tedge/device-certs/tedge-private-key.pem"
-"#,
-        )
-        .await
-        .unwrap();
-
-        let err = load_mapper_config(&mapper_dir).await.unwrap_err();
-        let msg = format!("{err}");
-        assert!(
-            msg.contains("key_path") && msg.contains("cert_path"),
-            "Error should mention both key_path and cert_path: {msg}"
         );
     }
 
