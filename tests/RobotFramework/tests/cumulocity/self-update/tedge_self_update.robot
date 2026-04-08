@@ -14,6 +14,7 @@ Test Tags           theme:c8y    theme:installation
 Update tedge version from previous using Cumulocity
     [Tags]    test:retry(1)    workaround
 
+    # 1.0.0 is the earliest version we can upgrade from (upgrading from <= 0.8.1 not possible due to removal of compatibility_adapter actor)
     ${PREV_VERSION}=    Set Variable    1.0.0
     # Install base version
     Execute Command
@@ -79,6 +80,7 @@ Update tedge version from previous using Cumulocity
     Operation Should Be SUCCESSFUL    ${operation}
 
 Refreshes mosquitto bridge configuration
+    # 1.0.0 is the earliest version we can upgrade from (upgrading from <= 0.8.1 not possible due to removal of compatibility_adapter actor)
     ${PREV_VERSION}=    Set Variable    1.0.0
     # Install base version
     Execute Command
