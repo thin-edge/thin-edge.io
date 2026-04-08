@@ -1,10 +1,12 @@
 *** Settings ***
-Resource        ../../../../resources/common.resource
-Library         String
-Library         Cumulocity
-Library         ThinEdgeIO
+Resource            ../../../../resources/common.resource
+Library             String
+Library             Cumulocity
+Library             ThinEdgeIO
 
-Test Tags       theme:c8y
+Test Teardown       Get Logs
+
+Test Tags           theme:c8y
 
 
 *** Test Cases ***
@@ -112,3 +114,4 @@ Disconnect And Delete Device From Cumulocity
     [Arguments]    ${profile}    ${external_id}
     Execute Command    tedge disconnect c8y --profile ${profile}    ignore_exit_code=${True}
     Cumulocity.Delete Managed Object And Device User    ${external_id}
+    Get Logs
