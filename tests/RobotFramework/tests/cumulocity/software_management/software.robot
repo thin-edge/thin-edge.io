@@ -30,8 +30,7 @@ Supported software types should not be declared during startup when disabled
 
 Supported software types and c8y_SupportedSoftwareTypes should be declared during startup
     [Documentation]    c8y_SupportedSoftwareTypes should be created if the relevant config is set to true #2654
-    # note: c8y.software_management.with_types is enabled by default as of 2.x
-    Restart Service    tedge-mapper-c8y
+    [Setup]    Custom Setup With Software Types Enabled
     Device Should Have Fragment Values    c8y_SupportedSoftwareTypes\=["apt", "flow"]
 
 Software list should be populated during startup
@@ -219,6 +218,9 @@ Custom Setup
 
 Custom Setup With Software Types Disabled
     Custom Setup    tedge_config=["c8y.software_management.with_types=false"]
+
+Custom Setup With Software Types Enabled
+    Custom Setup    tedge_config=["c8y.software_management.with_types=true"]
 
 Stop tedge-agent
     [Timeout]    5 seconds

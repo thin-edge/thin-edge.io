@@ -183,7 +183,7 @@ set/unset c8y.software_management.with_types
     # Undo the change by using the 'unset' command, value returns to default one
     Execute Command    sudo tedge config unset c8y.software_management.with_types
     ${set}    Execute Command    tedge config list
-    Should Contain    ${set}    c8y.software_management.with_types=true
+    Should Contain    ${set}    c8y.software_management.with_types=false
 
 set/unset az.root_cert_path
     Execute Command    sudo tedge config set az.root_cert_path /etc/ssl/certs1    # Changing az.root_cert_path
