@@ -137,7 +137,7 @@ Migration With Write Protected Tedge Toml
     Execute Command    sudo chmod 755 /etc/tedge/mappers
 
     # Make tedge directory read-only
-    Execute Command    sudo chmod 555 /etc/tedge
+    Execute Command    sudo chattr +i /etc/tedge
 
     # Attempt migration - should fail with permission error referencing tedge.toml
     ${result}=    Execute Command
@@ -145,11 +145,11 @@ Migration With Write Protected Tedge Toml
     ...    exp_exit_code=!0
     ...    stderr=${True}
     ...    stdout=${False}
-    Should Contain    ${result}    Permission denied
+    Should Contain    ${result}    Operation not permitted
     Should Contain    ${result}    /etc/tedge/tedge.toml
 
     # Cleanup: Restore permissions
-    Execute Command    sudo chmod 755 /etc/tedge
+    Execute Command    sudo chattr -i /etc/tedge
 
 Migrate Azure Config Default Profile
     [Documentation]    Spot-check: Verify migration works for Azure
