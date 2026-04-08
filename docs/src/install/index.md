@@ -24,6 +24,14 @@ curl -fsSL https://thin-edge.io/install.sh | sh -s
 wget -O - https://thin-edge.io/install.sh | sh -s
 ```
 
+:::caution
+If you're upgrading from %%te%% version 0.x, then you will have to first upgrade to 1.x before you can upgrade to 2.x.
+
+In addition, the following items are removed in 2.x:
+
+* `tedge/` MQTT topics are no longer supported as it has been deprecated since November 2023. Instead use the newer [%%te%% topics](../references/mqtt-api.md)
+:::
+
 If the device is in a network behind a HTTP Proxy, then you will need to set the `https_proxy` environment variable before installing %%te%%.
 
 ```sh
