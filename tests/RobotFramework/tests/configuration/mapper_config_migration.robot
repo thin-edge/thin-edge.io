@@ -34,6 +34,9 @@ Migrate C8y Named Profile
     # Setup: Configure named profile
     Setup Test Config    c8y    production.c8y.io    profile=production
 
+    # Ensure default profile does not exist
+    Execute Command    tedge config unset c8y.url
+
     # Execute migration
     Migrate Cloud Configs
 

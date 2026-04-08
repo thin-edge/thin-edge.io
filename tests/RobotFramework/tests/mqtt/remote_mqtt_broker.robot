@@ -66,6 +66,7 @@ Custom Setup
 
     # Copy files form one device to another (use base64 encoding to prevent quoting issues)
     ${tedge_toml_encoded}=    Execute Command    cat /etc/tedge/tedge.toml | base64
+    ${mapper_toml_encoded}=    Execute Command    cat /etc/tedge/mappers/c8y/mapper.toml | base64
     ${pem}=    Execute Command    cat "$(tedge config get device.cert_path)"
 
     # container 2 running all other services
@@ -78,6 +79,8 @@ Custom Setup
 
     Execute Command    echo -n "${tedge_toml_encoded}" | base64 --decode | sudo tee /etc/tedge/tedge.toml
     Execute Command    sudo tedge config unset mqtt.bind.address
+    Execute Command    sudo -u tedge mkdir -p /etc/tedge/mappers/c8y
+    Execute Command    echo -n "${mapper_toml_encoded}" | base64 --decode | sudo tee /etc/tedge/mappers/c8y/mapper.toml
     Execute Command    echo "${pem}" | sudo tee "$(tedge config get device.cert_path)"
     Restart Service    c8y-firmware-plugin
     Restart Service    tedge-agent
