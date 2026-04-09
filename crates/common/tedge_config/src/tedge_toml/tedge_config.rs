@@ -1145,7 +1145,7 @@ define_tedge_config! {
         },
 
         bridge: {
-            #[tedge_config(default(value = false))]
+            #[tedge_config(default(value = true))]
             #[tedge_config(example = "false")]
             #[tedge_config(note = "After changing this value, run `tedge reconnect <cloud>` to apply the changes")]
             /// Enables the built-in bridge when running tedge-mapper
