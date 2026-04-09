@@ -1,6 +1,20 @@
 #!/bin/sh
 set -e
 
+# upgrade the config to move out the mapper specific settings from tedge.toml
+if ! tedge config upgrade; then
+    code="$?"
+    echo "WARNING: 'tedge config upgrade' failed. code=$code" >&2
+fi
+
+if ! tedge refresh-bridges; then
+    # Ignore errors whilst recreating bridges
+    # as it can fail if the user has removed settings like c8y.url
+    # and not run 'tedge disconnect c8y'
+    code="$?"
+    echo "WARNING: 'tedge refresh-bridges' failed. code=$code" >&2
+fi
+
 #LINUXHELPER#
 
 enable_start_service() {
