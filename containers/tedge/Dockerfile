@@ -58,7 +58,8 @@ COPY --from=build /usr/share/tedge/diag-plugins/* /usr/share/tedge/diag-plugins/
 RUN addgroup -g "$USER_GID" -S "$USERNAME" \
     && adduser -u "$USER_UID" -g '' -H -D "$USERNAME" -G "$USERNAME" \
     && /usr/bin/tedge init \
-    && /usr/bin/c8y-remote-access-plugin --init
+    && /usr/bin/c8y-remote-access-plugin --init \
+    && ln -s $(which tedge-flows-plugin) /etc/tedge/sm-plugins/flow
 
 # Add custom config
 COPY system.toml /etc/tedge/
