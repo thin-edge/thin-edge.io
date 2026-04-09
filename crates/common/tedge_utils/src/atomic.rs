@@ -125,18 +125,16 @@ impl TryFrom<&PermissionEntry> for MaybePermissions {
 
     fn try_from(value: &PermissionEntry) -> Result<Self, Self::Error> {
         let uid = value
-            .user
-            .as_ref()
-            .map(|u| uzers::get_user_by_name(&u).with_context(|| format!("no such user: '{u}'")))
+            .user()
+            .map(|u| uzers::get_user_by_name(u).with_context(|| format!("no such user: '{u}'")))
             .transpose()?
             .map(|u| u.uid());
         let gid = value
-            .group
-            .as_ref()
-            .map(|g| uzers::get_group_by_name(&g).with_context(|| format!("no such group: '{g}'")))
+            .group()
+            .map(|g| uzers::get_group_by_name(g).with_context(|| format!("no such group: '{g}'")))
             .transpose()?
             .map(|g| g.gid());
-        let mode = value.mode;
+        let mode = value.mode();
 
         Ok(Self { uid, gid, mode })
     }

@@ -196,9 +196,9 @@ impl FileConfigPlugin {
             let result = CreateDirsOptions {
                 dir_path: parent,
                 sudo,
-                mode: file_entry.parent_permissions.mode,
-                user: file_entry.parent_permissions.user.as_deref(),
-                group: file_entry.parent_permissions.group.as_deref(),
+                mode: file_entry.parent_permissions.mode(),
+                user: file_entry.parent_permissions.user(),
+                group: file_entry.parent_permissions.group(),
             }
             .create();
 
@@ -215,8 +215,15 @@ impl FileConfigPlugin {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create parent directories. Path: '{parent}'"))?;
 
-        file_entry.parent_permissions.clone().apply_sync(parent.as_std_path())
-            .with_context(|| format!("failed to change permissions or mode of the parent directory. Path: '{parent}'"))?;
+        tedge_utils::file::apply_permissions_sync(
+            parent.as_std_path(),
+            &file_entry.parent_permissions,
+        )
+        .with_context(|| {
+            format!(
+                "failed to change permissions or mode of the parent directory. Path: '{parent}'"
+            )
+        })?;
 
         Ok(())
     }
@@ -265,9 +272,9 @@ impl FileConfigPlugin {
             }
 
             TedgeWriteStatus::Enabled { sudo } => {
-                let mode = file_entry.file_permissions.mode;
-                let user = file_entry.file_permissions.user.as_deref();
-                let group = file_entry.file_permissions.group.as_deref();
+                let mode = file_entry.file_permissions.mode();
+                let user = file_entry.file_permissions.user();
+                let group = file_entry.file_permissions.group();
 
                 let options = CopyOptions {
                     from,

@@ -11,9 +11,11 @@ use std::process::Stdio;
 use tedge_config::log_init;
 use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::TEdgeConfig;
-use tedge_utils::file::change_user_and_group;
-use tedge_utils::file::create_directory_with_user_group;
-use tedge_utils::file::create_file_with_user_group;
+use tedge_utils::file::apply_permissions;
+use tedge_utils::file::create_directory;
+use tedge_utils::file::create_file;
+use tedge_utils::file::permissions;
+use tedge_utils::file::PermissionEntry;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
@@ -94,27 +96,25 @@ async fn declare_supported_operation(
     group: &str,
 ) -> miette::Result<()> {
     let supported_operation_path = supported_operation_path(config_dir);
-    create_directory_with_user_group(
+    create_directory(
         supported_operation_path.parent().unwrap(),
-        user,
-        group,
-        0o775,
+        &permissions(user, group, 0o775),
     )
     .await
     .into_diagnostic()
     .context("Creating supported operations directory")?;
 
     if supported_operation_path.exists() {
-        change_user_and_group(&supported_operation_path, user, group)
-            .await
-            .into_diagnostic()
-            .context("Changing permissions of supported operations")
+        apply_permissions(
+            &supported_operation_path,
+            &PermissionEntry::default().with_user(user).with_group(group),
+        )
+        .await
+        .into_diagnostic()
+        .context("Changing permissions of supported operations")
     } else {
-        create_file_with_user_group(
+        create_file(
             supported_operation_path,
-            user,
-            group,
-            0o644,
             Some(
                 r#"[exec]
 command = "c8y-remote-access-plugin"
@@ -122,6 +122,7 @@ topic = "c8y/s/ds"
 on_message = "530"
 "#,
             ),
+            permissions(user, group, 0o644),
         )
         .await
         .into_diagnostic()

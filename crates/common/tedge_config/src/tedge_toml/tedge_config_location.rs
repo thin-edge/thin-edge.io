@@ -440,14 +440,16 @@ impl TEdgeConfigLocation {
         }
         let directory_permissions =
             file::permissions(&system_config.user, &system_config.group, 0o755);
-        if let Err(err) = directory_permissions.apply(parent_dir.as_std_path()).await {
+        if let Err(err) =
+            file::apply_permissions(parent_dir.as_std_path(), &directory_permissions).await
+        {
             warn!("failed to set file ownership for '{parent_dir}': {err}");
         }
 
         let permissions = file::permissions(&system_config.user, &system_config.group, 0o644);
         atomically_write_file_async(toml_path, toml.as_bytes()).await?;
 
-        if let Err(err) = permissions.apply(toml_path.as_std_path()).await {
+        if let Err(err) = file::apply_permissions(toml_path.as_std_path(), &permissions).await {
             warn!("failed to set file ownership/permissions for '{toml_path}': {err}");
         }
 

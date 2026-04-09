@@ -73,52 +73,32 @@ pub enum FileError {
     },
 }
 
+/// Create a directory with the given permissions.
+///
+/// If the directory already exists, permissions are left unchanged.
 pub async fn create_directory(
     dir: impl AsRef<Path>,
     permissions: &PermissionEntry,
 ) -> Result<(), FileError> {
-    permissions.create_directory(dir.as_ref()).await
+    permissions.create_directory(dir.as_ref(), false).await
 }
 
+/// Create a directory with the given permissions, updating ownership even if it already exists.
 pub async fn create_directory_and_update_ownership(
     dir: impl AsRef<Path>,
     permissions: &PermissionEntry,
 ) -> Result<(), FileError> {
-    permissions
-        .clone()
-        .force_dir_ownership()
-        .create_directory(dir.as_ref())
-        .await
+    permissions.create_directory(dir.as_ref(), true).await
 }
 
-/// Create the directory owned by the user running this API with default directory permissions
+/// Create a directory owned by the user running this process with default permissions.
 pub async fn create_directory_with_defaults(dir: impl AsRef<Path>) -> Result<(), FileError> {
     create_directory(dir, &PermissionEntry::default()).await
 }
 
-pub async fn create_directory_with_user_group(
-    dir: impl AsRef<Path>,
-    user: &str,
-    group: &str,
-    mode: u32,
-) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    perm_entry.create_directory(dir.as_ref()).await
-}
-
-pub async fn create_directory_with_user_group_and_update_ownership(
-    dir: impl AsRef<Path>,
-    user: &str,
-    group: &str,
-    mode: u32,
-) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    perm_entry
-        .force_dir_ownership()
-        .create_directory(dir.as_ref())
-        .await
-}
-
+/// Create a file with the given permissions and optional default content.
+///
+/// If the file already exists it is left unchanged.
 pub async fn create_file(
     file: impl AsRef<Path>,
     content: Option<&str>,
@@ -127,36 +107,34 @@ pub async fn create_file(
     permissions.create_file(file.as_ref(), content).await
 }
 
-/// Create the directory owned by the user running this API with default file permissions
-pub async fn create_file_with_defaults(
-    file: impl AsRef<Path>,
-    content: Option<&str>,
+/// Apply the given permissions (owner, group, mode) to an existing path.
+pub async fn apply_permissions(
+    path: impl AsRef<Path>,
+    permissions: &PermissionEntry,
 ) -> Result<(), FileError> {
-    create_file(file, content, PermissionEntry::default()).await
+    permissions.apply(path.as_ref()).await
 }
 
-pub async fn create_file_with_mode(
-    file: impl AsRef<Path>,
-    content: Option<&str>,
-    mode: u32,
+/// Synchronous version of [`apply_permissions`].
+pub fn apply_permissions_sync(
+    path: impl AsRef<Path>,
+    permissions: &PermissionEntry,
 ) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(None, None, Some(mode));
-    perm_entry.create_file(file.as_ref(), content).await
+    permissions.apply_sync(path.as_ref())
+}
+
+/// Shorthand to create a [`PermissionEntry`] with all three fields set.
+///
+/// Empty strings are treated as unset, leaving the corresponding ownership unchanged.
+pub fn permissions(user: &str, group: &str, mode: u32) -> PermissionEntry {
+    PermissionEntry::default()
+        .with_user(user)
+        .with_group(group)
+        .with_mode(mode)
 }
 
 pub async fn path_exists(path: impl AsRef<Path>) -> bool {
     tokio::fs::try_exists(path).await.unwrap_or(false)
-}
-
-pub async fn create_file_with_user_group(
-    file: impl AsRef<Path>,
-    user: &str,
-    group: &str,
-    mode: u32,
-    default_content: Option<&str>,
-) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    perm_entry.create_file(file.as_ref(), default_content).await
 }
 
 /// Moves a file to a destination path.
@@ -215,7 +193,7 @@ pub async fn move_file(
 
     let file_permissions = if let Some(mode) = original_permission_mode {
         // Use the same file permission as the original one
-        PermissionEntry::new(None, None, Some(mode))
+        PermissionEntry::default().with_mode(mode)
     } else {
         // Set the user, group, and mode as given for a new file
         new_file_permissions
@@ -257,28 +235,57 @@ impl FileMoveError {
 
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct PermissionEntry {
-    pub user: Option<String>,
-    pub group: Option<String>,
-    pub mode: Option<u32>,
-    pub reassert_dir_ownership: bool,
+    user: Option<String>,
+    group: Option<String>,
+    mode: Option<u32>,
 }
 
 impl PermissionEntry {
+    /// Create a `PermissionEntry` from optional values.
+    ///
+    /// Empty strings are treated as unset and mapped to `None`, so ownership
+    /// is left unchanged for whichever field is empty.
     pub fn new(user: Option<String>, group: Option<String>, mode: Option<u32>) -> Self {
         Self {
-            user,
-            group,
+            user: user.filter(|s| !s.is_empty()),
+            group: group.filter(|s| !s.is_empty()),
             mode,
-            reassert_dir_ownership: false,
         }
     }
 
-    pub fn force_dir_ownership(mut self) -> Self {
-        self.reassert_dir_ownership = true;
+    pub fn user(&self) -> Option<&str> {
+        self.user.as_deref()
+    }
+
+    pub fn group(&self) -> Option<&str> {
+        self.group.as_deref()
+    }
+
+    pub fn mode(&self) -> Option<u32> {
+        self.mode
+    }
+
+    /// Set the user, treating an empty string as "leave unchanged".
+    pub fn with_user(mut self, user: impl Into<String>) -> Self {
+        let user = user.into();
+        self.user = (!user.is_empty()).then_some(user);
         self
     }
 
-    pub async fn apply(&self, path: &Path) -> Result<(), FileError> {
+    /// Set the group, treating an empty string as "leave unchanged".
+    pub fn with_group(mut self, group: impl Into<String>) -> Self {
+        let group = group.into();
+        self.group = (!group.is_empty()).then_some(group);
+        self
+    }
+
+    /// Set the file mode.
+    pub fn with_mode(mut self, mode: u32) -> Self {
+        self.mode = Some(mode);
+        self
+    }
+
+    async fn apply(&self, path: &Path) -> Result<(), FileError> {
         match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
                 change_user_and_group(path, user, group).await?;
@@ -299,7 +306,7 @@ impl PermissionEntry {
         Ok(())
     }
 
-    pub fn apply_sync(&self, path: &Path) -> Result<(), FileError> {
+    fn apply_sync(&self, path: &Path) -> Result<(), FileError> {
         match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
                 change_user_and_group_sync(path, user, group)?;
@@ -320,12 +327,12 @@ impl PermissionEntry {
         Ok(())
     }
 
-    async fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
+    async fn create_directory(&self, dir: &Path, force_update: bool) -> Result<(), FileError> {
         match dir.parent() {
             None => return Ok(()),
             Some(parent) => {
                 if !path_exists(parent).await {
-                    Box::pin(self.create_directory(parent)).await?;
+                    Box::pin(self.create_directory(parent, force_update)).await?;
                 }
             }
         }
@@ -341,7 +348,7 @@ impl PermissionEntry {
                 Ok(())
             }
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                if self.reassert_dir_ownership {
+                if force_update {
                     debug!(
                         "Updating user and group for already existing dir: {:?}",
                         dir
@@ -398,18 +405,6 @@ impl PermissionEntry {
     }
 }
 
-/// Creates a `PermissionEntry` from plain `user` and `group` strings.
-///
-/// Empty strings are treated as unset and mapped to `None`, so ownership
-/// is left unchanged for whichever field is empty.
-pub fn permissions(user: &str, group: &str, mode: u32) -> PermissionEntry {
-    PermissionEntry::new(
-        (!user.is_empty()).then_some(user.to_string()),
-        (!group.is_empty()).then_some(group.to_string()),
-        Some(mode),
-    )
-}
-
 /// Overwrite the content of existing file. The file permissions will be kept.
 pub async fn overwrite_file(file: impl AsRef<Path>, content: &str) -> Result<(), FileError> {
     let file = file.as_ref();
@@ -442,7 +437,7 @@ pub async fn overwrite_file(file: impl AsRef<Path>, content: &str) -> Result<(),
     }
 }
 
-pub async fn change_user_and_group(
+async fn change_user_and_group(
     file: impl AsRef<Path>,
     user: impl Into<String>,
     group: impl Into<String>,
@@ -455,7 +450,7 @@ pub async fn change_user_and_group(
         .unwrap()
 }
 
-pub fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<(), FileError> {
+fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<(), FileError> {
     match (user, group) {
         ("", "") => return Ok(()),
         ("", group) => return change_group_sync(path, group),
@@ -552,14 +547,14 @@ fn change_group_sync(file: impl AsRef<Path>, group: &str) -> Result<(), FileErro
     Ok(())
 }
 
-pub async fn change_mode(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
+async fn change_mode(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
     let file = file.as_ref().to_owned();
     tokio::task::spawn_blocking(move || change_mode_sync(&file, mode))
         .await
         .unwrap()
 }
 
-pub fn change_mode_sync(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
+fn change_mode_sync(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
     let file = file.as_ref();
     let mut permissions = get_metadata_sync(file)?.permissions();
 
@@ -580,7 +575,7 @@ pub fn change_mode_sync(file: impl AsRef<Path>, mode: u32) -> Result<(), FileErr
 }
 
 /// Return metadata when the given path exists and accessible by user
-pub async fn get_metadata(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileError> {
+async fn get_metadata(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileError> {
     let path = path.as_ref();
     fs::metadata(path)
         .await
@@ -594,30 +589,6 @@ fn get_metadata_sync(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileEr
     std::fs::metadata(path).map_err(|_| FileError::PathNotAccessible {
         path: path.to_path_buf(),
     })
-}
-
-/// Return filename if the given path contains a filename
-pub fn get_filename(path: impl AsRef<Path>) -> Option<String> {
-    let filename = path.as_ref().file_name()?.to_str()?.to_string();
-    Some(filename)
-}
-
-/// Get uid from the user name
-pub fn get_uid_by_name(user: &str) -> Result<u32, FileError> {
-    let ud = get_user_by_name(user)
-        .map(|u| u.uid())
-        .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
-    Ok(ud)
-}
-
-/// Get gid from the group name
-pub fn get_gid_by_name(group: &str) -> Result<u32, FileError> {
-    let gd = get_group_by_name(group)
-        .map(|g| g.gid())
-        .ok_or_else(|| FileError::GroupNotFound {
-            group: group.into(),
-        })?;
-    Ok(gd)
 }
 
 pub async fn create_symlink(
@@ -669,7 +640,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None)
+        create_file(&file_path, None, permissions(&USER, &GROUP, 0o644))
             .await
             .unwrap();
         assert!(path_exists(file_path.as_str()).await);
@@ -690,9 +661,13 @@ mod tests {
         ]"#;
 
         // Create a new file with default content
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, Some(example_config))
-            .await
-            .unwrap();
+        create_file(
+            &file_path,
+            Some(example_config),
+            permissions(&USER, &GROUP, 0o775),
+        )
+        .await
+        .unwrap();
 
         let content = fs::read(file_path).await.unwrap();
         assert_eq!(example_config.as_bytes(), content);
@@ -703,9 +678,13 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        let err = create_file_with_user_group(file_path, "nonexistent_user", &GROUP, 0o775, None)
-            .await
-            .unwrap_err();
+        let err = create_file(
+            file_path,
+            None,
+            permissions("nonexistent_user", &GROUP, 0o775),
+        )
+        .await
+        .unwrap_err();
 
         assert!(err.to_string().contains("User not found"));
     }
@@ -715,9 +694,13 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        let err = create_file_with_user_group(&file_path, &USER, "nonexistent_group", 0o775, None)
-            .await
-            .unwrap_err();
+        let err = create_file(
+            &file_path,
+            None,
+            permissions(&USER, "nonexistent_group", 0o775),
+        )
+        .await
+        .unwrap_err();
 
         assert!(err.to_string().contains("Group not found"));
         fs::remove_file(&file_path).await.unwrap();
@@ -728,7 +711,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir").display().to_string();
 
-        create_directory_with_user_group_and_update_ownership(&dir_path, &USER, &GROUP, 0o775)
+        create_directory_and_update_ownership(&dir_path, &permissions(&USER, &GROUP, 0o775))
             .await
             .unwrap();
 
@@ -744,11 +727,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir");
 
-        let err = create_directory_with_user_group_and_update_ownership(
+        let err = create_directory_and_update_ownership(
             &dir_path,
-            "nonexistent_user",
-            &GROUP,
-            0o775,
+            &permissions("nonexistent_user", &GROUP, 0o775),
         )
         .await
         .unwrap_err();
@@ -761,11 +742,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("dir");
 
-        let err = create_directory_with_user_group_and_update_ownership(
+        let err = create_directory_and_update_ownership(
             &dir_path,
-            &USER,
-            "nonexistent_group",
-            0o775,
+            &permissions(&USER, "nonexistent_group", 0o775),
         )
         .await
         .unwrap_err();
@@ -778,7 +757,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file").display().to_string();
 
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None)
+        create_file(&file_path, None, permissions(&USER, &GROUP, 0o644))
             .await
             .unwrap();
         assert!(path_exists(&file_path).await);
@@ -787,8 +766,10 @@ mod tests {
         let perm = meta.permissions();
         assert!(format!("{:o}", perm.mode()).contains("644"));
 
-        let permission_set = PermissionEntry::new(None, None, Some(0o444));
-        permission_set.apply(Path::new(&file_path)).await.unwrap();
+        let permission_set = PermissionEntry::default().with_mode(0o444);
+        apply_permissions(Path::new(&file_path), &permission_set)
+            .await
+            .unwrap();
 
         let meta = fs::metadata(&file_path).await.unwrap();
         let perm = meta.permissions();
@@ -796,19 +777,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn verify_get_file_name() {
-        assert_eq!(
-            get_filename(PathBuf::from("/it/is/file.txt")),
-            Some("file.txt".to_string())
-        );
-        assert_eq!(get_filename(PathBuf::from("/")), None);
-    }
-
-    #[tokio::test]
     async fn overwrite_file_content() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("file");
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, None)
+        create_file(&file_path, None, permissions(&USER, &GROUP, 0o775))
             .await
             .unwrap();
 
@@ -819,21 +791,6 @@ mod tests {
 
         let actual_content = fs::read(file_path).await.unwrap();
         assert_eq!(actual_content, new_content.as_bytes());
-    }
-
-    #[test]
-    fn get_uid_of_users() {
-        assert_eq!(get_uid_by_name("root").unwrap(), 0);
-        let err = get_uid_by_name("nonexistent_user").unwrap_err();
-        assert!(err.to_string().contains("User not found"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn get_gid_of_groups() {
-        assert_eq!(get_gid_by_name("root").unwrap(), 0);
-        let err = get_gid_by_name("nonexistent_group").unwrap_err();
-        assert!(err.to_string().contains("Group not found"));
     }
 
     #[cfg(target_os = "macos")]
@@ -857,7 +814,7 @@ mod tests {
         let dest_path = temp_dir.path().join("dest_file").display().to_string();
 
         // create symlink
-        create_file_with_user_group(&source_path, &USER, &GROUP, 0o644, None)
+        create_file(&source_path, None, permissions(&USER, &GROUP, 0o644))
             .await
             .unwrap();
         assert!(path_exists(&source_path).await);
@@ -868,9 +825,13 @@ mod tests {
         assert!(create_symlink(&source_path, &dest_path).await.is_ok());
 
         // creating symlink again should  return error if source is different
-        create_file_with_user_group(&another_source_path, &USER, &GROUP, 0o644, None)
-            .await
-            .unwrap();
+        create_file(
+            &another_source_path,
+            None,
+            permissions(&USER, &GROUP, 0o644),
+        )
+        .await
+        .unwrap();
         assert!(path_exists(&another_source_path).await);
         let err = create_symlink(&another_source_path, &dest_path)
             .await
@@ -891,7 +852,7 @@ mod tests {
     async fn move_file_to_different_filesystem() {
         let file_dir = TempDir::new().unwrap();
         let file_path = file_dir.path().join("file");
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, Some("test"))
+        create_file(&file_path, Some("test"), permissions(&USER, &GROUP, 0o775))
             .await
             .unwrap();
 

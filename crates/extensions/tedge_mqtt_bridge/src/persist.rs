@@ -48,7 +48,7 @@ pub async fn persist_bridge_config_file(
     // Set file ownership and permissions on both files
     for path in [&config_path, &template_path] {
         let permissions = file::permissions(user, group, 0o644);
-        if let Err(err) = permissions.apply(path.as_std_path()).await {
+        if let Err(err) = file::apply_permissions(path.as_std_path(), &permissions).await {
             warn!("failed to set file ownership/permissions for '{path}': {err}");
         }
     }

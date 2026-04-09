@@ -1165,7 +1165,14 @@ pub async fn chown_certificate_and_key(bridge_config: &BridgeConfig, tedge_confi
     // - When `tedge cert create` is not run as root, a certificate is created but owned by the user running the command.
     // - A better approach could be to remove this `chown` and run the command as mosquitto.
     let path = &bridge_config.bridge_certfile;
-    if let Err(err) = tedge_utils::file::change_user_and_group(path, &user, &group).await {
+    if let Err(err) = tedge_utils::file::apply_permissions(
+        path,
+        &tedge_utils::file::PermissionEntry::default()
+            .with_user(&user)
+            .with_group(&group),
+    )
+    .await
+    {
         warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
     }
 
@@ -1174,7 +1181,14 @@ pub async fn chown_certificate_and_key(bridge_config: &BridgeConfig, tedge_confi
     if !path.exists() {
         return;
     }
-    if let Err(err) = tedge_utils::file::change_user_and_group(path, &user, &group).await {
+    if let Err(err) = tedge_utils::file::apply_permissions(
+        path,
+        &tedge_utils::file::PermissionEntry::default()
+            .with_user(&user)
+            .with_group(&group),
+    )
+    .await
+    {
         warn!("Failed to change ownership of {path} to {user}:{group}: {err}");
     }
 }

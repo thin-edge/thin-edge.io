@@ -243,7 +243,7 @@ impl FirmwareManagerWorker {
             move_file(
                 &downloaded_firmware,
                 &cache_file_path,
-                PermissionEntry::new(None, None, None),
+                PermissionEntry::default(),
             )
             .await
             .map_err(FileError::from)?;

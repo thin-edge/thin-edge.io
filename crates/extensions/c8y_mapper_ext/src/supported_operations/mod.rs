@@ -96,7 +96,7 @@ impl SupportedOperations {
             let template_path = self.base_ops_dir.join(template_name);
             file::create_symlink(template_path, &ops_file).await?;
         } else {
-            file::create_file_with_defaults(&ops_file, None).await?;
+            file::create_file(&ops_file, None, file::PermissionEntry::default()).await?;
         };
 
         Ok(())

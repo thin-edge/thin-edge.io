@@ -180,7 +180,7 @@ async fn bridge_rules(
     )
     .await?;
 
-    if let Err(err) = permissions.apply(bridge_config_dir.as_std_path()).await {
+    if let Err(err) = file::apply_permissions(bridge_config_dir.as_std_path(), &permissions).await {
         warn!("failed to set file ownership/permissions for '{bridge_config_dir}': {err}");
     }
 

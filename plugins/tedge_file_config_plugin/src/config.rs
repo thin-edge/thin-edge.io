@@ -83,11 +83,13 @@ impl FileEntry {
         service_action: Option<String>,
     ) -> Self {
         let parent_user = parent_permissions
-            .user
-            .or_else(|| file_permissions.user.clone());
+            .user()
+            .map(str::to_owned)
+            .or_else(|| file_permissions.user().map(str::to_owned));
         let parent_group = parent_permissions
-            .group
-            .or_else(|| file_permissions.group.clone());
+            .group()
+            .map(str::to_owned)
+            .or_else(|| file_permissions.group().map(str::to_owned));
 
         Self {
             path: path.into(),
@@ -96,7 +98,7 @@ impl FileEntry {
             parent_permissions: PermissionEntry::new(
                 parent_user,
                 parent_group,
-                parent_permissions.mode,
+                parent_permissions.mode(),
             ),
             service,
             service_action,
@@ -328,11 +330,10 @@ type = "other.conf"
 
     #[test]
     fn test_file_entry_new_inherits_parent_permissions() {
-        let file_perms = PermissionEntry::new(
-            Some("tedge".to_string()),
-            Some("tedge".to_string()),
-            Some(0o644),
-        );
+        let file_perms = PermissionEntry::default()
+            .with_user("tedge")
+            .with_group("tedge")
+            .with_mode(0o644);
         let parent_perms = PermissionEntry::default();
 
         let entry = FileEntry::new(
@@ -345,23 +346,21 @@ type = "other.conf"
         );
 
         // Parent should inherit user and group from file permissions
-        assert_eq!(entry.parent_permissions.user, Some("tedge".to_string()));
-        assert_eq!(entry.parent_permissions.group, Some("tedge".to_string()));
-        assert_eq!(entry.parent_permissions.mode, None);
+        assert_eq!(entry.parent_permissions.user(), Some("tedge"));
+        assert_eq!(entry.parent_permissions.group(), Some("tedge"));
+        assert_eq!(entry.parent_permissions.mode(), None);
     }
 
     #[test]
     fn test_file_entry_new_respects_explicit_parent_permissions() {
-        let file_perms = PermissionEntry::new(
-            Some("user1".to_string()),
-            Some("group1".to_string()),
-            Some(0o644),
-        );
-        let parent_perms = PermissionEntry::new(
-            Some("parent_user".to_string()),
-            Some("parent_group".to_string()),
-            Some(0o755),
-        );
+        let file_perms = PermissionEntry::default()
+            .with_user("user1")
+            .with_group("group1")
+            .with_mode(0o644);
+        let parent_perms = PermissionEntry::default()
+            .with_user("parent_user")
+            .with_group("parent_group")
+            .with_mode(0o755);
 
         let entry = FileEntry::new(
             "/etc/test.conf",
@@ -373,15 +372,9 @@ type = "other.conf"
         );
 
         // Parent should use its own explicit permissions, not inherit
-        assert_eq!(
-            entry.parent_permissions.user,
-            Some("parent_user".to_string())
-        );
-        assert_eq!(
-            entry.parent_permissions.group,
-            Some("parent_group".to_string())
-        );
-        assert_eq!(entry.parent_permissions.mode, Some(0o755));
+        assert_eq!(entry.parent_permissions.user(), Some("parent_user"));
+        assert_eq!(entry.parent_permissions.group(), Some("parent_group"));
+        assert_eq!(entry.parent_permissions.mode(), Some(0o755));
     }
 
     #[test]

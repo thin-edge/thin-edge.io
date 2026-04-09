@@ -10,6 +10,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file;
+use tedge_utils::file::apply_permissions;
 use tedge_utils::file::create_directory_and_update_ownership;
 use tracing::debug;
 use tracing::info;
@@ -105,10 +106,7 @@ impl TEdgeInitCmd {
         let file_permissions = file::permissions(&user, &group, 0o644);
         let system_toml = config_dir.join("system.toml");
         if system_toml.exists() {
-            file_permissions
-                .clone()
-                .apply(system_toml.as_std_path())
-                .await?;
+            apply_permissions(system_toml.as_std_path(), &file_permissions).await?;
         }
 
         let agent_state_dir = if config.agent.state.path.exists() {
@@ -121,9 +119,7 @@ impl TEdgeInitCmd {
 
         let entity_store_file = agent_state_dir.join("entity_store.jsonl");
         if entity_store_file.exists() {
-            file_permissions
-                .apply(entity_store_file.as_std_path())
-                .await?;
+            apply_permissions(entity_store_file.as_std_path(), &file_permissions).await?;
         }
 
         Ok(())
