@@ -1274,6 +1274,7 @@ class ThinEdgeIO(DeviceLibrary):
             assert (
                 proc.returncode == 0
             ), f"Failed to add remote access PASSTHROUGH configuration.\n{output}"
+            time.sleep(2)   # Wait a bit for the configuration to be applied before returning
             return output
 
     @keyword("Execute Remote Access Command")
