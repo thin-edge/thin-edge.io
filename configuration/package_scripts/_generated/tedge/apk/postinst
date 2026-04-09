@@ -39,14 +39,6 @@ fi
 # Initialize the tedge
 tedge init
 
-if ! tedge refresh-bridges; then
-    # Ignore errors whilst recreating bridges
-    # as it can fail if the user has removed settings like c8y.url
-    # and not run 'tedge disconnect c8y'
-    code="$?"
-    echo "WARNING: 'tedge refresh-bridges' failed. code=$code" >&2
-fi
-
 # Create completion scripts
 # Note: Generate completion scripts during post installation
 # to ensure the tedge binary is already installed at its intended location

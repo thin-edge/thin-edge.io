@@ -516,9 +516,10 @@ class ThinEdgeIO(DeviceLibrary):
         # Parse the certificate details via tedge cert show
         lines = []
         try:
-            command = "tedge cert show c8y"
+            # Note: tedge cert show c8y is not supported in 1.3.1 which is used in some tests
+            command = "tedge cert show c8y 2>/dev/null || tedge cert show"
             if cloud_profile:
-                command += f" --profile {cloud_profile}"
+                command = f"tedge cert show c8y --profile {cloud_profile} 2>/dev/null || tedge cert show --profile {cloud_profile}"
             lines = self.execute_command(command, ignore_exit_code=True).splitlines()
 
         except Exception as ex:
@@ -1273,6 +1274,7 @@ class ThinEdgeIO(DeviceLibrary):
             assert (
                 proc.returncode == 0
             ), f"Failed to add remote access PASSTHROUGH configuration.\n{output}"
+            time.sleep(2)   # Wait a bit for the configuration to be applied before returning
             return output
 
     @keyword("Execute Remote Access Command")

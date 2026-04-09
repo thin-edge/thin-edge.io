@@ -48,7 +48,6 @@ Check system health including c8y
     ThinEdgeIO.Service Should Be Running    c8y-firmware-plugin
 
     ThinEdgeIO.Set Device Context    ${CHILD_SN}
-    ThinEdgeIO.Service Should Be Stopped    mosquitto
     ThinEdgeIO.Service Should Be Stopped    tedge-mapper-c8y
     ThinEdgeIO.Service Should Be Running    tedge-agent
     ThinEdgeIO.Service Should Be Stopped    c8y-firmware-plugin

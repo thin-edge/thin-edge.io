@@ -1145,7 +1145,7 @@ define_tedge_config! {
         },
 
         bridge: {
-            #[tedge_config(default(value = false))]
+            #[tedge_config(default(value = true))]
             #[tedge_config(example = "false")]
             #[tedge_config(note = "After changing this value, run `tedge reconnect <cloud>` to apply the changes")]
             /// Enables the built-in bridge when running tedge-mapper
@@ -1153,7 +1153,7 @@ define_tedge_config! {
 
             reconnect_policy: {
                 /// The minimum time the built-in bridge will wait before reconnecting
-                #[tedge_config(example = "30s", default(from_str = "30s"))]
+                #[tedge_config(example = "30s", default(from_str = "5s"))]
                 initial_interval: SecondsOrHumanTime,
 
                 /// The maximum time the built-in bridge will wait before reconnecting

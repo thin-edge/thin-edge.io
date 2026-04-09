@@ -68,6 +68,7 @@ Install tedge with custom user provided in system.toml
 *** Keywords ***
 Custom Setup
     ${DEVICE_SN}=    Setup    skip_bootstrap=${True}
+    Set Test Variable    $DEVICE_SN
 
 Install tedge
     ${bootstrap_cmd}=    ThinEdgeIO.Get Bootstrap Command
