@@ -10,12 +10,19 @@ on_success = "prepare"
 
 [prepare]
 script = "sudo /etc/tedge/sm-plugins/apt prepare"
+on_success = "get-version"
+
+# Extract the exact version to upgrade to
+# otherwise the server will just get the latest available version which maybe newer than the
+# version under test
+[get-version]
+script = """bash -c "printf ':::begin-tedge:::\\n{\\"version\\":\\"%s\\"}\\n:::end-tedge:::\\n' \\"$(jq -r '.updateList[].modules[].version' <<< '${.payload}')\\"""""
 on_success = "self-update"
 
 [self-update]
 # Note: update tedge as it is used by the tedge-agent (as tedge is a multi-call binary)
 # Note: installing the new tedge package will not restart the tedge-agent service
-script = "sudo /etc/tedge/sm-plugins/apt install tedge"
+script = "sudo /etc/tedge/sm-plugins/apt install tedge --module-version '${.payload.version}'"
 on_success = "restart-agent"
 
 [restart-agent]
