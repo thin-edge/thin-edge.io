@@ -22,7 +22,7 @@ use tokio::time::Timeout;
 
 /// A test helper that extends a message box with various way to check received messages.
 #[async_trait]
-pub trait MessageReceiverExt<M: Message>: Sized {
+pub trait MessageReceiverExt<M: Message>: MessageReceiver<M> {
     /// Return a new receiver which returns None if no message is received after the given timeout
     ///
     /// ```
@@ -73,7 +73,9 @@ pub trait MessageReceiverExt<M: Message>: Sized {
     /// }
     /// ```
     ///
-    fn with_timeout(self, timeout: Duration) -> TimedMessageBox<Self>;
+    fn with_timeout(self, timeout: Duration) -> TimedMessageBox<Self>
+    where
+        Self: Sized;
 
     /// Skip the given number of messages
     ///

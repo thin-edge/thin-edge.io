@@ -8,6 +8,8 @@ use crate::availability::AvailabilityBuilder;
 use crate::config::BridgeConfig;
 use crate::operations::OperationHandler;
 use crate::Capabilities;
+use anyhow::Context as _;
+use assert_json_diff::assert_json_matches_no_panic;
 use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
@@ -15,15 +17,19 @@ use c8y_api::proxy_url::Protocol;
 use c8y_api::smartrest::topic::C8yTopic;
 use serde_json::json;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
+use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
@@ -57,8 +63,6 @@ use tedge_flows::FlowsMapperConfig;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
-use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
-use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
@@ -67,6 +71,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::file::create_directory_with_defaults;
+use tracing::trace;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
@@ -129,7 +134,7 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
-    assert_received_contains_str(
+    tedge_mqtt_ext::test_helpers::assert_received_contains_str(
         &mut avail,
         [(
             "te/device/child1//",
@@ -154,7 +159,7 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
-    assert_received_contains_str(
+    tedge_mqtt_ext::test_helpers::assert_received_contains_str(
         &mut avail,
         [(
             "te/device/child2//",
@@ -179,7 +184,7 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
-    assert_received_contains_str(
+    tedge_mqtt_ext::test_helpers::assert_received_contains_str(
         &mut avail,
         [(
             "te/device/child3//",
@@ -667,6 +672,7 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
 
 #[tokio::test]
 async fn c8y_mapper_alarm_with_custom_message() {
+    tracing_subscriber::fmt().with_env_filter("trace").init();
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
@@ -1439,6 +1445,14 @@ async fn custom_operation_without_timeout_successful() {
     .await
     .expect("Send failed");
 
+    let _ = tokio::time::timeout(TEST_TIMEOUT_MS, async {
+        loop {
+            mqtt.recv().await;
+        }
+    })
+    .await;
+    dbg!(&mqtt.messages.lock().unwrap());
+
     // Expect `501` smartrest message on `c8y/s/us`.
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
 
@@ -1468,6 +1482,7 @@ EOF
 
 #[tokio::test]
 async fn custom_operation_with_timeout_successful() {
+    tracing_subscriber::fmt().with_env_filter("trace").init();
     // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
     // and executes the custom operation within the timeout period
 
@@ -1490,8 +1505,6 @@ async fn custom_operation_with_timeout_successful() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
@@ -1594,6 +1607,7 @@ EOF
 
 #[tokio::test]
 async fn custom_operation_timeout_sigkill() {
+    tracing_subscriber::fmt().with_env_filter("trace").init();
     // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
     // and executes the custom operation, it will timeout because it will not complete before given timeout
     // sigterm sent first, still the operation did not stop, so sigkill will be sent to stop the operation
@@ -2393,6 +2407,7 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
 
 #[tokio::test]
 async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
+    tracing_subscriber::fmt().with_env_filter("trace").init();
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
@@ -3321,19 +3336,42 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
 }
 
 pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessage>) {
-    //Skip all the init messages by still doing loose assertions
-    assert_received_contains_str(
-        mqtt,
-        [
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                "c8y_Agent",
-            ),
-            ("c8y/s/us", "114"),
-            ("c8y/s/us", "500"),
-        ],
-    )
-    .await;
+    // Consume initial messages. Init messages may arrive on `c8y/s/us` or
+    // on per-device subtopics like `c8y/s/us/<device>`. Accept the expected
+    // init payload fragments from any topic.
+    let mut found_agent = false;
+    let mut found_114 = false;
+    let mut found_500 = false;
+
+    let timeout_fut = async {
+        while !(found_agent && found_114 && found_500) {
+            let msg = mqtt.recv().await;
+            if msg.is_none() {
+                break;
+            }
+            let msg = msg.unwrap();
+            let payload = msg.payload.as_str().unwrap_or_default();
+            if payload.contains("c8y_Agent") {
+                found_agent = true;
+            }
+            if payload.contains("114") {
+                found_114 = true;
+            }
+            if payload.contains("500") {
+                found_500 = true;
+            }
+        }
+    };
+
+    let _ = tokio::time::timeout(TEST_TIMEOUT_MS, timeout_fut).await;
+
+    assert!(
+        found_agent && found_114 && found_500,
+        "expected init messages not received: agent={} 114={} 500={}",
+        found_agent,
+        found_114,
+        found_500
+    );
 }
 
 pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, HttpResult>) {
@@ -3399,11 +3437,11 @@ impl MockMqttBoxBuilder {
         let mut ignore_topics = TopicFilter::empty();
         ignore_topics.add_unchecked("te/+/+/+/+/status/flows");
 
-        MockMqttBox {
+        MockMqttBox::new(MockMqttBoxUnbuffered {
             ignore_topics,
             receiver: self.input_receiver,
             senders: self.output_sender,
-        }
+        })
     }
 }
 
@@ -3444,14 +3482,248 @@ impl RuntimeRequestSink for MockMqttBoxBuilder {
     }
 }
 
+pub async fn assert_received_contains_str<'a, I>(messages: &mut MockMqttBox, expected: I)
+where
+    I: IntoIterator<Item = (&'a str, &'a str)>,
+{
+    'outer: for expected_msg in expected.into_iter() {
+        // this always waits for a message even if we don't assert any more messages
+        // instead we should:
+        // 1. if any messages are ready immediately, add them
+        // 2. search through buffered messages
+        messages.recv_short().await;
+
+        // 3. if failed to find in buffered, then wait for new messages up to timeout
+        // 4. if a new message comes and matches, exit immediately
+        // 5. if it comes and doesn't match, wait for more using the remaining timeout
+        loop {
+            if messages.contains_message(expected_msg.0, expected_msg.1) {
+                continue 'outer;
+            }
+            if tokio::time::timeout(
+                messages.timeout.unwrap_or(Duration::from_secs(15)),
+                messages.recv(),
+            )
+            .await
+            .is_err()
+            {
+                panic!(
+                    "Didn't find expected message: [{}] {}\nmessage buffer: {:#?}",
+                    expected_msg.0,
+                    expected_msg.1,
+                    messages.messages.lock().unwrap()
+                );
+            }
+        }
+    }
+}
+
+pub async fn assert_received_includes_json<I, S>(messages: &mut MockMqttBox, expected: I)
+where
+    I: IntoIterator<Item = (S, serde_json::Value)>,
+    S: AsRef<str>,
+{
+    'outer: for expected_msg in expected.into_iter() {
+        // this always waits for a message even if we don't assert any more messages
+        // instead we should:
+        // 1. if any messages are ready immediately, add them
+        // 2. search through buffered messages
+        messages.recv_short().await;
+
+        // 3. if failed to find in buffered, then wait for new messages up to timeout
+        // 4. if a new message comes and matches, exit immediately
+        // 5. if it comes and doesn't match, wait for more using the remaining timeout
+        loop {
+            if messages.assert_contains_json(&expected_msg) {
+                continue 'outer;
+            }
+            if tokio::time::timeout(
+                messages.timeout.unwrap_or(Duration::from_secs(15)),
+                messages.recv(),
+            )
+            .await
+            .is_err()
+            {
+                panic!(
+                    "Message doesn't include json: [{}] {}\nmessage buffer: {:#?}",
+                    expected_msg.0.as_ref(),
+                    expected_msg.1,
+                    messages.messages.lock().unwrap()
+                );
+            }
+        }
+    }
+}
+
+/// An MQTT message box that stores received messages in a buffer and supports
+/// assertions for stored messages.
+///
+/// To enable maximum flexibility in test assertions, where most tests don't
+/// care about the all the messages, only ones they're directly testing, we want
+/// to allow these tests to ignore these messages without losing them (in case
+/// something else asserts them later). This is most easily done by gathering
+/// all received messages to a buffer and then choosing to drop selected
+/// messages only once they're asserted.
 pub struct MockMqttBox {
+    mqtt: MqttInner,
+    messages: Arc<Mutex<VecDeque<MqttMessage>>>,
+
+    // hack: some tests use different timeout and assertions need to know about it and proper
+    // handling isn't done yet, so expose just duration here, will need to fix
+    timeout: Option<Duration>,
+}
+
+enum MqttInner {
+    Unbuffered(MockMqttBoxUnbuffered),
+    UnbufferedTimeout(TimedMessageBox<MockMqttBoxUnbuffered>),
+}
+
+impl MockMqttBox {
+    pub fn new(mqtt: MockMqttBoxUnbuffered) -> Self {
+        Self {
+            mqtt: MqttInner::Unbuffered(mqtt),
+            messages: Default::default(),
+            timeout: Default::default(),
+        }
+    }
+
+    pub fn into_unbuffered(self) -> MockMqttBoxUnbuffered {
+        match self.mqtt {
+            MqttInner::Unbuffered(mqtt) => mqtt,
+            MqttInner::UnbufferedTimeout(_) => {
+                panic!("can't return after calling .with_timeout")
+            }
+        }
+    }
+
+    pub fn with_timeout(mut self, duration: Duration) -> Self {
+        self.timeout = Some(duration);
+        let mqtt = match self.mqtt {
+            MqttInner::UnbufferedTimeout(_) => return self,
+            MqttInner::Unbuffered(mqtt) => mqtt,
+        };
+
+        self.mqtt = MqttInner::UnbufferedTimeout(mqtt.with_timeout(duration));
+        self
+    }
+
+    /// Receives messages with a short timeout.
+    ///
+    /// The short timeout is for emulating receiving messages which are "immediately ready". If wanted
+    /// message is not immediately ready, use normal recv which waits for configured timeout.
+    pub async fn recv_short(&mut self) {
+        while tokio::time::timeout(Duration::from_millis(10), self.recv())
+            .await
+            .is_ok()
+        {}
+    }
+
+    #[track_caller]
+    pub fn contains_message(&mut self, topic: &str, payload: &str) -> bool {
+        let mut messages = self.messages.lock().unwrap();
+        let Some(pos) = messages
+            .iter()
+            .position(|m| m.topic.name == topic && m.payload_str().unwrap().contains(payload))
+        else {
+            return false;
+        };
+        messages.remove(pos);
+        true
+    }
+
+    #[track_caller]
+    pub fn assert_contains_json<S>(&mut self, expected: &(S, serde_json::Value)) -> bool
+    where
+        S: AsRef<str>,
+    {
+        let mut messages = self.messages.lock().unwrap();
+        let Some(pos) = messages
+            .iter()
+            .position(|m| message_includes_json(m, expected).is_ok())
+        else {
+            return false;
+        };
+        messages.remove(pos);
+        true
+    }
+}
+
+pub fn message_includes_json<S>(
+    message: &MqttMessage,
+    expected: &(S, serde_json::Value),
+) -> anyhow::Result<()>
+where
+    S: AsRef<str>,
+{
+    anyhow::ensure!(
+        TopicFilter::new_unchecked(expected.0.as_ref()).accept(message),
+        "\nReceived unexpected message: {:?}",
+        message
+    );
+
+    let payload = serde_json::from_str::<serde_json::Value>(
+        message.payload_str().context("non UTF-8 payload")?,
+    )
+    .expect("non JSON payload");
+
+    assert_json_matches_no_panic(
+        &payload,
+        &expected.1,
+        assert_json_diff::Config::new(assert_json_diff::CompareMode::Inclusive),
+    )
+    .map_err(|e| anyhow::anyhow!(e))
+}
+
+#[async_trait::async_trait]
+impl MessageReceiver<MqttMessage> for MockMqttBox {
+    async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
+        trace!("calling MockMqttBox::try_recv");
+        let recv = match &mut self.mqtt {
+            MqttInner::Unbuffered(mqtt) => {
+                tokio::time::timeout(Duration::from_secs(1), mqtt.try_recv())
+            }
+            MqttInner::UnbufferedTimeout(mqtt) => {
+                tokio::time::timeout(Duration::from_secs(999), mqtt.try_recv())
+            }
+        };
+        let message = recv.await.unwrap_or(Ok(None))?;
+        trace!("message returned");
+        if let Some(message) = &message {
+            self.messages.lock().unwrap().push_back(message.clone());
+        }
+        Ok(message)
+    }
+
+    async fn recv(&mut self) -> Option<MqttMessage> {
+        self.try_recv().await.unwrap_or_default()
+    }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        match &mut self.mqtt {
+            MqttInner::Unbuffered(mqtt) => mqtt.recv_signal().await,
+            MqttInner::UnbufferedTimeout(mqtt) => mqtt.recv_signal().await,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Sender<MqttMessage> for MockMqttBox {
+    async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
+        match &mut self.mqtt {
+            MqttInner::Unbuffered(mqtt) => mqtt.send(message).await,
+            MqttInner::UnbufferedTimeout(mqtt) => mqtt.send(message).await,
+        }
+    }
+}
+
+pub struct MockMqttBoxUnbuffered {
     pub(crate) ignore_topics: TopicFilter,
     pub(crate) receiver: LoggingReceiver<MqttRequest>,
     pub(crate) senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
 }
 
 #[async_trait::async_trait]
-impl MessageReceiver<MqttMessage> for MockMqttBox {
+impl MessageReceiver<MqttMessage> for MockMqttBoxUnbuffered {
     async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
         loop {
             let message = self.receiver.try_recv().await;
@@ -3491,7 +3763,7 @@ impl MessageReceiver<MqttMessage> for MockMqttBox {
 }
 
 #[async_trait::async_trait]
-impl Sender<MqttMessage> for MockMqttBox {
+impl Sender<MqttMessage> for MockMqttBoxUnbuffered {
     async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
         for (topic, sender) in self.senders.iter_mut() {
             if topic.accept(&message) {
