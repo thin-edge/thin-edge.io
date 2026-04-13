@@ -6,6 +6,7 @@ use crate::tests::TestHandle;
 use proptest::test_runner::Config as ProptestConfig;
 use rand::seq::SliceRandom;
 use rand::Rng;
+use rand::RngExt;
 use rand::SeedableRng;
 use serde_json::json;
 use std::collections::HashMap;

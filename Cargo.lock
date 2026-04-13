@@ -824,7 +824,7 @@ dependencies = [
  "futures-util",
  "http 1.3.1",
  "miette",
- "rand 0.9.1",
+ "rand 0.10.1",
  "rstest",
  "rustls 0.23.27",
  "serde",
@@ -960,7 +960,7 @@ dependencies = [
  "mockito",
  "plugin_sm",
  "proptest",
- "rand 0.9.1",
+ "rand 0.10.1",
  "serde",
  "serde_json",
  "tedge_actors",
@@ -2909,7 +2909,7 @@ dependencies = [
  "hyper 1.6.0",
  "hyper-util",
  "log",
- "rand 0.9.1",
+ "rand 0.9.4",
  "regex",
  "serde_json",
  "serde_urlencoded",
@@ -3653,7 +3653,7 @@ dependencies = [
  "bytes",
  "getrandom 0.3.3",
  "lru-slab",
- "rand 0.9.1",
+ "rand 0.9.4",
  "ring",
  "rustc-hash",
  "rustls 0.23.27",
@@ -3719,9 +3719,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.1"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97"
+checksum = "44c5af06bb1b7d3216d91932aed5265164bf384dc89cd6ba05cf59a35f5f76ea"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
@@ -3729,9 +3729,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc266eb313df6c5c09c1c7b1fbe2510961e5bcd3add930c1e31f7ed9da0feff8"
+checksum = "d2e8e8bcc7961af1fdac401278c6a831614941f6164ee3bf4ce61b7edb162207"
 dependencies = [
  "chacha20",
  "getrandom 0.4.2",
@@ -5003,7 +5003,7 @@ dependencies = [
  "glob",
  "log",
  "predicates",
- "rand 0.9.1",
+ "rand 0.10.1",
  "regex",
  "serde",
  "tedge_api",
@@ -5092,7 +5092,7 @@ dependencies = [
  "pem",
  "percent-encoding",
  "postcard",
- "rand 0.9.1",
+ "rand 0.10.1",
  "rsa",
  "rustls 0.23.27",
  "sd-listen-fds",
@@ -5340,7 +5340,7 @@ dependencies = [
  "futures",
  "glob",
  "humantime",
- "rand 0.9.1",
+ "rand 0.10.1",
  "rquickjs",
  "serde",
  "serde_json",
@@ -6091,7 +6091,7 @@ dependencies = [
  "http 1.3.1",
  "httparse",
  "log",
- "rand 0.9.1",
+ "rand 0.9.4",
  "rustls 0.23.27",
  "rustls-pki-types",
  "sha1",
@@ -6110,7 +6110,7 @@ dependencies = [
  "http 1.3.1",
  "httparse",
  "log",
- "rand 0.9.1",
+ "rand 0.9.4",
  "rustls 0.23.27",
  "rustls-pki-types",
  "sha1",
@@ -6259,7 +6259,7 @@ checksum = "a68d3c8f01c0cfa54a75291d83601161799e4a89a39e0929f4b0354d88757a37"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
- "rand 0.10.0",
+ "rand 0.10.1",
  "uuid-rng-internal",
  "wasm-bindgen",
 ]
@@ -6270,7 +6270,7 @@ version = "1.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02b76dc0e3c64be846ad2fd1378656e7de2120530d1e83d8f20ca6a0cdba01de"
 dependencies = [
- "rand 0.10.0",
+ "rand 0.10.1",
 ]
 
 [[package]]

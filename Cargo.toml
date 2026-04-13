@@ -172,7 +172,7 @@ prettyplease = "0.2.22"
 proc-macro2 = "1"
 proptest = "1.0"
 quote = "1"
-rand = "0.9"
+rand = "0.10"
 rasn = "0.26"
 rasn-cms = "0.26"
 rcgen = { version = "0.14", features = ["pem", "zeroize"] }
