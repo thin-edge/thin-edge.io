@@ -74,7 +74,6 @@ impl Record for GenericCommandState {
             ".topic.operation" => self.operation().map(|s| s.into()),
             ".topic.cmd_id" => self.cmd_id().map(|s| s.into()),
             ".payload" => Some(self.payload.clone()),
-            path if path.contains(['[', ']']) => None,
             path => {
                 let value_path = path.strip_prefix(".payload.")?;
                 let value = json_excerpt(&self.payload, value_path)
@@ -97,10 +96,38 @@ fn json_as_string(value: &Value) -> String {
 }
 
 fn json_excerpt<'a>(value: &'a Value, path: &'a str) -> Option<&'a Value> {
+    if path.is_empty() {
+        return Some(value);
+    }
+
     match path.split_once('.') {
-        None if path.is_empty() => Some(value),
+        None => json_array_excerpt(value, path),
+        Some((key, path)) => {
+            json_array_excerpt(value, key).and_then(|value| json_excerpt(value, path))
+        }
+    }
+}
+
+fn json_array_excerpt<'a>(value: &'a Value, path: &'a str) -> Option<&'a Value> {
+    if path.is_empty() {
+        return Some(value);
+    }
+
+    match path.find('[') {
         None => value.get(path),
-        Some((key, path)) => value.get(key).and_then(|value| json_excerpt(value, path)),
+        Some(0) => {
+            let (key, path) = path[1..].split_once(']')?;
+            let index = key.parse::<usize>().ok()?;
+            value
+                .get(index)
+                .and_then(|value| json_array_excerpt(value, path))
+        }
+        Some(pos) => {
+            let (key, path) = path.split_at(pos);
+            value
+                .get(key)
+                .and_then(|value| json_array_excerpt(value, path))
+        }
     }
 }
 
@@ -114,8 +141,13 @@ mod tests {
     #[test]
     fn inject_json_into_parameters() {
         let topic = Topic::new_unchecked("te/device/main///cmd/make_it/123");
-        let payload = r#"{ "status":"init", "foo":42, "bar": { "extra": [1,2,3] }}"#;
-        let command = mqtt_channel::MqttMessage::new(&topic, payload);
+        let payload = json!({
+            "status":"init",
+            "foo":42,
+            "bar": { "extra": [1,2,3] },
+            "nested": [ { "matrix": [[4,5,6], [7,8,9]]} ]
+        });
+        let command = mqtt_channel::MqttMessage::new(&topic, payload.to_string());
         let cmd = GenericCommandState::from_command_message(&command).expect("parsing error");
         assert!(cmd.is_init());
 
@@ -123,12 +155,8 @@ mod tests {
         assert_eq!(
             cmd.inject_values_into_template("${.}").to_json(),
             json!({
-                "topic": "te/device/main///cmd/make_it/123",
-                "payload": {
-                    "status":"init",
-                    "foo":42,
-                    "bar": { "extra": [1,2,3] }
-                }
+                    "topic": "te/device/main///cmd/make_it/123",
+                    "payload": payload,
             })
         );
         assert_eq!(
@@ -194,11 +222,20 @@ mod tests {
                 .to_json(),
             json!([1, 2, 3])
         );
-
-        // Not supported yet
         assert_eq!(
-            cmd.inject_values_into_template("${.payload.bar.extra[1]}"),
-            "${.payload.bar.extra[1]}"
+            cmd.inject_values_into_template("${.payload.bar.extra[1]}")
+                .to_json(),
+            json!(2)
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.nested[0].matrix[1]}")
+                .to_json(),
+            json!([7, 8, 9])
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.nested[0].matrix[1][2]}")
+                .to_json(),
+            json!(9)
         );
 
         // Ill formed
@@ -218,6 +255,7 @@ mod tests {
             cmd.inject_values_into_template("${.payload.bar.unknown}"),
             ""
         );
+        assert_eq!(cmd.inject_values_into_template("${.payload.bar[}"), "");
     }
 
     trait JsonContent {

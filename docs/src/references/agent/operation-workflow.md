@@ -241,6 +241,7 @@ Data extracted from the command status topic and message payload can be passed a
   - `${.payload}` is the whole command json payload (*e.g.* `{"status': "init"}`)
   - `${.payload.status}` is the command current status (*e.g.* `"init"`)
   - `${.payload.x.y.z}` is the json value extracted from the payload following the given `x.y.z` path if any.
+  - `${.payload.xs[1]}` extracts a value from an array using its position.
   - `${.payload.some.unknown.path}` is substituted for the empty string `""`,
      the rational being that the *payload* object represents a free-form value.
   - When the root object is unknown (*e.g.* `${.unknown-object.some.path}`), the argument is passed unchanged to the script.
