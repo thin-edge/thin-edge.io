@@ -146,6 +146,11 @@ set_version_variables() {
         APK_VERSION="${GIT_SEMVER//\~/_rc}"
     fi
 
+    # strip everything after and including the '+'
+    # as Alpine Linux virtual package dependencies don't seem
+    # to resolve properly if the '+' is contained in the name
+    APK_VERSION_APPROXIMATE="${APK_VERSION%%+*}"
+
     if [[ "$GIT_SEMVER" = *-rc* ]]; then
         # Debian expects a tilde as a separator
         DEB_VERSION="${GIT_SEMVER//-/\~}"
@@ -171,6 +176,7 @@ set_version_variables() {
 
     export GIT_SEMVER
     export APK_VERSION
+    export APK_VERSION_APPROXIMATE
     export DEB_VERSION
     export RPM_VERSION
     export CONTAINER_VERSION
