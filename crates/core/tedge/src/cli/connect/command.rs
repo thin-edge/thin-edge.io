@@ -63,9 +63,8 @@ use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeConfigError;
 use tedge_system_services::*;
 use tedge_utils::file::path_exists;
-use tedge_utils::paths::create_directories;
 use tedge_utils::paths::ok_if_not_found;
-use tedge_utils::paths::DraftFile;
+use tedge_utils::paths::Owner;
 use tracing::warn;
 use yansi::Paint as _;
 
@@ -1298,16 +1297,10 @@ async fn write_generic_mosquitto_config_to_file(
     tedge_config: &TEdgeConfig,
     common_mosquitto_config: &CommonMosquittoConfig,
 ) -> Result<(), ConnectError> {
-    let dir_path = tedge_config.root_dir().join(TEDGE_BRIDGE_CONF_DIR_PATH);
-
-    // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
-    create_directories(dir_path)?;
-
-    let common_config_path =
-        get_common_mosquitto_config_file_path(tedge_config, common_mosquitto_config);
-    let mut common_draft = DraftFile::new(common_config_path).await?.with_mode(0o644);
-    common_mosquitto_config.serialize(&mut common_draft).await?;
-    common_draft.persist().await?;
+    let config_file = common_mosquitto_config.config_file.as_str();
+    let mut contents = Vec::new();
+    common_mosquitto_config.serialize(&mut contents).await?;
+    write_mosquitto_owned_config(tedge_config, config_file, &contents).await?;
 
     Ok(())
 }
@@ -1329,16 +1322,29 @@ async fn write_bridge_config_to_file(
     config: &TEdgeConfig,
     bridge_config: &BridgeConfig,
 ) -> Result<(), ConnectError> {
-    let dir_path = config.root_dir().join(TEDGE_BRIDGE_CONF_DIR_PATH);
+    let mut contents = Vec::new();
+    bridge_config.serialize(&mut contents).await?;
+    write_mosquitto_owned_config(config, &bridge_config.config_file, &contents).await?;
 
-    // This will forcefully create directory structure if it doesn't exist, we should find better way to do it, maybe config should deal with it?
-    create_directories(dir_path)?;
+    Ok(())
+}
 
-    let config_path = get_bridge_config_file_path(config, bridge_config);
-    let mut config_draft = DraftFile::new(config_path).await?.with_mode(0o644);
-    bridge_config.serialize(&mut config_draft).await?;
-    config_draft.persist().await?;
-
+async fn write_mosquitto_owned_config(
+    tedge_config: &TEdgeConfig,
+    config_file: &str,
+    contents: &[u8],
+) -> Result<(), ConnectError> {
+    let config_root = tedge_config.config_root();
+    config_root
+        .dir(TEDGE_BRIDGE_CONF_DIR_PATH)?
+        .with_mode(0o755)
+        .ensure()
+        .await?;
+    config_root
+        .file(format!("{TEDGE_BRIDGE_CONF_DIR_PATH}/{config_file}"))?
+        .with_owner(Owner::user_group(crate::BROKER_USER, crate::BROKER_GROUP))
+        .replace_atomic(contents)
+        .await?;
     Ok(())
 }
 
@@ -1347,16 +1353,6 @@ fn get_bridge_config_file_path(config: &TEdgeConfig, bridge_config: &BridgeConfi
         .root_dir()
         .join(TEDGE_BRIDGE_CONF_DIR_PATH)
         .join(&*bridge_config.config_file)
-}
-
-fn get_common_mosquitto_config_file_path(
-    config: &TEdgeConfig,
-    common_mosquitto_config: &CommonMosquittoConfig,
-) -> Utf8PathBuf {
-    config
-        .root_dir()
-        .join(TEDGE_BRIDGE_CONF_DIR_PATH)
-        .join(&common_mosquitto_config.config_file)
 }
 
 // To confirm the connected c8y tenant is the one that user configured.

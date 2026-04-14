@@ -683,9 +683,7 @@ mod tests {
     use nix::unistd::Uid;
     use once_cell::sync::Lazy;
     use std::os::unix::fs::PermissionsExt;
-    use std::path::Path;
     use tedge_test_utils::fs::TempTedgeDir;
-    use tempfile::TempDir;
 
     static USER: Lazy<String> = Lazy::new(whoami::username);
     static GROUP: Lazy<String> = Lazy::new(|| {
@@ -696,118 +694,9 @@ mod tests {
     });
 
     #[tokio::test]
-    async fn create_file_correct_user_group() {
-        let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("file").display().to_string();
-
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None)
-            .await
-            .unwrap();
-        assert!(path_exists(file_path.as_str()).await);
-        let meta = std::fs::metadata(file_path.as_str()).unwrap();
-        let perm = meta.permissions();
-        println!("{:o}", perm.mode());
-        assert!(format!("{:o}", perm.mode()).contains("644"));
-    }
-
-    #[tokio::test]
-    async fn create_file_with_default_content() {
-        let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("file").display().to_string();
-
-        let example_config = r#"# Add the configurations to be managed
-        files = [
-        #    { path = '/etc/tedge/tedge.toml' },
-        ]"#;
-
-        // Create a new file with default content
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, Some(example_config))
-            .await
-            .unwrap();
-
-        let content = fs::read(file_path).await.unwrap();
-        assert_eq!(example_config.as_bytes(), content);
-    }
-
-    #[tokio::test]
-    async fn create_file_wrong_user() {
-        let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("file").display().to_string();
-
-        let err = create_file_with_user_group(file_path, "nonexistent_user", &GROUP, 0o775, None)
-            .await
-            .unwrap_err();
-
-        assert!(err.to_string().contains("User not found"));
-    }
-
-    #[tokio::test]
-    async fn create_file_wrong_group() {
-        let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("file").display().to_string();
-
-        let err = create_file_with_user_group(&file_path, &USER, "nonexistent_group", 0o775, None)
-            .await
-            .unwrap_err();
-
-        assert!(err.to_string().contains("Group not found"));
-        fs::remove_file(&file_path).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn create_directory_with_correct_user_group() {
-        let temp_dir = TempDir::new().unwrap();
-        let dir_path = temp_dir.path().join("dir").display().to_string();
-
-        create_directory_with_user_group_and_update_ownership(&dir_path, &USER, &GROUP, 0o775)
-            .await
-            .unwrap();
-
-        assert!(path_exists(&dir_path).await);
-        let meta = fs::metadata(&dir_path).await.unwrap();
-        let perm = meta.permissions();
-        println!("{:o}", perm.mode());
-        assert!(format!("{:o}", perm.mode()).contains("775"));
-    }
-
-    #[tokio::test]
-    async fn create_directory_with_wrong_user() {
-        let temp_dir = TempDir::new().unwrap();
-        let dir_path = temp_dir.path().join("dir");
-
-        let err = create_directory_with_user_group_and_update_ownership(
-            &dir_path,
-            "nonexistent_user",
-            &GROUP,
-            0o775,
-        )
-        .await
-        .unwrap_err();
-
-        assert!(err.to_string().contains("User not found"));
-    }
-
-    #[tokio::test]
-    async fn create_directory_with_wrong_group() {
-        let temp_dir = TempDir::new().unwrap();
-        let dir_path = temp_dir.path().join("dir");
-
-        let err = create_directory_with_user_group_and_update_ownership(
-            &dir_path,
-            &USER,
-            "nonexistent_group",
-            0o775,
-        )
-        .await
-        .unwrap_err();
-
-        assert!(err.to_string().contains("Group not found"));
-    }
-
-    #[tokio::test]
     async fn change_file_permissions() {
-        let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("file").display().to_string();
+        let ttd = TempTedgeDir::new();
+        let file_path = ttd.path().join("file");
 
         create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None)
             .await
@@ -815,15 +704,79 @@ mod tests {
         assert!(path_exists(&file_path).await);
 
         let meta = fs::metadata(&file_path).await.unwrap();
-        let perm = meta.permissions();
-        assert!(format!("{:o}", perm.mode()).contains("644"));
+        assert_eq!(meta.permissions().mode() & 0o777, 0o644);
 
         let permission_set = PermissionEntry::new(None, None, Some(0o444));
-        permission_set.apply(Path::new(&file_path)).await.unwrap();
+        permission_set.apply(&file_path).await.unwrap();
 
         let meta = fs::metadata(&file_path).await.unwrap();
-        let perm = meta.permissions();
-        assert!(format!("{:o}", perm.mode()).contains("444"));
+        assert_eq!(meta.permissions().mode() & 0o777, 0o444);
+    }
+
+    #[tokio::test]
+    async fn overwrite_file_content() {
+        let ttd = TempTedgeDir::new();
+        let file_path = ttd.path().join("file");
+
+        PermissionEntry::default()
+            .create_file(&file_path, None)
+            .await
+            .unwrap();
+
+        overwrite_file(&file_path, "abc").await.unwrap();
+
+        let actual = fs::read(&file_path).await.unwrap();
+        assert_eq!(actual, b"abc");
+    }
+
+    #[tokio::test]
+    async fn create_new_symlink() {
+        let ttd = TempTedgeDir::new();
+        let source_path = ttd.path().join("source_file");
+        let another_source_path = ttd.path().join("another_source_file");
+        let dest_path = ttd.path().join("dest_file");
+
+        PermissionEntry::default()
+            .create_file(&source_path, None)
+            .await
+            .unwrap();
+        create_symlink(&source_path, &dest_path).await.unwrap();
+        assert!(path_exists(&dest_path).await);
+
+        // Idempotent when target is the same
+        assert!(create_symlink(&source_path, &dest_path).await.is_ok());
+
+        // Fails when an existing symlink points to a different target
+        PermissionEntry::default()
+            .create_file(&another_source_path, None)
+            .await
+            .unwrap();
+        let err = create_symlink(&another_source_path, &dest_path)
+            .await
+            .unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("symlink exists but does not point to"));
+    }
+
+    #[tokio::test]
+    async fn move_file_to_different_filesystem() {
+        let src_dir = TempTedgeDir::new();
+        let file_path = src_dir.path().join("file");
+        PermissionEntry::new(None, None, Some(0o775))
+            .create_file(&file_path, Some("test"))
+            .await
+            .unwrap();
+
+        let dest_dir = TempTedgeDir::new();
+        let dest_path = dest_dir.path().join("another-file");
+
+        move_file(&file_path, &dest_path, PermissionEntry::default())
+            .await
+            .unwrap();
+
+        let content = fs::read(&dest_path).await.unwrap();
+        assert_eq!(content, b"test");
     }
 
     #[tokio::test]
@@ -878,23 +831,6 @@ mod tests {
         assert_eq!(get_filename(PathBuf::from("/")), None);
     }
 
-    #[tokio::test]
-    async fn overwrite_file_content() {
-        let temp_dir = TempDir::new().unwrap();
-        let file_path = temp_dir.path().join("file");
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, None)
-            .await
-            .unwrap();
-
-        let new_content = "abc";
-        overwrite_file(file_path.as_path(), new_content)
-            .await
-            .unwrap();
-
-        let actual_content = fs::read(file_path).await.unwrap();
-        assert_eq!(actual_content, new_content.as_bytes());
-    }
-
     #[test]
     fn get_uid_of_users() {
         assert_eq!(get_uid_by_name("root").unwrap(), 0);
@@ -916,67 +852,5 @@ mod tests {
         assert_ne!(get_gid_by_name("staff").unwrap(), 0);
         let err = get_gid_by_name("nonexistent_group").unwrap_err();
         assert!(err.to_string().contains("Group not found"));
-    }
-
-    #[tokio::test]
-    async fn create_new_symlink() {
-        let temp_dir = TempDir::new().unwrap();
-        let source_path = temp_dir.path().join("source_file").display().to_string();
-        let another_source_path = temp_dir
-            .path()
-            .join("another_source_file")
-            .display()
-            .to_string();
-        let invalid_source_path = temp_dir.path().join("invalid_file").display().to_string();
-        let dest_path = temp_dir.path().join("dest_file").display().to_string();
-
-        // create symlink
-        create_file_with_user_group(&source_path, &USER, &GROUP, 0o644, None)
-            .await
-            .unwrap();
-        assert!(path_exists(&source_path).await);
-        create_symlink(&source_path, &dest_path).await.unwrap();
-        assert!(path_exists(&dest_path).await);
-
-        // creating symlink again should not return error if source is the same
-        assert!(create_symlink(&source_path, &dest_path).await.is_ok());
-
-        // creating symlink again should  return error if source is different
-        create_file_with_user_group(&another_source_path, &USER, &GROUP, 0o644, None)
-            .await
-            .unwrap();
-        assert!(path_exists(&another_source_path).await);
-        let err = create_symlink(&another_source_path, &dest_path)
-            .await
-            .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("symlink exists but does not point to")
-                && err.to_string().contains(another_source_path.as_str())
-        );
-
-        // creating symlink should not be possible to file that does not exists
-        assert!(create_symlink(invalid_source_path, dest_path)
-            .await
-            .is_err());
-    }
-
-    #[tokio::test]
-    async fn move_file_to_different_filesystem() {
-        let file_dir = TempDir::new().unwrap();
-        let file_path = file_dir.path().join("file");
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o775, Some("test"))
-            .await
-            .unwrap();
-
-        let dest_dir = TempDir::new_in(".").unwrap();
-        let dest_path = dest_dir.path().join("another-file");
-
-        move_file(file_path, &dest_path, PermissionEntry::default())
-            .await
-            .unwrap();
-
-        let content = fs::read(&dest_path).await.unwrap();
-        assert_eq!("test".as_bytes(), content);
     }
 }

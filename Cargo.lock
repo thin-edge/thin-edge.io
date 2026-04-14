@@ -830,12 +830,14 @@ dependencies = [
  "serde",
  "sha1",
  "tedge_config",
+ "tedge_test_utils",
  "tedge_utils",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "tokio-rustls 0.26.2",
  "url",
+ "whoami",
  "ws_stream_tungstenite 0.15.0",
 ]
 

@@ -387,12 +387,10 @@ mod tests {
     #[tokio::test]
     async fn ensure_creates_missing_managed_directories() {
         let ttd = TempTedgeDir::new();
+        let root = ttd.path();
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(
-            ttd.path(),
-            owner.user.clone(),
-            owner.group.clone(),
-        );
+        let config_root =
+            TedgePaths::from_root_with_defaults(root, owner.user.clone(), owner.group.clone());
 
         config_root
             .dir("operations/c8y")
@@ -402,16 +400,9 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(ttd.path().join("operations").is_dir());
-        assert!(ttd.path().join("operations/c8y").is_dir());
-        assert_eq!(
-            std::fs::metadata(ttd.path().join("operations/c8y"))
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o755
-        );
+        assert!(root.join("operations").is_dir());
+        assert!(root.join("operations/c8y").is_dir());
+        assert_eq!(mode_bits(root.join("operations/c8y")).await, 0o755);
     }
 
     #[tokio::test]
@@ -437,14 +428,13 @@ mod tests {
 
     #[tokio::test]
     async fn create_if_missing_leaves_existing_directory_mode_unchanged() {
-        let temp_dir = TempTedgeDir::new();
-        let root = temp_dir.dir("etc").dir("tedge");
-        let existing = root.dir("operations");
+        let ttd = TempTedgeDir::new();
+        let existing = ttd.dir("operations");
         existing.set_mode(0o700);
 
         let owner = current_owner();
         let config_root = TedgePaths::from_root_with_defaults(
-            root.path(),
+            ttd.path(),
             owner.user.clone(),
             owner.group.clone(),
         );
@@ -457,14 +447,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            std::fs::metadata(existing.path())
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777,
-            0o700
-        );
+        assert_eq!(mode_bits(existing.path()).await, 0o700);
     }
 
     #[tokio::test]
@@ -638,18 +621,17 @@ mod tests {
     #[tokio::test]
     async fn replace_atomic_preserves_symlink_following_behavior() {
         let ttd = TempTedgeDir::new();
-        let mosquitto_conf = ttd.dir("mosquitto-conf");
-        let target = mosquitto_conf.path().join("c8y-bridge.conf");
-        let link = ttd.path().join("bridge-link.conf");
-        std::fs::write(&target, "before").unwrap();
-        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let root = ttd.path();
+        let bridge_conf = ttd
+            .dir("mosquitto-conf")
+            .file("c8y-bridge.conf")
+            .with_raw_content("before");
+        let link = root.join("bridge-link.conf");
+        std::os::unix::fs::symlink(bridge_conf.path(), &link).unwrap();
 
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(
-            ttd.path(),
-            owner.user.clone(),
-            owner.group.clone(),
-        );
+        let config_root =
+            TedgePaths::from_root_with_defaults(root, owner.user.clone(), owner.group.clone());
 
         config_root
             .file("bridge-link.conf")
@@ -658,7 +640,12 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(std::fs::read_to_string(&target).unwrap(), "after");
+        assert_eq!(
+            tokio::fs::read_to_string(&bridge_conf.path())
+                .await
+                .unwrap(),
+            "after"
+        );
     }
 
     async fn mode_bits(path: impl AsRef<std::path::Path>) -> u32 {

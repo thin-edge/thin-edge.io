@@ -36,7 +36,18 @@ pub async fn persist_bridge_config_file(
 ) -> anyhow::Result<()> {
     let config_path = dir.join(name).with_extension("toml");
     let template_path = dir.join(name).with_extension("toml.template");
-    let owner = tedge_config.config_root().default_owner().clone();
+    let config_root = tedge_config.config_root();
+    let owner = config_root.default_owner().clone();
+    let relative_dir = dir
+        .strip_prefix(tedge_config.root_dir())
+        .context("bridge config directory must stay under the config root")?;
+
+    config_root
+        .dir(relative_dir.as_std_path())
+        .context("invalid bridge config directory")?
+        .with_mode(0o755)
+        .ensure()
+        .await?;
 
     // Persist a copy of bridge config definition to be used by users as a template.
     // Don't update the flow definition if overridden or disabled
@@ -172,12 +183,34 @@ mod tests {
     use super::*;
     use crate::config_toml::TableMapperLookup;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_utils::paths::Owner;
 
     mod persist_bridge_config_file {
         use super::*;
 
-        async fn load_config(ttd: &TempTedgeDir) -> TEdgeConfig {
+        fn current_owner() -> Owner {
+            let user = whoami::username();
+            let group = std::process::Command::new("id")
+                .arg("-gn")
+                .output()
+                .ok()
+                .and_then(|output| String::from_utf8(output.stdout).ok())
+                .map(|group| group.trim().to_owned())
+                .filter(|group| !group.is_empty())
+                .expect("group must exist");
+            Owner::user_group(user, group)
+        }
+
+        async fn load_config_with_owner(ttd: &TempTedgeDir, owner: &Owner) -> TEdgeConfig {
+            ttd.file("system.toml").with_raw_content(&format!(
+                "user = '{}'\ngroup = '{}'\n",
+                owner.user, owner.group
+            ));
             TEdgeConfig::load(ttd.utf8_path()).await.unwrap()
+        }
+
+        async fn load_config(ttd: &TempTedgeDir) -> TEdgeConfig {
+            load_config_with_owner(ttd, &current_owner()).await
         }
 
         #[tokio::test]
@@ -203,6 +236,52 @@ mod tests {
                     .await
                     .unwrap(),
                 content
+            );
+        }
+
+        #[tokio::test]
+        async fn creates_directory_using_the_system_toml_user() {
+            let ttd = TempTedgeDir::new();
+            let dir = ttd.utf8_path().join("bridge");
+            let config = load_config_with_owner(&ttd, &Owner::user_group("root", "root")).await;
+
+            let err = persist_bridge_config_file(&dir, "test", "test content", &config)
+                .await
+                .unwrap_err();
+            let err = err.to_string();
+
+            assert!(
+                err.contains("Failed to change owner"),
+                "error should indicate an ownership change failure, got: {err}"
+            );
+            assert!(
+                err.contains("/bridge"),
+                "error should point at the bridge directory, got: {err}"
+            );
+        }
+
+        #[tokio::test]
+        async fn creates_missing_directory_using_the_current_system_toml_user() {
+            let ttd = TempTedgeDir::new();
+            let dir = ttd.utf8_path().join("bridge");
+            let config = load_config(&ttd).await;
+
+            persist_bridge_config_file(&dir, "test", "test content", &config)
+                .await
+                .unwrap();
+
+            assert!(dir.exists());
+            assert_eq!(
+                tokio::fs::read_to_string(dir.join("test.toml"))
+                    .await
+                    .unwrap(),
+                "test content"
+            );
+            assert_eq!(
+                tokio::fs::read_to_string(dir.join("test.toml.template"))
+                    .await
+                    .unwrap(),
+                "test content"
             );
         }
 
