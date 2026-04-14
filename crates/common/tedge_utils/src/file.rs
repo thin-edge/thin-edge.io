@@ -91,6 +91,18 @@ pub async fn create_directory_and_update_ownership(
         .await
 }
 
+pub async fn create_directory_and_update_ownership_with_root(
+    root: impl AsRef<Path>,
+    dir: impl AsRef<Path>,
+    permissions: &PermissionEntry,
+) -> Result<(), FileError> {
+    permissions
+        .clone()
+        .force_dir_ownership()
+        .create_directory_with_root(dir.as_ref(), root.as_ref())
+        .await
+}
+
 /// Create the directory owned by the user running this API with default directory permissions
 pub async fn create_directory_with_defaults(dir: impl AsRef<Path>) -> Result<(), FileError> {
     create_directory(dir, &PermissionEntry::default()).await
@@ -320,12 +332,29 @@ impl PermissionEntry {
         Ok(())
     }
 
-    async fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
+    pub(crate) async fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
+        self.create_directory_internal(dir, None).await
+    }
+
+    pub(crate) async fn create_directory_with_root(
+        &self,
+        dir: &Path,
+        root: &Path,
+    ) -> Result<(), FileError> {
+        self.create_directory_internal(dir, Some(root)).await
+    }
+
+    async fn create_directory_internal(
+        &self,
+        dir: &Path,
+        root: Option<&Path>,
+    ) -> Result<(), FileError> {
         match dir.parent() {
             None => return Ok(()),
+            Some(_parent) if Some(dir) == root => {}
             Some(parent) => {
                 if !path_exists(parent).await {
-                    Box::pin(self.create_directory(parent)).await?;
+                    Box::pin(self.create_directory_internal(parent, root)).await?;
                 }
             }
         }
@@ -363,7 +392,7 @@ impl PermissionEntry {
     ///     Ok() when file is created and the content is written successfully into the file.
     ///     Ok() when the file already exists
     ///     Err(_) When it can not create the file with the appropriate owner and access permissions.
-    async fn create_file(
+    pub(crate) async fn create_file(
         &self,
         file: impl AsRef<Path>,
         default_content: Option<&str>,
@@ -651,9 +680,11 @@ pub async fn create_symlink(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nix::unistd::Uid;
     use once_cell::sync::Lazy;
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
+    use tedge_test_utils::fs::TempTedgeDir;
     use tempfile::TempDir;
 
     static USER: Lazy<String> = Lazy::new(whoami::username);
@@ -793,6 +824,49 @@ mod tests {
         let meta = fs::metadata(&file_path).await.unwrap();
         let perm = meta.permissions();
         assert!(format!("{:o}", perm.mode()).contains("444"));
+    }
+
+    #[tokio::test]
+    async fn rooted_directory_creation_reports_the_failing_ancestor() {
+        if Uid::current().is_root() {
+            return;
+        }
+
+        let ttd = TempTedgeDir::new();
+        let root = ttd.dir("managed-root");
+        let target = root.path().join("logs").join("agent");
+
+        let err = create_directory_and_update_ownership_with_root(
+            root.path(),
+            &target,
+            &permissions("root", "root", 0o755),
+        )
+        .await
+        .unwrap_err();
+
+        let err = err.to_string();
+        assert!(err.contains(&root.path().display().to_string()));
+        assert!(!err.contains(&target.display().to_string()));
+    }
+
+    #[tokio::test]
+    async fn rooted_directory_creation_does_not_create_parents_above_the_root() {
+        let ttd = TempTedgeDir::new();
+        let missing_parent = ttd.path().join("missing-parent");
+        let root = missing_parent.join("managed-root");
+        let target = root.join("logs");
+
+        let err = create_directory_and_update_ownership_with_root(
+            &root,
+            &target,
+            &PermissionEntry::default(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, FileError::DirectoryCreateFailed { .. }));
+        assert!(!root.exists());
+        assert!(!missing_parent.exists());
     }
 
     #[tokio::test]

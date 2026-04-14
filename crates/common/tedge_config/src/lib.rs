@@ -14,6 +14,7 @@ pub use tedge_toml::tedge_config::TEdgeConfigDto;
 pub use tedge_toml::tedge_config::TEdgeConfigReader;
 pub use tedge_toml::tedge_config::TEdgeMqttClientAuthConfig;
 pub use tedge_toml::tedge_config_location::*;
+use tedge_utils::paths::TedgePaths;
 
 pub use camino::Utf8Path as Path;
 pub use camino::Utf8PathBuf as PathBuf;
@@ -34,6 +35,11 @@ impl TEdgeConfig {
 
     pub fn read_system_config(&self) -> SystemConfig {
         SystemConfig::try_new(self.root_dir()).unwrap_or_default()
+    }
+
+    pub fn config_root(&self) -> TedgePaths {
+        let system = self.read_system_config();
+        TedgePaths::from_root_with_defaults(self.root_dir(), system.user, system.group)
     }
 
     /// Load [TEdgeConfig], using a separate mapper config file as the default
@@ -105,5 +111,26 @@ impl TEdgeConfig {
     #[track_caller]
     pub fn load_toml_str_with_root_dir(config_dir: impl AsRef<StdPath>, toml: &str) -> TEdgeConfig {
         TEdgeConfigLocation::load_toml_str(toml, TEdgeConfigLocation::from_custom_root(config_dir))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    #[tokio::test]
+    async fn config_root_uses_system_toml_defaults() {
+        let ttd = TempTedgeDir::new();
+        ttd.file("tedge.toml").with_raw_content("");
+        ttd.file("system.toml")
+            .with_raw_content("user = 'service-user'\ngroup = 'service-group'\n");
+
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let config_root = config.config_root();
+
+        assert_eq!(config_root.root(), ttd.path());
+        assert_eq!(config_root.default_owner().user, "service-user");
+        assert_eq!(config_root.default_owner().group, "service-group");
     }
 }
