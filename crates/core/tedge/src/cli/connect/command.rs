@@ -64,7 +64,6 @@ use tedge_config::TEdgeConfigError;
 use tedge_system_services::*;
 use tedge_utils::file::path_exists;
 use tedge_utils::paths::ok_if_not_found;
-use tedge_utils::paths::Owner;
 use tracing::warn;
 use yansi::Paint as _;
 
@@ -1300,7 +1299,7 @@ async fn write_generic_mosquitto_config_to_file(
     let config_file = common_mosquitto_config.config_file.as_str();
     let mut contents = Vec::new();
     common_mosquitto_config.serialize(&mut contents).await?;
-    write_mosquitto_owned_config(tedge_config, config_file, &contents).await?;
+    crate::bridge::write_mosquitto_owned_config(tedge_config, config_file, &contents).await?;
 
     Ok(())
 }
@@ -1324,26 +1323,7 @@ async fn write_bridge_config_to_file(
 ) -> Result<(), ConnectError> {
     let mut contents = Vec::new();
     bridge_config.serialize(&mut contents).await?;
-    write_mosquitto_owned_config(config, &bridge_config.config_file, &contents).await?;
-
-    Ok(())
-}
-
-async fn write_mosquitto_owned_config(
-    tedge_config: &TEdgeConfig,
-    config_file: &str,
-    contents: &[u8],
-) -> Result<(), ConnectError> {
-    let config_root = tedge_config.config_root();
-    config_root
-        .dir(TEDGE_BRIDGE_CONF_DIR_PATH)?
-        .with_mode(0o755)
-        .ensure()
-        .await?;
-    config_root
-        .file(format!("{TEDGE_BRIDGE_CONF_DIR_PATH}/{config_file}"))?
-        .with_owner(Owner::user_group(crate::BROKER_USER, crate::BROKER_GROUP))
-        .replace_atomic(contents)
+    crate::bridge::write_mosquitto_owned_config(config, &bridge_config.config_file, &contents)
         .await?;
     Ok(())
 }
