@@ -64,6 +64,11 @@ collect() {
     # Copy tedge.toml
     cp "$TEDGE_CONFIG_DIR"/tedge.toml "$OUTPUT_DIR"/tedge.toml
 
+    # Copy mappers directory
+    if [ -d "$TEDGE_CONFIG_DIR/mappers" ]; then
+        cp -r "$TEDGE_CONFIG_DIR/mappers" "$OUTPUT_DIR/mappers"
+    fi
+
     # tedge config list
     tedge config list --all > "$OUTPUT_DIR"/tedge-config-list.log
 }
