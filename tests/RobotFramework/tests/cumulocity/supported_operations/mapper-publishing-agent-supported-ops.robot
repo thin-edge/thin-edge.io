@@ -134,13 +134,8 @@ Recreate nested child supported operations after cloud deletion on mapper restar
     Log    ${mo}
 
     Delete Managed Object    ${DEVICE_SN}:device:childA
-    Delete Managed Object    ${DEVICE_SN}:device:child0
-    Delete Managed Object    ${DEVICE_SN}:device:child1
-    Delete Managed Object    ${DEVICE_SN}:device:child2
-    Delete Managed Object    ${DEVICE_SN}:device:child3
-    Delete Managed Object    ${DEVICE_SN}:device:child4
 
-    Cumulocity.Device Should Have A Child Devices
+    Cumulocity.Device Should Not Have Any Child Devices
 
     # we restart the mapper, devices should be re-registered and have the same hierarchy
     Start Service    tedge-mapper-c8y
