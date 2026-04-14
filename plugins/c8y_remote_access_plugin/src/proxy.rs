@@ -13,7 +13,7 @@ use miette::miette;
 use miette::Context;
 use miette::Diagnostic;
 use miette::IntoDiagnostic;
-use rand::RngCore;
+use rand::Rng;
 use rustls::ClientConfig;
 use std::pin::Pin;
 use std::sync::Arc;
