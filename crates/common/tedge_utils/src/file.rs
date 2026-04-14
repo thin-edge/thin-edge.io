@@ -73,13 +73,6 @@ pub enum FileError {
     },
 }
 
-pub async fn create_directory(
-    dir: impl AsRef<Path>,
-    permissions: &PermissionEntry,
-) -> Result<(), FileError> {
-    permissions.create_directory(dir.as_ref()).await
-}
-
 pub async fn create_directory_and_update_ownership(
     dir: impl AsRef<Path>,
     permissions: &PermissionEntry,
@@ -105,38 +98,9 @@ pub async fn create_directory_and_update_ownership_with_root(
 
 /// Create the directory owned by the user running this API with default directory permissions
 pub async fn create_directory_with_defaults(dir: impl AsRef<Path>) -> Result<(), FileError> {
-    create_directory(dir, &PermissionEntry::default()).await
-}
-
-pub async fn create_directory_with_user_group(
-    dir: impl AsRef<Path>,
-    user: &str,
-    group: &str,
-    mode: u32,
-) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    perm_entry.create_directory(dir.as_ref()).await
-}
-
-pub async fn create_directory_with_user_group_and_update_ownership(
-    dir: impl AsRef<Path>,
-    user: &str,
-    group: &str,
-    mode: u32,
-) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    perm_entry
-        .force_dir_ownership()
+    PermissionEntry::default()
         .create_directory(dir.as_ref())
         .await
-}
-
-pub async fn create_file(
-    file: impl AsRef<Path>,
-    content: Option<&str>,
-    permissions: PermissionEntry,
-) -> Result<(), FileError> {
-    permissions.create_file(file.as_ref(), content).await
 }
 
 /// Create the directory owned by the user running this API with default file permissions
@@ -144,7 +108,9 @@ pub async fn create_file_with_defaults(
     file: impl AsRef<Path>,
     content: Option<&str>,
 ) -> Result<(), FileError> {
-    create_file(file, content, PermissionEntry::default()).await
+    PermissionEntry::default()
+        .create_file(file.as_ref(), content)
+        .await
 }
 
 pub async fn create_file_with_mode(
@@ -158,17 +124,6 @@ pub async fn create_file_with_mode(
 
 pub async fn path_exists(path: impl AsRef<Path>) -> bool {
     tokio::fs::try_exists(path).await.unwrap_or(false)
-}
-
-pub async fn create_file_with_user_group(
-    file: impl AsRef<Path>,
-    user: &str,
-    group: &str,
-    mode: u32,
-    default_content: Option<&str>,
-) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(Some(user.into()), Some(group.into()), Some(mode));
-    perm_entry.create_file(file.as_ref(), default_content).await
 }
 
 /// Moves a file to a destination path.
@@ -285,7 +240,7 @@ impl PermissionEntry {
         }
     }
 
-    pub fn force_dir_ownership(mut self) -> Self {
+    pub(crate) fn force_dir_ownership(mut self) -> Self {
         self.reassert_dir_ownership = true;
         self
     }
@@ -681,27 +636,18 @@ pub async fn create_symlink(
 mod tests {
     use super::*;
     use nix::unistd::Uid;
-    use once_cell::sync::Lazy;
     use std::os::unix::fs::PermissionsExt;
     use tedge_test_utils::fs::TempTedgeDir;
-
-    static USER: Lazy<String> = Lazy::new(whoami::username);
-    static GROUP: Lazy<String> = Lazy::new(|| {
-        uzers::get_current_groupname()
-            .unwrap()
-            .into_string()
-            .unwrap()
-    });
 
     #[tokio::test]
     async fn change_file_permissions() {
         let ttd = TempTedgeDir::new();
         let file_path = ttd.path().join("file");
 
-        create_file_with_user_group(&file_path, &USER, &GROUP, 0o644, None)
+        PermissionEntry::new(None, None, Some(0o644))
+            .create_file(&file_path, None)
             .await
             .unwrap();
-        assert!(path_exists(&file_path).await);
 
         let meta = fs::metadata(&file_path).await.unwrap();
         assert_eq!(meta.permissions().mode() & 0o777, 0o644);
