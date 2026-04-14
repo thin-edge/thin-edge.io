@@ -117,9 +117,15 @@ fn json_array_excerpt<'a>(value: &'a Value, path: &'a str) -> Option<&'a Value> 
         None => value.get(path),
         Some(0) => {
             let (key, path) = path[1..].split_once(']')?;
-            let index = key.parse::<usize>().ok()?;
-            value
-                .get(index)
+            let index = key.parse::<i64>().ok()?;
+            let items = value.as_array()?;
+            let abs_index = if index >= 0 {
+                index
+            } else {
+                (items.len() as i64) + index
+            };
+            items
+                .get(abs_index as usize)
                 .and_then(|value| json_array_excerpt(value, path))
         }
         Some(pos) => {
@@ -228,6 +234,24 @@ mod tests {
             json!(2)
         );
         assert_eq!(
+            cmd.inject_values_into_template("${.payload.bar.extra[3]}"),
+            ""
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.bar.extra[-1]}")
+                .to_json(),
+            json!(3)
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.bar.extra[-3]}")
+                .to_json(),
+            json!(1)
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.bar.extra[-4]}"),
+            ""
+        );
+        assert_eq!(
             cmd.inject_values_into_template("${.payload.nested[0].matrix[1]}")
                 .to_json(),
             json!([7, 8, 9])
@@ -255,7 +279,16 @@ mod tests {
             cmd.inject_values_into_template("${.payload.bar.unknown}"),
             ""
         );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.bar[extra]}"), // only integer can be used as indexes
+            ""
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.payload.bar[0]}"), // not an array
+            ""
+        );
         assert_eq!(cmd.inject_values_into_template("${.payload.bar[}"), "");
+        assert_eq!(cmd.inject_values_into_template("${.payload.bar]}"), "");
     }
 
     trait JsonContent {
