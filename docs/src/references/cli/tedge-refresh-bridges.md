@@ -4,7 +4,7 @@ tags: [Reference, CLI]
 sidebar_position: 8
 ---
 
-# The tedge run command
+# The tedge refresh-bridges command
 
 ```text command="tedge refresh-bridges --help" title="tedge refresh-bridges"
 Refresh all currently active mosquitto bridges
