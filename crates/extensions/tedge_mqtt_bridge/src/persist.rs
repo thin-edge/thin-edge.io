@@ -32,11 +32,11 @@ pub async fn persist_bridge_config_file(
     dir: &Utf8Path,
     name: &str,
     content: &str,
-    user: &str,
-    group: &str,
+    tedge_config: &TEdgeConfig,
 ) -> anyhow::Result<()> {
     let config_path = dir.join(name).with_extension("toml");
     let template_path = dir.join(name).with_extension("toml.template");
+    let owner = tedge_config.config_root().default_owner().clone();
 
     // Persist a copy of bridge config definition to be used by users as a template.
     // Don't update the flow definition if overridden or disabled
@@ -47,7 +47,7 @@ pub async fn persist_bridge_config_file(
 
     // Set file ownership and permissions on both files
     for path in [&config_path, &template_path] {
-        let permissions = file::permissions(user, group, 0o644);
+        let permissions = file::permissions(&owner.user, &owner.group, 0o644);
         if let Err(err) = permissions.apply(path.as_std_path()).await {
             warn!("failed to set file ownership/permissions for '{path}': {err}");
         }
@@ -176,14 +176,19 @@ mod tests {
     mod persist_bridge_config_file {
         use super::*;
 
+        async fn load_config(ttd: &TempTedgeDir) -> TEdgeConfig {
+            TEdgeConfig::load(ttd.utf8_path()).await.unwrap()
+        }
+
         #[tokio::test]
         async fn creates_both_config_and_template_when_neither_exists() {
             let ttd = TempTedgeDir::new();
             let dir = ttd.utf8_path().join("bridge");
             tokio::fs::create_dir_all(&dir).await.unwrap();
+            let config = load_config(&ttd).await;
             let content = "test content";
 
-            persist_bridge_config_file(&dir, "test", content, "tedge-test", "tedge-test")
+            persist_bridge_config_file(&dir, "test", content, &config)
                 .await
                 .unwrap();
 
@@ -206,6 +211,7 @@ mod tests {
             let ttd = TempTedgeDir::new();
             let dir = ttd.utf8_path().join("bridge");
             tokio::fs::create_dir_all(&dir).await.unwrap();
+            let config = load_config(&ttd).await;
 
             // Set up matching config and template
             let old_content = "old content";
@@ -217,7 +223,7 @@ mod tests {
                 .unwrap();
 
             let new_content = "new content";
-            persist_bridge_config_file(&dir, "test", new_content, "tedge-test", "tedge-test")
+            persist_bridge_config_file(&dir, "test", new_content, &config)
                 .await
                 .unwrap();
 
@@ -240,6 +246,7 @@ mod tests {
             let ttd = TempTedgeDir::new();
             let dir = ttd.utf8_path().join("bridge");
             tokio::fs::create_dir_all(&dir).await.unwrap();
+            let config = load_config(&ttd).await;
 
             // Set up differing config and template (user has customized)
             let custom_config = "custom user config";
@@ -252,7 +259,7 @@ mod tests {
                 .unwrap();
 
             let new_content = "new content";
-            persist_bridge_config_file(&dir, "test", new_content, "tedge-test", "tedge-test")
+            persist_bridge_config_file(&dir, "test", new_content, &config)
                 .await
                 .unwrap();
 
@@ -277,6 +284,7 @@ mod tests {
             let ttd = TempTedgeDir::new();
             let dir = ttd.utf8_path().join("bridge");
             tokio::fs::create_dir_all(&dir).await.unwrap();
+            let config = load_config(&ttd).await;
 
             // Set up matching config and template with disabled marker
             let old_content = "old content";
@@ -291,7 +299,7 @@ mod tests {
                 .unwrap();
 
             let new_content = "new content";
-            persist_bridge_config_file(&dir, "test", new_content, "tedge-test", "tedge-test")
+            persist_bridge_config_file(&dir, "test", new_content, &config)
                 .await
                 .unwrap();
 

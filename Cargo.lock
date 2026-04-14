@@ -4895,6 +4895,7 @@ dependencies = [
  "url",
  "uzers",
  "which",
+ "whoami",
  "x509-parser 0.18.0",
  "yansi",
 ]
@@ -5455,6 +5456,7 @@ dependencies = [
  "toml 0.9.6",
  "tracing",
  "tracing-subscriber",
+ "whoami",
  "yansi",
 ]
 

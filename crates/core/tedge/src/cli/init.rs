@@ -10,7 +10,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file;
-use tedge_utils::file::create_directory_and_update_ownership;
+use tedge_utils::file::create_directory_and_update_ownership_with_root;
+use tedge_utils::paths::TedgePaths;
 use tracing::debug;
 use tracing::info;
 
@@ -81,26 +82,24 @@ impl TEdgeInitCmd {
         }
 
         let config_dir = &config.root_dir();
+        let config_root = TedgePaths::from_root_with_defaults(config.root_dir(), &user, &group);
         let permissions = file::permissions(&user, &group, 0o775);
-        create_directory_and_update_ownership(&config_dir, &permissions).await?;
-        create_directory_and_update_ownership(config_dir.join("mosquitto-conf"), &permissions)
-            .await?;
-        create_directory_and_update_ownership(config_dir.join("operations"), &permissions).await?;
-        create_directory_and_update_ownership(
-            config_dir.join("operations").join("c8y"),
+        for dir in config_root_directories() {
+            config_root.dir(dir)?.with_mode(0o775).ensure().await?;
+        }
+
+        create_directory_and_update_ownership_with_root(
+            &config.logs.path,
+            &config.logs.path,
             &permissions,
         )
         .await?;
-        create_directory_and_update_ownership(config_dir.join("plugins"), &permissions).await?;
-        create_directory_and_update_ownership(config_dir.join("sm-plugins"), &permissions).await?;
-        create_directory_and_update_ownership(config_dir.join("device-certs"), &permissions)
-            .await?;
-        create_directory_and_update_ownership(config_dir.join("mappers"), &permissions).await?;
-        create_directory_and_update_ownership(config_dir.join(".tedge-mapper-c8y"), &permissions)
-            .await?;
-
-        create_directory_and_update_ownership(&config.logs.path, &permissions).await?;
-        create_directory_and_update_ownership(&config.data.path, &permissions).await?;
+        create_directory_and_update_ownership_with_root(
+            &config.data.path,
+            &config.data.path,
+            &permissions,
+        )
+        .await?;
 
         let file_permissions = file::permissions(&user, &group, 0o644);
         let system_toml = config_dir.join("system.toml");
@@ -115,7 +114,7 @@ impl TEdgeInitCmd {
             config.agent.state.path.to_path_buf()
         } else {
             let agent_state_dir = config_dir.join(".agent");
-            create_directory_and_update_ownership(&agent_state_dir, &permissions).await?;
+            config_root.dir(".agent")?.with_mode(0o775).ensure().await?;
             agent_state_dir
         };
 
@@ -148,6 +147,18 @@ impl TEdgeInitCmd {
             }
         }
     }
+}
+
+fn config_root_directories() -> [&'static str; 7] {
+    [
+        "mosquitto-conf",
+        "operations/c8y",
+        "plugins",
+        "sm-plugins",
+        "device-certs",
+        "mappers",
+        ".tedge-mapper-c8y",
+    ]
 }
 
 #[async_trait::async_trait]
@@ -372,6 +383,52 @@ mod tests {
             create_symlinks_for("tedge-mapper", target, Path::new("/usr/bin"), &fs)
                 .await
                 .unwrap()
+        }
+    }
+
+    mod init {
+        use super::*;
+        use tedge_config::TEdgeConfig;
+        use tedge_test_utils::fs::TempTedgeDir;
+        use uzers::get_group_by_gid;
+
+        fn current_user_and_group() -> (String, String) {
+            let user = whoami::username();
+            let gid = nix::unistd::getgid().as_raw();
+            let group = get_group_by_gid(gid)
+                .expect("group must exist")
+                .name()
+                .to_string_lossy()
+                .into_owned();
+
+            (user, group)
+        }
+
+        #[tokio::test]
+        async fn initializes_directories() {
+            let ttd = TempTedgeDir::new();
+            let tedge_dir = ttd.dir("tedge");
+            let logs_dir = tedge_dir.utf8_path().join("logs");
+            let data_dir = tedge_dir.utf8_path().join("data");
+            tedge_dir.file("tedge.toml").with_raw_content(&format!(
+                "logs.path = \"{logs_dir}\"\ndata.path = \"{data_dir}\"\n",
+            ));
+            let config = TEdgeConfig::load(tedge_dir.path()).await.unwrap();
+            let (user, group) = current_user_and_group();
+            TEdgeInitCmd::new(Some(user), Some(group), false)
+                .execute(config)
+                .await
+                .unwrap();
+
+            for dir in config_root_directories() {
+                assert!(
+                    tedge_dir.path().join(dir).exists(),
+                    "config directory {dir} should be created"
+                );
+            }
+            for dir in [logs_dir, data_dir] {
+                assert!(dir.exists(), "directory {dir} should be created");
+            }
         }
     }
 
