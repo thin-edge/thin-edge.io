@@ -134,7 +134,7 @@ build_package() {
     target="$2"
 
     package_arch=$(get_package_arch "$target")
-    source_dir="target/$target/release"
+    source_dir="target/$target/${BUILD_PROFILE:-release}"
 
     export PKG_ARCH="$package_arch"
     export PKG_NAME="$name"
@@ -235,7 +235,7 @@ build_tarball() {
     local name="$1"
     local target="$2"
     local binary="$3"
-    source_dir="target/$target/release"
+    source_dir="target/$target/${BUILD_PROFILE:-release}"
 
     rm -f "$source_dir/$name"*tar.gz
 

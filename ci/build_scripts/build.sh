@@ -59,6 +59,7 @@ Flags:
                                             then the build tool will be selected based on the binary
     --bin <name>    Override which binary to build. By default the binaries form the package_list.sh will be used
     --glibc-version <version>   GLIBC version to use when compiling for libc targets
+    --profile <release|debug|dev-stripped>   Cargo build profile to use. Defaults to release. Use 'debug' for unoptimized builds with debug info, or 'dev-stripped' for unoptimized builds with symbols stripped
     --skip-build    Skip building the binaries and only package them (e.g. just create the linux packages)
 
 Env:
@@ -98,9 +99,8 @@ source ./ci/package_list.sh
 
 TARGET="${TARGET:-}"
 BUILD_WITH="${BUILD_WITH:-zig}"
-COMMON_BUILD_OPTIONS=(
-    "--release"
-)
+BUILD_PROFILE="${BUILD_PROFILE:-release}"
+COMMON_BUILD_OPTIONS=()
 TOOLCHAIN="${TOOLCHAIN:-+1.85}"
 # Note: Minimum version that is supported with riscv64gc-unknown-linux-gnu is 2.27
 GLIBC_VERSION="${GLIBC_VERSION:-2.17}"
@@ -129,6 +129,10 @@ do
             ;;
         --glibc-version)
             GLIBC_VERSION="$2"
+            shift
+            ;;
+        --profile)
+            BUILD_PROFILE="$2"
             shift
             ;;
         --skip-build)
@@ -259,9 +263,15 @@ get_target_for_binary() {
 }
 
 if [ -z "$ARTIFACT_DIR" ]; then
-    ARTIFACT_DIR="target/$TARGET/release"
+    ARTIFACT_DIR="target/$TARGET/$BUILD_PROFILE"
 fi
 mkdir -p "$ARTIFACT_DIR"
+
+if [ "$BUILD_PROFILE" = "release" ]; then
+    COMMON_BUILD_OPTIONS+=("--release")
+elif [ "$BUILD_PROFILE" != "debug" ]; then
+    COMMON_BUILD_OPTIONS+=("--profile" "$BUILD_PROFILE")
+fi
 
 install_clang_if_required() {
     # Only install clang if it is not available to keep build times
@@ -294,7 +304,7 @@ if [ "$BUILD" = 1 ] && [ ${#BINARIES[@]} -gt 0 ]; then
         BINARY_TARGET=$(get_target_for_binary "$name" "$TARGET")
         # shellcheck disable=SC2086
         rustup $TOOLCHAIN target add "$BINARY_TARGET"
-        BUILD_DIR="target/$BINARY_TARGET/release"
+        BUILD_DIR="target/$BINARY_TARGET/$BUILD_PROFILE"
 
         # Each binary should have its preferred build tool (unless if the user overrides this)
         BUILD_TOOL=$(get_build_tool_for_binary "$name")
@@ -362,4 +372,5 @@ fi
 # Create release packages (e.g. linux packages like rpm, deb, apk etc.)
 OUTPUT_DIR="$(dirname "$ARTIFACT_DIR")/packages"
 PACKAGES=( "${RELEASE_PACKAGES[@]}" )
+export BUILD_PROFILE
 ./ci/build_scripts/package.sh build "$TARGET" "${PACKAGES[@]}" --output "$OUTPUT_DIR"

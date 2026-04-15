@@ -240,6 +240,10 @@ yansi = { version = "1.0.1", default-features = false, features = [
 ] }
 zeroize = "1.5"
 
+[profile.dev-stripped]
+inherits = "dev"
+strip = "symbols"
+
 [profile.release]
 codegen-units = 1
 lto = true
