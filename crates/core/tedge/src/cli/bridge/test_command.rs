@@ -37,7 +37,7 @@ pub struct BridgeTestCmd {
 
     /// Show skipped rules (e.g. due to unmet conditions or empty template loops)
     #[clap(long)]
-    debug: bool,
+    show_all: bool,
 }
 
 #[async_trait::async_trait]
@@ -52,7 +52,7 @@ impl Command for BridgeTestCmd {
     #[mutants::skip]
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         tedge_mapper::warn_misconfigured_mapper_dirs(&config.root_dir().join("mappers")).await;
-        let detail = if self.debug {
+        let detail = if self.show_all {
             DetailLevel::Debug
         } else {
             DetailLevel::Normal
@@ -371,7 +371,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             cloud: cloud.to_string(),
             topic: topic.to_string(),
             profile,
-            debug: detail == DetailLevel::Debug,
+            show_all: detail == DetailLevel::Debug,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let mut buf = Vec::new();
@@ -668,7 +668,7 @@ topic = "measurements"
             cloud: cloud.to_string(),
             topic: topic.to_string(),
             profile,
-            debug: detail == DetailLevel::Debug,
+            show_all: detail == DetailLevel::Debug,
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let mut buf = Vec::new();
@@ -706,7 +706,7 @@ topic = "measurements"
             cloud: "c8y".to_string(),
             topic: "te/measurements".to_string(),
             profile: None,
-            debug: false,
+            show_all: false,
         };
         assert_eq!(
             cmd.description(),
