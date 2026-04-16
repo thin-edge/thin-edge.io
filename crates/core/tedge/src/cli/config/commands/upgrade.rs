@@ -18,7 +18,7 @@ impl Command for UpgradeConfigCommand {
             ))
         })?;
 
-        println!("Configuration updates completed successfully.");
+        eprintln!("Configuration updates completed successfully.");
         Ok(())
     }
 }
