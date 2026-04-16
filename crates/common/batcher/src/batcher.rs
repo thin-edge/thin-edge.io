@@ -2,6 +2,7 @@ use crate::batch::Batch;
 use crate::batch::BatchAdd;
 use crate::batchable::Batchable;
 use crate::config::BatchConfig;
+use crate::BatchConfigBuilder;
 use time::OffsetDateTime;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -15,6 +16,17 @@ pub(crate) enum BatcherOutput<B> {
 pub struct Batcher<B: Batchable> {
     config: BatchConfig,
     batches: Vec<Batch<B>>,
+}
+
+impl<B: Batchable> Default for Batcher<B> {
+    fn default() -> Self {
+        let batch_config = BatchConfigBuilder::new()
+            .event_jitter(500)
+            .delivery_jitter(400) // Heuristic delay that should work out well on a Rpi
+            .message_leap_limit(0)
+            .build();
+        Batcher::new(batch_config)
+    }
 }
 
 impl<B: Batchable> Batcher<B> {

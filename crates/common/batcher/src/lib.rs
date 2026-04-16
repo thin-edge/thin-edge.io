@@ -27,42 +27,13 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::SimpleMessageBoxBuilder;
 
 pub struct BatchingActorBuilder<B: Batchable> {
-    batching_window: u32,
-    maximum_message_delay: u32,
-    message_leap_limit: u32,
     message_box: SimpleMessageBoxBuilder<BatchDriverInput<B>, BatchDriverOutput<B>>,
 }
 
 impl<B: Batchable> Default for BatchingActorBuilder<B> {
     fn default() -> Self {
         BatchingActorBuilder {
-            batching_window: 500,
-            maximum_message_delay: 400, // Heuristic delay that should work out well on an Rpi
-            message_leap_limit: 0,
             message_box: SimpleMessageBoxBuilder::new("Event batcher", 16),
-        }
-    }
-}
-
-impl<B: Batchable> BatchingActorBuilder<B> {
-    pub fn with_batching_window(self, batching_window: u32) -> Self {
-        Self {
-            batching_window,
-            ..self
-        }
-    }
-
-    pub fn with_maximum_message_delay(self, maximum_message_delay: u32) -> Self {
-        Self {
-            maximum_message_delay,
-            ..self
-        }
-    }
-
-    pub fn with_message_leap_limit(self, message_leap_limit: u32) -> Self {
-        Self {
-            message_leap_limit,
-            ..self
         }
     }
 }
@@ -93,12 +64,7 @@ impl<B: Batchable> Builder<BatchDriver<B>> for BatchingActorBuilder<B> {
     }
 
     fn build(self) -> BatchDriver<B> {
-        let batch_config = BatchConfigBuilder::new()
-            .event_jitter(self.batching_window)
-            .delivery_jitter(self.maximum_message_delay)
-            .message_leap_limit(self.message_leap_limit)
-            .build();
-        let batcher = Batcher::new(batch_config);
+        let batcher = Batcher::default();
         let message_box = self.message_box.build();
         BatchDriver::new(batcher, message_box)
     }
