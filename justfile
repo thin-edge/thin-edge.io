@@ -57,9 +57,8 @@ install-tools:
     rustup component add rust-analyzer rust-analysis rust-src rustfmt clippy
     rustup toolchain install nightly
     rustup component add rustfmt --toolchain nightly
-    cargo +stable install --locked taplo-cli
-    cargo +stable install --locked cargo-nextest
-    cargo +stable install --locked cargo-deny
+    which cargo-binstall || curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+    cargo binstall --no-confirm taplo-cli cargo-nextest cargo-deny
 
 # Check if necessary tools are installed
 [private]
