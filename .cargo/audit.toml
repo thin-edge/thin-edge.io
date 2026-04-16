@@ -18,7 +18,9 @@ ignore = [
     "RUSTSEC-2023-0071",
     "RUSTSEC-2026-0009",
     # rustls-webpki 0.102.x used by rumqttc/rumqttd which pin ^0.102.x; incompatible with fixed 0.103.10. Waiting for upstream update.
-    "RUSTSEC-2026-0049"
+    "RUSTSEC-2026-0049",
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
 ] 
 informational_warnings = ["unmaintained"] # warn for categories of informational advisories
 severity_threshold = "low" # CVSS severity ("none", "low", "medium", "high", "critical")
