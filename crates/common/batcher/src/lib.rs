@@ -5,6 +5,7 @@ mod batchable;
 mod batcher;
 mod config;
 mod driver;
+mod flows;
 
 pub use crate::batchable::Batchable;
 pub use crate::batcher::Batcher;
@@ -16,6 +17,7 @@ pub use crate::config::EventBatchConfigBuilder;
 pub use crate::driver::BatchDriver;
 pub use crate::driver::BatchDriverInput;
 pub use crate::driver::BatchDriverOutput;
+pub use crate::flows::MessageBatcher;
 use std::convert::Infallible;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
