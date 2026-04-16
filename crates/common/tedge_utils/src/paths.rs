@@ -83,25 +83,34 @@ impl TedgePaths {
         &self.default_owner
     }
 
-    pub fn dir(&self, relative_path: impl AsRef<Path>) -> Result<ManagedDir, PathsError> {
+    pub fn dir(&self, path: impl AsRef<Path>) -> Result<ManagedDir, PathsError> {
         Ok(ManagedDir {
             root: self.root.clone(),
-            path: self.resolve(relative_path)?,
+            path: self.resolve(path)?,
             owner: self.default_owner.clone(),
             mode: 0o755,
         })
     }
 
-    pub fn file(&self, relative_path: impl AsRef<Path>) -> Result<ManagedFile, PathsError> {
+    pub fn file(&self, path: impl AsRef<Path>) -> Result<ManagedFile, PathsError> {
         Ok(ManagedFile {
-            path: self.resolve(relative_path)?,
+            path: self.resolve(path)?,
             owner: self.default_owner.clone(),
             mode: 0o644,
         })
     }
 
-    fn resolve(&self, relative_path: impl AsRef<Path>) -> Result<PathBuf, PathsError> {
-        let relative_path = relative_path.as_ref();
+    fn resolve(&self, path: impl AsRef<Path>) -> Result<PathBuf, PathsError> {
+        let path = path.as_ref();
+        let relative_path = if path.is_absolute() {
+            path.strip_prefix(&self.root)
+                .map_err(|_| PathsError::PathOutsideRoot {
+                    path: path.to_path_buf(),
+                })?
+        } else {
+            path
+        };
+
         validate_managed_path(relative_path)?;
         Ok(self.root.join(relative_path))
     }
@@ -254,9 +263,27 @@ mod tests {
     }
 
     #[test]
-    fn rejects_absolute_paths() {
+    fn accepts_absolute_paths_under_the_root() {
+        let root = TedgePaths::from_root_with_defaults("/etc/tedge", "tedge", "tedge");
+
+        let dir = root.dir("/etc/tedge/operations/c8y").unwrap();
+        assert_eq!(dir.path(), Path::new("/etc/tedge/operations/c8y"));
+
+        let file = root.file("/etc/tedge/system.toml").unwrap();
+        assert_eq!(file.path(), Path::new("/etc/tedge/system.toml"));
+    }
+
+    #[test]
+    fn rejects_absolute_paths_outside_the_root() {
         let root = TedgePaths::from_root_with_defaults("/etc/tedge", "tedge", "tedge");
         let err = root.dir("/etc").unwrap_err();
+        assert!(matches!(err, PathsError::PathOutsideRoot { .. }));
+    }
+
+    #[test]
+    fn rejects_absolute_paths_that_escape_the_root() {
+        let root = TedgePaths::from_root_with_defaults("/etc/tedge", "tedge", "tedge");
+        let err = root.file("/etc/tedge/../passwd").unwrap_err();
         assert!(matches!(err, PathsError::InvalidManagedPath { .. }));
     }
 

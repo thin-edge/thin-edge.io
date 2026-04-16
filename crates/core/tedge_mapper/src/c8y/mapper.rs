@@ -401,12 +401,9 @@ pub async fn bridge_rules(
     let mapper_config_dir =
         tedge_config.mapper_config_dir::<C8yMapperSpecificConfig>(cloud_profile);
     let config_root = tedge_config.config_root();
-    let relative_mapper_config_dir = mapper_config_dir
-        .strip_prefix(tedge_config.root_dir())
-        .context("mapper config directory must stay under the config root")?;
 
     if let Err(err) = config_root
-        .dir(relative_mapper_config_dir.join("bridge"))
+        .dir(mapper_config_dir.join("bridge"))
         .context("invalid mapper config directory")?
         .with_mode(0o755)
         .ensure()
