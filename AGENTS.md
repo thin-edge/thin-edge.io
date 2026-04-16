@@ -45,9 +45,6 @@ cargo nextest run --status-level fail --all-features test_name
 # Run doc tests only
 just test-docs
 
-# Setup integration test environment (one-time setup)
-just setup-integration-test
-
 # Run integration tests (builds first, then runs Robot Framework tests)
 just integration-test
 
@@ -70,9 +67,6 @@ just check
 # Check for specific target
 just check TARGET
 
-# Run clippy manually
-cargo clippy --all-targets --all-features
-
 # Check dependencies (licenses, security advisories)
 just check-dependencies
 ```
@@ -82,10 +76,14 @@ just check-dependencies
 ```bash
 # One-time setup: install required tools and configure git hooks
 just install-tools
-just prepare-dev
 
 # The prepare-dev command adds a git pre-commit hook that automatically
 # adds the required "Signed-off-by" trailer to commits (required by CLA)
+just prepare-dev
+
+# Setup integration test environment (one-time setup)
+just setup-integration-test
+
 ```
 
 ## Architecture
@@ -117,11 +115,11 @@ crates/
 │   └── tedge_watchdog/ # Process monitoring
 ├── common/             # Utility libraries
 │   ├── mqtt_channel/   # MQTT client wrapper
-│   ├── tedge_config/   # Configuration management
-│   ├── download/       # File download utilities
-│   ├── upload/         # File upload utilities
+│   ├── tedge_config/   # Configuration definition
+│   ├── download/       # HTTP file download utilities
+│   ├── upload/         # HTTP file upload utilities
 │   └── ...
-├── extensions/         # Optional feature modules
+├── extensions/         # Extensions of tedge_mapper and tedge_agent
 │   ├── *_mapper_ext/   # Cloud provider mappers (c8y, aws, az)
 │   ├── tedge_mqtt_ext/ # MQTT actor
 │   ├── tedge_flows/    # JavaScript flow engine (QuickJS)
@@ -153,15 +151,17 @@ The project builds a **multicall binary** that acts as different executables bas
 
 3. **`tedge-agent`** - Device operations handler
    - Runs as: `tedge run agent`
-   - Handles: software management, restart, config updates, log uploads
-   - Orchestrates plugins for specific operations
+   - Handles: software management, device restart, config management and log uploads out of the box using built-in workflows
+   - Supports plugins to extend built-in operations
+   - Extensible to support other custom operations as well
+     via custom workflows
 
 ### MQTT Topic Hierarchy
 
 ```
-te/device/main//                      # Main device
-te/device/child01//                   # Child device
-te/device/main/service/tedge-agent    # Service registration
+te/device/main//                      # Main device topic prefix and registration topic
+te/device/child01//                   # Child device topic prefix and registration topic
+te/device/main/service/tedge-agent    # Service topic prefix and registration topic
 te/device/main///m/temperature/+      # Telemetry (outbound)
 te/device/main///cmd/restart/+        # Commands (inbound)
 te/device/main///status/health/+      # Status (outbound)
@@ -179,7 +179,7 @@ Mappers translate between thin-edge.io's cloud-agnostic data model and cloud pro
 **Data flow:**
 ```
 Device → te/* topics → Mapper → Cloud-specific topics → MQTT Bridge → Cloud
-Cloud → Mapper → te/* topics → Agent/Services
+Cloud → MQTT Bridge  → Mapper → te/* topics → Agent/Services
 ```
 
 **Mapper implementations:**
@@ -227,31 +227,7 @@ Refer to @CODING_GUIDELINES.md
 
 ### Actor Development Patterns
 
-When creating new actors:
-
-1. **Define clear message types:**
-   ```rust
-   pub struct MyRequest { /* fields */ }
-   pub struct MyResponse { /* fields */ }
-   ```
-
-2. **Implement appropriate actor trait:**
-   - `Server` - Request-response pattern
-   - `Actor` - Custom message loop
-   - `MessageSource`/`MessageSink` - Stream processing
-
-3. **Use builders for composition:**
-   ```rust
-   let mut builder = MyActorBuilder::new(config);
-   builder.connect_sink(other_actor);
-   let actor = builder.build();
-   runtime.spawn(actor).await?;
-   ```
-
-4. **Handle graceful shutdown:**
-   - Listen for `RuntimeRequest::Shutdown`
-   - Clean up resources
-   - Return `Ok(())` or appropriate error
+Use the `.agent/skills/add-actor` skill while creating new actors.
 
 ## Testing
 
@@ -278,23 +254,16 @@ Integration tests use Robot Framework with custom device adapters:
 
 Setup requires `.env` file with cloud credentials (see `tests/RobotFramework/devdata/env.template`).
 
+Use the `.agent/skills/add-integration-test` skill while creating new tests.
+
 ## Git Workflow and Commits
 
 ### Commit Requirements
 
 **MANDATORY for all commits:**
 - Include `Signed-off-by` trailer (use `git commit -s`)
-- Subject line: ≤50 characters, capitalized, imperative mood, no period
-- Empty line after subject
-- Body lines: ≤72 characters
-- Explain **why** the change was made (not just what)
-
-**Automated checks enforce:**
-- `Signed-off-by` trailer present
-- Commit message formatting
-- No `fixup!` or `squash!` commits when merging
-
-**Run `just prepare-dev` to add a git hook that automatically signs commits.**
+- Follow conventional commits for commit messages
+- Conventional commits protocol is defined at https://www.conventionalcommits.org/en/v1.0.0/
 
 ### Pull Request Guidelines
 
@@ -312,34 +281,12 @@ Setup requires `.env` file with cloud credentials (see `tests/RobotFramework/dev
 - Dependencies must be compatible with Apache 2.0
 - Keep dependencies synchronized across workspace crates
 
-## Common Development Patterns
+## Rust Conventions
 
-### Adding a New Cloud Mapper
-
-1. Create extension crate: `crates/extensions/xyz_mapper_ext/`
-2. Implement `TEdgeComponent` trait with `start()` method
-3. Create `XyzMapper` struct implementing actor composition
-4. Define MQTT topic mappings and converters
-5. Add flow definitions if using flow-based approach
-6. Register mapper in `tedge_mapper::bin/tedge_mapper.rs`
-7. Add integration tests in `tests/RobotFramework/`
-
-### Adding a New Plugin
-
-1. Create binary crate: `plugins/my_plugin/`
-2. Implement `Plugin` trait from `plugin_sm` crate
-3. Define CLI interface (install, remove, list, version)
-4. Add plugin registration in agent configuration
-5. Write unit tests for plugin logic
-6. Add Robot Framework tests for end-to-end validation
-
-### Adding Configuration Options
-
-1. Define option in `tedge_config` using `define_tedge_config!` macro
-2. Add validation and default values
-3. Update `tedge config` CLI to expose new option
-4. Add tests for configuration parsing and validation
-5. Update documentation (in `docs/` directory)
+- **Error handling**: Use `#[derive(Debug, thiserror::Error)]` with `#[from]` and `#[error(transparent)]` for error type composition
+- **Workspace deps**: All crates use `{ workspace = true }` for version, edition, and license; lints centralized with `[lints] workspace = true`
+- **Safety**: `#![forbid(unsafe_code)]` in all crates
+- **Release profile**: `opt-level = "z"`, LTO enabled, symbol stripping (optimized for embedded)
 
 ## Troubleshooting
 
@@ -355,15 +302,9 @@ Setup requires `.env` file with cloud credentials (see `tests/RobotFramework/dev
 - **Robot Framework not found**: Run `just setup-integration-test`
 - **Tests hang**: Check that local MQTT broker (rumqttd) is running and port 1883 is available
 
-### Runtime Issues
-
-- **Actors crash**: Check logs in `~/.tedge/logs/`
-- **MQTT connection fails**: Verify broker is running on localhost:1883
-- **Plugin execution fails**: Check plugin logs in `~/.tedge/operations/`
-
 ## Additional Resources
 
-- **Documentation**: https://thin-edge.github.io/thin-edge.io/
+- **Documentation**: `docs/` directory
 - **Design documents**: `design/` directory
   - `thin-edge-actors-design.md` - Actor framework architecture
   - `thin-edge-core.md` - Core component design
