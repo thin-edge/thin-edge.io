@@ -30,7 +30,7 @@ impl ExitHandlers {
     ) -> Result<Self, ScriptDefinitionError> {
         // The on exit error handlers are sorted by range min
         // to ease the implementation of `ExitHandlers::state_update()`
-        on_exit.sort_by(|(x, _, _), (y, _, _)| x.cmp(y));
+        on_exit.sort_by_key(|(x, _, _)| *x);
 
         // The user can provide `on_error` or `on_exit._` but not both
         if let Some(wildcard) = wildcard {
