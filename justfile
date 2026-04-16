@@ -54,11 +54,29 @@ prepare-dev:
 
 # Install necessary tools
 install-tools:
+    #!/usr/bin/env bash
+    set -e
     rustup component add rust-analyzer rust-analysis rust-src rustfmt clippy
     rustup toolchain install nightly
     rustup component add rustfmt --toolchain nightly
+
+    # Install taplo by downloading the pre-compiled binary directly from GitHub releases
+    # This is because cargo-binstall can't find a binary release for it
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64)         ARCH="x86_64" ;;
+        aarch64|arm64)  ARCH="aarch64" ;;
+        armv7l)         ARCH="armv7" ;;
+        i686|i386)      ARCH="x86" ;;
+    esac
+    INSTALL_DIR="${CARGO_HOME:-$HOME/.cargo}/bin"
+    curl -fsSL "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-${OS}-${ARCH}.gz" \
+        | gunzip > "$INSTALL_DIR/taplo"
+    chmod +x "$INSTALL_DIR/taplo"
+
     which cargo-binstall || curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-    cargo binstall --no-confirm taplo-cli cargo-nextest cargo-deny
+    cargo binstall --no-confirm cargo-nextest cargo-deny
 
 # Check if necessary tools are installed
 [private]
