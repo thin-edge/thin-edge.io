@@ -161,7 +161,6 @@ async fn bridge_rules(
     if let Err(err) = config_root
         .dir(&mapper_config_dir)
         .context("invalid mapper config directory")?
-        .with_mode(0o755)
         .ensure()
         .await
     {

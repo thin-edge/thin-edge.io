@@ -10,6 +10,19 @@ use crate::file::FileError;
 use crate::file::PermissionEntry;
 use crate::fs::atomically_write_file_async;
 
+const PERMISSION_BITS: u32 = 0o777;
+const DEFAULT_UMASK: u32 = 0o022;
+const DEFAULT_DIR_MODE: u32 = apply_umask(0o777);
+const DEFAULT_FILE_MODE: u32 = apply_umask(0o666);
+const GROUP_WRITE: u32 = 0o020;
+
+const fn apply_umask(mode: u32) -> u32 {
+    let mode = mode & PERMISSION_BITS;
+    let umask = DEFAULT_UMASK & PERMISSION_BITS;
+
+    mode & (PERMISSION_BITS ^ umask)
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum PathsError {
     #[error("User's Home Directory not found.")]
@@ -89,7 +102,7 @@ impl TedgePaths {
             root: self.root.clone(),
             path: self.root.clone(),
             owner: self.default_owner.clone(),
-            mode: 0o755,
+            mode: DEFAULT_DIR_MODE,
             warn_and_ignore_permission_errors: false,
         }
     }
@@ -99,7 +112,7 @@ impl TedgePaths {
             root: self.root.clone(),
             path: self.resolve(path)?,
             owner: self.default_owner.clone(),
-            mode: 0o755,
+            mode: DEFAULT_DIR_MODE,
             warn_and_ignore_permission_errors: false,
         })
     }
@@ -108,7 +121,7 @@ impl TedgePaths {
         Ok(ManagedFile {
             path: self.resolve(path)?,
             owner: self.default_owner.clone(),
-            mode: 0o644,
+            mode: DEFAULT_FILE_MODE,
             warn_and_ignore_permission_errors: false,
         })
     }
@@ -119,7 +132,7 @@ impl TedgePaths {
             root: self.root.clone(),
             path: path.to_owned(),
             owner: self.default_owner.clone(),
-            mode: 0o755,
+            mode: DEFAULT_DIR_MODE,
             warn_and_ignore_permission_errors: false,
         });
 
@@ -127,7 +140,7 @@ impl TedgePaths {
             active: ManagedFile {
                 path,
                 owner: self.default_owner.clone(),
-                mode: 0o644,
+                mode: DEFAULT_FILE_MODE,
                 warn_and_ignore_permission_errors: false,
             },
             parent,
@@ -176,6 +189,11 @@ impl ManagedDir {
 
     pub fn with_mode(mut self, mode: u32) -> Self {
         self.mode = mode;
+        self
+    }
+
+    pub fn group_writable(mut self) -> Self {
+        self.mode |= GROUP_WRITE;
         self
     }
 
@@ -366,11 +384,6 @@ impl ManagedTemplateFile {
         self
     }
 
-    pub fn with_mode(mut self, mode: u32) -> Self {
-        self.active = self.active.with_mode(mode);
-        self
-    }
-
     pub fn warn_and_ignore_permission_errors(mut self) -> Self {
         self.warn_and_ignore_permission_errors = true;
         self
@@ -522,7 +535,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ensure_creates_missing_managed_directories() {
+    async fn ensure_creates_missing_managed_directories_with_default_mode() {
         let ttd = TempTedgeDir::new();
         let root = ttd.path();
         let owner = current_owner();
@@ -532,7 +545,6 @@ mod tests {
         config_root
             .dir("operations/c8y")
             .unwrap()
-            .with_mode(0o755)
             .ensure()
             .await
             .unwrap();
@@ -540,6 +552,25 @@ mod tests {
         assert!(root.join("operations").is_dir());
         assert!(root.join("operations/c8y").is_dir());
         assert_eq!(mode_bits(root.join("operations/c8y")).await, 0o755);
+    }
+
+    #[tokio::test]
+    async fn group_writable_sets_group_write_bit() {
+        let ttd = TempTedgeDir::new();
+        let root = ttd.path();
+        let owner = current_owner();
+        let config_root =
+            TedgePaths::from_root_with_defaults(root, owner.user.clone(), owner.group.clone());
+
+        config_root
+            .dir("operations")
+            .unwrap()
+            .group_writable()
+            .ensure()
+            .await
+            .unwrap();
+
+        assert_eq!(mode_bits(root.join("operations")).await, 0o775);
     }
 
     #[tokio::test]
@@ -579,7 +610,6 @@ mod tests {
         config_root
             .dir("operations")
             .unwrap()
-            .with_mode(0o755)
             .create_if_missing()
             .await
             .unwrap();
@@ -650,12 +680,11 @@ mod tests {
         config_root
             .file("system.toml")
             .unwrap()
-            .with_mode(0o640)
             .create_if_missing(b"")
             .await
             .unwrap();
 
-        assert_eq!(mode_bits(root.join("system.toml")).await, 0o640);
+        assert_eq!(mode_bits(root.join("system.toml")).await, 0o644);
     }
 
     #[tokio::test]
@@ -724,7 +753,6 @@ mod tests {
         let err = config_root
             .dir("operations/c8y")
             .unwrap()
-            .with_mode(0o755)
             .ensure()
             .await
             .unwrap_err();

@@ -36,7 +36,6 @@ pub async fn persist_bridge_config_file(
     config_root
         .dir(dir)
         .context("invalid bridge config directory")?
-        .with_mode(0o755)
         .ensure()
         .await?;
 
@@ -46,7 +45,6 @@ pub async fn persist_bridge_config_file(
     config_root
         .template_file(dir.join(name_toml))
         .context("invalid bridge config file")?
-        .with_mode(0o644)
         .warn_and_ignore_permission_errors()
         .persist(content)
         .await

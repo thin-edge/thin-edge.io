@@ -28,7 +28,6 @@ pub(crate) async fn write_mosquitto_owned_config(
     let config_root = tedge_config.config_root();
     config_root
         .dir(TEDGE_BRIDGE_CONF_DIR_PATH)?
-        .with_mode(0o755)
         .ensure()
         .await?;
     config_root

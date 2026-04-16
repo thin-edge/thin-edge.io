@@ -82,17 +82,17 @@ impl TEdgeInitCmd {
         let config_dir = &config.root_dir();
         let config_root = TedgePaths::from_root_with_defaults(config.root_dir(), &user, &group);
         for dir in config_root_directories() {
-            config_root.dir(dir)?.with_mode(0o775).ensure().await?;
+            config_root.dir(dir)?.group_writable().ensure().await?;
         }
 
         TedgePaths::from_root_with_defaults(&config.logs.path, &user, &group)
             .root_dir()
-            .with_mode(0o775)
+            .group_writable()
             .ensure()
             .await?;
         TedgePaths::from_root_with_defaults(&config.data.path, &user, &group)
             .root_dir()
-            .with_mode(0o775)
+            .group_writable()
             .ensure()
             .await?;
 
@@ -100,7 +100,6 @@ impl TEdgeInitCmd {
         if system_toml.exists() {
             config_root
                 .file("system.toml")?
-                .with_mode(0o644)
                 .ensure_permissions()
                 .await?;
         }
@@ -109,7 +108,7 @@ impl TEdgeInitCmd {
             config.agent.state.path.to_path_buf()
         } else {
             let agent_state_dir = config_dir.join(".agent");
-            config_root.dir(".agent")?.with_mode(0o775).ensure().await?;
+            config_root.dir(".agent")?.group_writable().ensure().await?;
             agent_state_dir
         };
 
@@ -117,7 +116,6 @@ impl TEdgeInitCmd {
         if entity_store_file.exists() {
             TedgePaths::from_root_with_defaults(&agent_state_dir, &user, &group)
                 .file("entity_store.jsonl")?
-                .with_mode(0o644)
                 .ensure_permissions()
                 .await?;
         }

@@ -445,7 +445,6 @@ impl TEdgeConfigLocation {
 
         config_root
             .file(toml_path.as_std_path())?
-            .with_mode(0o644)
             .warn_and_ignore_permission_errors()
             .replace_atomic(toml.as_bytes())
             .await?;
