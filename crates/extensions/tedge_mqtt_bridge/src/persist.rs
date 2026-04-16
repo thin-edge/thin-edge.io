@@ -7,9 +7,6 @@ use anyhow::Context;
 use camino::Utf8Path;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
-use tedge_utils::file;
-use tedge_utils::fs;
-use tracing::warn;
 
 use crate::config::expand_bridge_rules;
 use crate::config::BridgeConfig;
@@ -34,16 +31,10 @@ pub async fn persist_bridge_config_file(
     content: &str,
     tedge_config: &TEdgeConfig,
 ) -> anyhow::Result<()> {
-    let config_path = dir.join(name).with_extension("toml");
-    let template_path = dir.join(name).with_extension("toml.template");
     let config_root = tedge_config.config_root();
-    let owner = config_root.default_owner().clone();
-    let relative_dir = dir
-        .strip_prefix(tedge_config.root_dir())
-        .context("bridge config directory must stay under the config root")?;
 
     config_root
-        .dir(relative_dir.as_std_path())
+        .dir(dir)
         .context("invalid bridge config directory")?
         .with_mode(0o755)
         .ensure()
@@ -51,18 +42,15 @@ pub async fn persist_bridge_config_file(
 
     // Persist a copy of bridge config definition to be used by users as a template.
     // Don't update the flow definition if overridden or disabled
-    let name_toml = format!("{}.toml", name);
-    fs::persist_file_with_template(dir, &name_toml, content)
+    let name_toml = format!("{name}.toml");
+    config_root
+        .template_file(dir.join(name_toml))
+        .context("invalid bridge config file")?
+        .with_mode(0o644)
+        .warn_and_ignore_permission_errors()
+        .persist(content)
         .await
         .map_err(anyhow::Error::msg)?;
-
-    // Set file ownership and permissions on both files
-    for path in [&config_path, &template_path] {
-        let permissions = file::permissions(&owner.user, &owner.group, 0o644);
-        if let Err(err) = permissions.apply(path.as_std_path()).await {
-            warn!("failed to set file ownership/permissions for '{path}': {err}");
-        }
-    }
 
     Ok(())
 }

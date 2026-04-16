@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use tedge_utils::fs::persist_file_with_template;
+use tedge_utils::paths::TedgePaths;
 
 pub struct DeviceProfileManagerBuilder {}
 
@@ -10,7 +10,10 @@ impl DeviceProfileManagerBuilder {
         // Initialize device_profile.toml with template pattern:
         // - Always update device_profile.toml.template with the latest definition
         // - Only update device_profile.toml if it doesn't exist or hasn't been customized by the user
-        persist_file_with_template(ops_dir, "device_profile.toml", workflow_definition).await?;
+        TedgePaths::from_root_with_defaults(ops_dir.as_std_path(), "", "")
+            .template_file("device_profile.toml")?
+            .persist(workflow_definition)
+            .await?;
 
         Ok(Self {})
     }

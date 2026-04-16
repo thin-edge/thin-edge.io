@@ -50,7 +50,7 @@ use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
-use tedge_utils::fs::persist_file_with_template;
+use tedge_utils::paths::TedgePaths;
 use toml::toml;
 
 /// An instance of the config manager
@@ -109,7 +109,9 @@ impl ConfigManagerBuilder {
         // - Only update config_update.toml if it doesn't exist or hasn't been customized by the user
         let workflow_definition = include_str!("resources/config_update.toml");
 
-        persist_file_with_template(&config.ops_dir, "config_update.toml", workflow_definition)
+        TedgePaths::from_root_with_defaults(&config.ops_dir, "", "")
+            .template_file("config_update.toml")?
+            .persist(workflow_definition)
             .await?;
 
         if config.plugin_config_path.exists() {

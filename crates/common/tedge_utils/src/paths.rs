@@ -4,8 +4,10 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use tokio::io::AsyncWriteExt;
+use tracing::warn;
 
 use crate::file::permissions;
+use crate::file::FileError;
 use crate::file::PermissionEntry;
 use crate::fs::atomically_write_file_async;
 
@@ -97,6 +99,26 @@ impl TedgePaths {
             path: self.resolve(path)?,
             owner: self.default_owner.clone(),
             mode: 0o644,
+        })
+    }
+
+    pub fn template_file(&self, path: impl AsRef<Path>) -> Result<ManagedTemplateFile, PathsError> {
+        let path = self.resolve(path)?;
+        let parent = path.parent().map(|path| ManagedDir {
+            root: self.root.clone(),
+            path: path.to_owned(),
+            owner: self.default_owner.clone(),
+            mode: 0o755,
+        });
+
+        Ok(ManagedTemplateFile {
+            active: ManagedFile {
+                path,
+                owner: self.default_owner.clone(),
+                mode: 0o644,
+            },
+            parent,
+            warn_and_ignore_permission_errors: false,
         })
     }
 
@@ -211,6 +233,94 @@ impl ManagedFile {
 
     fn permission_entry(&self) -> PermissionEntry {
         permissions(&self.owner.user, &self.owner.group, self.mode)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ManagedTemplateFile {
+    active: ManagedFile,
+    parent: Option<ManagedDir>,
+    warn_and_ignore_permission_errors: bool,
+}
+
+impl ManagedTemplateFile {
+    pub fn path(&self) -> &Path {
+        self.active.path()
+    }
+
+    pub fn owner(&self) -> &Owner {
+        self.active.owner()
+    }
+
+    pub fn with_owner(mut self, owner: Owner) -> Self {
+        self.active = self.active.with_owner(owner);
+        self
+    }
+
+    pub fn with_mode(mut self, mode: u32) -> Self {
+        self.active = self.active.with_mode(mode);
+        self
+    }
+
+    pub fn warn_and_ignore_permission_errors(mut self) -> Self {
+        self.warn_and_ignore_permission_errors = true;
+        self
+    }
+
+    pub async fn persist(self, content: impl AsRef<[u8]>) -> Result<(), PathsError> {
+        let content = content.as_ref();
+        let template = self.template_file();
+        let disabled_path = append_path_suffix(self.active.path(), ".disabled");
+
+        if let Some(parent) = &self.parent {
+            parent.create_if_missing().await?;
+        }
+
+        let prior_config: Option<Vec<u8>> = tokio::fs::read(self.active.path()).await.ok();
+        let prior_template: Option<Vec<u8>> = tokio::fs::read(template.path()).await.ok();
+        let overridden = prior_config != prior_template;
+        let disabled = tokio::fs::try_exists(&disabled_path).await.unwrap_or(false);
+
+        if !overridden && !disabled {
+            self.persist_file(&self.active, content).await?;
+        }
+
+        self.persist_file(&template, content).await
+    }
+
+    fn template_file(&self) -> ManagedFile {
+        ManagedFile {
+            path: append_path_suffix(self.active.path(), ".template"),
+            owner: self.active.owner.clone(),
+            mode: self.active.mode,
+        }
+    }
+
+    async fn persist_file(&self, file: &ManagedFile, content: &[u8]) -> Result<(), PathsError> {
+        let result = file.replace_atomic(content).await;
+        if self.warn_and_ignore_permission_errors {
+            ignore_owner_or_mode_error(result)
+        } else {
+            result
+        }
+    }
+}
+
+fn append_path_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut path = path.as_os_str().to_os_string();
+    path.push(suffix);
+    PathBuf::from(path)
+}
+
+fn ignore_owner_or_mode_error(result: Result<(), PathsError>) -> Result<(), PathsError> {
+    match result {
+        Err(PathsError::FileError(
+            err @ (FileError::MetaDataError { .. } | FileError::ChangeModeError { .. }),
+        )) => {
+            warn!("{err}");
+            Ok(())
+        }
+        result => result,
     }
 }
 
@@ -555,6 +665,189 @@ mod tests {
                 .await
                 .unwrap(),
             "after"
+        );
+    }
+
+    #[tokio::test]
+    async fn template_persistence_creates_active_and_template_files() {
+        let ttd = TempTedgeDir::new();
+        let owner = current_owner();
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+
+        config_root
+            .template_file("bridge/rules.toml")
+            .unwrap()
+            .persist("test content")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml"))
+                .await
+                .unwrap(),
+            "test content"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml.template"))
+                .await
+                .unwrap(),
+            "test content"
+        );
+    }
+
+    #[tokio::test]
+    async fn template_persistence_updates_both_files_when_active_matches_template() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("bridge");
+        let owner = current_owner();
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+
+        config_root
+            .template_file("bridge/rules.toml")
+            .unwrap()
+            .persist("old content")
+            .await
+            .unwrap();
+        config_root
+            .template_file("bridge/rules.toml")
+            .unwrap()
+            .persist("new content")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml"))
+                .await
+                .unwrap(),
+            "new content"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml.template"))
+                .await
+                .unwrap(),
+            "new content"
+        );
+    }
+
+    #[tokio::test]
+    async fn template_persistence_preserves_overridden_active_file() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("bridge");
+        let owner = current_owner();
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+
+        config_root
+            .template_file("bridge/rules.toml")
+            .unwrap()
+            .persist("old content")
+            .await
+            .unwrap();
+        tokio::fs::write(ttd.path().join("bridge/rules.toml"), "custom content")
+            .await
+            .unwrap();
+        config_root
+            .template_file("bridge/rules.toml")
+            .unwrap()
+            .persist("new content")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml"))
+                .await
+                .unwrap(),
+            "custom content"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml.template"))
+                .await
+                .unwrap(),
+            "new content"
+        );
+    }
+
+    #[tokio::test]
+    async fn template_persistence_preserves_disabled_active_file() {
+        let ttd = TempTedgeDir::new();
+        ttd.dir("bridge");
+        let owner = current_owner();
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+
+        config_root
+            .template_file("bridge/rules.toml")
+            .unwrap()
+            .persist("old content")
+            .await
+            .unwrap();
+        tokio::fs::write(ttd.path().join("bridge/rules.toml.disabled"), "")
+            .await
+            .unwrap();
+        config_root
+            .template_file("bridge/rules.toml")
+            .unwrap()
+            .persist("new content")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml"))
+                .await
+                .unwrap(),
+            "old content"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml.template"))
+                .await
+                .unwrap(),
+            "new content"
+        );
+    }
+
+    #[tokio::test]
+    async fn template_persistence_can_warn_and_ignore_owner_or_mode_errors() {
+        if Uid::current().is_root() {
+            return;
+        }
+
+        let ttd = TempTedgeDir::new();
+        ttd.dir("bridge");
+        let owner = current_owner();
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+
+        let err = config_root
+            .template_file("bridge/rules.toml")
+            .unwrap()
+            .with_owner(Owner::user_group("root", "root"))
+            .persist("test content")
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Failed to change owner"));
+
+        let ttd = TempTedgeDir::new();
+        ttd.dir("bridge");
+        let owner = current_owner();
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+
+        config_root
+            .template_file("bridge/rules.toml")
+            .unwrap()
+            .with_owner(Owner::user_group("root", "root"))
+            .warn_and_ignore_permission_errors()
+            .persist("test content")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml"))
+                .await
+                .unwrap(),
+            "test content"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(ttd.path().join("bridge/rules.toml.template"))
+                .await
+                .unwrap(),
+            "test content"
         );
     }
 
