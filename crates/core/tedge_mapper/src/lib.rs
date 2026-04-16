@@ -283,6 +283,8 @@ fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
     az_mapper_ext::load_builtin_transformers(flows);
     #[cfg(feature = "aws")]
     aws_mapper_ext::load_builtin_transformers(flows);
+
+    flows.register_builtin(batcher::MessageBatcher::default());
 }
 
 pub(crate) async fn mapper_flow_registry(

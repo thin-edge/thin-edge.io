@@ -23,7 +23,7 @@ impl<B: Batchable> Default for Batcher<B> {
         let batch_config = BatchConfigBuilder::new()
             .event_jitter(500)
             .delivery_jitter(400) // Heuristic delay that should work out well on a Rpi
-            .message_leap_limit(0)
+            .message_leap_limit(500)
             .build();
         Batcher::new(batch_config)
     }
