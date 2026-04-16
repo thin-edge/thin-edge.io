@@ -4,7 +4,6 @@ mod common_mosquitto_config;
 mod config;
 
 use tedge_config::TEdgeConfig;
-use tedge_utils::paths::Owner;
 use tedge_utils::paths::PathsError;
 
 #[cfg(feature = "aws")]
@@ -32,8 +31,40 @@ pub(crate) async fn write_mosquitto_owned_config(
         .await?;
     config_root
         .file(format!("{TEDGE_BRIDGE_CONF_DIR_PATH}/{config_file}"))?
-        .with_owner(Owner::user_group(crate::BROKER_USER, crate::BROKER_GROUP))
+        .preserve_ownership()
         .replace_atomic(contents)
         .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::fs::PermissionsExt;
+    use tedge_config::TEdgeConfig;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    #[tokio::test]
+    async fn mosquitto_config_files_keep_writer_ownership() {
+        let ttd = TempTedgeDir::new();
+        ttd.file("system.toml")
+            .with_raw_content("user = ''\ngroup = ''\n");
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+        write_mosquitto_owned_config(&config, "tedge-mosquitto.conf", b"listener 1883")
+            .await
+            .unwrap();
+
+        let metadata = tokio::fs::metadata(
+            ttd.path()
+                .join(TEDGE_BRIDGE_CONF_DIR_PATH)
+                .join("tedge-mosquitto.conf"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(metadata.uid(), nix::unistd::geteuid().as_raw());
+        assert_eq!(metadata.gid(), nix::unistd::getegid().as_raw());
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o644);
+    }
 }

@@ -3,8 +3,8 @@ Resource            ../../resources/common.resource
 Library             Cumulocity
 Library             ThinEdgeIO
 
+Suite Teardown      Custom Teardown
 Test Setup          Custom Setup
-Test Teardown       Custom Teardown
 
 Test Tags           theme:cli    theme:configuration
 

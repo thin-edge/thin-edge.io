@@ -81,6 +81,8 @@ impl TEdgeInitCmd {
 
         let config_dir = &config.root_dir();
         let config_root = TedgePaths::from_root_with_defaults(config.root_dir(), &user, &group);
+
+        config_root.root_dir().group_writable().ensure().await?;
         for dir in config_root_directories() {
             config_root.dir(dir)?.group_writable().ensure().await?;
         }
@@ -144,9 +146,11 @@ impl TEdgeInitCmd {
     }
 }
 
-fn config_root_directories() -> [&'static str; 7] {
+fn config_root_directories() -> [&'static str; 8] {
     [
         "mosquitto-conf",
+        // Ensure the permissions of both operations and operations/c8y
+        "operations",
         "operations/c8y",
         "plugins",
         "sm-plugins",
@@ -383,6 +387,7 @@ mod tests {
 
     mod init {
         use super::*;
+        use std::os::unix::fs::PermissionsExt;
         use tedge_config::TEdgeConfig;
         use tedge_test_utils::fs::TempTedgeDir;
         use uzers::get_group_by_gid;
@@ -397,6 +402,15 @@ mod tests {
                 .into_owned();
 
             (user, group)
+        }
+
+        async fn mode_bits(path: impl AsRef<std::path::Path>) -> u32 {
+            tokio::fs::metadata(path)
+                .await
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777
         }
 
         #[tokio::test]
@@ -415,6 +429,7 @@ mod tests {
                 .await
                 .unwrap();
 
+            assert_eq!(mode_bits(tedge_dir.path()).await, 0o775);
             for dir in config_root_directories() {
                 assert!(
                     tedge_dir.path().join(dir).exists(),
@@ -423,6 +438,7 @@ mod tests {
             }
             for dir in [logs_dir, data_dir] {
                 assert!(dir.exists(), "directory {dir} should be created");
+                assert_eq!(mode_bits(dir).await, 0o775);
             }
         }
     }

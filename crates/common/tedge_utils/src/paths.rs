@@ -187,9 +187,8 @@ impl ManagedDir {
         self
     }
 
-    pub fn with_mode(mut self, mode: u32) -> Self {
-        self.mode = mode;
-        self
+    pub fn preserve_ownership(self) -> Self {
+        self.with_owner(Owner::user_group("", ""))
     }
 
     pub fn group_writable(mut self) -> Self {
@@ -298,9 +297,8 @@ impl ManagedFile {
         self
     }
 
-    pub fn with_mode(mut self, mode: u32) -> Self {
-        self.mode = mode;
-        self
+    pub fn preserve_ownership(self) -> Self {
+        self.with_owner(Owner::user_group("", ""))
     }
 
     pub fn warn_and_ignore_permission_errors(mut self) -> Self {
