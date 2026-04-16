@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
 use tracing::warn;
 
-use crate::file::permissions;
 use crate::file::FileError;
 use crate::file::PermissionEntry;
 use crate::fs::atomically_write_file_async;
@@ -85,12 +84,23 @@ impl TedgePaths {
         &self.default_owner
     }
 
+    pub fn root_dir(&self) -> ManagedDir {
+        ManagedDir {
+            root: self.root.clone(),
+            path: self.root.clone(),
+            owner: self.default_owner.clone(),
+            mode: 0o755,
+            warn_and_ignore_permission_errors: false,
+        }
+    }
+
     pub fn dir(&self, path: impl AsRef<Path>) -> Result<ManagedDir, PathsError> {
         Ok(ManagedDir {
             root: self.root.clone(),
             path: self.resolve(path)?,
             owner: self.default_owner.clone(),
             mode: 0o755,
+            warn_and_ignore_permission_errors: false,
         })
     }
 
@@ -99,6 +109,7 @@ impl TedgePaths {
             path: self.resolve(path)?,
             owner: self.default_owner.clone(),
             mode: 0o644,
+            warn_and_ignore_permission_errors: false,
         })
     }
 
@@ -109,6 +120,7 @@ impl TedgePaths {
             path: path.to_owned(),
             owner: self.default_owner.clone(),
             mode: 0o755,
+            warn_and_ignore_permission_errors: false,
         });
 
         Ok(ManagedTemplateFile {
@@ -116,6 +128,7 @@ impl TedgePaths {
                 path,
                 owner: self.default_owner.clone(),
                 mode: 0o644,
+                warn_and_ignore_permission_errors: false,
             },
             parent,
             warn_and_ignore_permission_errors: false,
@@ -144,6 +157,7 @@ pub struct ManagedDir {
     path: PathBuf,
     owner: Owner,
     mode: u32,
+    warn_and_ignore_permission_errors: bool,
 }
 
 impl ManagedDir {
@@ -165,22 +179,82 @@ impl ManagedDir {
         self
     }
 
+    pub fn warn_and_ignore_permission_errors(mut self) -> Self {
+        self.warn_and_ignore_permission_errors = true;
+        self
+    }
+
     pub async fn ensure(&self) -> Result<(), PathsError> {
+        if self.warn_and_ignore_permission_errors {
+            self.ensure_without_strict_permissions().await
+        } else {
+            self.ensure_strict_permissions().await
+        }
+    }
+
+    async fn ensure_strict_permissions(&self) -> Result<(), PathsError> {
         let permissions = self.permission_entry().force_dir_ownership();
-        permissions
+        let result = permissions
             .create_directory_with_root(self.path(), &self.root)
-            .await?;
-        Ok(())
+            .await
+            .map_err(Into::into);
+        self.handle_permission_errors(result)
+    }
+
+    async fn ensure_without_strict_permissions(&self) -> Result<(), PathsError> {
+        self.create_directory_tree_with_root(self.path()).await?;
+        let result = self
+            .permission_entry()
+            .apply(self.path())
+            .await
+            .map_err(Into::into);
+        self.handle_permission_errors(result)
+    }
+
+    async fn create_directory_tree_with_root(&self, dir: &Path) -> Result<(), FileError> {
+        match dir.parent() {
+            None => return Ok(()),
+            Some(_parent) if dir == self.root => {}
+            Some(parent) => {
+                if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
+                    Box::pin(self.create_directory_tree_with_root(parent)).await?;
+                }
+            }
+        }
+
+        match tokio::fs::create_dir(dir).await {
+            Ok(_) => Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+            Err(err) => Err(FileError::DirectoryCreateFailed {
+                dir: dir.display().to_string(),
+                from: err,
+            }),
+        }
     }
 
     pub async fn create_if_missing(&self) -> Result<(), PathsError> {
         let permissions = self.permission_entry();
-        permissions.create_directory(self.path()).await?;
-        Ok(())
+        let result = permissions
+            .create_directory(self.path())
+            .await
+            .map_err(Into::into);
+        self.handle_permission_errors(result)
     }
 
     fn permission_entry(&self) -> PermissionEntry {
-        permissions(&self.owner.user, &self.owner.group, self.mode)
+        PermissionEntry::new(
+            non_empty_string(&self.owner.user),
+            non_empty_string(&self.owner.group),
+            Some(self.mode),
+        )
+    }
+
+    fn handle_permission_errors(&self, result: Result<(), PathsError>) -> Result<(), PathsError> {
+        if self.warn_and_ignore_permission_errors {
+            ignore_owner_or_mode_error(result)
+        } else {
+            result
+        }
     }
 }
 
@@ -189,6 +263,7 @@ pub struct ManagedFile {
     path: PathBuf,
     owner: Owner,
     mode: u32,
+    warn_and_ignore_permission_errors: bool,
 }
 
 impl ManagedFile {
@@ -210,10 +285,19 @@ impl ManagedFile {
         self
     }
 
+    pub fn warn_and_ignore_permission_errors(mut self) -> Self {
+        self.warn_and_ignore_permission_errors = true;
+        self
+    }
+
     pub async fn replace_atomic(&self, content: impl AsRef<[u8]>) -> Result<(), PathsError> {
-        atomically_write_file_async(&self.path, content.as_ref()).await?;
-        self.permission_entry().apply(&self.path).await?;
-        Ok(())
+        let result = async {
+            atomically_write_file_async(&self.path, content.as_ref()).await?;
+            self.permission_entry().apply(&self.path).await?;
+            Ok(())
+        }
+        .await;
+        self.handle_permission_errors(result)
     }
 
     pub async fn create_if_missing(&self, content: impl AsRef<[u8]>) -> Result<(), PathsError> {
@@ -223,16 +307,41 @@ impl ManagedFile {
                 file.write_all(content.as_ref()).await?;
                 file.flush().await?;
                 file.sync_all().await?;
-                self.permission_entry().apply(&self.path).await?;
-                Ok(())
+                let result = self
+                    .permission_entry()
+                    .apply(&self.path)
+                    .await
+                    .map_err(Into::into);
+                self.handle_permission_errors(result)
             }
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
             Err(err) => Err(err.into()),
         }
     }
 
+    pub async fn ensure_permissions(&self) -> Result<(), PathsError> {
+        let result = self
+            .permission_entry()
+            .apply(&self.path)
+            .await
+            .map_err(Into::into);
+        self.handle_permission_errors(result)
+    }
+
     fn permission_entry(&self) -> PermissionEntry {
-        permissions(&self.owner.user, &self.owner.group, self.mode)
+        PermissionEntry::new(
+            non_empty_string(&self.owner.user),
+            non_empty_string(&self.owner.group),
+            Some(self.mode),
+        )
+    }
+
+    fn handle_permission_errors(&self, result: Result<(), PathsError>) -> Result<(), PathsError> {
+        if self.warn_and_ignore_permission_errors {
+            ignore_owner_or_mode_error(result)
+        } else {
+            result
+        }
     }
 }
 
@@ -293,6 +402,7 @@ impl ManagedTemplateFile {
             path: append_path_suffix(self.active.path(), ".template"),
             owner: self.active.owner.clone(),
             mode: self.active.mode,
+            warn_and_ignore_permission_errors: false,
         }
     }
 
@@ -312,10 +422,17 @@ fn append_path_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
+fn non_empty_string(value: &str) -> Option<String> {
+    (!value.is_empty()).then_some(value.to_string())
+}
+
 fn ignore_owner_or_mode_error(result: Result<(), PathsError>) -> Result<(), PathsError> {
     match result {
         Err(PathsError::FileError(
-            err @ (FileError::MetaDataError { .. } | FileError::ChangeModeError { .. }),
+            err @ (FileError::MetaDataError { .. }
+            | FileError::ChangeModeError { .. }
+            | FileError::UserNotFound { .. }
+            | FileError::GroupNotFound { .. }),
         )) => {
             warn!("{err}");
             Ok(())

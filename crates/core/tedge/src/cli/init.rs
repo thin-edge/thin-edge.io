@@ -9,8 +9,6 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
-use tedge_utils::file;
-use tedge_utils::file::create_directory_and_update_ownership_with_root;
 use tedge_utils::paths::TedgePaths;
 use tracing::debug;
 use tracing::info;
@@ -83,30 +81,27 @@ impl TEdgeInitCmd {
 
         let config_dir = &config.root_dir();
         let config_root = TedgePaths::from_root_with_defaults(config.root_dir(), &user, &group);
-        let permissions = file::permissions(&user, &group, 0o775);
         for dir in config_root_directories() {
             config_root.dir(dir)?.with_mode(0o775).ensure().await?;
         }
 
-        create_directory_and_update_ownership_with_root(
-            &config.logs.path,
-            &config.logs.path,
-            &permissions,
-        )
-        .await?;
-        create_directory_and_update_ownership_with_root(
-            &config.data.path,
-            &config.data.path,
-            &permissions,
-        )
-        .await?;
+        TedgePaths::from_root_with_defaults(&config.logs.path, &user, &group)
+            .root_dir()
+            .with_mode(0o775)
+            .ensure()
+            .await?;
+        TedgePaths::from_root_with_defaults(&config.data.path, &user, &group)
+            .root_dir()
+            .with_mode(0o775)
+            .ensure()
+            .await?;
 
-        let file_permissions = file::permissions(&user, &group, 0o644);
         let system_toml = config_dir.join("system.toml");
         if system_toml.exists() {
-            file_permissions
-                .clone()
-                .apply(system_toml.as_std_path())
+            config_root
+                .file("system.toml")?
+                .with_mode(0o644)
+                .ensure_permissions()
                 .await?;
         }
 
@@ -120,8 +115,10 @@ impl TEdgeInitCmd {
 
         let entity_store_file = agent_state_dir.join("entity_store.jsonl");
         if entity_store_file.exists() {
-            file_permissions
-                .apply(entity_store_file.as_std_path())
+            TedgePaths::from_root_with_defaults(&agent_state_dir, &user, &group)
+                .file("entity_store.jsonl")?
+                .with_mode(0o644)
+                .ensure_permissions()
                 .await?;
         }
 

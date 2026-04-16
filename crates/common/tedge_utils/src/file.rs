@@ -382,18 +382,6 @@ impl PermissionEntry {
     }
 }
 
-/// Creates a `PermissionEntry` from plain `user` and `group` strings.
-///
-/// Empty strings are treated as unset and mapped to `None`, so ownership
-/// is left unchanged for whichever field is empty.
-pub fn permissions(user: &str, group: &str, mode: u32) -> PermissionEntry {
-    PermissionEntry::new(
-        (!user.is_empty()).then_some(user.to_string()),
-        (!group.is_empty()).then_some(group.to_string()),
-        Some(mode),
-    )
-}
-
 /// Overwrite the content of existing file. The file permissions will be kept.
 pub async fn overwrite_file(file: impl AsRef<Path>, content: &str) -> Result<(), FileError> {
     let file = file.as_ref();
@@ -738,7 +726,7 @@ mod tests {
         let err = create_directory_and_update_ownership_with_root(
             root.path(),
             &target,
-            &permissions("root", "root", 0o755),
+            &PermissionEntry::new(Some("root".into()), Some("root".into()), Some(0o755)),
         )
         .await
         .unwrap_err();
