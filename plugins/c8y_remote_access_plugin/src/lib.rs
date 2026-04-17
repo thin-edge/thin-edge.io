@@ -13,6 +13,7 @@ use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::TEdgeConfig;
 use tedge_utils::paths::ManagedFile;
 use tedge_utils::paths::Owner;
+use tedge_utils::paths::PathsError;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
@@ -35,7 +36,6 @@ const UNIX_SOCKFILE: &str = "/run/c8y-remote-access-plugin.sock";
 pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let c8y_profile = opt.profile.clone();
     let c8y_profile = c8y_profile.as_deref();
-
     log_init(
         "c8y_remote_access_plugin",
         &opt.common.log_args,
@@ -46,7 +46,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
     let tedge_config = TEdgeConfig::load(&opt.common.config_dir)
         .await
         .into_diagnostic()
-        .context("Reading tedge config")?;
+        .context("Failed to read tedge config")?;
 
     let command = parse_arguments(opt)?;
 
@@ -57,6 +57,7 @@ pub async fn run(opt: C8yRemoteAccessPluginOpt) -> miette::Result<()> {
             let group = group.as_deref().unwrap_or(&system_config.group);
             declare_supported_operation(&tedge_config, user, group)
                 .await
+                .into_diagnostic()
                 .with_context(|| {
                     "Failed to initialize c8y-remote-access-plugin. You have to run the command with sudo."
                 })
@@ -91,10 +92,16 @@ async fn declare_supported_operation(
     tedge_config: &TEdgeConfig,
     user: &str,
     group: &str,
-) -> miette::Result<()> {
-    let supported_operation_path = supported_operation_path(tedge_config.root_dir());
-    supported_operation_file(tedge_config, user, group)
-        .into_diagnostic()?
+) -> Result<(), PathsError> {
+    let supported_operation_file = supported_operation_file(tedge_config, user, group)?;
+
+    supported_operation_file
+        .parent()
+        .respect_existing()
+        .ensure()
+        .await?;
+
+    supported_operation_file
         .replace_atomic(
             r#"[exec]
 command = "c8y-remote-access-plugin"
@@ -103,15 +110,13 @@ on_message = "530"
 "#,
         )
         .await
-        .into_diagnostic()
-        .with_context(|| format!("Declaring supported operations at {supported_operation_path}"))
 }
 
 fn supported_operation_file(
     tedge_config: &TEdgeConfig,
     user: &str,
     group: &str,
-) -> Result<ManagedFile, tedge_utils::paths::PathsError> {
+) -> Result<ManagedFile, PathsError> {
     tedge_config
         .config_root()
         .file("operations/c8y/c8y_RemoteAccessConnect")
@@ -391,20 +396,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn init_fails_when_shared_parent_directory_is_missing() {
+    async fn init_creates_shared_parent_directory_when_missing() {
         let ttd = TempTedgeDir::new();
         ttd.file("tedge.toml").with_raw_content("");
         let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
-        let err = declare_supported_operation(&config, &whoami::username(), &whoami::username())
+        declare_supported_operation(&config, &whoami::username(), &whoami::username())
             .await
-            .unwrap_err();
+            .unwrap();
 
-        assert!(
-            err.to_string().contains("Declaring supported operations"),
-            "{err}"
-        );
-        assert!(!ttd.path().join("operations").exists());
+        assert!(ttd.path().join("operations").is_dir());
+        assert!(ttd.path().join("operations/c8y").is_dir());
+        assert!(ttd
+            .path()
+            .join("operations/c8y/c8y_RemoteAccessConnect")
+            .exists());
     }
 
     #[tokio::test]
@@ -424,6 +430,26 @@ mod tests {
             .permissions()
             .mode();
         assert_eq!(mode & 0o777, 0o700);
+    }
+
+    #[tokio::test]
+    async fn init_does_not_modify_existing_operations_directory_permissions() {
+        let ttd = TempTedgeDir::new();
+        ttd.file("tedge.toml").with_raw_content("");
+        let ops_dir = ttd.dir("operations");
+        std::fs::set_permissions(ops_dir.path(), std::fs::Permissions::from_mode(0o701)).unwrap();
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+        declare_supported_operation(&config, &whoami::username(), &whoami::username())
+            .await
+            .unwrap();
+
+        let mode = std::fs::metadata(ops_dir.path())
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o701);
+        assert!(ttd.path().join("operations/c8y").is_dir());
     }
 
     fn create_example_operation(dir: &Utf8Path) -> Utf8PathBuf {

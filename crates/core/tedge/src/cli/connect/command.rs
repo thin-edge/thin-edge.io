@@ -1299,7 +1299,7 @@ async fn write_generic_mosquitto_config_to_file(
     let config_file = common_mosquitto_config.config_file.as_str();
     let mut contents = Vec::new();
     common_mosquitto_config.serialize(&mut contents).await?;
-    crate::bridge::write_mosquitto_owned_config(tedge_config, config_file, &contents).await?;
+    crate::bridge::write_mosquitto_config(tedge_config, config_file, &contents).await?;
 
     Ok(())
 }
@@ -1323,7 +1323,7 @@ async fn write_bridge_config_to_file(
 ) -> Result<(), ConnectError> {
     let mut contents = Vec::new();
     bridge_config.serialize(&mut contents).await?;
-    crate::bridge::write_mosquitto_owned_config(config, &bridge_config.config_file, &contents)
+    crate::bridge::write_mosquitto_config(config, &bridge_config.config_file, &contents)
         .await?;
     Ok(())
 }

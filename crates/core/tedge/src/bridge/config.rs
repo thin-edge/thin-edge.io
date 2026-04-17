@@ -159,7 +159,7 @@ impl BridgeConfig {
     ) -> Result<(), tedge_utils::paths::PathsError> {
         let mut contents = Vec::new();
         self.serialize(&mut contents).await?;
-        super::write_mosquitto_owned_config(tedge_config, &self.config_file, &contents).await?;
+        super::write_mosquitto_config(tedge_config, &self.config_file, &contents).await?;
 
         Ok(())
     }

@@ -103,6 +103,7 @@ impl TedgePaths {
             path: self.root.clone(),
             owner: self.default_owner.clone(),
             mode: DEFAULT_DIR_MODE,
+            respect_existing: false,
             warn_and_ignore_permission_errors: false,
         }
     }
@@ -113,12 +114,14 @@ impl TedgePaths {
             path: self.resolve(path)?,
             owner: self.default_owner.clone(),
             mode: DEFAULT_DIR_MODE,
+            respect_existing: false,
             warn_and_ignore_permission_errors: false,
         })
     }
 
     pub fn file(&self, path: impl AsRef<Path>) -> Result<ManagedFile, PathsError> {
         Ok(ManagedFile {
+            root: self.root.clone(),
             path: self.resolve(path)?,
             owner: self.default_owner.clone(),
             mode: DEFAULT_FILE_MODE,
@@ -133,11 +136,13 @@ impl TedgePaths {
             path: path.to_owned(),
             owner: self.default_owner.clone(),
             mode: DEFAULT_DIR_MODE,
+            respect_existing: false,
             warn_and_ignore_permission_errors: false,
         });
 
         Ok(ManagedTemplateFile {
             active: ManagedFile {
+                root: self.root.clone(),
                 path,
                 owner: self.default_owner.clone(),
                 mode: DEFAULT_FILE_MODE,
@@ -170,6 +175,7 @@ pub struct ManagedDir {
     path: PathBuf,
     owner: Owner,
     mode: u32,
+    respect_existing: bool,
     warn_and_ignore_permission_errors: bool,
 }
 
@@ -187,8 +193,22 @@ impl ManagedDir {
         self
     }
 
-    pub fn preserve_ownership(self) -> Self {
+    /// Use the process owner/group when creating this directory.
+    ///
+    /// This skips owner/group management for the directory. Mode is still
+    /// managed by this builder.
+    pub fn use_process_ownership(self) -> Self {
         self.with_owner(Owner::user_group("", ""))
+    }
+
+    /// Leave an existing directory unchanged.
+    ///
+    /// If the directory is missing, it is created and configured with this
+    /// builder's owner and mode. If it already exists, its ownership and mode
+    /// are left as-is.
+    pub fn respect_existing(mut self) -> Self {
+        self.respect_existing = true;
+        self
     }
 
     pub fn group_writable(mut self) -> Self {
@@ -210,7 +230,10 @@ impl ManagedDir {
     }
 
     async fn ensure_strict_permissions(&self) -> Result<(), PathsError> {
-        let permissions = self.permission_entry().force_dir_ownership();
+        let mut permissions = self.permission_entry();
+        if !self.respect_existing {
+            permissions = permissions.force_dir_ownership();
+        }
         let result = permissions
             .create_directory_with_root(self.path(), &self.root)
             .await
@@ -219,7 +242,11 @@ impl ManagedDir {
     }
 
     async fn ensure_without_strict_permissions(&self) -> Result<(), PathsError> {
+        let existed = tokio::fs::try_exists(self.path()).await.unwrap_or(false);
         self.create_directory_tree_with_root(self.path()).await?;
+        if self.respect_existing && existed {
+            return Ok(());
+        }
         let result = self
             .permission_entry()
             .apply(self.path())
@@ -249,15 +276,6 @@ impl ManagedDir {
         }
     }
 
-    pub async fn create_if_missing(&self) -> Result<(), PathsError> {
-        let permissions = self.permission_entry();
-        let result = permissions
-            .create_directory(self.path())
-            .await
-            .map_err(Into::into);
-        self.handle_permission_errors(result)
-    }
-
     fn permission_entry(&self) -> PermissionEntry {
         PermissionEntry::new(
             non_empty_string(&self.owner.user),
@@ -277,6 +295,7 @@ impl ManagedDir {
 
 #[derive(Debug, Clone)]
 pub struct ManagedFile {
+    root: PathBuf,
     path: PathBuf,
     owner: Owner,
     mode: u32,
@@ -292,12 +311,33 @@ impl ManagedFile {
         &self.owner
     }
 
+    pub fn parent(&self) -> ManagedDir {
+        let path = self
+            .path
+            .parent()
+            .filter(|path| path.starts_with(&self.root))
+            .expect("managed file path must have a parent inside its root");
+
+        ManagedDir {
+            root: self.root.clone(),
+            path: path.to_owned(),
+            owner: self.owner.clone(),
+            mode: DEFAULT_DIR_MODE,
+            respect_existing: false,
+            warn_and_ignore_permission_errors: self.warn_and_ignore_permission_errors,
+        }
+    }
+
     pub fn with_owner(mut self, owner: Owner) -> Self {
         self.owner = owner;
         self
     }
 
-    pub fn preserve_ownership(self) -> Self {
+    /// Use the process owner/group when creating or replacing this file.
+    ///
+    /// This skips owner/group management for the file. Mode is still managed
+    /// by this builder.
+    pub fn use_process_ownership(self) -> Self {
         self.with_owner(Owner::user_group("", ""))
     }
 
@@ -393,7 +433,7 @@ impl ManagedTemplateFile {
         let disabled_path = append_path_suffix(self.active.path(), ".disabled");
 
         if let Some(parent) = &self.parent {
-            parent.create_if_missing().await?;
+            parent.clone().respect_existing().ensure().await?;
         }
 
         let prior_config: Option<Vec<u8>> = tokio::fs::read(self.active.path()).await.ok();
@@ -410,6 +450,7 @@ impl ManagedTemplateFile {
 
     fn template_file(&self) -> ManagedFile {
         ManagedFile {
+            root: self.active.root.clone(),
             path: append_path_suffix(self.active.path(), ".template"),
             owner: self.active.owner.clone(),
             mode: self.active.mode,
@@ -572,7 +613,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_if_missing_creates_missing_parent_directories() {
+    async fn respect_existing_creates_missing_parent_directories() {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
         let config_root = TedgePaths::from_root_with_defaults(
@@ -584,7 +625,8 @@ mod tests {
         config_root
             .dir("operations/c8y")
             .unwrap()
-            .create_if_missing()
+            .respect_existing()
+            .ensure()
             .await
             .unwrap();
 
@@ -593,7 +635,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_if_missing_leaves_existing_directory_mode_unchanged() {
+    async fn respect_existing_leaves_existing_directory_mode_unchanged() {
         let ttd = TempTedgeDir::new();
         let existing = ttd.dir("operations");
         existing.set_mode(0o700);
@@ -608,7 +650,8 @@ mod tests {
         config_root
             .dir("operations")
             .unwrap()
-            .create_if_missing()
+            .respect_existing()
+            .ensure()
             .await
             .unwrap();
 
@@ -626,6 +669,21 @@ mod tests {
             .with_owner(Owner::user_group("mosquitto", "mosquitto"));
 
         assert_eq!(file.owner(), &Owner::user_group("mosquitto", "mosquitto"));
+    }
+
+    #[test]
+    fn file_parent_uses_file_owner() {
+        let ttd = TempTedgeDir::new();
+        let root = TedgePaths::from_root_with_defaults(ttd.path(), "tedge", "tedge");
+
+        let parent = root
+            .file("operations/c8y/c8y_RemoteAccessConnect")
+            .unwrap()
+            .with_owner(Owner::user_group("remote", "remote"))
+            .parent();
+
+        assert_eq!(parent.path(), ttd.path().join("operations/c8y"));
+        assert_eq!(parent.owner(), &Owner::user_group("remote", "remote"));
     }
 
     #[tokio::test]

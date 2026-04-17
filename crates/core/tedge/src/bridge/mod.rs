@@ -19,7 +19,7 @@ pub use config::BridgeLocation;
 
 pub const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
-pub(crate) async fn write_mosquitto_owned_config(
+pub(crate) async fn write_mosquitto_config(
     tedge_config: &TEdgeConfig,
     config_file: &str,
     contents: &[u8],
@@ -31,7 +31,7 @@ pub(crate) async fn write_mosquitto_owned_config(
         .await?;
     config_root
         .file(format!("{TEDGE_BRIDGE_CONF_DIR_PATH}/{config_file}"))?
-        .preserve_ownership()
+        .use_process_ownership()
         .replace_atomic(contents)
         .await?;
     Ok(())
@@ -52,7 +52,7 @@ mod tests {
             .with_raw_content("user = ''\ngroup = ''\n");
         let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
-        write_mosquitto_owned_config(&config, "tedge-mosquitto.conf", b"listener 1883")
+        write_mosquitto_config(&config, "tedge-mosquitto.conf", b"listener 1883")
             .await
             .unwrap();
 
