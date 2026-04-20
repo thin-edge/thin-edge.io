@@ -5555,6 +5555,7 @@ version = "2.0.0"
 dependencies = [
  "anyhow",
  "async-tempfile",
+ "camino",
  "doku",
  "futures",
  "maplit",
