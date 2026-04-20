@@ -266,6 +266,45 @@ impl TEdgeConfigLocation {
         &self.tedge_config_file_path
     }
 
+    /// Get the path where the tedge.toml backup file would be located
+    fn get_backup_path(&self) -> Utf8PathBuf {
+        let mut backup_path = self.tedge_config_file_path.clone();
+        backup_path.set_extension("toml.bak");
+        backup_path
+    }
+
+    /// Create a backup of tedge.toml before upgrade
+    ///
+    /// Returns the path to the created backup file, or an error if backup creation fails.
+    pub async fn backup_tedge_config(&self) -> Result<Utf8PathBuf, TEdgeConfigError> {
+        let backup_path = self.get_backup_path();
+        debug!("Creating backup of {} to {}", self.toml_path(), backup_path);
+
+        tokio::fs::copy(self.toml_path(), &backup_path)
+            .await
+            .map_err(|e| {
+                warn!("Failed to create backup of {}: {}", self.toml_path(), e);
+                TEdgeConfigError::Anyhow(anyhow::anyhow!(
+                    "Failed to create backup of {}: {}. Please ensure the file exists and you have write permissions.",
+                    self.toml_path(), e
+                ))
+            })?;
+
+        Ok(backup_path)
+    }
+
+    /// Check if a stale backup file exists
+    ///
+    /// Returns the path to the backup file if it exists, None otherwise.
+    pub fn check_backup_exists(&self) -> Option<Utf8PathBuf> {
+        let backup_path = self.get_backup_path();
+        if backup_path.exists() {
+            Some(backup_path)
+        } else {
+            None
+        }
+    }
+
     pub(crate) async fn load(self) -> Result<TEdgeConfig, TEdgeConfigError> {
         let dto = self.load_dto_from_toml_and_env().await?;
         debug!(

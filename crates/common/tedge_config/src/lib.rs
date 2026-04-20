@@ -65,17 +65,28 @@ impl TEdgeConfig {
         self.location().update_toml(update).await
     }
 
-    pub async fn migrate_mapper_configs(self) -> Result<(), TEdgeConfigError> {
+    pub async fn migrate_mapper_configs(self) -> Result<PathBuf, TEdgeConfigError> {
+        // Create a backup of tedge.toml before starting migration
+        let backup_path = self.location().backup_tedge_config().await?;
+        tracing::info!("Created backup of tedge.toml at: {}", backup_path);
+
         for cloud_type in CloudType::iter() {
             self.location().migrate_mapper_config(cloud_type).await?;
         }
-        Ok(())
+        Ok(backup_path)
+    }
+
+    /// Check if a stale tedge.toml.bak backup file exists
+    ///
+    /// Returns Some(path) if a backup file is found, None otherwise.
+    pub fn check_backup_exists(&self) -> Option<PathBuf> {
+        self.location().check_backup_exists()
     }
 
     pub fn mapper_config_dir<T: ExpectedCloudType>(
         &self,
         profile: Option<&ProfileName>,
-    ) -> camino::Utf8PathBuf {
+    ) -> PathBuf {
         self.location().config_dir::<T>(profile)
     }
 

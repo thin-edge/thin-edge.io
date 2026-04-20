@@ -30,6 +30,12 @@ impl Command for GetConfigCommand {
             Err(err) => return Err(anyhow::Error::new(err).into()),
         }
 
+        // Check for stale backup files and warn user
+        if let Some(backup_path) = tedge_config.check_backup_exists() {
+            eprintln!("Warning: Found stale backup file at {}", backup_path);
+            eprintln!("If your current configuration is working, you can safely delete it.");
+        }
+
         Ok(())
     }
 }

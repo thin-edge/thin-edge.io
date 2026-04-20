@@ -19,6 +19,12 @@ impl Command for SetConfigCommand {
     }
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        // Check for stale backup files and warn user
+        if let Some(backup_path) = tedge_config.check_backup_exists() {
+            eprintln!("Warning: Found stale backup file at {}", backup_path);
+            eprintln!("If your current configuration is working, you can safely delete it.");
+        }
+
         tedge_config
             .update_toml(&|dto, _reader| {
                 dto.try_update_str(&self.key, &self.value)

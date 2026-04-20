@@ -11,7 +11,7 @@ impl Command for UpgradeConfigCommand {
     }
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        tedge_config.migrate_mapper_configs().await.map_err(|e| {
+        let backup_path = tedge_config.migrate_mapper_configs().await.map_err(|e| {
             MaybeFancy::Unfancy(anyhow::Error::new(e).context(
                 "Failed to migrate mapper configurations. \
                      Fix the underlying issue and run 'tedge config upgrade' again to retry.",
@@ -19,6 +19,13 @@ impl Command for UpgradeConfigCommand {
         })?;
 
         eprintln!("Configuration updates completed successfully.");
+        eprintln!(
+            "Your original configuration has been backed up to: {} in case the old configuration must be restored.",
+            backup_path
+        );
+        eprintln!(
+            "You may delete it after validating that your upgraded configuration is working."
+        );
         Ok(())
     }
 }
