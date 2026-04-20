@@ -96,7 +96,7 @@ impl WorkflowSupervisor {
             .values()
             .filter_map(|versions| versions.current_workflow())
             .collect::<Vec<_>>();
-        operations.sort_by(|&a, &b| a.operation.to_string().cmp(&b.operation.to_string()));
+        operations.sort_by_key(|&a| a.operation.to_string());
         operations
             .iter()
             .filter_map(|workflow| workflow.capability_message(schema, target))
