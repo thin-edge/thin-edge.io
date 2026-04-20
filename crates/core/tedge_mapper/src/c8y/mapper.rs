@@ -439,27 +439,9 @@ mod tests {
     use super::*;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    fn current_user_group() -> (String, String) {
-        let user = std::process::Command::new("id")
-            .arg("-un")
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.trim().to_owned())
-            .unwrap();
-        let group = std::process::Command::new("id")
-            .arg("-gn")
-            .output()
-            .ok()
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.trim().to_owned())
-            .unwrap();
-        (user, group)
-    }
-
     async fn load_config(toml: &str) -> (TempTedgeDir, TEdgeConfig) {
         let ttd = TempTedgeDir::new();
-        let (user, group) = current_user_group();
+        let (user, group) = crate::test_helpers::current_user_group();
         ttd.file("system.toml")
             .with_raw_content(&format!("user = '{user}'\ngroup = '{group}'\n"));
         ttd.file("tedge.toml").with_raw_content(toml);

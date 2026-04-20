@@ -433,21 +433,16 @@ impl TEdgeConfigLocation {
             system_config.group,
         );
 
+        let toml_file = config_root
+            .file(toml_path.as_std_path())?
+            .warn_and_ignore_permission_errors();
+
         // Create `$HOME/.tedge`, `/etc/tedge` or `/etc/tedge/mappers/{cloud}`
         // directory in case it does not exist yet
-        let parent_dir = toml_path.parent().expect("provided path must have parent");
-        config_root
-            .dir(parent_dir.as_std_path())?
-            .warn_and_ignore_permission_errors()
-            .ensure()
-            .await
-            .with_context(|| format!("Failed to create directory {parent_dir}"))?;
+        let parent_dir = toml_file.parent();
+        parent_dir.ensure().await?;
 
-        config_root
-            .file(toml_path.as_std_path())?
-            .warn_and_ignore_permission_errors()
-            .replace_atomic(toml.as_bytes())
-            .await?;
+        toml_file.replace_atomic(toml.as_bytes()).await?;
 
         Ok(())
     }

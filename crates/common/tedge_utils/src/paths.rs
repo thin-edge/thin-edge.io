@@ -1,8 +1,11 @@
 use std::ffi::OsString;
+use std::fmt;
 use std::path::Component;
 use std::path::Path;
-use std::path::PathBuf;
+use std::path::PathBuf as StdPathBuf;
 
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use tokio::io::AsyncWriteExt;
 use tracing::warn;
 
@@ -44,10 +47,10 @@ pub enum PathsError {
     RelativePathNotPermitted { path: OsString },
 
     #[error("Managed path {path:?} must stay relative to the config root")]
-    InvalidManagedPath { path: PathBuf },
+    InvalidManagedPath { path: StdPathBuf },
 
     #[error("Managed path {path:?} is outside the config root")]
-    PathOutsideRoot { path: PathBuf },
+    PathOutsideRoot { path: StdPathBuf },
 
     #[error(transparent)]
     FileError(#[from] crate::file::FileError),
@@ -73,7 +76,7 @@ impl Owner {
 
 #[derive(Debug, Clone)]
 pub struct TedgePaths {
-    root: PathBuf,
+    root: Utf8PathBuf,
     default_owner: Owner,
 }
 
@@ -84,13 +87,14 @@ impl TedgePaths {
         group: impl Into<String>,
     ) -> Self {
         Self {
-            root: root.as_ref().to_path_buf(),
+            root: Utf8PathBuf::from_path_buf(root.as_ref().to_path_buf())
+                .expect("managed path root must be valid UTF-8"),
             default_owner: Owner::user_group(user, group),
         }
     }
 
     pub fn root(&self) -> &Path {
-        &self.root
+        self.root.as_std_path()
     }
 
     pub fn default_owner(&self) -> &Owner {
@@ -129,6 +133,16 @@ impl TedgePaths {
         })
     }
 
+    /// Creates a builder for a file managed using the template pattern:
+    ///
+    /// - `{name}` - active file (updated only if not overridden or disabled)
+    /// - `{name}.template` - canonical template (always updated)
+    /// - `{name}.disabled` - marker file indicating the file is disabled
+    ///
+    /// Call `.persist(content)` on the returned builder to write the file.
+    /// If a user has modified the `name` file (making it differ from the `name.template`),
+    /// or if a `.disabled` marker exists, the active file will not be updated.
+    /// However, the template will always be refreshed with the latest definition.
     pub fn template_file(&self, path: impl AsRef<Path>) -> Result<ManagedTemplateFile, PathsError> {
         let path = self.resolve(path)?;
         let parent = path.parent().map(|path| ManagedDir {
@@ -153,10 +167,10 @@ impl TedgePaths {
         })
     }
 
-    fn resolve(&self, path: impl AsRef<Path>) -> Result<PathBuf, PathsError> {
+    fn resolve(&self, path: impl AsRef<Path>) -> Result<Utf8PathBuf, PathsError> {
         let path = path.as_ref();
         let relative_path = if path.is_absolute() {
-            path.strip_prefix(&self.root)
+            path.strip_prefix(self.root.as_std_path())
                 .map_err(|_| PathsError::PathOutsideRoot {
                     path: path.to_path_buf(),
                 })?
@@ -165,14 +179,19 @@ impl TedgePaths {
         };
 
         validate_managed_path(relative_path)?;
+        let relative_path =
+            Utf8Path::from_path(relative_path).ok_or_else(|| PathsError::PathToStringFailed {
+                path: relative_path.as_os_str().to_os_string(),
+            })?;
         Ok(self.root.join(relative_path))
     }
 }
 
 #[derive(Debug, Clone)]
+#[must_use]
 pub struct ManagedDir {
-    root: PathBuf,
-    path: PathBuf,
+    root: Utf8PathBuf,
+    path: Utf8PathBuf,
     owner: Owner,
     mode: u32,
     respect_existing: bool,
@@ -181,7 +200,7 @@ pub struct ManagedDir {
 
 impl ManagedDir {
     pub fn path(&self) -> &Path {
-        &self.path
+        self.path.as_std_path()
     }
 
     pub fn owner(&self) -> &Owner {
@@ -235,7 +254,7 @@ impl ManagedDir {
             permissions = permissions.force_dir_ownership();
         }
         let result = permissions
-            .create_directory_with_root(self.path(), &self.root)
+            .create_directory_with_root(self.path(), self.root.as_std_path())
             .await
             .map_err(Into::into);
         self.handle_permission_errors(result)
@@ -243,7 +262,8 @@ impl ManagedDir {
 
     async fn ensure_without_strict_permissions(&self) -> Result<(), PathsError> {
         let existed = tokio::fs::try_exists(self.path()).await.unwrap_or(false);
-        self.create_directory_tree_with_root(self.path()).await?;
+        self.create_directory_tree_with_root(self.path.as_path())
+            .await?;
         if self.respect_existing && existed {
             return Ok(());
         }
@@ -255,10 +275,10 @@ impl ManagedDir {
         self.handle_permission_errors(result)
     }
 
-    async fn create_directory_tree_with_root(&self, dir: &Path) -> Result<(), FileError> {
+    async fn create_directory_tree_with_root(&self, dir: &Utf8Path) -> Result<(), FileError> {
         match dir.parent() {
             None => return Ok(()),
-            Some(_parent) if dir == self.root => {}
+            Some(_parent) if dir == self.root.as_path() => {}
             Some(parent) => {
                 if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
                     Box::pin(self.create_directory_tree_with_root(parent)).await?;
@@ -270,7 +290,7 @@ impl ManagedDir {
             Ok(_) => Ok(()),
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
             Err(err) => Err(FileError::DirectoryCreateFailed {
-                dir: dir.display().to_string(),
+                dir: dir.to_string(),
                 from: err,
             }),
         }
@@ -293,10 +313,17 @@ impl ManagedDir {
     }
 }
 
+impl fmt::Display for ManagedDir {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.path.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone)]
+#[must_use]
 pub struct ManagedFile {
-    root: PathBuf,
-    path: PathBuf,
+    root: Utf8PathBuf,
+    path: Utf8PathBuf,
     owner: Owner,
     mode: u32,
     warn_and_ignore_permission_errors: bool,
@@ -304,7 +331,7 @@ pub struct ManagedFile {
 
 impl ManagedFile {
     pub fn path(&self) -> &Path {
-        &self.path
+        self.path.as_std_path()
     }
 
     pub fn owner(&self) -> &Owner {
@@ -348,8 +375,8 @@ impl ManagedFile {
 
     pub async fn replace_atomic(&self, content: impl AsRef<[u8]>) -> Result<(), PathsError> {
         let result = async {
-            atomically_write_file_async(&self.path, content.as_ref()).await?;
-            self.permission_entry().apply(&self.path).await?;
+            atomically_write_file_async(self.path(), content.as_ref()).await?;
+            self.permission_entry().apply(self.path()).await?;
             Ok(())
         }
         .await;
@@ -358,14 +385,14 @@ impl ManagedFile {
 
     pub async fn create_if_missing(&self, content: impl AsRef<[u8]>) -> Result<(), PathsError> {
         let mut options = tokio::fs::OpenOptions::new();
-        match options.create_new(true).write(true).open(&self.path).await {
+        match options.create_new(true).write(true).open(self.path()).await {
             Ok(mut file) => {
                 file.write_all(content.as_ref()).await?;
                 file.flush().await?;
                 file.sync_all().await?;
                 let result = self
                     .permission_entry()
-                    .apply(&self.path)
+                    .apply(self.path())
                     .await
                     .map_err(Into::into);
                 self.handle_permission_errors(result)
@@ -378,7 +405,7 @@ impl ManagedFile {
     pub async fn ensure_permissions(&self) -> Result<(), PathsError> {
         let result = self
             .permission_entry()
-            .apply(&self.path)
+            .apply(self.path())
             .await
             .map_err(Into::into);
         self.handle_permission_errors(result)
@@ -401,7 +428,14 @@ impl ManagedFile {
     }
 }
 
+impl fmt::Display for ManagedFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.path.fmt(f)
+    }
+}
+
 #[derive(Debug, Clone)]
+#[must_use]
 pub struct ManagedTemplateFile {
     active: ManagedFile,
     parent: Option<ManagedDir>,
@@ -439,7 +473,9 @@ impl ManagedTemplateFile {
         let prior_config: Option<Vec<u8>> = tokio::fs::read(self.active.path()).await.ok();
         let prior_template: Option<Vec<u8>> = tokio::fs::read(template.path()).await.ok();
         let overridden = prior_config != prior_template;
-        let disabled = tokio::fs::try_exists(&disabled_path).await.unwrap_or(false);
+        let disabled = tokio::fs::try_exists(disabled_path.as_std_path())
+            .await
+            .unwrap_or(false);
 
         if !overridden && !disabled {
             self.persist_file(&self.active, content).await?;
@@ -468,10 +504,11 @@ impl ManagedTemplateFile {
     }
 }
 
-fn append_path_suffix(path: &Path, suffix: &str) -> PathBuf {
+fn append_path_suffix(path: &Path, suffix: &str) -> Utf8PathBuf {
     let mut path = path.as_os_str().to_os_string();
     path.push(suffix);
-    PathBuf::from(path)
+    Utf8PathBuf::from_path_buf(StdPathBuf::from(path))
+        .expect("managed path suffix must preserve UTF-8")
 }
 
 fn non_empty_string(value: &str) -> Option<String> {
@@ -686,6 +723,26 @@ mod tests {
         assert_eq!(parent.owner(), &Owner::user_group("remote", "remote"));
     }
 
+    #[test]
+    fn managed_paths_can_be_displayed() {
+        let ttd = TempTedgeDir::new();
+        let root = TedgePaths::from_root_with_defaults(ttd.path(), "tedge", "tedge");
+        let file = root.file("operations/c8y/c8y_Restart").unwrap();
+        let parent = file.parent();
+
+        assert_eq!(
+            file.to_string(),
+            ttd.path()
+                .join("operations/c8y/c8y_Restart")
+                .display()
+                .to_string()
+        );
+        assert_eq!(
+            parent.to_string(),
+            ttd.path().join("operations/c8y").display().to_string()
+        );
+    }
+
     #[tokio::test]
     async fn file_create_if_missing_writes_content_on_first_call() {
         let ttd = TempTedgeDir::new();
@@ -835,6 +892,7 @@ mod tests {
             err,
             PathsError::FileError(FileError::DirectoryCreateFailed { .. })
         ));
+        assert!(err.to_string().contains(&root.display().to_string()));
         assert!(!root.exists());
         assert!(!ttd.path().join("missing-parent").exists());
     }

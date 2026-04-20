@@ -25,12 +25,9 @@ pub(crate) async fn write_mosquitto_config(
     contents: &[u8],
 ) -> Result<(), PathsError> {
     let config_root = tedge_config.config_root();
-    config_root
-        .dir(TEDGE_BRIDGE_CONF_DIR_PATH)?
-        .ensure()
-        .await?;
-    config_root
-        .file(format!("{TEDGE_BRIDGE_CONF_DIR_PATH}/{config_file}"))?
+    let config_file = config_root.file(format!("{TEDGE_BRIDGE_CONF_DIR_PATH}/{config_file}"))?;
+    config_file.parent().ensure().await?;
+    config_file
         .use_process_ownership()
         .replace_atomic(contents)
         .await?;
