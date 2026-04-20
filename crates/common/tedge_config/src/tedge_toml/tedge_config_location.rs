@@ -434,7 +434,7 @@ impl TEdgeConfigLocation {
         );
 
         let toml_file = config_root
-            .file(toml_path.as_std_path())?
+            .file(toml_path)?
             .warn_and_ignore_permission_errors();
 
         // Create `$HOME/.tedge`, `/etc/tedge` or `/etc/tedge/mappers/{cloud}`

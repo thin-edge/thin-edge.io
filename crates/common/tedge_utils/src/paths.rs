@@ -1,9 +1,6 @@
-use std::ffi::OsString;
 use std::fmt;
-use std::path::Component;
-use std::path::Path;
-use std::path::PathBuf as StdPathBuf;
 
+use camino::Utf8Component;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use tokio::io::AsyncWriteExt;
@@ -28,29 +25,14 @@ const fn apply_umask(mode: u32) -> u32 {
 
 #[derive(thiserror::Error, Debug)]
 pub enum PathsError {
-    #[error("User's Home Directory not found.")]
-    HomeDirNotFound,
-
     #[error(transparent)]
     IoError(#[from] std::io::Error),
 
-    #[error("Path conversion to String failed: {path:?}.")]
-    PathToStringFailed { path: OsString },
-
-    #[error("Directory: {path:?} not found")]
-    DirNotFound { path: OsString },
-
-    #[error("Parent directory for the path: {path:?} not found")]
-    ParentDirNotFound { path: OsString },
-
-    #[error("Relative path: {path:?} is not permitted. Provide an absolute path instead.")]
-    RelativePathNotPermitted { path: OsString },
-
     #[error("Managed path {path:?} must stay relative to the config root")]
-    InvalidManagedPath { path: StdPathBuf },
+    InvalidManagedPath { path: Utf8PathBuf },
 
     #[error("Managed path {path:?} is outside the config root")]
-    PathOutsideRoot { path: StdPathBuf },
+    PathOutsideRoot { path: Utf8PathBuf },
 
     #[error(transparent)]
     FileError(#[from] crate::file::FileError),
@@ -82,19 +64,18 @@ pub struct TedgePaths {
 
 impl TedgePaths {
     pub fn from_root_with_defaults(
-        root: impl AsRef<Path>,
+        root: impl AsRef<Utf8Path>,
         user: impl Into<String>,
         group: impl Into<String>,
     ) -> Self {
         Self {
-            root: Utf8PathBuf::from_path_buf(root.as_ref().to_path_buf())
-                .expect("managed path root must be valid UTF-8"),
+            root: root.as_ref().to_owned(),
             default_owner: Owner::user_group(user, group),
         }
     }
 
-    pub fn root(&self) -> &Path {
-        self.root.as_std_path()
+    pub fn root(&self) -> &Utf8Path {
+        &self.root
     }
 
     pub fn default_owner(&self) -> &Owner {
@@ -112,7 +93,7 @@ impl TedgePaths {
         }
     }
 
-    pub fn dir(&self, path: impl AsRef<Path>) -> Result<ManagedDir, PathsError> {
+    pub fn dir(&self, path: impl AsRef<Utf8Path>) -> Result<ManagedDir, PathsError> {
         Ok(ManagedDir {
             root: self.root.clone(),
             path: self.resolve(path)?,
@@ -123,7 +104,7 @@ impl TedgePaths {
         })
     }
 
-    pub fn file(&self, path: impl AsRef<Path>) -> Result<ManagedFile, PathsError> {
+    pub fn file(&self, path: impl AsRef<Utf8Path>) -> Result<ManagedFile, PathsError> {
         Ok(ManagedFile {
             root: self.root.clone(),
             path: self.resolve(path)?,
@@ -143,7 +124,7 @@ impl TedgePaths {
     /// If a user has modified the `name` file (making it differ from the `name.template`),
     /// or if a `.disabled` marker exists, the active file will not be updated.
     /// However, the template will always be refreshed with the latest definition.
-    pub fn template_file(&self, path: impl AsRef<Path>) -> Result<ManagedTemplateFile, PathsError> {
+    pub fn template_file(&self, path: impl AsRef<Utf8Path>) -> Result<ManagedTemplateFile, PathsError> {
         let path = self.resolve(path)?;
         let parent = path.parent().map(|path| ManagedDir {
             root: self.root.clone(),
@@ -167,22 +148,18 @@ impl TedgePaths {
         })
     }
 
-    fn resolve(&self, path: impl AsRef<Path>) -> Result<Utf8PathBuf, PathsError> {
+    fn resolve(&self, path: impl AsRef<Utf8Path>) -> Result<Utf8PathBuf, PathsError> {
         let path = path.as_ref();
         let relative_path = if path.is_absolute() {
-            path.strip_prefix(self.root.as_std_path())
+            path.strip_prefix(&self.root)
                 .map_err(|_| PathsError::PathOutsideRoot {
-                    path: path.to_path_buf(),
+                    path: path.to_owned(),
                 })?
         } else {
             path
         };
 
         validate_managed_path(relative_path)?;
-        let relative_path =
-            Utf8Path::from_path(relative_path).ok_or_else(|| PathsError::PathToStringFailed {
-                path: relative_path.as_os_str().to_os_string(),
-            })?;
         Ok(self.root.join(relative_path))
     }
 }
@@ -199,8 +176,8 @@ pub struct ManagedDir {
 }
 
 impl ManagedDir {
-    pub fn path(&self) -> &Path {
-        self.path.as_std_path()
+    pub fn path(&self) -> &Utf8Path {
+        &self.path
     }
 
     pub fn owner(&self) -> &Owner {
@@ -254,7 +231,7 @@ impl ManagedDir {
             permissions = permissions.force_dir_ownership();
         }
         let result = permissions
-            .create_directory_with_root(self.path(), self.root.as_std_path())
+            .create_directory_with_root(self.path().as_std_path(), self.root.as_std_path())
             .await
             .map_err(Into::into);
         self.handle_permission_errors(result)
@@ -269,7 +246,7 @@ impl ManagedDir {
         }
         let result = self
             .permission_entry()
-            .apply(self.path())
+            .apply(self.path().as_std_path())
             .await
             .map_err(Into::into);
         self.handle_permission_errors(result)
@@ -330,8 +307,8 @@ pub struct ManagedFile {
 }
 
 impl ManagedFile {
-    pub fn path(&self) -> &Path {
-        self.path.as_std_path()
+    pub fn path(&self) -> &Utf8Path {
+        &self.path
     }
 
     pub fn owner(&self) -> &Owner {
@@ -376,7 +353,7 @@ impl ManagedFile {
     pub async fn replace_atomic(&self, content: impl AsRef<[u8]>) -> Result<(), PathsError> {
         let result = async {
             atomically_write_file_async(self.path(), content.as_ref()).await?;
-            self.permission_entry().apply(self.path()).await?;
+            self.permission_entry().apply(self.path().as_std_path()).await?;
             Ok(())
         }
         .await;
@@ -392,7 +369,7 @@ impl ManagedFile {
                 file.sync_all().await?;
                 let result = self
                     .permission_entry()
-                    .apply(self.path())
+                    .apply(self.path().as_std_path())
                     .await
                     .map_err(Into::into);
                 self.handle_permission_errors(result)
@@ -443,7 +420,7 @@ pub struct ManagedTemplateFile {
 }
 
 impl ManagedTemplateFile {
-    pub fn path(&self) -> &Path {
+    pub fn path(&self) -> &Utf8Path {
         self.active.path()
     }
 
@@ -473,7 +450,7 @@ impl ManagedTemplateFile {
         let prior_config: Option<Vec<u8>> = tokio::fs::read(self.active.path()).await.ok();
         let prior_template: Option<Vec<u8>> = tokio::fs::read(template.path()).await.ok();
         let overridden = prior_config != prior_template;
-        let disabled = tokio::fs::try_exists(disabled_path.as_std_path())
+        let disabled = tokio::fs::try_exists(&disabled_path)
             .await
             .unwrap_or(false);
 
@@ -504,11 +481,8 @@ impl ManagedTemplateFile {
     }
 }
 
-fn append_path_suffix(path: &Path, suffix: &str) -> Utf8PathBuf {
-    let mut path = path.as_os_str().to_os_string();
-    path.push(suffix);
-    Utf8PathBuf::from_path_buf(StdPathBuf::from(path))
-        .expect("managed path suffix must preserve UTF-8")
+fn append_path_suffix(path: &Utf8Path, suffix: &str) -> Utf8PathBuf {
+    format!("{path}{suffix}").into()
 }
 
 fn non_empty_string(value: &str) -> Option<String> {
@@ -530,19 +504,19 @@ fn ignore_owner_or_mode_error(result: Result<(), PathsError>) -> Result<(), Path
     }
 }
 
-fn validate_managed_path(path: &Path) -> Result<(), PathsError> {
+fn validate_managed_path(path: &Utf8Path) -> Result<(), PathsError> {
     if path.is_absolute() {
         return Err(PathsError::InvalidManagedPath {
-            path: path.to_path_buf(),
+            path: path.to_owned(),
         });
     }
 
     for component in path.components() {
         match component {
-            Component::CurDir | Component::Normal(_) => {}
-            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+            Utf8Component::CurDir | Utf8Component::Normal(_) => {}
+            Utf8Component::ParentDir | Utf8Component::RootDir | Utf8Component::Prefix(_) => {
                 return Err(PathsError::InvalidManagedPath {
-                    path: path.to_path_buf(),
+                    path: path.to_owned(),
                 })
             }
         }
@@ -583,10 +557,10 @@ mod tests {
         let root = TedgePaths::from_root_with_defaults("/etc/tedge", "tedge", "tedge");
 
         let dir = root.dir("/etc/tedge/operations/c8y").unwrap();
-        assert_eq!(dir.path(), Path::new("/etc/tedge/operations/c8y"));
+        assert_eq!(dir.path(), Utf8Path::new("/etc/tedge/operations/c8y"));
 
         let file = root.file("/etc/tedge/system.toml").unwrap();
-        assert_eq!(file.path(), Path::new("/etc/tedge/system.toml"));
+        assert_eq!(file.path(), Utf8Path::new("/etc/tedge/system.toml"));
     }
 
     #[test]
@@ -613,7 +587,7 @@ mod tests {
     #[tokio::test]
     async fn ensure_creates_missing_managed_directories_with_default_mode() {
         let ttd = TempTedgeDir::new();
-        let root = ttd.path();
+        let root = ttd.utf8_path();
         let owner = current_owner();
         let config_root =
             TedgePaths::from_root_with_defaults(root, owner.user.clone(), owner.group.clone());
@@ -633,7 +607,7 @@ mod tests {
     #[tokio::test]
     async fn group_writable_sets_group_write_bit() {
         let ttd = TempTedgeDir::new();
-        let root = ttd.path();
+        let root = ttd.utf8_path();
         let owner = current_owner();
         let config_root =
             TedgePaths::from_root_with_defaults(root, owner.user.clone(), owner.group.clone());
@@ -654,7 +628,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
         let config_root = TedgePaths::from_root_with_defaults(
-            ttd.path(),
+            ttd.utf8_path(),
             owner.user.clone(),
             owner.group.clone(),
         );
@@ -679,7 +653,7 @@ mod tests {
 
         let owner = current_owner();
         let config_root = TedgePaths::from_root_with_defaults(
-            ttd.path(),
+            ttd.utf8_path(),
             owner.user.clone(),
             owner.group.clone(),
         );
@@ -698,7 +672,7 @@ mod tests {
     #[tokio::test]
     async fn explicit_owner_override_replaces_default_owner() {
         let ttd = TempTedgeDir::new();
-        let root = TedgePaths::from_root_with_defaults(ttd.path(), "tedge", "tedge");
+        let root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "tedge", "tedge");
 
         let file = root
             .file("mosquitto-conf/c8y-bridge.conf")
@@ -711,7 +685,7 @@ mod tests {
     #[test]
     fn file_parent_uses_file_owner() {
         let ttd = TempTedgeDir::new();
-        let root = TedgePaths::from_root_with_defaults(ttd.path(), "tedge", "tedge");
+        let root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "tedge", "tedge");
 
         let parent = root
             .file("operations/c8y/c8y_RemoteAccessConnect")
@@ -726,7 +700,7 @@ mod tests {
     #[test]
     fn managed_paths_can_be_displayed() {
         let ttd = TempTedgeDir::new();
-        let root = TedgePaths::from_root_with_defaults(ttd.path(), "tedge", "tedge");
+        let root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "tedge", "tedge");
         let file = root.file("operations/c8y/c8y_Restart").unwrap();
         let parent = file.parent();
 
@@ -747,7 +721,7 @@ mod tests {
     async fn file_create_if_missing_writes_content_on_first_call() {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .file("system.toml")
@@ -768,7 +742,7 @@ mod tests {
         ttd.file("system.toml")
             .with_raw_content("# existing config");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .file("system.toml")
@@ -786,7 +760,7 @@ mod tests {
     #[tokio::test]
     async fn file_create_if_missing_sets_mode() {
         let ttd = TempTedgeDir::new();
-        let root = ttd.path();
+        let root = ttd.utf8_path();
         let owner = current_owner();
         let config_root = TedgePaths::from_root_with_defaults(root, owner.user, owner.group);
 
@@ -803,7 +777,7 @@ mod tests {
     #[tokio::test]
     async fn file_create_if_missing_fails_when_parent_missing() {
         let ttd = TempTedgeDir::new();
-        let root = ttd.path().join("root-not-created");
+        let root = ttd.utf8_path().join("root-not-created");
         // root is intentionally not created
         let owner = current_owner();
         let config_root = TedgePaths::from_root_with_defaults(&root, owner.user, owner.group);
@@ -822,7 +796,7 @@ mod tests {
     async fn file_create_if_missing_with_wrong_user() {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         let err = config_root
             .file("system.toml")
@@ -839,7 +813,7 @@ mod tests {
     async fn ensure_with_wrong_user() {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         let err = config_root
             .dir("operations")
@@ -859,7 +833,7 @@ mod tests {
         }
 
         let ttd = TempTedgeDir::new();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), "root", "root");
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "root", "root");
         let failing_ancestor = ttd.path().join("operations");
         let requested = ttd.path().join("operations").join("c8y");
 
@@ -878,7 +852,7 @@ mod tests {
     #[tokio::test]
     async fn ensure_does_not_create_directories_above_the_root() {
         let ttd = TempTedgeDir::new();
-        let root = ttd.path().join("missing-parent").join("managed-root");
+        let root = ttd.utf8_path().join("missing-parent").join("managed-root");
         let config_root = TedgePaths::from_root_with_defaults(&root, "", "");
 
         let err = config_root
@@ -892,7 +866,7 @@ mod tests {
             err,
             PathsError::FileError(FileError::DirectoryCreateFailed { .. })
         ));
-        assert!(err.to_string().contains(&root.display().to_string()));
+        assert!(err.to_string().contains(&root.to_string()));
         assert!(!root.exists());
         assert!(!ttd.path().join("missing-parent").exists());
     }
@@ -900,7 +874,7 @@ mod tests {
     #[tokio::test]
     async fn replace_atomic_preserves_symlink_following_behavior() {
         let ttd = TempTedgeDir::new();
-        let root = ttd.path();
+        let root = ttd.utf8_path();
         let bridge_conf = ttd
             .dir("mosquitto-conf")
             .file("c8y-bridge.conf")
@@ -931,7 +905,7 @@ mod tests {
     async fn template_persistence_creates_active_and_template_files() {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")
@@ -959,7 +933,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")
@@ -993,7 +967,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")
@@ -1030,7 +1004,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")
@@ -1071,7 +1045,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         let err = config_root
             .template_file("bridge/rules.toml")
@@ -1085,7 +1059,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), owner.user, owner.group);
+        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")

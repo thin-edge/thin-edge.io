@@ -245,7 +245,8 @@ impl PermissionEntry {
         self
     }
 
-    pub async fn apply(&self, path: &Path) -> Result<(), FileError> {
+    pub async fn apply(&self, path: impl AsRef<Path>) -> Result<(), FileError> {
+        let path = path.as_ref();
         match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
                 change_user_and_group(path, user, group).await?;
@@ -266,7 +267,8 @@ impl PermissionEntry {
         Ok(())
     }
 
-    pub fn apply_sync(&self, path: &Path) -> Result<(), FileError> {
+    pub fn apply_sync(&self, path: impl AsRef<Path>) -> Result<(), FileError> {
+        let path = path.as_ref();
         match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
                 change_user_and_group_sync(path, user, group)?;
@@ -287,16 +289,16 @@ impl PermissionEntry {
         Ok(())
     }
 
-    pub(crate) async fn create_directory(&self, dir: &Path) -> Result<(), FileError> {
-        self.create_directory_internal(dir, None).await
+    pub(crate) async fn create_directory(&self, dir: impl AsRef<Path>) -> Result<(), FileError> {
+        self.create_directory_internal(dir.as_ref(), None).await
     }
 
     pub(crate) async fn create_directory_with_root(
         &self,
-        dir: &Path,
-        root: &Path,
+        dir: impl AsRef<Path>,
+        root: impl AsRef<Path>,
     ) -> Result<(), FileError> {
-        self.create_directory_internal(dir, Some(root)).await
+        self.create_directory_internal(dir.as_ref(), Some(root.as_ref())).await
     }
 
     async fn create_directory_internal(

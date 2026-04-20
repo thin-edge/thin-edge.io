@@ -10,7 +10,7 @@ impl DeviceProfileManagerBuilder {
         // Initialize device_profile.toml with template pattern:
         // - Always update device_profile.toml.template with the latest definition
         // - Only update device_profile.toml if it doesn't exist or hasn't been customized by the user
-        TedgePaths::from_root_with_defaults(ops_dir.as_std_path(), "", "")
+        TedgePaths::from_root_with_defaults(ops_dir, "", "")
             .template_file("device_profile.toml")?
             .persist(workflow_definition)
             .await?;

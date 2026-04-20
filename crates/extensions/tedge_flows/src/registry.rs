@@ -315,7 +315,7 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         content: &str,
     ) -> Result<(), UpdateFlowRegistryError> {
         let dir = self.store().config_dir();
-        TedgePaths::from_root_with_defaults(dir.as_std_path(), "", "")
+        TedgePaths::from_root_with_defaults(dir, "", "")
             .template_file(format!("{}.toml", name))?
             .persist(content)
             .await?;
