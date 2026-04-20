@@ -27,6 +27,7 @@ use tedge_config_macros::ProfileName;
 use tedge_utils::paths::TedgePaths;
 use tracing::debug;
 use tracing::subscriber::NoSubscriber;
+use tracing::warn;
 
 use super::tedge_config;
 use super::ParseKeyError;
@@ -97,6 +98,13 @@ impl TEdgeConfigLocation {
             .unwrap_or_default();
         let tedge_toml: toml::Table = toml::from_str(&toml).unwrap();
         CloudType::iter().any(|key| tedge_toml.contains_key(key.as_ref()))
+    }
+
+    // A generic abstration to check if a migration is required.
+    // Currently, the only migration we have is for mapper configs.
+    // This can be extended in the future if we need to add more migrations.
+    pub async fn is_migration_required(&self) -> bool {
+        self.tedge_toml_contains_cloud_config().await
     }
 
     pub async fn tedge_toml_contains_cloud_config_for(&self, cloud_type: CloudType) -> bool {
@@ -264,6 +272,35 @@ impl TEdgeConfigLocation {
 
     fn toml_path(&self) -> &Utf8Path {
         &self.tedge_config_file_path
+    }
+
+    /// Get the path where the tedge.toml backup file would be located
+    fn get_backup_path(&self) -> Utf8PathBuf {
+        let mut backup_path = self.tedge_config_file_path.clone();
+        backup_path.set_extension("toml.bak");
+        backup_path
+    }
+
+    /// Create a backup of tedge.toml before upgrade
+    ///
+    /// Returns the path to the created backup file, or an error if backup creation fails.
+    pub async fn backup_tedge_config(
+        &self,
+        root: TedgePaths,
+    ) -> Result<Utf8PathBuf, TEdgeConfigError> {
+        let backup_path = self.get_backup_path();
+        debug!("Creating backup of {} to {}", self.toml_path(), backup_path);
+
+        let content = tokio::fs::read(self.toml_path()).await?;
+        root.file(&backup_path)?.replace_atomic(content).await.map_err(|e| {
+                warn!("Failed to create backup of {}: {}", self.toml_path(), e);
+                TEdgeConfigError::Anyhow(anyhow::anyhow!(
+                    "Failed to create backup of {}: {}. Please ensure the file exists and you have write permissions.",
+                    self.toml_path(), e
+                ))
+            })?;
+
+        Ok(backup_path)
     }
 
     pub(crate) async fn load(self) -> Result<TEdgeConfig, TEdgeConfigError> {
