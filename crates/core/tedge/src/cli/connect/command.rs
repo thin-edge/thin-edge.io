@@ -1323,8 +1323,7 @@ async fn write_bridge_config_to_file(
 ) -> Result<(), ConnectError> {
     let mut contents = Vec::new();
     bridge_config.serialize(&mut contents).await?;
-    crate::bridge::write_mosquitto_config(config, &bridge_config.config_file, &contents)
-        .await?;
+    crate::bridge::write_mosquitto_config(config, &bridge_config.config_file, &contents).await?;
     Ok(())
 }
 

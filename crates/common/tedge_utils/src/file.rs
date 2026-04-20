@@ -298,7 +298,8 @@ impl PermissionEntry {
         dir: impl AsRef<Path>,
         root: impl AsRef<Path>,
     ) -> Result<(), FileError> {
-        self.create_directory_internal(dir.as_ref(), Some(root.as_ref())).await
+        self.create_directory_internal(dir.as_ref(), Some(root.as_ref()))
+            .await
     }
 
     async fn create_directory_internal(

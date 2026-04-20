@@ -124,7 +124,10 @@ impl TedgePaths {
     /// If a user has modified the `name` file (making it differ from the `name.template`),
     /// or if a `.disabled` marker exists, the active file will not be updated.
     /// However, the template will always be refreshed with the latest definition.
-    pub fn template_file(&self, path: impl AsRef<Utf8Path>) -> Result<ManagedTemplateFile, PathsError> {
+    pub fn template_file(
+        &self,
+        path: impl AsRef<Utf8Path>,
+    ) -> Result<ManagedTemplateFile, PathsError> {
         let path = self.resolve(path)?;
         let parent = path.parent().map(|path| ManagedDir {
             root: self.root.clone(),
@@ -353,7 +356,9 @@ impl ManagedFile {
     pub async fn replace_atomic(&self, content: impl AsRef<[u8]>) -> Result<(), PathsError> {
         let result = async {
             atomically_write_file_async(self.path(), content.as_ref()).await?;
-            self.permission_entry().apply(self.path().as_std_path()).await?;
+            self.permission_entry()
+                .apply(self.path().as_std_path())
+                .await?;
             Ok(())
         }
         .await;
@@ -450,9 +455,7 @@ impl ManagedTemplateFile {
         let prior_config: Option<Vec<u8>> = tokio::fs::read(self.active.path()).await.ok();
         let prior_template: Option<Vec<u8>> = tokio::fs::read(template.path()).await.ok();
         let overridden = prior_config != prior_template;
-        let disabled = tokio::fs::try_exists(&disabled_path)
-            .await
-            .unwrap_or(false);
+        let disabled = tokio::fs::try_exists(&disabled_path).await.unwrap_or(false);
 
         if !overridden && !disabled {
             self.persist_file(&self.active, content).await?;
@@ -721,7 +724,8 @@ mod tests {
     async fn file_create_if_missing_writes_content_on_first_call() {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .file("system.toml")
@@ -742,7 +746,8 @@ mod tests {
         ttd.file("system.toml")
             .with_raw_content("# existing config");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .file("system.toml")
@@ -796,7 +801,8 @@ mod tests {
     async fn file_create_if_missing_with_wrong_user() {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         let err = config_root
             .file("system.toml")
@@ -813,7 +819,8 @@ mod tests {
     async fn ensure_with_wrong_user() {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         let err = config_root
             .dir("operations")
@@ -905,7 +912,8 @@ mod tests {
     async fn template_persistence_creates_active_and_template_files() {
         let ttd = TempTedgeDir::new();
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")
@@ -933,7 +941,8 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")
@@ -967,7 +976,8 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")
@@ -1004,7 +1014,8 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")
@@ -1045,7 +1056,8 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         let err = config_root
             .template_file("bridge/rules.toml")
@@ -1059,7 +1071,8 @@ mod tests {
         let ttd = TempTedgeDir::new();
         ttd.dir("bridge");
         let owner = current_owner();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), owner.user, owner.group);
 
         config_root
             .template_file("bridge/rules.toml")
