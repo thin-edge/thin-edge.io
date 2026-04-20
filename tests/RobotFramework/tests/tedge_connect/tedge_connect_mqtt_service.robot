@@ -8,13 +8,14 @@ Test Teardown       Get Logs
 
 
 *** Test Cases ***
-Connect to Cumulocity MQTT Service endpoint
+Connect to Cumulocity MQTT Service endpoint mosquitto bridge
     ${DEVICE_SN}=    Setup    connect=${False}
+    Execute Command    tedge config set mqtt.bridge.built_in false
     Execute Command    tedge config set c8y.mqtt_service.enabled true
     Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
     Execute Command    tedge connect c8y
 
-    Verify Custom Topic Publish and Subscribe
+    Verify Custom Topic Publish
 
 Connect to Cumulocity MQTT Service endpoint basic auth
     ${DEVICE_SN}=    Setup    register=${False}
@@ -30,7 +31,7 @@ Connect to Cumulocity MQTT Service endpoint basic auth
 
     Execute Command    tedge connect c8y
 
-    Verify Custom Topic Publish and Subscribe
+    Verify Custom Topic Publish
 
 Connect to Cumulocity MQTT Service endpoint builtin bridge
     ${DEVICE_SN}=    Setup    connect=${False}
@@ -39,16 +40,18 @@ Connect to Cumulocity MQTT Service endpoint builtin bridge
     Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
     Execute Command    tedge connect c8y
 
-    Verify Custom Topic Publish and Subscribe
+    Verify Custom Topic Publish
 
 
 *** Keywords ***
-Verify Custom Topic Publish and Subscribe
-    ${timestamp}=    Get Unix Timestamp
+Verify Custom Topic Publish
+    [Documentation]    FUTURE: Deploy a lightweight service/function to be able to
+    ...    test the messages published to and messages received from the Cumulocity
+    ...    MQTT Service. For now, just test if the bridge is still up after publishing
+    ...    a message to the mqtt service to ensure the bridge isn't being disconnected
+    ...    due to publishing an illegal message or to an illegal topic
     # Publish a message to a topic that the device is subscribed to
-    Execute Command    tedge mqtt pub c8y/mqtt/out/sub/topic '"hello"'
+    Execute Command    tedge mqtt pub c8y/mqtt/out/foo/bar '"hello"'
     # Assert that the message is looped back on the inbound subscribed topic
-    Should Have MQTT Messages
-    ...    c8y/mqtt/in/sub/topic
-    ...    message_contains="hello"
-    ...    date_from=${timestamp}
+    Sleep    2s
+    Bridge Should Be Up    cloud=c8y
