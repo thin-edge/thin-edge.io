@@ -666,7 +666,6 @@ version = "2.0.0"
 dependencies = [
  "async-trait",
  "serde_json",
- "tedge_actors",
  "tedge_flows",
  "time",
  "tokio",
