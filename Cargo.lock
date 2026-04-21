@@ -5051,8 +5051,6 @@ dependencies = [
  "camino",
  "certificate",
  "clap",
- "clock",
- "collectd_ext",
  "flockfile",
  "mqtt_channel",
  "rcgen",

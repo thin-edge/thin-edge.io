@@ -561,12 +561,12 @@ mod tests {
     #[test]
     fn run_all_logging_considers_supervisor_agent_and_mapper_services() {
         assert_eq!(
-            log_service_names(Some(&MapperName::Collectd)),
+            log_service_names(Some(&MapperName::UserDefined(vec!["local".to_string()]))),
             vec![
                 "tedge".to_string(),
                 tedge_agent::AGENT_NAME.to_string(),
                 "tedge-mapper".to_string(),
-                "tedge-mapper-collectd".to_string(),
+                "tedge-mapper".to_string(),
             ]
         );
     }
