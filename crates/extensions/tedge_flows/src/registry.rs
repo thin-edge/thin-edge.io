@@ -12,7 +12,8 @@ use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use tedge_utils::file;
-use tedge_utils::fs;
+use tedge_utils::paths::PathsError;
+use tedge_utils::paths::TedgePaths;
 use tracing::error;
 use tracing::info;
 
@@ -314,7 +315,10 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
         content: &str,
     ) -> Result<(), UpdateFlowRegistryError> {
         let dir = self.store().config_dir();
-        fs::persist_file_with_template(dir, &format!("{}.toml", name), content).await?;
+        TedgePaths::from_root_with_defaults(dir, "", "")
+            .template_file(format!("{}.toml", name))?
+            .persist(content)
+            .await?;
         Ok(())
     }
 
@@ -336,7 +340,7 @@ pub enum UpdateFlowRegistryError {
     FileMoveError(#[from] file::FileMoveError),
 
     #[error(transparent)]
-    AtomicFileError(#[from] fs::AtomFileError),
+    PathsError(#[from] PathsError),
 }
 
 pub struct FlowStore<F> {

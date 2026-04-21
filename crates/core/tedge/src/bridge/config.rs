@@ -1,4 +1,3 @@
-use super::TEDGE_BRIDGE_CONF_DIR_PATH;
 use crate::cli::CertificateShift;
 use camino::Utf8PathBuf;
 use core::fmt;
@@ -8,7 +7,6 @@ use tedge_config::models::auth_method::AuthType;
 use tedge_config::models::HostPort;
 use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::TEdgeConfig;
-use tedge_utils::paths::DraftFile;
 use tokio::io::AsyncWriteExt;
 
 #[derive(Debug)]
@@ -159,23 +157,11 @@ impl BridgeConfig {
         &self,
         tedge_config: &TEdgeConfig,
     ) -> Result<(), tedge_utils::paths::PathsError> {
-        let dir_path = tedge_config.root_dir().join(TEDGE_BRIDGE_CONF_DIR_PATH);
-
-        tedge_utils::paths::create_directories(dir_path)?;
-
-        let config_path = self.file_path(tedge_config);
-        let mut config_draft = DraftFile::new(config_path).await?.with_mode(0o644);
-        self.serialize(&mut config_draft).await?;
-        config_draft.persist().await?;
+        let mut contents = Vec::new();
+        self.serialize(&mut contents).await?;
+        super::write_mosquitto_config(tedge_config, &self.config_file, &contents).await?;
 
         Ok(())
-    }
-
-    fn file_path(&self, tedge_config: &TEdgeConfig) -> Utf8PathBuf {
-        tedge_config
-            .root_dir()
-            .join(TEDGE_BRIDGE_CONF_DIR_PATH)
-            .join(&*self.config_file)
     }
 }
 

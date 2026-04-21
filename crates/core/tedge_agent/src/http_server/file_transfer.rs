@@ -23,7 +23,6 @@ use hyper::Request;
 use hyper::StatusCode;
 use std::io::ErrorKind;
 use tedge_actors::futures::StreamExt;
-use tedge_utils::paths::create_directories;
 use tokio::fs::File;
 use tokio::io;
 use tokio::io::AsyncBufReadExt;
@@ -73,7 +72,7 @@ async fn upload_file(path: FileTransferPath, request: Request<Body>) -> Result<S
     }
 
     if let Some(directory) = path.full.parent() {
-        if let Err(err) = create_directories(directory) {
+        if let Err(err) = tedge_utils::file::create_directory_with_defaults(directory).await {
             return Err(internal_error(err, path.request));
         }
 

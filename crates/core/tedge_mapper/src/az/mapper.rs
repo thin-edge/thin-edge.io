@@ -20,8 +20,6 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::AuthMethod;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
-use tedge_utils::file;
-use tedge_utils::file::create_directory_and_update_ownership;
 use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
@@ -164,12 +162,12 @@ async fn bridge_rules(
     cloud_profile: Option<&ProfileName>,
 ) -> anyhow::Result<BridgeConfig> {
     let mapper_config_dir = tedge_config.mapper_config_dir::<AzMapperSpecificConfig>(cloud_profile);
-    let system_config = tedge_config.read_system_config();
-    let (user, group) = (system_config.user, system_config.group);
-    let permissions = file::permissions(&user, &group, 0o755);
-
-    if let Err(err) =
-        create_directory_and_update_ownership(mapper_config_dir.clone(), &permissions).await
+    let config_root = tedge_config.config_root();
+    if let Err(err) = config_root
+        .dir(&mapper_config_dir)
+        .context("invalid mapper config directory")?
+        .ensure()
+        .await
     {
         warn!("failed to set file ownership for '{mapper_config_dir}': {err}");
     }
@@ -180,14 +178,9 @@ async fn bridge_rules(
         &bridge_config_dir,
         "rules",
         include_str!("bridge/rules.toml"),
-        &user,
-        &group,
+        tedge_config,
     )
     .await?;
-
-    if let Err(err) = permissions.apply(bridge_config_dir.as_std_path()).await {
-        warn!("failed to set file ownership/permissions for '{bridge_config_dir}': {err}");
-    }
 
     let effective = resolve_effective_mapper_config(tedge_config, cloud_profile).await?;
 
@@ -284,6 +277,9 @@ mod tests {
 
     async fn create_test_dir(toml: &str) -> TempTedgeDir {
         let ttd = TempTedgeDir::new();
+        let (user, group) = crate::test_helpers::current_user_group();
+        ttd.file("system.toml")
+            .with_raw_content(&format!("user = '{user}'\ngroup = '{group}'\n"));
         ttd.file("tedge.toml").with_raw_content(toml);
         ttd
     }

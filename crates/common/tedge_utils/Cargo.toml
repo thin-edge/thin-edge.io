@@ -19,6 +19,7 @@ timestamp = ["strum", "time", "serde", "serde_json"]
 [dependencies]
 anyhow = { workspace = true }
 async-tempfile = { workspace = true }
+camino = { workspace = true }
 doku = { workspace = true }
 futures = { workspace = true }
 mqtt_channel = { workspace = true }

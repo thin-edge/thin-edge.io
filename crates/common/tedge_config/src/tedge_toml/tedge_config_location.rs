@@ -24,11 +24,9 @@ use std::path::PathBuf;
 use strum::IntoEnumIterator as _;
 use tedge_config_macros::MultiDto;
 use tedge_config_macros::ProfileName;
-use tedge_utils::file;
-use tedge_utils::fs::atomically_write_file_async;
+use tedge_utils::paths::TedgePaths;
 use tracing::debug;
 use tracing::subscriber::NoSubscriber;
-use tracing::warn;
 
 use super::tedge_config;
 use super::ParseKeyError;
@@ -429,27 +427,22 @@ impl TEdgeConfigLocation {
         }
 
         let system_config = SystemConfig::try_new(&self.tedge_config_root_path).unwrap_or_default();
+        let config_root = TedgePaths::from_root_with_defaults(
+            &self.tedge_config_root_path,
+            system_config.user,
+            system_config.group,
+        );
+
+        let toml_file = config_root
+            .file(toml_path)?
+            .warn_and_ignore_permission_errors();
 
         // Create `$HOME/.tedge`, `/etc/tedge` or `/etc/tedge/mappers/{cloud}`
         // directory in case it does not exist yet
-        let parent_dir = toml_path.parent().expect("provided path must have parent");
-        if !tokio::fs::try_exists(toml_path).await.unwrap_or(false) {
-            tokio::fs::create_dir_all(parent_dir)
-                .await
-                .with_context(|| format!("Failed to create directory {parent_dir}"))?;
-        }
-        let directory_permissions =
-            file::permissions(&system_config.user, &system_config.group, 0o755);
-        if let Err(err) = directory_permissions.apply(parent_dir.as_std_path()).await {
-            warn!("failed to set file ownership for '{parent_dir}': {err}");
-        }
+        let parent_dir = toml_file.parent();
+        parent_dir.ensure().await?;
 
-        let permissions = file::permissions(&system_config.user, &system_config.group, 0o644);
-        atomically_write_file_async(toml_path, toml.as_bytes()).await?;
-
-        if let Err(err) = permissions.apply(toml_path.as_std_path()).await {
-            warn!("failed to set file ownership/permissions for '{toml_path}': {err}");
-        }
+        toml_file.replace_atomic(toml.as_bytes()).await?;
 
         Ok(())
     }

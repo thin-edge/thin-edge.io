@@ -372,6 +372,27 @@ async fn effective_mapper_config(
 }
 
 #[cfg(test)]
+pub(crate) mod test_helpers {
+    pub(crate) fn current_user_group() -> (String, String) {
+        let user = std::process::Command::new("id")
+            .arg("-un")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_owned())
+            .unwrap();
+        let group = std::process::Command::new("id")
+            .arg("-gn")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_owned())
+            .unwrap();
+        (user, group)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

@@ -830,12 +830,14 @@ dependencies = [
  "serde",
  "sha1",
  "tedge_config",
+ "tedge_test_utils",
  "tedge_utils",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "tokio-rustls 0.26.2",
  "url",
+ "whoami",
  "ws_stream_tungstenite 0.15.0",
 ]
 
@@ -4895,6 +4897,7 @@ dependencies = [
  "url",
  "uzers",
  "which",
+ "whoami",
  "x509-parser 0.18.0",
  "yansi",
 ]
@@ -5455,6 +5458,7 @@ dependencies = [
  "toml 0.9.6",
  "tracing",
  "tracing-subscriber",
+ "whoami",
  "yansi",
 ]
 
@@ -5551,6 +5555,7 @@ version = "2.0.0"
 dependencies = [
  "anyhow",
  "async-tempfile",
+ "camino",
  "doku",
  "futures",
  "maplit",

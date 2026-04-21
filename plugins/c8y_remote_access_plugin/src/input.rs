@@ -32,7 +32,7 @@ arg_required_else_help(true),
 pub struct C8yRemoteAccessPluginOpt {
     #[arg(long)]
     /// Complete the installation of c8y-remote-access-plugin by declaring the supported operation.
-    init: bool,
+    pub init: bool,
 
     #[arg(long)]
     /// Clean up c8y-remote-access-plugin, deleting the supported operation from tedge.
