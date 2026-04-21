@@ -90,7 +90,6 @@ In this scenario, all of the %%te%% components are running on the gateway device
 |Name|Typical Memory Usage (MiB)|
 |--|--|
 |tedge-mapper c8y (Cumulocity)|8|
-|tedge-mapper collectd |8|
 |tedge-agent|8|
 |mosquitto|10|
 |**Total**|34|

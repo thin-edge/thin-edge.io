@@ -18,7 +18,7 @@ This document describes how the systemd watchdog mechanism can be enabled for %%
 
 ## Enabling the systemd watchdog feature for a tedge service
 
-Enabling systemd watchdog for a %%te%% service (tedge-agent, tedge-mapper-c8y/az/collectd) is a two-step process.
+Enabling systemd watchdog for a %%te%% service (tedge-agent, tedge-mapper-c8y/az) is a two-step process.
 
 ### Step 1: Enable the watchdog feature in the systemd service file
 
