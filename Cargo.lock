@@ -1269,24 +1269,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "collectd_ext"
-version = "2.1.0"
-dependencies = [
- "anyhow",
- "assert_matches",
- "async-trait",
- "batcher",
- "clock",
- "tedge_actors",
- "tedge_api",
- "tedge_mqtt_ext",
- "thiserror 2.0.21",
- "time",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
