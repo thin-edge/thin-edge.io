@@ -4,7 +4,6 @@ use crate::aws::mapper::AwsMapper;
 use crate::az::mapper::AzureMapper;
 #[cfg(feature = "c8y")]
 use crate::c8y::mapper::CumulocityMapper;
-use crate::collectd::mapper::CollectdMapper;
 use crate::core::component::TEdgeComponent;
 use crate::custom::mapper::CustomMapper;
 use anyhow::bail;
@@ -66,7 +65,6 @@ pub mod aws;
 pub mod az;
 #[cfg(feature = "c8y")]
 pub mod c8y;
-mod collectd;
 mod core;
 mod custom;
 use crate::custom_mapper_resolve::EffectiveMapperConfig;
@@ -106,7 +104,6 @@ fn lookup_component(component_name: MapperName) -> anyhow::Result<Box<dyn TEdgeC
         MapperName::Aws { profile } => Box::new(AwsMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
-        MapperName::Collectd => Box::new(CollectdMapper),
         #[cfg(feature = "c8y")]
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
             profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
@@ -169,7 +166,6 @@ pub enum MapperName {
         #[clap(long)]
         profile: Option<ProfileName>,
     },
-    Collectd,
     /// Run a user-defined mapper from `/etc/tedge/mappers/{name}/`.
     ///
     /// The mapper name must match `[a-z][a-z0-9-]*`.
@@ -198,7 +194,6 @@ impl fmt::Display for MapperName {
             MapperName::C8y {
                 profile: Some(profile),
             } => write!(f, "tedge-mapper-c8y@{profile}"),
-            MapperName::Collectd => write!(f, "tedge-mapper-collectd"),
             MapperName::UserDefined(args) => write!(
                 f,
                 "tedge-mapper-{}",

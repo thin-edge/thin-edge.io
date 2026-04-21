@@ -21,8 +21,6 @@ c8y_mapper_ext = { workspace = true, optional = true }
 camino = { workspace = true }
 certificate = { workspace = true }
 clap = { workspace = true }
-clock = { workspace = true }
-collectd_ext = { workspace = true }
 flockfile = { workspace = true }
 mqtt_channel = { workspace = true }
 serde = { workspace = true }
