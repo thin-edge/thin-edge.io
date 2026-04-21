@@ -80,36 +80,14 @@ tedge connect aws
 This will configure all the services (mosquitto, tedge-mapper-c8y.service, tedge-mapper-az.service,
 tedge-mapper-aws.service, tedge-agent.service) to use the newly set port and the bind address.
 
-## Common Errors
+## Step 4: Restart the local services using MQTT
 
-The below example shows that we cannot set a string value for the port number.
+After changing the mqtt port and host, all the services using MQTT have to be restarted.
 
-```sh
-tedge config set mqtt.bind.port '"1234"'
-```
+- For the Cumulocity, Azure and AWS mappers, this is done running the appropriate `tedge connect` command.
+- For user-configured mapper, this has to be done manually, for instance by restarting `tedge-mapper-local`.
+  ```sh
+  sudo systemctl restart tedge-mapper-local
+  ```
+- For other services, say `collectd`, please refer to their documentation to update their configuration and restart the service.
 
-```text title="Output"
-Error: failed to set the configuration key: mqtt.bind.port with value: "1234".
-
-Caused by:
-    Conversion from String failed
-```
-
-## Updating the mqtt port and bind address (host) in collectd and for collectd-mapper
-
-Update the `collectd.conf` with the new port and host in `<Plugin mqtt>`.
-
-Then, restart the collectd service.
-
-```sh
-sudo systemctl restart collectd
-```
-
-After changing the mqtt port and host, then connect to the cloud using `tedge connect c8y/az`.
-Then (Steps 1-3) the collectd-mapper has to be restarted to use the newly set port and bind address (host).
-
-Restart the tedge-mapper-collectd service.
-
-```sh
-sudo systemctl restart tedge-mapper-collectd
-```
