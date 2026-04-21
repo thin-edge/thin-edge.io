@@ -109,6 +109,7 @@ impl<B: Batchable> Batcher<B> {
         batch.batch_end() + self.config.delivery_jitter() > time
     }
 
+    #[cfg(test)]
     pub(crate) fn flush(&mut self) -> Vec<Vec<B>> {
         let mut batches = Vec::with_capacity(self.batches.len());
 
