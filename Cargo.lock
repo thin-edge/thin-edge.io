@@ -5544,8 +5544,6 @@ dependencies = [
  "camino",
  "certificate",
  "clap",
- "clock",
- "collectd_ext",
  "flockfile",
  "futures",
  "mqtt_channel",
