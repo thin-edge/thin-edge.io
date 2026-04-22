@@ -27,6 +27,7 @@ use tedge_config_macros::ProfileName;
 use tedge_utils::paths::TedgePaths;
 use tracing::debug;
 use tracing::subscriber::NoSubscriber;
+use tracing::warn;
 
 use super::tedge_config;
 use super::ParseKeyError;
@@ -276,13 +277,15 @@ impl TEdgeConfigLocation {
     /// Create a backup of tedge.toml before upgrade
     ///
     /// Returns the path to the created backup file, or an error if backup creation fails.
-    pub async fn backup_tedge_config(&self) -> Result<Utf8PathBuf, TEdgeConfigError> {
+    pub async fn backup_tedge_config(
+        &self,
+        root: TedgePaths,
+    ) -> Result<Utf8PathBuf, TEdgeConfigError> {
         let backup_path = self.get_backup_path();
         debug!("Creating backup of {} to {}", self.toml_path(), backup_path);
 
-        tokio::fs::copy(self.toml_path(), &backup_path)
-            .await
-            .map_err(|e| {
+        let content = tokio::fs::read(self.toml_path()).await?;
+        root.file(&backup_path)?.replace_atomic(content).await.map_err(|e| {
                 warn!("Failed to create backup of {}: {}", self.toml_path(), e);
                 TEdgeConfigError::Anyhow(anyhow::anyhow!(
                     "Failed to create backup of {}: {}. Please ensure the file exists and you have write permissions.",

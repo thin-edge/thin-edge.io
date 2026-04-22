@@ -67,7 +67,10 @@ impl TEdgeConfig {
 
     pub async fn migrate_mapper_configs(self) -> Result<PathBuf, TEdgeConfigError> {
         // Create a backup of tedge.toml before starting migration
-        let backup_path = self.location().backup_tedge_config().await?;
+        let backup_path = self
+            .location()
+            .backup_tedge_config(self.config_root())
+            .await?;
         tracing::info!("Created backup of tedge.toml at: {}", backup_path);
 
         for cloud_type in CloudType::iter() {

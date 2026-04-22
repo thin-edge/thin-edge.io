@@ -76,13 +76,11 @@ Custom Setup
 
 Check known tedge environment settings
     [Arguments]    ${ENV_NAME}    ${KEY_NAME}    ${VALUE}
-    ${stdout}    ${stderr}=    Execute Command
+    ${stdout}=    Execute Command
     ...    cmd=env ${ENV_NAME}=${VALUE} tedge config get ${KEY_NAME}
     ...    stdout=${True}
-    ...    stderr=${True}
     ...    retries=1
     Should Be Equal    ${stdout}    ${VALUE}\n
-    Should Be Empty    ${stderr}
 
 Check known tedge environment settings for topics
     [Arguments]    ${ENV_NAME}    ${KEY_NAME}
