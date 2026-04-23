@@ -47,7 +47,7 @@ journalctl -u tedge-mapper-aws
 ```
 
 :::note
-Run `tedge_mapper --debug aws` to log more debug messages
+Run `tedge-mapper --debug aws` to log more debug messages
 :::
 
 ### Software Management logs {#software-management}
