@@ -26,7 +26,7 @@ use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperConfig;
 use tedge_flows::UpdateFlowRegistryError;
-use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::paths::TedgePaths;
 use tracing::error;
 use tracing::log::warn;
 
@@ -313,7 +313,11 @@ async fn flow_registry(
     mapper_config: Option<EffectiveMapperConfig>,
     flows_dir: impl AsRef<Utf8Path>,
 ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
-    if let Err(err) = create_directory_with_defaults(flows_dir.as_ref()).await {
+    if let Err(err) = TedgePaths::from_root_with_defaults(flows_dir.as_ref(), "", "")
+        .root_dir()
+        .ensure()
+        .await
+    {
         error!(
             "failed to create flow directory '{}': {err}",
             flows_dir.as_ref()

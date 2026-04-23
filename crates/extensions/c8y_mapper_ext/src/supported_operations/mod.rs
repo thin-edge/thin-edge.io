@@ -38,6 +38,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tedge_utils::paths::TedgePaths;
 use tracing::warn;
 
 type ExternalId = String;
@@ -81,7 +82,8 @@ impl SupportedOperations {
         };
 
         // Create directory for a device if it doesn't exist yet
-        file::create_directory_with_defaults(ops_file.parent().expect("should never fail")).await?;
+        let parent_dir = TedgePaths::from_root_with_defaults(ops_file.parent().unwrap(), "", "");
+        parent_dir.root_dir().ensure().await?;
 
         // if a template for such operation already exists on the main device, that means we should symlink to it,
         // because it should contain properties required for custom operation
@@ -96,7 +98,7 @@ impl SupportedOperations {
             let template_path = self.base_ops_dir.join(template_name);
             file::create_symlink(template_path, &ops_file).await?;
         } else {
-            file::create_file_with_defaults(&ops_file, None).await?;
+            parent_dir.file(&ops_file)?.create_if_missing("").await?;
         };
 
         Ok(())
