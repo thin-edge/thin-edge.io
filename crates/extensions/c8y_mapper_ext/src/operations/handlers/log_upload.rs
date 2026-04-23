@@ -42,82 +42,95 @@ impl OperationContext {
             }
         };
 
-        let smartrest_topic = &target.smartrest_publish_topic;
-
         match command.status() {
             CommandStatus::Executing => Ok(OperationOutcome::Executing {
                 extra_messages: vec![],
             }),
             CommandStatus::Successful => {
-                // Send a request to the Downloader to download the file asynchronously from FTS
-                let log_filename = format!("{}-{}", command.payload.log_type, cmd_id);
-
-                let tedge_file_url = &command.payload.tedge_url;
-
-                let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
-                    .context("Failed to create a temporary directory")?;
-                let destination_path = destination_dir.path().join(log_filename);
-
-                let download_request = DownloadRequest::new(tedge_file_url, &destination_path);
-                let (_, download_result) = self
-                    .downloader
-                    .clone()
-                    .await_response((cmd_id.into(), download_request))
-                    .await
-                    .context("Unexpected ChannelError")?;
-
-                let download_response = download_result.context(
-                    "tedge-mapper-c8y failed to download log from file transfer service",
-                )?;
-
-                let file_path = Utf8PathBuf::try_from(download_response.file_path)
-                    .map_err(|e| e.into_io_error())
-                    .context("Could not parse file path as Utf-8")?;
-
-                let event_type = &command.payload.log_type;
-
-                let (binary_upload_event_url, upload_result) = self
-                    .upload_file(
-                        &target.external_id,
-                        &file_path,
-                        None,
-                        Some(mime::TEXT_PLAIN),
-                        cmd_id,
-                        event_type.clone(),
-                        None,
-                    )
-                    .await
-                    .context("Could not upload log file to C8y")?;
-
-                let smartrest_response = super::get_smartrest_response_for_upload_result(
-                    upload_result,
-                    binary_upload_event_url.as_str(),
-                    CumulocitySupportedOperations::C8yLogFileRequest,
-                    self.smart_rest_use_operation_id,
-                    self.get_operation_id(cmd_id),
-                );
-
-                let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_response);
-
-                self.upload_operation_log(
-                    &target.external_id,
-                    cmd_id,
-                    &OperationType::LogUpload,
-                    &command.clone().into_generic_command(&self.mqtt_schema),
-                )
-                .await
-                .context("Could not upload operation log")?;
-
-                Ok(OperationOutcome::Finished {
-                    messages: vec![c8y_notification],
-                })
+                let tedge_file_url = command.payload.tedge_url.clone();
+                let outcome = self.upload_log_file_to_c8y(target, cmd_id, &command).await;
+                // Delete the file from the file transfer service
+                self.http_delete(&tedge_file_url).await;
+                outcome
             }
-            CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
+            CommandStatus::Failed { reason } => {
+                self.http_delete(&command.payload.tedge_url).await;
+                Err(anyhow::anyhow!(reason).into())
+            }
             _ => {
                 // Do nothing as other components might handle those states
                 Ok(OperationOutcome::Ignored)
             }
         }
+    }
+
+    async fn upload_log_file_to_c8y(
+        &self,
+        target: &EntityTarget,
+        cmd_id: &str,
+        command: &LogUploadCmd,
+    ) -> Result<OperationOutcome, OperationError> {
+        // Send a request to the Downloader to download the file asynchronously from FTS
+        let log_filename = format!("{}-{}", command.payload.log_type, cmd_id);
+        let tedge_file_url = &command.payload.tedge_url;
+        let smartrest_topic = &target.smartrest_publish_topic;
+
+        let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
+            .context("Failed to create a temporary directory")?;
+        let destination_path = destination_dir.path().join(log_filename);
+
+        let download_request = DownloadRequest::new(tedge_file_url, &destination_path);
+        let (_, download_result) = self
+            .downloader
+            .clone()
+            .await_response((cmd_id.into(), download_request))
+            .await
+            .context("Unexpected ChannelError")?;
+
+        let download_response = download_result
+            .context("tedge-mapper-c8y failed to download log from file transfer service")?;
+
+        let file_path = Utf8PathBuf::try_from(download_response.file_path)
+            .map_err(|e| e.into_io_error())
+            .context("Could not parse file path as Utf-8")?;
+
+        let event_type = &command.payload.log_type;
+
+        let (binary_upload_event_url, upload_result) = self
+            .upload_file(
+                &target.external_id,
+                &file_path,
+                None,
+                Some(mime::TEXT_PLAIN),
+                cmd_id,
+                event_type.clone(),
+                None,
+            )
+            .await
+            .context("Could not upload log file to C8y")?;
+
+        let smartrest_response = super::get_smartrest_response_for_upload_result(
+            upload_result,
+            binary_upload_event_url.as_str(),
+            CumulocitySupportedOperations::C8yLogFileRequest,
+            self.smart_rest_use_operation_id,
+            self.get_operation_id(cmd_id),
+        );
+
+        let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_response);
+
+        self.upload_operation_log(
+            &target.external_id,
+            cmd_id,
+            &OperationType::LogUpload,
+            &command.clone().into_generic_command(&self.mqtt_schema),
+        )
+        .await
+        .context("Could not upload operation log")?;
+
+        Ok(OperationOutcome::Finished {
+            messages: vec![c8y_notification],
+        })
     }
 }
 
@@ -363,6 +376,7 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
+        spawn_dummy_c8y_http_proxy(test_handle.http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
@@ -418,6 +432,7 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
+        spawn_dummy_c8y_http_proxy(test_handle.http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;
@@ -497,6 +512,7 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
 
         let TestHandle { mqtt, .. } = test_handle;
+        spawn_dummy_c8y_http_proxy(test_handle.http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         skip_init_messages(&mut mqtt).await;

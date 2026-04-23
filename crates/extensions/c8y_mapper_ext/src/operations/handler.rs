@@ -17,6 +17,8 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::workflow::GenericCommandState;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::debug;
 use tracing::error;
@@ -53,6 +55,7 @@ impl OperationHandler {
         mqtt_publisher: LoggingSender<MqttMessage>,
 
         http_proxy: C8YHttpProxy,
+        http_client: ClientMessageBox<HttpRequest, HttpResult>,
     ) -> Self {
         Self {
             context: Arc::new(OperationContext {
@@ -73,6 +76,7 @@ impl OperationHandler {
                 uploader,
 
                 http_proxy: http_proxy.clone(),
+                http_client,
             }),
 
             running_operations: Default::default(),
@@ -819,24 +823,29 @@ mod tests {
             FakeServerBoxBuilder::default();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
+        let mut http_client_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
+            FakeServerBoxBuilder::default();
+        let http_client = ClientMessageBox::new(&mut http_client_builder);
+
         let operation_handler = OperationHandler::new(
             &c8y_mapper_config,
             downloader,
             uploader,
             mqtt_publisher,
             c8y_proxy,
+            http_client,
         );
 
         let mqtt = mqtt_builder.build();
         let downloader = downloader_builder.build();
         let uploader = uploader_builder.build();
-        let http = http_builder.build();
+        let c8y_proxy = http_builder.build();
 
         TestHandle {
             mqtt,
             downloader,
             uploader,
-            c8y_proxy: http,
+            c8y_proxy,
             operation_handler,
             ttd,
         }

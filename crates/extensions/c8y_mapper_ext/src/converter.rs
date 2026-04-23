@@ -80,6 +80,8 @@ use tedge_api::LoggedCommand;
 use tedge_config::models::TopicPrefix;
 use tedge_config::TEdgeConfigError;
 use tedge_flows::FlowContextHandle;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
@@ -189,6 +191,7 @@ impl CumulocityConverter {
         http_proxy: C8YHttpProxy,
         uploader: ClientMessageBox<(String, UploadRequest), (String, UploadResult)>,
         downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
+        http_client: ClientMessageBox<HttpRequest, HttpResult>,
         flow_context: FlowContextHandle,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
@@ -244,6 +247,7 @@ impl CumulocityConverter {
             uploader,
             mqtt_publisher.clone(),
             http_proxy.clone(),
+            http_client,
         );
 
         Ok(CumulocityConverter {
@@ -3168,6 +3172,10 @@ pub(crate) mod tests {
             FakeServerBox::builder();
         let downloader = ClientMessageBox::new(&mut downloader_builder);
 
+        let mut http_client_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
+            FakeServerBox::builder();
+        let http_client = ClientMessageBox::new(&mut http_client_builder);
+
         let flow_context = FlowContextHandle::default();
         let converter = CumulocityConverter::new(
             config,
@@ -3175,6 +3183,7 @@ pub(crate) mod tests {
             http_proxy,
             uploader,
             downloader,
+            http_client,
             flow_context,
         )
         .unwrap();

@@ -6,11 +6,14 @@ use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandState;
 use tedge_config::models::AutoLogUpload;
+use tedge_http_ext::HttpRequestBuilder;
+use tedge_http_ext::HttpResponseExt;
 use tedge_uploader_ext::ContentType;
 use tedge_uploader_ext::FormData;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use time::OffsetDateTime;
+use tracing::warn;
 use url::Url;
 
 use super::handlers::OperationContext;
@@ -98,5 +101,39 @@ impl OperationContext {
         }
 
         Ok(())
+    }
+
+    /// Delete a file from the file transfer service using the DELETE REST API.
+    /// This operation logs warnings on failure but does not propagate errors,
+    /// as file deletion is not critical to the success of the log upload operation.
+    pub async fn http_delete(&self, file_url: &str) {
+        let builder = HttpRequestBuilder::delete(file_url);
+        match builder.build() {
+            Ok(request) => {
+                let http_result = self.http_client.clone().await_response(request).await;
+                match http_result {
+                    Ok(response) => {
+                        if let Err(e) = response.error_for_status() {
+                            warn!(
+                                "Failed to delete log file from file transfer service at {}: {}",
+                                file_url, e
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to send delete request to file transfer service at {}: {}",
+                            file_url, e
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to create delete request for file transfer service at {}: {}",
+                    file_url, e
+                );
+            }
+        }
     }
 }

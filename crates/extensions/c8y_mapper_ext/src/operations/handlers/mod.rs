@@ -45,6 +45,8 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandState;
 use tedge_config::models::AutoLogUpload;
 use tedge_config::models::SoftwareManagementApiFlag;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
@@ -64,6 +66,7 @@ pub(super) struct OperationContext {
     pub(super) http_proxy: C8YHttpProxy,
     pub(super) downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     pub(super) uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
+    pub(super) http_client: ClientMessageBox<HttpRequest, HttpResult>,
     pub(super) mqtt_publisher: LoggingSender<MqttMessage>,
 }
 
