@@ -3367,6 +3367,10 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, Ht
                             .build(),
                     )
                     .await;
+            } else if let Some(_) = uri.strip_prefix("/te/v1/files") {
+                let _ = http
+                    .send(HttpResponseBuilder::new().status(200).build())
+                    .await;
             }
         }
     });
