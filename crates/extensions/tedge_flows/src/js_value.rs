@@ -1,4 +1,5 @@
 use crate::flow::epoch_ms;
+use crate::flow::from_epoch_ms;
 use crate::flow::FlowError;
 use crate::flow::Message;
 use crate::Transport;
@@ -13,6 +14,8 @@ use serde_json::json;
 use serde_json::Number;
 use std::collections::BTreeMap;
 use std::time::SystemTime;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 /// Akin to serde_json::Value with extra cases for date and binary data
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -115,7 +118,7 @@ impl JsonValue {
 
 impl From<Message> for JsonValue {
     fn from(value: Message) -> Self {
-        let raw_payload = JsonValue::Bytes(value.payload.clone());
+        let payload = JsonValue::Bytes(value.payload.clone());
         let mqtt = value.transport.map(|transport| match transport {
             Transport::Mqtt { qos, retain } => JsonValue::object([
                 ("qos", JsonValue::Number((qos as u8).into())),
@@ -124,7 +127,7 @@ impl From<Message> for JsonValue {
         });
         JsonValue::object([
             ("topic", JsonValue::string(value.topic)),
-            ("payload", raw_payload),
+            ("payload", payload),
             ("time", JsonValue::option(value.timestamp)),
             ("mqtt", JsonValue::option(mqtt)),
         ])
@@ -199,14 +202,27 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
             }
         };
 
-        value.remove("time");
-        value.remove("raw_payload");
+        let timestamp = match value.remove("time") {
+            Some(JsonValue::String(date)) =>
+            {
+                #[expect(
+                    clippy::disallowed_methods,
+                    reason = "Not vulnerable to RUSTSEC-2026-0009 as not RFC-2822 format"
+                )]
+                OffsetDateTime::parse(&date, &Rfc3339)
+                    .map(|t| t.into())
+                    .ok()
+            }
+            Some(JsonValue::Number(millis)) => millis.as_u128().and_then(from_epoch_ms),
+            _ => None,
+        };
+
         let transport = OptionalTransport::from_value(value)?;
 
         Ok(Message {
             topic,
             payload,
-            timestamp: None,
+            timestamp,
             transport,
         })
     }
