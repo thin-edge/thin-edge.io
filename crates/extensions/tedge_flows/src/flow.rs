@@ -562,7 +562,7 @@ impl Message {
     }
 }
 
-impl std::fmt::Display for Message {
+impl Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{}] ", self.topic)?;
         match &self.payload_str() {
@@ -574,6 +574,16 @@ impl std::fmt::Display for Message {
 
 impl std::fmt::Debug for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(timestamp) = &self.timestamp {
+            write!(
+                f,
+                "@{} ",
+                timestamp
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis()
+            )?;
+        };
         write!(
             f,
             "[{}] {}",
@@ -622,6 +632,14 @@ pub(crate) fn epoch_ms(time: &SystemTime) -> u128 {
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("SystemTime after UNIX EPOCH");
     duration.as_millis()
+}
+
+pub(crate) fn from_epoch_ms(epoch_ms: u128) -> Option<SystemTime> {
+    let secs = epoch_ms / 1000;
+    let millis = epoch_ms % 1000;
+    SystemTime::UNIX_EPOCH
+        .checked_add(Duration::from_secs(secs as u64))
+        .and_then(|time| time.checked_add(Duration::from_millis(millis as u64)))
 }
 
 pub fn error_from_js(err: LoadError) -> FlowError {

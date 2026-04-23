@@ -302,6 +302,70 @@ export function onMessage(message) {
     }
 
     #[tokio::test]
+    async fn setting_event_time() {
+        let js = r#"
+export function onMessage(message) {
+    const processing_time = message.time;
+    const event_time = new Date(1776944047373);
+    return {
+        "time": event_time.valueOf(),    // serialized as a number of milliseconds
+        "topic": "event",
+        "payload": JSON.stringify({
+            event_time,                  // serialized as a string
+            processing_time,
+        })
+    }
+}
+        "#;
+        let (runtime, mut script) = runtime_with(js).await;
+
+        let event_time =
+            SystemTime::UNIX_EPOCH + Duration::from_secs(1776944047) + Duration::from_millis(373);
+        let processing_time = event_time + Duration::from_secs(20) + Duration::from_millis(122);
+        let input = Message::new("tick", "");
+        let output = Message::with_timestamp(
+            "event",
+            r#"{"event_time":"2026-04-23T11:34:07.373Z","processing_time":"2026-04-23T11:34:27.495Z"}"#.to_string(),
+            event_time
+        );
+        assert_eq!(
+            script
+                .on_message(&runtime, processing_time, &input)
+                .await
+                .unwrap(),
+            vec![output]
+        );
+    }
+
+    #[tokio::test]
+    async fn setting_event_time_rfc3339() {
+        let js = r#"
+const utf8 = new TextDecoder();
+export function onMessage(message) {
+    const encodedText = message.payload;
+    const event_time = utf8.decode(message.payload);
+    message.time = event_time;
+    return message;
+}
+        "#;
+        let (runtime, mut script) = runtime_with(js).await;
+
+        let event_time =
+            SystemTime::UNIX_EPOCH + Duration::from_secs(1776944047) + Duration::from_millis(373);
+        let input = Message::new("event", "2026-04-23T11:34:07.373Z");
+        assert_eq!(
+            script
+                .on_message(&runtime, SystemTime::now(), &input)
+                .await
+                .unwrap()
+                .get(0)
+                .unwrap()
+                .timestamp,
+            Some(event_time)
+        );
+    }
+
+    #[tokio::test]
     async fn using_unknown_function() {
         let js = r#"
 function transform(x) { return [x] }
