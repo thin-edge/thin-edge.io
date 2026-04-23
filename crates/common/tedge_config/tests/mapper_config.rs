@@ -161,6 +161,12 @@ async fn mapper_config_is_not_created_if_another_cloud_exists_in_tedge_toml() {
 async fn mapper_config_is_created_for_new_profile_of_existing_separate_config_cloud() {
     let ttd = TempTedgeDir::new();
 
+    // Create system.toml with empty user and group to use current process ownership
+    ttd.file("system.toml").with_toml_content(toml::toml! {
+        user = ""
+        group = ""
+    });
+
     let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
     tedge_config
         .update_toml(&|dto, _rdr| {

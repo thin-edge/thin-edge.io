@@ -4,7 +4,7 @@ use tedge_test_utils::fs::TempTedgeDir;
 /// Test that backup is created before config upgrade with TOML value equality
 #[tokio::test]
 async fn backup_is_created_before_config_upgrade() {
-    let ttd = TempTedgeDir::new();
+    let ttd = config_root();
 
     // Set up multi-cloud configuration before upgrade
     let original_config = toml::toml!(
@@ -73,7 +73,7 @@ async fn backup_is_created_before_config_upgrade() {
 /// Test that subsequent upgrades overwrite previous backup
 #[tokio::test]
 async fn subsequent_upgrades_overwrite_previous_backup() {
-    let ttd = TempTedgeDir::new();
+    let ttd = config_root();
 
     // First upgrade
     let first_config = toml::toml!(
@@ -131,4 +131,16 @@ async fn subsequent_upgrades_overwrite_previous_backup() {
         second_backup_config, first_config,
         "Second backup should not contain first configuration"
     );
+}
+
+fn config_root() -> TempTedgeDir {
+    let ttd = TempTedgeDir::new();
+
+    // Create system.toml with empty user and group to use current process ownership
+    ttd.file("system.toml").with_toml_content(toml::toml! {
+        user = ""
+        group = ""
+    });
+
+    ttd
 }
