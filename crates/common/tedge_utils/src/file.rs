@@ -32,9 +32,6 @@ pub enum FileError {
     #[error("Group not found: {group:?}.")]
     GroupNotFound { group: String },
 
-    #[error(transparent)]
-    Errno(#[from] nix::errno::Errno),
-
     #[error("The path is not accessible. {path:?}")]
     PathNotAccessible { path: PathBuf },
 
@@ -51,17 +48,8 @@ pub enum FileError {
         source: anyhow::Error,
     },
 
-    #[error("The Path is not valid unicode. {path:?}")]
-    InvalidUnicode { path: PathBuf },
-
-    #[error("The Path does not name a valid file. {path:?}")]
-    InvalidName { path: PathBuf },
-
     #[error(transparent)]
     FromIoError(#[from] std::io::Error),
-
-    #[error("No write access to {path:?}")]
-    NoWriteAccess { path: PathBuf },
 
     #[error(transparent)]
     FileMove(#[from] FileMoveError),
@@ -71,29 +59,6 @@ pub enum FileError {
         link: PathBuf,
         source: std::io::Error,
     },
-}
-
-pub async fn create_directory_and_update_ownership(
-    dir: impl AsRef<Path>,
-    permissions: &PermissionEntry,
-) -> Result<(), FileError> {
-    permissions
-        .clone()
-        .force_dir_ownership()
-        .create_directory(dir.as_ref())
-        .await
-}
-
-pub async fn create_directory_and_update_ownership_with_root(
-    root: impl AsRef<Path>,
-    dir: impl AsRef<Path>,
-    permissions: &PermissionEntry,
-) -> Result<(), FileError> {
-    permissions
-        .clone()
-        .force_dir_ownership()
-        .create_directory_with_root(dir.as_ref(), root.as_ref())
-        .await
 }
 
 /// Create the directory owned by the user running this API with default directory permissions
@@ -245,7 +210,7 @@ impl PermissionEntry {
         self
     }
 
-    pub async fn apply(&self, path: impl AsRef<Path>) -> Result<(), FileError> {
+    pub(crate) async fn apply(&self, path: impl AsRef<Path>) -> Result<(), FileError> {
         let path = path.as_ref();
         match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
@@ -430,7 +395,7 @@ pub async fn change_user_and_group(
         .unwrap()
 }
 
-pub fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<(), FileError> {
+fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<(), FileError> {
     match (user, group) {
         ("", "") => return Ok(()),
         ("", group) => return change_group_sync(path, group),
@@ -527,14 +492,14 @@ fn change_group_sync(file: impl AsRef<Path>, group: &str) -> Result<(), FileErro
     Ok(())
 }
 
-pub async fn change_mode(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
+async fn change_mode(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
     let file = file.as_ref().to_owned();
     tokio::task::spawn_blocking(move || change_mode_sync(&file, mode))
         .await
         .unwrap()
 }
 
-pub fn change_mode_sync(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
+fn change_mode_sync(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
     let file = file.as_ref();
     let mut permissions = get_metadata_sync(file)?.permissions();
 
@@ -555,7 +520,7 @@ pub fn change_mode_sync(file: impl AsRef<Path>, mode: u32) -> Result<(), FileErr
 }
 
 /// Return metadata when the given path exists and accessible by user
-pub async fn get_metadata(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileError> {
+async fn get_metadata(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileError> {
     let path = path.as_ref();
     fs::metadata(path)
         .await
@@ -569,30 +534,6 @@ fn get_metadata_sync(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileEr
     std::fs::metadata(path).map_err(|_| FileError::PathNotAccessible {
         path: path.to_path_buf(),
     })
-}
-
-/// Return filename if the given path contains a filename
-pub fn get_filename(path: impl AsRef<Path>) -> Option<String> {
-    let filename = path.as_ref().file_name()?.to_str()?.to_string();
-    Some(filename)
-}
-
-/// Get uid from the user name
-pub fn get_uid_by_name(user: &str) -> Result<u32, FileError> {
-    let ud = get_user_by_name(user)
-        .map(|u| u.uid())
-        .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
-    Ok(ud)
-}
-
-/// Get gid from the group name
-pub fn get_gid_by_name(group: &str) -> Result<u32, FileError> {
-    let gd = get_group_by_name(group)
-        .map(|g| g.gid())
-        .ok_or_else(|| FileError::GroupNotFound {
-            group: group.into(),
-        })?;
-    Ok(gd)
 }
 
 pub async fn create_symlink(
@@ -626,7 +567,6 @@ pub async fn create_symlink(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nix::unistd::Uid;
     use std::os::unix::fs::PermissionsExt;
     use tedge_test_utils::fs::TempTedgeDir;
 
@@ -714,80 +654,5 @@ mod tests {
 
         let content = fs::read(&dest_path).await.unwrap();
         assert_eq!(content, b"test");
-    }
-
-    #[tokio::test]
-    async fn rooted_directory_creation_reports_the_failing_ancestor() {
-        if Uid::current().is_root() {
-            return;
-        }
-
-        let ttd = TempTedgeDir::new();
-        let root = ttd.dir("managed-root");
-        let target = root.path().join("logs").join("agent");
-
-        let err = create_directory_and_update_ownership_with_root(
-            root.path(),
-            &target,
-            &PermissionEntry::new(Some("root".into()), Some("root".into()), Some(0o755)),
-        )
-        .await
-        .unwrap_err();
-
-        let err = err.to_string();
-        assert!(err.contains(&root.path().display().to_string()));
-        assert!(!err.contains(&target.display().to_string()));
-    }
-
-    #[tokio::test]
-    async fn rooted_directory_creation_does_not_create_parents_above_the_root() {
-        let ttd = TempTedgeDir::new();
-        let missing_parent = ttd.path().join("missing-parent");
-        let root = missing_parent.join("managed-root");
-        let target = root.join("logs");
-
-        let err = create_directory_and_update_ownership_with_root(
-            &root,
-            &target,
-            &PermissionEntry::default(),
-        )
-        .await
-        .unwrap_err();
-
-        assert!(matches!(err, FileError::DirectoryCreateFailed { .. }));
-        assert!(!root.exists());
-        assert!(!missing_parent.exists());
-    }
-
-    #[tokio::test]
-    async fn verify_get_file_name() {
-        assert_eq!(
-            get_filename(PathBuf::from("/it/is/file.txt")),
-            Some("file.txt".to_string())
-        );
-        assert_eq!(get_filename(PathBuf::from("/")), None);
-    }
-
-    #[test]
-    fn get_uid_of_users() {
-        assert_eq!(get_uid_by_name("root").unwrap(), 0);
-        let err = get_uid_by_name("nonexistent_user").unwrap_err();
-        assert!(err.to_string().contains("User not found"));
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn get_gid_of_groups() {
-        assert_eq!(get_gid_by_name("root").unwrap(), 0);
-        let err = get_gid_by_name("nonexistent_group").unwrap_err();
-        assert!(err.to_string().contains("Group not found"));
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn get_gid_of_groups() {
-        assert_ne!(get_gid_by_name("staff").unwrap(), 0);
-        let err = get_gid_by_name("nonexistent_group").unwrap_err();
-        assert!(err.to_string().contains("Group not found"));
     }
 }
