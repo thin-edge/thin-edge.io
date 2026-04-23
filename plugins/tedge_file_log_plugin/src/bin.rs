@@ -125,6 +125,8 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
                         let line = line?;
                         println!("{}", line);
                     }
+
+                    std::fs::remove_file(log_path)?;
                     Ok(())
                 }
                 Err(err) => {
