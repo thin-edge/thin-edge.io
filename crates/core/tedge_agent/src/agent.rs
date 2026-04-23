@@ -62,7 +62,7 @@ use tedge_mqtt_ext::MqttConfig;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
-use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::paths::TedgePaths;
 use tracing::info;
 use tracing::instrument;
 
@@ -259,16 +259,23 @@ impl Agent {
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn init(&self) -> Result<(), anyhow::Error> {
-        // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
-        create_directory_with_defaults(agent_default_state_dir(self.config.config_dir.clone()))
-            .await?;
-        // Create directory for device inventory.json
-        create_directory_with_defaults(self.config.config_dir.join("device")).await?;
-        create_directory_with_defaults(&self.config.agent_log_dir).await?;
-        create_directory_with_defaults(&self.config.data_dir).await?;
-        create_directory_with_defaults(&self.config.http_config.file_transfer_dir).await?;
-        create_directory_with_defaults(self.config.data_dir.cache_dir()).await?;
-        create_directory_with_defaults(self.config.operations_dir.clone()).await?;
+        let ensured_directories = [
+            agent_default_state_dir(self.config.config_dir.clone()),
+            // Create directory for device inventory.json
+            self.config.config_dir.join("device"),
+            self.config.agent_log_dir.clone(),
+            self.config.http_config.file_transfer_dir.clone(),
+            self.config.operations_dir.clone(),
+            self.config.data_dir.root_dir(),
+            self.config.data_dir.cache_dir(),
+        ];
+
+        for dir in ensured_directories {
+            TedgePaths::from_root_with_defaults(dir, "", "")
+                .root_dir()
+                .ensure()
+                .await?;
+        }
 
         Ok(())
     }

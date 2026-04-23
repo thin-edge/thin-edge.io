@@ -61,32 +61,6 @@ pub enum FileError {
     },
 }
 
-/// Create the directory owned by the user running this API with default directory permissions
-pub async fn create_directory_with_defaults(dir: impl AsRef<Path>) -> Result<(), FileError> {
-    PermissionEntry::default()
-        .create_directory(dir.as_ref())
-        .await
-}
-
-/// Create the directory owned by the user running this API with default file permissions
-pub async fn create_file_with_defaults(
-    file: impl AsRef<Path>,
-    content: Option<&str>,
-) -> Result<(), FileError> {
-    PermissionEntry::default()
-        .create_file(file.as_ref(), content)
-        .await
-}
-
-pub async fn create_file_with_mode(
-    file: impl AsRef<Path>,
-    content: Option<&str>,
-    mode: u32,
-) -> Result<(), FileError> {
-    let perm_entry = PermissionEntry::new(None, None, Some(mode));
-    perm_entry.create_file(file.as_ref(), content).await
-}
-
 pub async fn path_exists(path: impl AsRef<Path>) -> bool {
     tokio::fs::try_exists(path).await.unwrap_or(false)
 }
@@ -254,10 +228,6 @@ impl PermissionEntry {
         Ok(())
     }
 
-    pub(crate) async fn create_directory(&self, dir: impl AsRef<Path>) -> Result<(), FileError> {
-        self.create_directory_internal(dir.as_ref(), None).await
-    }
-
     pub(crate) async fn create_directory_with_root(
         &self,
         dir: impl AsRef<Path>,
@@ -304,46 +274,6 @@ impl PermissionEntry {
             }
             Err(e) => Err(FileError::DirectoryCreateFailed {
                 dir: dir.display().to_string(),
-                from: e,
-            }),
-        }
-    }
-
-    /// This function creates a file with a given path, specific access privileges and with the given content.
-    /// If the file already exists, then it will not be re-created and it will not overwrite/append the contents of the file.
-    /// This method returns
-    ///     Ok() when file is created and the content is written successfully into the file.
-    ///     Ok() when the file already exists
-    ///     Err(_) When it can not create the file with the appropriate owner and access permissions.
-    pub(crate) async fn create_file(
-        &self,
-        file: impl AsRef<Path>,
-        default_content: Option<&str>,
-    ) -> Result<(), FileError> {
-        let mut options = fs::OpenOptions::new();
-        let file = file.as_ref();
-        match options.create_new(true).write(true).open(file).await {
-            Ok(mut f) => {
-                self.apply(file).await?;
-                if let Some(default_content) = default_content {
-                    f.write_all(default_content.as_bytes())
-                        .map_err(|e| FileError::WriteContentFailed {
-                            file: file.display().to_string(),
-                            from: e,
-                        })
-                        .await?;
-                    f.flush().await?;
-                }
-                f.sync_all().await.map_err(|from| FileError::FailedToSync {
-                    file: file.to_path_buf(),
-                    from,
-                })?;
-                Ok(())
-            }
-
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
-            Err(e) => Err(FileError::FileCreateFailed {
-                file: file.display().to_string(),
                 from: e,
             }),
         }
@@ -567,6 +497,7 @@ pub async fn create_symlink(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths::TedgePaths;
     use std::os::unix::fs::PermissionsExt;
     use tedge_test_utils::fs::TempTedgeDir;
 
@@ -575,8 +506,11 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let file_path = ttd.path().join("file");
 
-        PermissionEntry::new(None, None, Some(0o644))
-            .create_file(&file_path, None)
+        TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "")
+            .file("file")
+            .unwrap()
+            .with_mode(0o644)
+            .create_if_missing("")
             .await
             .unwrap();
 
@@ -595,10 +529,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let file_path = ttd.path().join("file");
 
-        PermissionEntry::default()
-            .create_file(&file_path, None)
-            .await
-            .unwrap();
+        ttd.file("file");
 
         overwrite_file(&file_path, "abc").await.unwrap();
 
@@ -613,10 +544,7 @@ mod tests {
         let another_source_path = ttd.path().join("another_source_file");
         let dest_path = ttd.path().join("dest_file");
 
-        PermissionEntry::default()
-            .create_file(&source_path, None)
-            .await
-            .unwrap();
+        ttd.file("source_file");
         create_symlink(&source_path, &dest_path).await.unwrap();
         assert!(path_exists(&dest_path).await);
 
@@ -624,10 +552,7 @@ mod tests {
         assert!(create_symlink(&source_path, &dest_path).await.is_ok());
 
         // Fails when an existing symlink points to a different target
-        PermissionEntry::default()
-            .create_file(&another_source_path, None)
-            .await
-            .unwrap();
+        ttd.file("another_source_file");
         let err = create_symlink(&another_source_path, &dest_path)
             .await
             .unwrap_err();
@@ -640,8 +565,12 @@ mod tests {
     async fn move_file_to_different_filesystem() {
         let src_dir = TempTedgeDir::new();
         let file_path = src_dir.path().join("file");
-        PermissionEntry::new(None, None, Some(0o775))
-            .create_file(&file_path, Some("test"))
+
+        TedgePaths::from_root_with_defaults(src_dir.utf8_path(), "", "")
+            .file("file")
+            .unwrap()
+            .with_mode(0o775)
+            .create_if_missing("test")
             .await
             .unwrap();
 

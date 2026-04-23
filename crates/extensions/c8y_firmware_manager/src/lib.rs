@@ -27,8 +27,9 @@ use tedge_api::path::DataDir;
 use tedge_config::models::TopicPrefix;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::FileError;
+use tedge_utils::paths::PathsError;
+use tedge_utils::paths::TedgePaths;
 use worker::IdDownloadRequest;
 use worker::IdDownloadResult;
 use worker::OperationOutcome;
@@ -71,10 +72,12 @@ impl FirmwareManagerBuilder {
         })
     }
 
-    pub async fn init(data_dir: &DataDir) -> Result<(), FileError> {
-        create_directory_with_defaults(data_dir.cache_dir()).await?;
-        create_directory_with_defaults(data_dir.file_transfer_dir()).await?;
-        create_directory_with_defaults(data_dir.firmware_dir()).await?;
+    pub async fn init(data_dir: &DataDir) -> Result<(), PathsError> {
+        let root_dir = TedgePaths::from_root_with_defaults(data_dir, "", "");
+        root_dir.root_dir().ensure().await?;
+        root_dir.dir(data_dir.cache_dir())?.ensure().await?;
+        root_dir.dir(data_dir.file_transfer_dir())?.ensure().await?;
+        root_dir.dir(data_dir.firmware_dir())?.ensure().await?;
         Ok(())
     }
 

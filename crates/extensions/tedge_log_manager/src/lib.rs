@@ -9,6 +9,7 @@ mod tests;
 
 use crate::plugin_manager::ExternalPlugins;
 pub use actor::*;
+use camino::Utf8PathBuf;
 pub use config::*;
 use std::path::PathBuf;
 use std::vec;
@@ -32,10 +33,10 @@ use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
 use tedge_api::workflow::SyncOnCommand;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
+use tedge_utils::paths::TedgePaths;
 use toml::toml;
 
 #[cfg(test)]
@@ -84,7 +85,12 @@ impl LogManagerBuilder {
         }
 
         // creating plugin config parent dir
-        create_directory_with_defaults(&config.plugin_config_dir).await?;
+        let config_plugin_dir = Utf8PathBuf::try_from(config.plugin_config_dir.clone())
+            .expect("Plugin config dir should be a valid UTF-8 path");
+        TedgePaths::from_root_with_defaults(config_plugin_dir, "", "")
+            .root_dir()
+            .ensure()
+            .await?;
 
         let legacy_plugin_config = config.config_dir.join("c8y").join("c8y-log-plugin.toml");
         if legacy_plugin_config.exists() {

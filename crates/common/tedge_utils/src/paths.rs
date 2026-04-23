@@ -340,6 +340,11 @@ impl ManagedFile {
         self
     }
 
+    pub fn with_mode(mut self, mode: u32) -> Self {
+        self.mode = mode;
+        self
+    }
+
     /// Use the process owner/group when creating or replacing this file.
     ///
     /// This skips owner/group management for the file. Mode is still managed
