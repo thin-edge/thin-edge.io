@@ -1,14 +1,12 @@
 ---
-title: 🚧 Connecting to Cumulocity MQTT Service
+title: Connecting to Cumulocity MQTT Service
 tags: [Operate, Cloud, Connection, Cumulocity]
 description: Connecting %%te%% to Cumulocity
 sidebar_position: 1
-unlisted: true
 ---
 
 import UserContext from '@site/src/components/UserContext';
 import UserContextForm from '@site/src/components/UserContextForm';
-import BrowserWindow from '@site/src/components/BrowserWindow';
 
 :::tip
 #### User Context {#user-context}
@@ -22,46 +20,99 @@ The user context will be persisted in your web browser's local storage.
 
 ## MQTT Service
 
-%%te%%, when connected to Cumulocity, connects to its [Core MQTT](https://cumulocity.com/docs/device-integration/mqtt/) 
-endpoint by default, which only supports a predefined set of topics that the device can publish data to
-and receive data from in predefined data formats (e.g: SmartREST or JSON over MQTT).
+By default, %%te%% connects to Cumulocity via its [Core MQTT](https://cumulocity.com/docs/device-integration/mqtt/)
+endpoint, which restricts devices to a predefined set of topics and data formats (e.g. SmartREST and JSON over MQTT).
 The [Cumulocity MQTT service](https://cumulocity.com/docs/device-integration/mqtt-service) on the other hand,
 is the next-gen MQTT endpoint offered by Cumulocity,
 which allows devices to publish and receive data using user-defined custom topic and payload formats as well.
 
-More information about the two MQTT interfaces offered by Cumulocity in the following table.
+This page explains how to connect %%te%% to the Cumulocity MQTT service so that devices can publish and subscribe to arbitrary topics on the cloud.
 
-|Name|Port|Description|Status|
-|----|----|-----------|------|
-|Core MQTT|8883|Allows devices to send messages directly into Cumulocity, provided that the device implements the pre-defined topic schema and payload formats of Core MQTT|[General Availability](https://cumulocity.com/docs/2024/glossary/g/#ga)|
-|MQTT Service|9883|Allows devices to send and receive arbitrary payloads on any MQTT topic|[Public Preview](https://cumulocity.com/docs/2024/glossary/p/#public-preview) (subject to change)|
+For more information about the two MQTT interfaces offered by Cumulocity, see the following table.
+
+|Name|Port|Description|Tenant feature required|Status|
+|----|----|-----------|----------------------|------|
+|[Core MQTT](https://cumulocity.com/docs/device-integration/mqtt/)|8883|Allows devices to send messages directly into Cumulocity, provided that the device implements the pre-defined topic schema and payload formats of Core MQTT|None|[General Availability](https://cumulocity.com/docs/2024/glossary/g/#ga)|
+|[MQTT Service](https://cumulocity.com/docs/device-integration/mqtt-service/) (without SmartREST)|9883|Arbitrary topic and payload support via a second dedicated bridge connection alongside the Core MQTT bridge|None|[General Availability](https://cumulocity.com/docs/2024/glossary/g/#ga)|
+|[MQTT Service](https://cumulocity.com/docs/device-integration/mqtt-service/) (with SmartREST)|9883|Arbitrary topic and payload support via a single bridge connection, replacing the Core MQTT bridge|mqtt-service.smartrest|[Public Preview](https://cumulocity.com/docs/2024/glossary/p/#public-preview)|
+
+:::warning
+Any option or feature not marked as [Generally Available](https://cumulocity.com/docs/2024/glossary/g/#ga) is subject to change and should not be used in production environments.
+:::
+
+## Option 1: MQTT Service (without SmartREST) {#without-smartrest}
+
+In this approach, the existing %%te%% connection continues to use the Cumulocity Core MQTT endpoint,
+and a second bridge is set up specifically to connect to the MQTT service endpoint.
+This uses the community package [`tedge-mapper-c8y-mqttservice`](https://github.com/thin-edge/tedge-mapper-c8y-mqttservice).
+
+1. Make sure the device is already connected to Cumulocity. If not, follow the [connection guide](./connect.md).
+
+1. Install the `tedge-mapper-c8y-mqttservice` community package
+
+   You can install the package manually via the command line, or install it via Cumulocity's Software Management feature.
+
+   ```sh tab={"label":"Debian/Ubuntu"}
+   sudo apt-get install tedge-mapper-c8y-mqttservice
+   ```
+
+   ```sh tab={"label":"RHEL/Fedora/RockyLinux"}
+   sudo dnf install tedge-mapper-c8y-mqttservice
+   ```
+
+   ```sh tab={"label":"Alpine"}
+   sudo apk add tedge-mapper-c8y-mqttservice
+   ```
+
+   Once installed, the package reads the existing %%te%% Cumulocity configuration (e.g. `c8y.url` and device
+   certificate) and automatically configures the second bridge to connect to the same tenant.
+
+   Refer to the
+   [community project's repository](https://github.com/thin-edge/tedge-mapper-c8y-mqttservice) for additional information.
+
+1. If needed, adjust the `/etc/tedge/mappers/c8y-mqttservice/mapper.toml` configuration file to fine-tune which topics are bridged to and from
+   the MQTT service endpoint.
+
+1. If you're using SystemD, the service should start automatically, however you can manually start it using:
+
+   ```sh
+   sudo systemctl start tedge-mapper-c8y-mqttservice
+   ```
+
+## Option 2: MQTT Service (with SmartREST) {#with-smartrest}
+
+In this approach, a single bridge connection is used for both the Cumulocity Core MQTT topics (e.g. SmartREST and JSON over MQTT)
+and the MQTT service freeform topics. This reduces bandwidth overhead because only one MQTT connection is
+maintained, eliminating the network overhead that a second bridge would introduce.
 
 :::caution
-The Cumulocity MQTT service is still in Public Preview, and as such, the interface is subject to change.
-It is strongly advised to avoid using it in production scenarios until the interface has stabilized.
-If you do decide to use it in production systems, then expect to have to do run some migration activities
-to update the %%te%% version and modify interfaces, configuration etc once the feature goes into General Availability.
+This option requires the `mqtt-service.smartrest` tenant feature to be enabled on your Cumulocity tenant.
+This feature is currently in [Public Preview](https://cumulocity.com/docs/2024/glossary/p/#public-preview)
+and is subject to change. It should not be used in production until the feature reaches General Availability.
+Contact your Cumulocity tenant administrator to have it enabled.
 :::
 
-### Configure the device
+### 1. Enable the tenant feature
 
-:::note
-The examples in this section demonstrate a device using a custom topic scheme to
-publish temperature measurements to the `sensors/temperature/measurement` topic in the cloud and
-receive commands to adjust the sampling interval from the cloud on the `sensors/temperature/set-config` topic.
-:::
+Use [go-c8y-cli](https://github.com/reubenmiller/go-c8y-cli) to enable the required tenant feature, or you can use the Cumulocity Administration application:
 
-Most of the configuration used to connect to the Cumulocity MQTT service endpoint are the same as
-the ones used to connect to the Cumulocity Core MQTT endpoint.
+```sh
+c8y features enable --key mqtt-service.smartrest
+```
+
+### 2. Configure the device
 
 1. Configure Cumulocity URL, if not already set.
 
    <UserContext>
-   
+
    ```sh
    sudo tedge config set c8y.url $C8Y_URL
+
+   # or if you're already using a custom c8y.http domain name
+   sudo tedge config set c8y.mqtt $C8Y_URL
    ```
-   
+
    </UserContext>
 
    :::note
@@ -69,10 +120,10 @@ the ones used to connect to the Cumulocity Core MQTT endpoint.
    as this config is derived from `c8y.url`, by default.
 
    If the MQTT service url is different from the one that would be derived from `c8y.url`,
-   then set`c8y.mqtt` explicitly.
+   then set `c8y.mqtt` explicitly.
    :::
 
-1. Enable connection to MQTT service endpoint
+1. Configure %%te%% to specify that the additional MQTT service related bridge rules should be enabled
 
    ```sh
    sudo tedge config set c8y.mqtt_service.enabled true
@@ -85,11 +136,16 @@ the ones used to connect to the Cumulocity Core MQTT endpoint.
    else it would be `example.cumulocity.com:8883` (the default core mqtt endpoint).
    :::
 
-
-1. Provide the topics to subscribe to (e.g: topic to receive sensor config updates)
+1. Provide any topics that the device should subscribe to (e.g: topic to receive sensor config updates)
 
    ```sh
-   sudo tedge config set c8y.mqtt_service.topics sensors/temperature/set-config
+   sudo tedge config set c8y.mqtt_service.topics sensors/temperature/set-config,foo/bar
+   ```
+
+   You can set multiple topics by using comma separated values.
+
+   ```sh
+   sudo tedge config set c8y.mqtt_service.topics "sensors/temperature/set-config,foo/bar"
    ```
 
 1. Make Cumulocity trust the device certificate as described [here](./connect.md#making-the-cloud-trust-the-device),
@@ -101,31 +157,62 @@ the ones used to connect to the Cumulocity Core MQTT endpoint.
    sudo tedge connect c8y
    ```
 
-   This step establishes the bridge connection to the mqtt service endpoint instead of the core mqtt endpoint.
+   This step establishes the bridge connection to the MQTT service endpoint instead of the Core MQTT endpoint.
    All MQTT traffic using both the built-in topics (e.g: SmartREST) as well as the user-provided custom topics
-   are routed to the MQTT service endpoint, completely bypassing the core MQTT endpoint.
+   are routed to the MQTT service endpoint, completely bypassing the Core MQTT endpoint.
 
-   :::note
-   If the device was previously connected to Cumulocity (the Core MQTT endpoint),
-   doing a `sudo tedge reconnect c8y` after steps 2 and 3 would have sufficed.
+   :::tip
+   If the device was previously connected to Cumulocity (the Core MQTT endpoint), then you can just run `sudo tedge reconnect c8y` after steps 2 and 3.
    :::
 
-1. Once connected, all messages published to `c8y/mqtt/out/#` topics are forwarded to the MQTT service endpoint,
-   without the `c8y/mqtt/out/` prefix.
+## Publishing and subscribing to MQTT service topics
 
-   For example, to publish the temperature measurement:
+Once connected, all messages published to `c8y/mqtt/out/#` topics are forwarded to the MQTT service endpoint,
+without the `c8y/mqtt/out/` prefix.
 
-   ```sh
-   tedge mqtt pub c8y/mqtt/out/sensors/temperature/measurement 25
-   ```
+For example, to publish the temperature measurement:
 
-   The message will be published to the `sensors/temperature/measurement` topic on the MQTT service,
-   and its receipt can be validated on Cumulocity.
-2. Similarly, any messages published to the subscribed `sensors/temperature/set-config` topic on Cumulocity
-   are published to the corresponding local bridge topic with a `c8y/mqtt/in/` topic prefix.
+```sh
+tedge mqtt pub c8y/mqtt/out/sensors/temperature/measurement 25
+```
 
-   To see the set configuration commands received from the cloud:
+The message will be published to the `sensors/temperature/measurement` topic on the MQTT service.
 
-   ```sh
-   tedge mqtt sub c8y/mqtt/in/sensors/temperature/set-config
-   ```
+Similarly, any messages published to a subscribed topic on Cumulocity (e.g. `sensors/temperature/set-config`)
+are published to the corresponding local bridge topic with a `c8y/mqtt/in/` prefix.
+
+To see the set configuration commands received from the cloud, use the following command:
+
+```sh
+tedge mqtt sub c8y/mqtt/in/sensors/temperature/set-config
+```
+
+## Inspecting and testing the bridge mapping
+
+### Inspect bridge mapping rules
+
+To display the full set of topic mapping rules for the Cumulocity bridge, run:
+
+```sh
+tedge bridge inspect c8y
+```
+
+This is useful to understand which local topics map to which remote topics (and vice versa).
+
+### Test a topic mapping
+
+To check how a specific local topic will be mapped before publishing, use `tedge bridge test`:
+
+```sh
+tedge bridge test c8y c8y/mqtt/out/foo/bar
+```
+
+```text title="Output"
+Bridge configuration for Cumulocity
+Reading from: /etc/tedge/mappers/c8y/bridge
+
+[local] c8y/mqtt/out/foo/bar  ->  [remote] foo/bar (outbound)
+  matched by rule: c8y/mqtt/out/# -> #
+```
+
+This confirms that a message published locally to `c8y/mqtt/out/foo/bar` will be forwarded to the `foo/bar` topic on the MQTT service.
