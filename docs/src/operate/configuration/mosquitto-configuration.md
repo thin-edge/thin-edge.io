@@ -80,7 +80,7 @@ tedge connect aws
 This will configure all the services (mosquitto, tedge-mapper-c8y.service, tedge-mapper-az.service,
 tedge-mapper-aws.service, tedge-agent.service) to use the newly set port and the bind address.
 
-## Step 4: Restart the local services using MQTT
+### Step 4: Restart the local services using MQTT
 
 After changing the mqtt port and host, all the services using MQTT have to be restarted.
 
