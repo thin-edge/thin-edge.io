@@ -142,12 +142,6 @@ c8y features enable --key mqtt-service.smartrest
 1. Provide any topics that the device should subscribe to (e.g: topic to receive sensor config updates)
 
    ```sh
-   sudo tedge config set c8y.mqtt_service.topics sensors/temperature/set-config,foo/bar
-   ```
-
-   You can set multiple topics by using comma separated values.
-
-   ```sh
    sudo tedge config set c8y.mqtt_service.topics "sensors/temperature/set-config,foo/bar"
    ```
 
