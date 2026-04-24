@@ -82,6 +82,19 @@ This uses the community package [`tedge-mapper-c8y-mqttservice`](https://github.
    sudo systemctl start tedge-mapper-c8y-mqttservice
    ```
 
+:::warning
+If the Cumulocity SmartREST feature (`mqtt-service.smartrest`) is not enabled, then you **MUST NOT** publish to the SmartREST and JSON over MQTT topics,
+otherwise the mapper will be automatically disconnected.
+
+Below shows examples of the illegal topics:
+
+```sh
+# illegal topics - DO NOT USE
+tedge mqtt pub c8y/mqtt/out/s/us "200,myCustomTemperatureMeasurement,fahrenheit,75.2,F"
+tedge mqtt pub c8y/mqtt/out/inventory/managedObjects '{"foo":"bar"}'
+```
+:::
+
 ## Option 2: MQTT Service (with SmartREST) {#with-smartrest}
 
 In this approach, a single bridge connection is used for both the Cumulocity Core MQTT topics (e.g. SmartREST and JSON over MQTT)
