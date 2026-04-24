@@ -77,6 +77,7 @@ ignore = [
     { id = "RUSTSEC-2026-0049", reason = "crate: rustls-webpki 0.102.x. Used by rumqttc/rumqttd which pin ^0.102.x; incompatible with the fixed 0.103.10. Waiting for upstream to release a version using 0.103.x" },
     { id = "RUSTSEC-2026-0098", reason = "crate: rustls-webpki 0.102.x. Used by rumqttc/rumqttd which pin ^0.102.x; no fix in the 0.102.x line. Waiting for upstream to release a version using 0.103.x" },
     { id = "RUSTSEC-2026-0099", reason = "crate: rustls-webpki 0.102.x. Used by rumqttc/rumqttd which pin ^0.102.x; no fix in the 0.102.x line. Waiting for upstream to release a version using 0.103.x" },
+    { id = "RUSTSEC-2026-0104", reason = "crate: rustls-webpki 0.102.x. Used by rumqttc/rumqttd which pin ^0.102.x; no fix in the 0.102.x line. Waiting for upstream to release a version using 0.103.x" },
 
     #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
     #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish

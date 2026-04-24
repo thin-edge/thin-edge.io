@@ -19,6 +19,7 @@ Connect to Cumulocity MQTT Service endpoint mosquitto bridge
 
 Connect to Cumulocity MQTT Service endpoint basic auth
     ${DEVICE_SN}=    Setup    register=${False}
+    ${CREDENTIALS}=    Cumulocity.Bulk Register Device With Basic Auth    external_id=${DEVICE_SN}
 
     Execute Command    tedge config set device.id ${DEVICE_SN}
     Set Cumulocity URLs
@@ -26,7 +27,7 @@ Connect to Cumulocity MQTT Service endpoint basic auth
     Execute Command    tedge config set c8y.mqtt_service.topics 'sub/topic,demo/topic'
 
     Execute Command
-    ...    cmd=printf '[c8y]\nusername = "%s"\npassword = "%s"\n' '${C8Y_CONFIG.tenant}/${C8Y_CONFIG.username}' '${C8Y_CONFIG.password}' > /etc/tedge/credentials.toml
+    ...    cmd=printf '[c8y]\nusername = "%s"\npassword = "%s"\n' '${CREDENTIALS.username}' '${CREDENTIALS.password}' > /etc/tedge/credentials.toml
     Execute Command    tedge config set c8y.auth_method basic
 
     Execute Command    tedge connect c8y
