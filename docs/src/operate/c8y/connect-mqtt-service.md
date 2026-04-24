@@ -25,10 +25,12 @@ endpoint, which restricts devices to a predefined set of topics and data formats
 The [Cumulocity MQTT service](https://cumulocity.com/docs/device-integration/mqtt-service) on the other hand,
 is the next-gen MQTT endpoint offered by Cumulocity,
 which allows devices to publish and receive data using user-defined custom topic and payload formats as well.
+The Cumulocity MQTT Service is also capable of supporting both user-defined topics, as well as support for the SmartREST topics, however this
+compatibility layer, is not available for production usage just yet.
 
 This page explains how to connect %%te%% to the Cumulocity MQTT service so that devices can publish and subscribe to arbitrary topics on the cloud.
 
-For more information about the two MQTT interfaces offered by Cumulocity, see the following table.
+For more information about the possible ways to connect to the different MQTT interfaces offered by Cumulocity, see the following table.
 
 |Name|Port|Description|Tenant feature required|Status|
 |----|----|-----------|----------------------|------|
@@ -48,6 +50,8 @@ This uses the community package [`tedge-mapper-c8y-mqttservice`](https://github.
 
 1. Make sure the device is already connected to Cumulocity. If not, follow the [connection guide](./connect.md).
 
+1. Configure the community repository on your device. Depending on how you installed %%te%% this might already be configured, however if it doesn't, you can configure the **community** repository by following the "Set Me Up" instructions on the [Cloudsmith](https://cloudsmith.io/~thinedge/repos/community/packages/) website.
+
 1. Install the `tedge-mapper-c8y-mqttservice` community package
 
    You can install the package manually via the command line, or install it via Cumulocity's Software Management feature.
@@ -64,8 +68,7 @@ This uses the community package [`tedge-mapper-c8y-mqttservice`](https://github.
    sudo apk add tedge-mapper-c8y-mqttservice
    ```
 
-   Once installed, the package reads the existing %%te%% Cumulocity configuration (e.g. `c8y.url` and device
-   certificate) and automatically configures the second bridge to connect to the same tenant.
+   During installation, if the device is already configured to connect to Cumulocity, then it will automatically detect the configured url, and use the Cumulocity MQTT Service port, so in normal cases there shouldn't be any manual configuration required.
 
    Refer to the
    [community project's repository](https://github.com/thin-edge/tedge-mapper-c8y-mqttservice) for additional information.
@@ -148,6 +151,13 @@ c8y features enable --key mqtt-service.smartrest
    sudo tedge config set c8y.mqtt_service.topics "sensors/temperature/set-config,foo/bar"
    ```
 
+   Or if you only want to add an addition topic to the already configured values, then use `tedge config add`:
+
+   ```sh
+   sudo tedge config add c8y.mqtt_service.topics "sensors/temperature/set-config"
+   sudo tedge config add c8y.mqtt_service.topics "foo/bar"
+   ```
+
 1. Make Cumulocity trust the device certificate as described [here](./connect.md#making-the-cloud-trust-the-device),
    if not already done.
 
@@ -193,15 +203,49 @@ tedge mqtt sub c8y/mqtt/in/sensors/temperature/set-config
 
 To display the full set of topic mapping rules for the Cumulocity bridge, run:
 
+<Tabs groupId="option">
+  <TabItem value="Option 1 (without SmartREST)" label="Option 1 (without SmartREST)" default>
+
+```sh
+tedge bridge inspect c8y-mqttservice
+```
+
+  </TabItem>
+
+  <TabItem value="Option 2 (with SmartREST)" label="Option 2 (with SmartREST)" default>
+
 ```sh
 tedge bridge inspect c8y
 ```
+
+  </TabItem>
+</Tabs>
+
 
 This is useful to understand which local topics map to which remote topics (and vice versa).
 
 ### Test a topic mapping
 
 To check how a specific local topic will be mapped before publishing, use `tedge bridge test`:
+
+<Tabs groupId="option">
+  <TabItem value="Option 1 (without SmartREST)" label="Option 1 (without SmartREST)" default>
+
+```sh
+tedge bridge test c8y-mqttservice c8y/mqtt/out/foo/bar
+```
+
+```text title="Output"
+Bridge configuration for Cumulocity
+Reading from: /etc/tedge/mappers/c8y-mqttservice/bridge
+
+[local] c8y/mqtt/out/foo/bar  ->  [remote] foo/bar (outbound)
+  matched by rule: c8y/mqtt/out/# -> #
+```
+
+  </TabItem>
+
+  <TabItem value="Option 2 (with SmartREST)" label="Option 2 (with SmartREST)" default>
 
 ```sh
 tedge bridge test c8y c8y/mqtt/out/foo/bar
@@ -214,5 +258,8 @@ Reading from: /etc/tedge/mappers/c8y/bridge
 [local] c8y/mqtt/out/foo/bar  ->  [remote] foo/bar (outbound)
   matched by rule: c8y/mqtt/out/# -> #
 ```
+
+  </TabItem>
+</Tabs>
 
 This confirms that a message published locally to `c8y/mqtt/out/foo/bar` will be forwarded to the `foo/bar` topic on the MQTT service.
