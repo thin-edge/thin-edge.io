@@ -50,7 +50,7 @@ tedge-file-config-plugin = { path = "plugins/tedge_file_config_plugin" }
 tedge-file-log-plugin = { path = "plugins/tedge_file_log_plugin" }
 tedge-flows-plugin = { path = "plugins/tedge_flows_plugin" }
 tedge-mapper = { path = "crates/core/tedge_mapper", default-features = false }
-tedge-p11-server = { path = "crates/extensions/tedge-p11-server" }
+tedge-p11 = { path = "crates/common/tedge-p11" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }
 tedge-write = { path = "crates/core/tedge_write" }
 tedge_actors = { path = "crates/core/tedge_actors" }

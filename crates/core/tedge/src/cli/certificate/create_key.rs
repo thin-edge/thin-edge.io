@@ -3,11 +3,11 @@ use camino::Utf8Path;
 use clap::ValueEnum;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfig;
-use tedge_p11_server::pkcs11::CreateKeyParams;
-use tedge_p11_server::pkcs11::KeyTypeParams;
-use tedge_p11_server::service::CreateKeyRequest;
-use tedge_p11_server::CryptokiConfig;
-use tedge_p11_server::SecretString;
+use tedge_p11::pkcs11::CreateKeyParams;
+use tedge_p11::pkcs11::KeyTypeParams;
+use tedge_p11::service::CreateKeyRequest;
+use tedge_p11::CryptokiConfig;
+use tedge_p11::SecretString;
 use tracing::warn;
 
 use crate::cli::common::Cloud;
@@ -90,7 +90,7 @@ impl Command for CreateKeyHsmCmd {
             .transpose()
             .context("invalid id")?;
 
-        let cryptoki = tedge_p11_server::tedge_p11_service(self.cryptoki_config.clone())?;
+        let cryptoki = tedge_p11::tedge_p11_service(self.cryptoki_config.clone())?;
         let Some(token) = self.token.clone() else {
             eprintln!("No token URL was provided for this operation; the available tokens are:");
             let tokens = cryptoki.get_tokens_uris()?;

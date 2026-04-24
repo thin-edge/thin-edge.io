@@ -25,7 +25,7 @@ reqwest = { workspace = true, optional = true, features = [
 rustls = { workspace = true }
 rustls-native-certs = { workspace = true }
 sha1 = { workspace = true }
-tedge-p11-server = { workspace = true }
+tedge-p11 = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true }

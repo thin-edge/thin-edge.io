@@ -6,8 +6,8 @@ use crate::PemCertificate;
 use crate::SignatureAlgorithm;
 use anyhow::Context;
 use camino::Utf8Path;
-use tedge_p11_server::service::ChooseSchemeRequest;
-use tedge_p11_server::CryptokiConfig;
+use tedge_p11::service::ChooseSchemeRequest;
+use tedge_p11::CryptokiConfig;
 use tracing::trace;
 use x509_parser::public_key::PublicKey;
 
@@ -51,7 +51,7 @@ impl rcgen::SigningKey for RemoteKeyPair {
         // are no other better variants that could let us return context, so we'll have to use this
         // until `rcgen::Error::RemoteKeyError` can take a parameter
         trace!(?self.cryptoki_config, msg = %String::from_utf8_lossy(msg), "sign");
-        let signer = tedge_p11_server::signing_key(self.cryptoki_config.clone())
+        let signer = tedge_p11::signing_key(self.cryptoki_config.clone())
             .map_err(|e| rcgen::Error::PemError(e.to_string()))?;
         signer
             .sign2(msg, self.algorithm.into())
@@ -102,7 +102,7 @@ impl RemoteKeyPair {
         cryptoki_config: CryptokiConfig,
         current_cert: Option<&Utf8Path>,
     ) -> Result<Self, CertificateError> {
-        let cryptoki = tedge_p11_server::tedge_p11_service(cryptoki_config.clone())?;
+        let cryptoki = tedge_p11::tedge_p11_service(cryptoki_config.clone())?;
 
         let pubkey_pem = cryptoki.get_public_key_pem(None);
         let pubkey_pem = match pubkey_pem {
@@ -128,15 +128,9 @@ impl RemoteKeyPair {
 
         let signature_algorithm = cryptoki.choose_scheme(ChooseSchemeRequest {
             offered: vec![
-                tedge_p11_server::service::SignatureScheme(
-                    rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
-                ),
-                tedge_p11_server::service::SignatureScheme(
-                    rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
-                ),
-                tedge_p11_server::service::SignatureScheme(
-                    rustls::SignatureScheme::RSA_PKCS1_SHA256,
-                ),
+                tedge_p11::service::SignatureScheme(rustls::SignatureScheme::ECDSA_NISTP256_SHA256),
+                tedge_p11::service::SignatureScheme(rustls::SignatureScheme::ECDSA_NISTP384_SHA384),
+                tedge_p11::service::SignatureScheme(rustls::SignatureScheme::RSA_PKCS1_SHA256),
             ],
             uri: None,
             // pin will be applied anyway by the client
