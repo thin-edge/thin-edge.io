@@ -32,6 +32,12 @@ impl AsRef<Path> for DataDir {
     }
 }
 
+impl AsRef<Utf8Path> for DataDir {
+    fn as_ref(&self) -> &Utf8Path {
+        &self.0
+    }
+}
+
 impl DataDir {
     /// Crete `DataDir` from `Utf8PathBuf`.
     pub fn new(path: Utf8PathBuf) -> Self {
@@ -50,6 +56,10 @@ impl DataDir {
     /// ```
     pub fn join(&self, path: impl AsRef<Utf8Path>) -> Utf8PathBuf {
         self.0.join(path.as_ref().to_path_buf())
+    }
+
+    pub fn root_dir(&self) -> Utf8PathBuf {
+        self.0.clone()
     }
 
     /// Return `Utf8PathBuf` to ThinEdge file transfer repository.

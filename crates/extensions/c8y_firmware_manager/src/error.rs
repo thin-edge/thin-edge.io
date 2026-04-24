@@ -36,6 +36,9 @@ pub enum FirmwareManagementError {
     FromFileError(#[from] tedge_utils::file::FileError),
 
     #[error(transparent)]
+    FromTedgePathsError(#[from] tedge_utils::paths::PathsError),
+
+    #[error(transparent)]
     FromSMCumulocityMapperError(#[from] c8y_api::smartrest::error::SMCumulocityMapperError),
 
     #[error(transparent)]
