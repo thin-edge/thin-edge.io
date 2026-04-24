@@ -199,8 +199,8 @@ Migration Fails When Tedge Dir Not Writable And Mappers Dir Missing
     ...    stderr=${True}
     ...    stdout=${False}
     Should Contain    ${result}    Permission denied
-    # The error should talk about how `/etc/tedge/mappers` can't be created
-    Should Contain    ${result}    /etc/tedge/mappers
+    # The error should talk about how `/etc/tedge` can't be written to
+    Should Contain    ${result}    /etc/tedge
 
     # Cleanup: Restore permissions
     Execute Command    sudo chmod 755 /etc/tedge

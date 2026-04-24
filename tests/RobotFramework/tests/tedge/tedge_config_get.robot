@@ -73,6 +73,7 @@ Normalize paths configured with tedge config
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
+    Execute Command    rm /etc/tedge/tedge.toml.bak    ignore_exit_code=${True}
 
 Check known tedge environment settings
     [Arguments]    ${ENV_NAME}    ${KEY_NAME}    ${VALUE}

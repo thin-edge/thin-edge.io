@@ -72,6 +72,13 @@ Update tedge version from previous using Cumulocity
     ${OUTPUT}=    Execute Command    systemctl is-enabled tedge-mapper-az || exit 1    exp_exit_code=1    strip=True
     Should Be Equal    ${OUTPUT}    disabled    msg=Service should still be disabled
 
+    File Should Exist    /etc/tedge/tedge.toml.bak
+    ${output}=    Execute Command    tedge config get c8y.url    stderr=True    strip=True
+    Should Contain    ${output}[1]    Found stale backup file
+    Execute Command    rm /etc/tedge/tedge.toml.bak
+    ${output}=    Execute Command    tedge config get c8y.url    stderr=True    strip=True
+    Should Not Contain    ${output}[1]    Found stale backup file
+
     # Check that the mapper is reacting to operations after the upgrade
     # Notes:
     # * Bug as seen in the past: https://github.com/thin-edge/thin-edge.io/issues/2545
