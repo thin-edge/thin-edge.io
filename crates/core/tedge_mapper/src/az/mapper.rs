@@ -57,8 +57,7 @@ impl TEdgeComponent for AzureMapper {
 
             let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
                 &remote_clientid,
-                az_config.url().or_config_not_set()?.to_string(),
-                8883,
+                mqtt_channel::Broker::tcp(az_config.url().or_config_not_set()?.to_string(), 8883),
             );
             cloud_config.set_clean_session(false);
             cloud_config.set_credentials(
@@ -68,7 +67,7 @@ impl TEdgeComponent for AzureMapper {
                 ),
                 "",
             );
-            cloud_config.set_keep_alive(az_config.bridge.keepalive_interval.duration());
+            cloud_config.set_keep_alive(az_config.bridge.keepalive_interval.duration().as_secs() as u16);
 
             let tls_config = tedge_config
                 .mqtt_client_config_rustls(&az_config)

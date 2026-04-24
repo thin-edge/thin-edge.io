@@ -17,7 +17,7 @@ resolver = "2"
 version = "2.0.0"
 authors = ["thin-edge.io team <info@thin-edge.io>"]
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.89"
 license = "Apache-2.0"
 homepage = "https://thin-edge.io"
 repository = "https://github.com/thin-edge/thin-edge.io"
@@ -182,7 +182,7 @@ ron = "0.12"
 rpassword = "7.4"
 rsa = "0.9.10"
 rstest = "0.26"
-rumqttc = { version = "0.25.1", default-features = false, features = [
+rumqttc = { package = "rumqttc-v4-next", version = "0.30.0", default-features = false, features = [
     "use-rustls-no-provider",
 ] }
 rumqttd = "0.20"

@@ -27,7 +27,7 @@ async fn start_mqtt_bridge(
     rules: BridgeConfig,
     tedge_config: Option<TEdgeConfig>,
 ) {
-    let cloud_config = MqttOptions::new("cloud-device", "127.0.0.1", cloud_port);
+    let cloud_config = MqttOptions::new("cloud-device", rumqttc::Broker::tcp("127.0.0.1", cloud_port));
     let service_name = "tedge-mapper-test";
     let health_topic = format!("te/device/main/service/{service_name}/status/health")
         .as_str()

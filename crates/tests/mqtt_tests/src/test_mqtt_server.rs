@@ -144,8 +144,8 @@ fn spawn_broker() -> u16 {
     };
 
     std::thread::spawn(move || {
-        let mut mqttoptions = rumqttc::MqttOptions::new("rumqtt-sync", "127.0.0.1", port);
-        mqttoptions.set_keep_alive(Duration::from_secs(5));
+        let mut mqttoptions = rumqttc::MqttOptions::new("rumqtt-sync", rumqttc::Broker::tcp("127.0.0.1", port));
+        mqttoptions.set_keep_alive(5);
 
         let (client, mut connection) = rumqttc::Client::new(mqttoptions, 10);
 
@@ -160,7 +160,7 @@ fn spawn_broker() -> u16 {
                 };
                 eprintln!(
                     "MQTT-TEST MSG: topic = {}, payload = {:?}",
-                    publish.topic, payload
+                    String::from_utf8_lossy(&publish.topic), payload
                 );
             }
         }

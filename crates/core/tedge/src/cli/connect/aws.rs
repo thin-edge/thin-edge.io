@@ -29,7 +29,7 @@ pub async fn check_device_status_aws(
         .mqtt_config()?
         .with_session_prefix(CLIENT_ID)
         .rumqttc_options()?;
-    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
 
     let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
     let mut acknowledged = false;

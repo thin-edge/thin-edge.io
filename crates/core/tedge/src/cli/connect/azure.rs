@@ -36,7 +36,7 @@ pub(crate) async fn check_device_status_azure(
         .with_session_prefix(CLIENT_ID)
         .rumqttc_options()?;
 
-    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
 
     let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
     let mut acknowledged = false;
@@ -69,10 +69,11 @@ pub(crate) async fn check_device_status_azure(
                 acknowledged = true;
             }
             Ok(Event::Incoming(Packet::Publish(response))) => {
-                if response.topic.contains(REGISTRATION_OK) {
+                let topic = String::from_utf8_lossy(&response.topic);
+                if topic.contains(REGISTRATION_OK) {
                     // We got a response
                     break;
-                } else if response.topic == built_in_bridge_health {
+                } else if topic == built_in_bridge_health {
                     client
                         .publish(
                             &azure_topic_device_twin_upstream,

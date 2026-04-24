@@ -336,6 +336,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-tungstenite"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb26fbd2a93308b1c1b74ac4e494a11ac10db57c476882240573bdf961463520"
+dependencies = [
+ "atomic-waker",
+ "futures-core",
+ "futures-io",
+ "futures-task",
+ "futures-util",
+ "log",
+ "pin-project-lite",
+ "rustls-native-certs",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-rustls 0.26.2",
+ "tungstenite 0.29.0",
+]
+
+[[package]]
 name = "async_io_stream"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -608,7 +628,7 @@ dependencies = [
  "getrandom 0.2.16",
  "instant",
  "pin-project-lite",
- "rand 0.8.5",
+ "rand 0.8.6",
  "tokio",
 ]
 
@@ -1633,7 +1653,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f5ce6d7f6b0c1a6330fb8450f49a8423b78e30d04132146938c35baab3877eb"
 dependencies = [
  "fnv",
- "rand 0.8.5",
+ "rand 0.8.6",
 ]
 
 [[package]]
@@ -1818,6 +1838,17 @@ name = "flume"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "spin",
+]
+
+[[package]]
+name = "flume"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e139bc46ca777eb5efaf62df0ab8cc5fd400866427e56c68b22e414e53bd3be"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -2930,7 +2961,7 @@ dependencies = [
  "futures",
  "log",
  "mqtt_tests",
- "rumqttc",
+ "rumqttc-v4-next",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -2948,7 +2979,7 @@ dependencies = [
  "fastrand",
  "futures",
  "once_cell",
- "rumqttc",
+ "rumqttc-v4-next",
  "rumqttd",
  "tokio",
 ]
@@ -2963,6 +2994,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mqttbytes-core-next"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78a866db83825732641da480c56d8a01ea7f853a639c7cbf5cc82a265ef0ba34"
+dependencies = [
+ "bytes",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "mutants"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2974,7 +3015,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
 dependencies = [
- "rand 0.8.5",
+ "rand 0.8.6",
 ]
 
 [[package]]
@@ -3081,7 +3122,7 @@ dependencies = [
  "num-integer",
  "num-iter",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.6",
  "smallvec",
  "zeroize",
 ]
@@ -3574,7 +3615,7 @@ dependencies = [
  "lazy_static",
  "num-traits",
  "proptest-macro",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rand_chacha 0.3.1",
  "rand_xorshift",
  "regex-syntax 0.8.5",
@@ -3710,9 +3751,9 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "5ca0ecfa931c29007047d1bc58e623ab12e5590e8c7cc53200d5202b69266d8a"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -4158,24 +4199,42 @@ dependencies = [
 ]
 
 [[package]]
-name = "rumqttc"
-version = "0.25.1"
+name = "rumqttc-core-next"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0feff8d882bff0b2fddaf99355a10336d43dd3ed44204f85ece28cf9626ab519"
+checksum = "ce991585c5d7af7690647aa87820543b67be40ed88f79addcf36e86a45f911e9"
 dependencies = [
  "async-http-proxy",
- "bytes",
- "fixedbitset",
- "flume",
- "futures-util",
- "log",
+ "async-tungstenite 0.34.0",
  "rustls-native-certs",
- "rustls-pemfile",
- "rustls-webpki 0.102.8",
+ "rustls-pki-types",
+ "rustls-webpki 0.103.13",
  "thiserror 2.0.12",
  "tokio",
  "tokio-rustls 0.26.2",
- "tokio-stream",
+]
+
+[[package]]
+name = "rumqttc-v4-next"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "170a905905fa5f6fd6eb6778042942bbcee7c8722c1760a7d379fecb50944d08"
+dependencies = [
+ "async-http-proxy",
+ "async-tungstenite 0.34.0",
+ "bytes",
+ "fixedbitset",
+ "flume 0.12.0",
+ "futures-util",
+ "log",
+ "mqttbytes-core-next",
+ "rumqttc-core-next",
+ "rustls-native-certs",
+ "rustls-pki-types",
+ "rustls-webpki 0.103.13",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-rustls 0.26.2",
  "tokio-util",
 ]
 
@@ -4190,12 +4249,12 @@ dependencies = [
  "bytes",
  "clap",
  "config",
- "flume",
+ "flume 0.11.1",
  "futures-util",
  "metrics",
  "metrics-exporter-prometheus",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rustls-pemfile",
  "rustls-webpki 0.102.8",
  "serde",
@@ -4289,7 +4348,7 @@ dependencies = [
  "once_cell",
  "ring",
  "rustls-pki-types",
- "rustls-webpki 0.103.12",
+ "rustls-webpki 0.103.13",
  "subtle",
  "zeroize",
 ]
@@ -4338,9 +4397,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.12"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8279bb85272c9f10811ae6a6c547ff594d6a7f3c6c6b02ee9726d1d0dcfcdd06"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -4864,7 +4923,7 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rpassword",
- "rumqttc",
+ "rumqttc-v4-next",
  "serde",
  "serde_json",
  "strum",
@@ -5442,7 +5501,7 @@ dependencies = [
  "mqttbytes",
  "mutants",
  "rcgen",
- "rumqttc",
+ "rumqttc-v4-next",
  "rumqttd",
  "serde",
  "serde_json",
@@ -6078,7 +6137,7 @@ dependencies = [
  "http 1.3.1",
  "httparse",
  "log",
- "rand 0.8.5",
+ "rand 0.8.6",
  "sha1",
  "thiserror 1.0.69",
  "url",
@@ -6121,6 +6180,24 @@ dependencies = [
  "sha1",
  "thiserror 2.0.12",
  "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c01152af293afb9c7c2a57e4b559c5620b421f6d133261c60dd2d0cdb38e6b8"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http 1.3.1",
+ "httparse",
+ "log",
+ "rand 0.9.4",
+ "rustls 0.23.27",
+ "rustls-pki-types",
+ "sha1",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
