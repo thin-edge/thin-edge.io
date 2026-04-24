@@ -84,7 +84,6 @@ mod tests {
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
     use std::time::Duration;
-    use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::Sender;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
