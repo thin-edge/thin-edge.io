@@ -308,7 +308,7 @@ export function onMessage(message) {
     const processing_time = message.time;
     const event_time = new Date(1776944047373);
     return {
-        "time": event_time.valueOf(),    // serialized as a number of milliseconds
+        "time": event_time.getTime(),    // serialized as a number of milliseconds
         "topic": "event",
         "payload": JSON.stringify({
             event_time,                  // serialized as a string
