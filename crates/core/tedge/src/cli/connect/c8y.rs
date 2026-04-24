@@ -50,10 +50,9 @@ pub async fn create_device_with_direct_connection(
 
     let mut mqtt_options = MqttOptions::new(
         bridge_config.remote_clientid.clone(),
-        address.host().to_string(),
-        address.port().into(),
+        rumqttc::Broker::tcp(address.host().to_string(), address.port().into()),
     );
-    mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
+    mqtt_options.set_keep_alive(5);
 
     let tls_config = if bridge_config.auth_type == AuthType::Basic {
         mqtt_options.set_credentials(
@@ -189,7 +188,7 @@ pub(crate) async fn check_device_status_c8y(
         .with_session_prefix(CLIENT_ID)
         .rumqttc_options()?;
 
-    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
 
     let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
     event_loop
@@ -315,7 +314,7 @@ pub(crate) async fn get_connected_c8y_url(
         .mqtt_config()?
         .with_session_prefix(CLIENT_ID)
         .rumqttc_options()?;
-    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
 
     let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
     event_loop

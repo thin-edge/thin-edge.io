@@ -264,7 +264,7 @@ impl Connection {
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     if msg.payload.len() > config.max_packet_size {
                         error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
-                            msg.topic, msg.payload.len(), config.max_packet_size);
+                            String::from_utf8_lossy(&msg.topic), msg.payload.len(), config.max_packet_size);
                         continue;
                     }
                     let _ = message_sender.send(msg.into()).await;
@@ -341,7 +341,7 @@ impl Connection {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     if msg.payload.len() > config.max_packet_size {
                         error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
-                            msg.topic, msg.payload.len(), config.max_packet_size);
+                            String::from_utf8_lossy(&msg.topic), msg.payload.len(), config.max_packet_size);
                         continue;
                     }
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
@@ -441,7 +441,7 @@ impl Connection {
         while let Some(message) = messages_receiver.next().await {
             let payload = Vec::from(message.payload_bytes());
             if let Err(err) = mqtt_client
-                .publish(message.topic, message.qos, message.retain, payload)
+                .publish(&message.topic.name, message.qos, message.retain, payload)
                 .await
             {
                 let _ = error_sender.send(err.into()).await;
@@ -455,7 +455,7 @@ impl Connection {
         if let Some(last_will) = last_will {
             let payload = Vec::from(last_will.payload_bytes());
             if mqtt_client
-                .publish(last_will.topic, last_will.qos, last_will.retain, payload)
+                .publish(&last_will.topic.name, last_will.qos, last_will.retain, payload)
                 .await
                 .is_ok()
             {

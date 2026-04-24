@@ -17,7 +17,7 @@ ignore = [
     # appropriate entries should be added to clippy.toml to disallow these methods.
     "RUSTSEC-2023-0071",
     "RUSTSEC-2026-0009",
-    # rustls-webpki 0.102.x used by rumqttc/rumqttd which pin ^0.102.x; incompatible with fixed 0.103.10. Waiting for upstream update.
+    # rustls-webpki 0.102.x used by rumqttd (test-only broker) which pins ^0.102.x; no fix in the 0.102.x line.
     "RUSTSEC-2026-0049",
     "RUSTSEC-2026-0098",
     "RUSTSEC-2026-0099",

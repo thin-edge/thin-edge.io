@@ -162,7 +162,7 @@ impl TestCon {
         let id: String = std::iter::repeat_with(fastrand::alphanumeric)
             .take(10)
             .collect();
-        let mut options = MqttOptions::new(id, "127.0.0.1", mqtt_port);
+        let mut options = MqttOptions::new(id, rumqttc::Broker::tcp("127.0.0.1", mqtt_port));
         options.set_clean_session(true);
 
         let (client, eventloop) = AsyncClient::new(options, 10);
@@ -231,7 +231,7 @@ impl TestCon {
     pub async fn next_topic_payload(&mut self) -> Result<(String, String), anyhow::Error> {
         loop {
             if let Event::Incoming(Packet::Publish(packet)) = self.eventloop.poll().await? {
-                let topic = packet.topic.clone();
+                let topic = String::from_utf8_lossy(&packet.topic).into_owned();
                 let msg = std::str::from_utf8(&packet.payload)
                     .unwrap_or("Error: non-utf8-payload")
                     .to_string();

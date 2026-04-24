@@ -34,7 +34,7 @@ fn new_broker_and_client(name: &str, port: u16) -> (AsyncClient, EventLoop) {
         .name(format!("{name} broker"))
         .spawn(move || broker.start().unwrap())
         .unwrap();
-    let mut client_opts = MqttOptions::new(format!("{name}-test-client"), "127.0.0.1", port);
+    let mut client_opts = MqttOptions::new(format!("{name}-test-client"), rumqttc::Broker::tcp("127.0.0.1", port));
     client_opts.set_max_packet_size(268435455, 268435455);
     AsyncClient::new(client_opts, 10)
 }
@@ -49,7 +49,7 @@ async fn start_mqtt_bridge_with_reconnect_message(
     rules: BridgeConfig,
     reconnect_message: Option<Publish>,
 ) {
-    let cloud_config = MqttOptions::new("a-device-id", "127.0.0.1", cloud_port);
+    let cloud_config = MqttOptions::new("a-device-id", rumqttc::Broker::tcp("127.0.0.1", cloud_port));
     let service_name = "tedge-mapper-test";
     let health_topic = format!("te/device/main/service/{service_name}/status/health")
         .as_str()

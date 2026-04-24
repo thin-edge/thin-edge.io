@@ -96,8 +96,7 @@ impl MqttBridgeActorBuilder {
     ) -> Self {
         let mut local_config = MqttOptions::new(
             service_name,
-            &tedge_config.mqtt.client.host,
-            tedge_config.mqtt.client.port.into(),
+            rumqttc::Broker::tcp(&tedge_config.mqtt.client.host, tedge_config.mqtt.client.port.into()),
         );
         // TODO cope with certs but not ca_dir, or handle that case with an explicit error message?
         let auth_config: mqtt_channel::AuthenticationConfig = tedge_config
@@ -321,7 +320,7 @@ impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
                     BridgeMessage::Pub { publish } => {
                         tx.send(None).await.unwrap();
                         target
-                            .publish(publish.topic, publish.qos, publish.retain, publish.payload)
+                            .publish(String::from_utf8_lossy(&publish.topic).into_owned(), publish.qos, publish.retain, publish.payload)
                             .await
                             .unwrap();
                     }
@@ -575,7 +574,7 @@ async fn half_bridge(
             // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
                 if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
-                    if let Some(topic) = transformer.convert_topic(&publish.topic) {
+                    if let Some(topic) = transformer.convert_topic(std::str::from_utf8(&publish.topic).unwrap_or_default()) {
                         received += 1;
                         target.publish(topic.to_string(), publish);
                     } else {

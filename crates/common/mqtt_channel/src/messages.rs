@@ -249,7 +249,7 @@ impl From<Publish> for MqttMessage {
         } = msg;
 
         MqttMessage {
-            topic: Topic::new_unchecked(&topic),
+            topic: Topic::new_unchecked(std::str::from_utf8(&topic).unwrap_or_default()),
             payload: DebugPayload::new(payload),
             qos,
             retain,

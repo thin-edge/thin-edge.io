@@ -255,8 +255,7 @@ async fn mqtt_bridge_config(
     }
     let mut cloud_config = tedge_mqtt_bridge::MqttOptions::new(
         c8y_config.device.id()?,
-        c8y.host().to_string(),
-        c8y_port,
+        mqtt_channel::Broker::tcp(c8y.host().to_string(), c8y_port),
     );
     // Cumulocity tells us not to not set clean session to false, so don't
     // https://cumulocity.com/docs/device-integration/mqtt/#mqtt-clean-session
@@ -340,7 +339,7 @@ async fn mqtt_bridge_config(
         message: format!("{last_will_message_bridge}\n{last_will_message_mapper}").into(),
         retain: false,
     });
-    cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration());
+    cloud_config.set_keep_alive(c8y_config.bridge.keepalive_interval.duration().as_secs() as u16);
 
     configure_proxy(tedge_config, &mut cloud_config)?;
     Ok((bridge_config, cloud_config, reconnect_message_mapper))

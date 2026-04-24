@@ -164,10 +164,12 @@ impl MqttEvents for LoggingEventLoop {
     }
 
     fn take_pending(&mut self) -> VecDeque<Request> {
-        std::mem::take(&mut self.inner.pending)
+        // The fork (rumqttc-v4-next) manages pending messages internally;
+        // EventLoop::pending is private and not externally accessible.
+        VecDeque::new()
     }
 
-    fn set_pending(&mut self, requests: Vec<Request>) {
-        self.inner.pending = requests.into_iter().collect();
+    fn set_pending(&mut self, _requests: Vec<Request>) {
+        // No-op: pending management is handled internally by the fork's EventLoop.
     }
 }

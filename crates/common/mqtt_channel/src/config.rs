@@ -394,8 +394,10 @@ impl Config {
 
         let broker_config = &self.broker;
 
-        let mut mqtt_options =
-            rumqttc::MqttOptions::new(id, &broker_config.host, broker_config.port);
+        let mut mqtt_options = rumqttc::MqttOptions::new(
+            id,
+            rumqttc::Broker::tcp(&broker_config.host, broker_config.port),
+        );
 
         if self.session_name.is_none() {
             // There is no point to have a session with a random name that will not be reused.

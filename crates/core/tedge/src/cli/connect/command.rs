@@ -580,7 +580,7 @@ async fn wait_for_custom_mapper_health(
         .with_session_prefix(CLIENT_ID)
         .rumqttc_options()
         .map_err(ConnectError::from)?;
-    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
+    mqtt_options.set_keep_alive(RESPONSE_TIMEOUT.as_secs() as u16);
 
     let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
 

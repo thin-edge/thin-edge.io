@@ -170,10 +170,10 @@ pub async fn build_cloud_mqtt_options(
         format!("'{mapper_dir}/mapper.toml' is missing a 'url' field required for the MQTT bridge")
     })?;
 
-    let mut cloud_config = MqttOptions::new(service_name, url.host().to_string(), url.port().0);
+    let mut cloud_config = MqttOptions::new(service_name, mqtt_channel::Broker::tcp(url.host().to_string(), url.port().0));
     cloud_config.set_clean_session(config.bridge.clean_session);
     if let Some(interval) = &config.bridge.keepalive_interval {
-        cloud_config.set_keep_alive(interval.duration());
+        cloud_config.set_keep_alive(interval.duration().as_secs() as u16);
     }
 
     let tls_enabled = match config.bridge.tls.enable {
