@@ -207,11 +207,9 @@ impl CumulocityConverter {
             );
             operations
         };
-        let operation_manager = SupportedOperations {
+        let supported_operations = SupportedOperations {
             device_id: device_id.clone(),
-
             base_ops_dir: Arc::clone(&config.ops_dir),
-
             operations_by_xid,
         };
 
@@ -250,7 +248,7 @@ impl CumulocityConverter {
             config: Arc::new(config),
             mapper_config,
             device_name: device_id,
-            supported_operations: operation_manager,
+            supported_operations,
             operation_logs,
             http_proxy,
             mqtt_publisher,
@@ -352,6 +350,21 @@ impl CumulocityConverter {
 
         if let Some(reg_message) = reg_message {
             messages.push(reg_message);
+        }
+
+        if matches!(
+            input.r#type,
+            EntityType::ChildDevice | EntityType::MainDevice
+        ) {
+            // supported operations message needs to be sent only after the c8y registration message
+            self.supported_operations
+                .load_all(external_id.as_ref(), &self.config.bridge_config)?;
+            let supported_ops = self.supported_operations.create_supported_operations(
+                external_id.as_ref(),
+                &self.config.bridge_config.c8y_prefix,
+            )?;
+
+            messages.push(supported_ops);
         }
 
         for (fragment_key, fragment_value) in input.twin_data.iter() {
@@ -1655,12 +1668,16 @@ pub(crate) mod tests {
 
         let messages = converter.convert(&in_message).await;
 
+        // TODO: only assert things relevant to what the test tests
         assert_messages_matching(
             &messages,
-            [(
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child,false".into(),
-            )],
+            [
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child,false".into(),
+                ),
+                ("c8y/s/us/test-device:device:child1", "114".into()),
+            ],
         );
     }
 
@@ -1693,10 +1710,13 @@ pub(crate) mod tests {
 
         assert_messages_matching(
             &messages,
-            [(
-                "c8y/s/us",
-                "101,test-device:device:child1,child1,thin-edge.io-child,true".into(),
-            )],
+            [
+                (
+                    "c8y/s/us",
+                    "101,test-device:device:child1,child1,thin-edge.io-child,true".into(),
+                ),
+                ("c8y/s/us/test-device:device:child1", "114".into()),
+            ],
         );
     }
 

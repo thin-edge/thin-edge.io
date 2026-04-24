@@ -224,6 +224,7 @@ async fn birth_message_with_shuffled_entity_registration_impl(seed: u64) {
                 "c8y/s/us",
                 "101,test-device:device:child1,Child1,RaspberryPi,false",
             ),
+            ("c8y/s/us/test-device:device:child1", "114"),
         ],
     )
     .await;
@@ -279,14 +280,17 @@ async fn nested_child_registration_with_shuffled_ordering_impl(seed: u64) {
                 "c8y/s/us",
                 "101,test-device:device:child1,Child1,RaspberryPi,false",
             ),
+            ("c8y/s/us/test-device:device:child1", "114"),
             (
                 "c8y/s/us/test-device:device:child1",
                 "101,test-device:device:child2,test-device:device:child2,thin-edge.io-child,false",
             ),
+            ("c8y/s/us/test-device:device:child2", "114"),
             (
                 "c8y/s/us/test-device:device:child2",
                 "101,child3,child3,thin-edge.io-child,false",
             ),
+            ("c8y/s/us/child3", "114"),
         ],
     )
     .await;
@@ -334,6 +338,7 @@ async fn child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
         &mut mqtt,
         [
             ("c8y/s/us", "101,test-device:device:external_sensor,"),
+            ("c8y/s/us/test-device:device:external_sensor", "114"),
             (
                 "c8y/s/us/test-device:device:external_sensor",
                 "102,test-device:device:external_sensor:service:service_child,",
@@ -385,6 +390,7 @@ async fn child_alarm_with_shuffled_entity_registration_impl(seed: u64) {
         &mut mqtt,
         [
             ("c8y/s/us", "101,test-device:device:external_sensor,"),
+            ("c8y/s/us/test-device:device:external_sensor", "114"),
             (
                 "c8y/s/us/test-device:device:external_sensor",
                 "303,temperature_high,Still high",
@@ -430,6 +436,7 @@ async fn child_event_with_shuffled_entity_registration_impl(seed: u64) {
         &mut mqtt,
         [
             ("c8y/s/us", "101,test-device:device:external_sensor,"),
+            ("c8y/s/us/test-device:device:external_sensor", "114"),
             ("c8y/event/events/create", "custom_event"),
         ],
     )
@@ -491,10 +498,12 @@ async fn nested_child_alarm_with_shuffled_ordering_impl(seed: u64) {
                 "c8y/s/us",
                 "101,immediate_child,immediate_child,thin-edge.io-child,false",
             ),
+            ("c8y/s/us/immediate_child", "114"),
             (
                 "c8y/s/us/immediate_child",
                 "101,nested_child,nested_child,thin-edge.io-child,false",
             ),
+            ("c8y/s/us/nested_child", "114"),
             (
                 "c8y/s/us/nested_child",
                 "303,ThinEdgeAlarm,Temperature high,2023-10-13T15:00:07.172674353Z",
@@ -566,7 +575,9 @@ async fn nested_child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
         &mut mqtt,
         [
             ("c8y/s/us", "101,immediate_child,"),
+            ("c8y/s/us/immediate_child", "114"),
             ("c8y/s/us/immediate_child", "101,nested_child,"),
+            ("c8y/s/us/nested_child", "114"),
             ("c8y/s/us/nested_child", "102,nested_service,"),
             (
                 "c8y/s/us/nested_service",
