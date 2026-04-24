@@ -10,6 +10,10 @@ DEFAULT_TARGET := `./ci/build_scripts/detect_target.sh`
 
 CARGO := `command -V cargo-zigbuild >/dev/null 2>&1 && printf "cargo-zigbuild" || printf "cargo"`
 
+# Build profile used when building the Rust binaries. Defaults to 'release'
+# Available values: [release, dev-stripped, debug]
+BUILD_PROFILE := env("BUILD_PROFILE", "release")
+
 # Print project and host machine info
 info:
     @echo "OS:             {{os()}}"
@@ -126,9 +130,14 @@ check-dependencies:
     cargo deny fetch
     cargo deny --all-features check --allow duplicate --allow unmaintained
 
-# Release, building all binaries and debian packages
+# Build all binaries and packages using the set profile
+# or dev, or something in-between
+build *ARGS:
+    ci/build_scripts/build.sh --profile {{BUILD_PROFILE}} {{ARGS}}
+
+# Release, building all binaries and packages (optimized, stripped of debug symbols)
 release *ARGS:
-    ci/build_scripts/build.sh {{ARGS}}
+    just -f {{justfile()}} BUILD_PROFILE=release build {{ARGS}}
 
 # Run unit and doc tests
 test *ARGS:
@@ -147,8 +156,8 @@ test-docs *ARGS:
 setup-integration-test *ARGS:
     tests/RobotFramework/bin/setup.sh {{ARGS}}
 
-# Run integration tests (using local build)
-integration-test *ARGS: release
+# Build the integration test image
+build-integration-test: build
     #!/usr/bin/env bash
     set -e
     if [ ! -d tests/RobotFramework/.venv ]; then
@@ -156,7 +165,10 @@ integration-test *ARGS: release
     fi
     cd tests/RobotFramework
     source .venv/bin/activate
-    invoke build --local
+    invoke build
+
+# Run integration tests (using local build)
+integration-test *ARGS: build-integration-test
     invoke tests {{ARGS}}
 
 # Generate linux package scripts from templates
