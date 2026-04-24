@@ -665,7 +665,8 @@ name = "batcher"
 version = "2.0.0"
 dependencies = [
  "async-trait",
- "tedge_actors",
+ "serde_json",
+ "tedge_flows",
  "time",
  "tokio",
 ]
@@ -1169,24 +1170,6 @@ name = "cobs"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
-
-[[package]]
-name = "collectd_ext"
-version = "2.0.0"
-dependencies = [
- "anyhow",
- "assert_matches",
- "async-trait",
- "batcher",
- "clock",
- "log",
- "tedge_actors",
- "tedge_api",
- "tedge_mqtt_ext",
- "thiserror 2.0.12",
- "time",
- "tokio",
-]
 
 [[package]]
 name = "colorchoice"
@@ -5052,8 +5035,6 @@ dependencies = [
  "camino",
  "certificate",
  "clap",
- "clock",
- "collectd_ext",
  "flockfile",
  "mqtt_channel",
  "rcgen",
