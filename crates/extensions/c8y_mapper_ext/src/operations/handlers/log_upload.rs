@@ -108,6 +108,9 @@ impl OperationContext {
                 .await
                 .context("Could not upload operation log")?;
 
+                // Delete the file from the file transfer service after successful upload
+                self.http_delete(tedge_file_url).await;
+
                 Ok(OperationOutcome::Finished {
                     messages: vec![c8y_notification],
                 })

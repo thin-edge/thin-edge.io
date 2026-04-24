@@ -343,6 +343,7 @@ pub struct C8yMapperBuilder {
     box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: DynSender<MqttMessage>,
     http_proxy: C8YHttpProxy,
+    http_client: ClientMessageBox<HttpRequest, HttpResult>,
     downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
     bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
@@ -368,6 +369,7 @@ impl C8yMapperBuilder {
         mqtt.connect_sink(config.topics.clone(), &box_builder.get_sender());
 
         let http_proxy = C8YHttpProxy::new(&config, http);
+        let http_client = ClientMessageBox::new(http);
 
         let downloader = ClientMessageBox::new(downloader);
         let uploader = ClientMessageBox::new(uploader);
@@ -392,6 +394,7 @@ impl C8yMapperBuilder {
             box_builder,
             mqtt_publisher,
             http_proxy,
+            http_client,
             uploader,
             downloader,
             bridge_monitor_builder,
@@ -449,6 +452,7 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
             self.http_proxy,
             self.uploader,
             self.downloader,
+            self.http_client,
             self.flow_context.unwrap_or_default(),
         )
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
