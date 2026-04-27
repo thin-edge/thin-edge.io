@@ -125,7 +125,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install taplo
-        run: cargo install taplo-cli
+        uses: taiki-e/install-action@taplo
 
       - name: Check Cargo.toml formatting
         run: taplo fmt --check
