@@ -538,7 +538,7 @@ jobs:
             echo "Warning: Failed to generate changelog, but it should not block a release" > _CHANGELOG.md
           fi
       - name: Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
