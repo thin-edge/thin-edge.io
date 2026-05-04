@@ -47,6 +47,9 @@ pub fn ssl_config(
     root_certs: Option<RootCertStore>,
 ) -> anyhow::Result<ServerConfig> {
     // Trusted CA for client certificates
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
     let config = ServerConfig::builder();
 
     let config = if let Some(root_certs) = root_certs {

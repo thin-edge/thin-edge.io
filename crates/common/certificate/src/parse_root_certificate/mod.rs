@@ -15,6 +15,14 @@ pub use tedge_p11::SecretString;
 
 use crate::CertificateError;
 
+// Must be called before any use of ClientConfig::builder() or ServerConfig::builder().
+// See https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default
+fn init_crypto_default_provider() {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+}
+
 pub fn create_tls_config(
     root_certificates: impl AsRef<Path>,
     client_private_key: impl AsRef<Path>,
@@ -24,6 +32,7 @@ pub fn create_tls_config(
     let pvt_key = read_pvt_key(client_private_key)?;
     let cert_chain = read_cert_chain(client_certificate)?;
 
+    init_crypto_default_provider();
     Ok(ClientConfig::builder()
         .with_root_certificates(root_cert_store)
         .with_client_auth_cert(cert_chain, pvt_key)?)
@@ -53,6 +62,7 @@ pub fn create_tls_config_cryptoki(
     };
     let resolver: SingleCertAndKey = certified_key.into();
 
+    init_crypto_default_provider();
     let config = ClientConfig::builder()
         .with_root_certificates(root_cert_store)
         .with_client_cert_resolver(Arc::new(resolver));
@@ -94,6 +104,7 @@ where
         ))?
     }
 
+    init_crypto_default_provider();
     Ok(ClientConfig::builder()
         .with_root_certificates(roots)
         .with_no_client_auth())
@@ -104,6 +115,7 @@ pub fn create_tls_config_without_client_cert(
 ) -> Result<ClientConfig, CertificateError> {
     let root_cert_store = new_root_store(root_certificates.as_ref())?;
 
+    init_crypto_default_provider();
     Ok(ClientConfig::builder()
         .with_root_certificates(root_cert_store)
         .with_no_client_auth())
