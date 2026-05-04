@@ -23,6 +23,7 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_config::OptionalConfig;
+use tedge_utils::paths::ManagedDir;
 use tokio::net::TcpListener;
 use tracing::log::info;
 
@@ -38,7 +39,7 @@ pub struct HttpServerActor {
 // In the tests, CertKeyPath is replaced with a String, and CaPath is replaced with a RootCertStore
 // hence they need to be separate types
 pub(crate) struct HttpServerConfig<CertKeyPath = Utf8PathBuf, CaPath = Utf8PathBuf> {
-    pub file_transfer_dir: Utf8PathBuf,
+    pub file_transfer_dir: ManagedDir,
     pub cert_path: OptionalConfig<CertKeyPath>,
     pub key_path: OptionalConfig<CertKeyPath>,
     pub ca_path: OptionalConfig<CaPath>,
@@ -97,7 +98,7 @@ impl HttpServerBuilder {
                 config.ca_path,
                 "File transfer service",
             )?,
-            file_transfer_dir: config.file_transfer_dir,
+            file_transfer_dir: config.file_transfer_dir.into(),
             signal_sender,
             signal_receiver,
             listener,
@@ -138,8 +139,8 @@ mod tests {
     use reqwest::Identity;
     use rustls::RootCertStore;
     use tedge_actors::ServerMessageBoxBuilder;
-    use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_utils::paths::TedgePaths;
     use tokio::fs;
 
     #[tokio::test]
@@ -374,7 +375,9 @@ mod tests {
 
     fn http_config(ttd: &TempTedgeDir, bind_port: u16) -> TestConfig {
         TestConfig {
-            file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
+            file_transfer_dir: TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "")
+                .dir("file-transfer")
+                .unwrap(),
             cert_path: OptionalConfig::empty("http.cert_path"),
             key_path: OptionalConfig::empty("http.key_path"),
             ca_path: OptionalConfig::empty("http.ca_path"),
@@ -399,7 +402,9 @@ mod tests {
         };
 
         Ok(TestConfig {
-            file_transfer_dir: DataDir::from(ttd.utf8_path_buf()).file_transfer_dir(),
+            file_transfer_dir: TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "")
+                .dir("file-transfer")
+                .unwrap(),
             cert_path: OptionalConfig::present(InjectedValue(cert), "http.cert_path"),
             key_path: OptionalConfig::present(InjectedValue(key), "http.key_path"),
             ca_path: root_certs

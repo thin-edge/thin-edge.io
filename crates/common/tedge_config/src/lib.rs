@@ -42,6 +42,30 @@ impl TEdgeConfig {
         TedgePaths::from_root_with_defaults(self.root_dir(), system.user, system.group)
     }
 
+    pub fn data_root(&self) -> TedgePaths {
+        let system = self.read_system_config();
+        TedgePaths::from_root_with_defaults(self.data.path.clone(), system.user, system.group)
+    }
+
+    pub fn state_root(&self) -> TedgePaths {
+        let system = self.read_system_config();
+        TedgePaths::from_root_with_defaults(
+            self.agent.state.path.clone(),
+            system.user,
+            system.group,
+        )
+    }
+
+    pub fn logs_root(&self) -> TedgePaths {
+        let system = self.read_system_config();
+        TedgePaths::from_root_with_defaults(self.logs.path.clone(), system.user, system.group)
+    }
+
+    pub fn run_root(&self) -> TedgePaths {
+        let system = self.read_system_config();
+        TedgePaths::from_root_with_defaults(self.run.path.clone(), system.user, system.group)
+    }
+
     /// Load [TEdgeConfig], using a separate mapper config file as the default
     /// behaviour if no clouds are already configured
     ///

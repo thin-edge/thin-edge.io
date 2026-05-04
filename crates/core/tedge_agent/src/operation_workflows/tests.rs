@@ -54,6 +54,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_script_ext::Execute;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_utils::paths::TedgePaths;
 use tokio::task::JoinHandle;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
@@ -782,6 +783,7 @@ async fn spawn_mqtt_operation_converter(
 
     let tmp_dir = Arc::new(TempTedgeDir::new());
     let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
+    let config_root = TedgePaths::from_root_with_defaults(tmp_path, "", "");
     let operations_dir = tmp_dir.dir("operations");
     for (file_name, content) in workflows {
         operations_dir.file(&file_name).with_raw_content(&content);
@@ -796,10 +798,10 @@ async fn spawn_mqtt_operation_converter(
         mqtt_schema: MqttSchema::new(),
         device_topic_id,
         service_topic_id,
-        log_dir: tmp_path.into(),
-        config_dir: tmp_path.into(),
-        state_dir: tmp_path.join("running-operations"),
-        operations_dir: operations_dir.utf8_path_buf(),
+        log_dir: TedgePaths::from_root_with_defaults(tmp_path, "", "").root_dir(),
+        config_dir: config_root.clone(),
+        state_dir: TedgePaths::from_root_with_defaults(tmp_path.join("running-operations"), "", ""),
+        operations_dir: config_root.dir("operations").unwrap(),
         tmp_dir: tmp_path.into(),
         capabilities: Capabilities::default(),
     };

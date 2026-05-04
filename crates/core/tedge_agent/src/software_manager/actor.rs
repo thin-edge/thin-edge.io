@@ -101,11 +101,12 @@ impl Actor for SoftwareManagerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        let sm_plugin_dir_path = self.config.sm_plugins_dir.path().to_path_buf();
         let mut plugins = ExternalPlugins::open(
-            &self.config.sm_plugins_dir,
+            &sm_plugin_dir_path,
             self.config.default_plugin_type.clone(),
             self.config.sudo.clone(),
-            self.config.config_dir.clone(),
+            self.config.config_dir.root().to_path_buf(),
         )
         .await
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
@@ -114,7 +115,7 @@ impl Actor for SoftwareManagerActor {
             warn!(
                 "{}",
                 NoPlugins {
-                    plugins_path: self.config.sm_plugins_dir.clone(),
+                    plugins_path: sm_plugin_dir_path,
                 }
             );
         }
@@ -246,7 +247,7 @@ impl SoftwareManagerActor {
         }
 
         plugins.load().await?;
-        plugins.update_default(&get_default_plugin(&self.config.config_dir).await?)?;
+        plugins.update_default(&get_default_plugin(self.config.config_dir.root()).await?)?;
 
         self.state_repository.store(&request.clone().into()).await?;
 

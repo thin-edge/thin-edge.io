@@ -6,6 +6,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::marker::PhantomData;
 use tedge_utils::fs::atomically_write_file_async;
+use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::TedgePaths;
 use tokio::fs;
 
 /// Store the current state of an operation
@@ -16,21 +18,22 @@ pub struct AgentStateRepository<T> {
 }
 
 /// The directory used by the agent to persist its state when tedge config agent.state.path is not set
-pub fn agent_default_state_dir(tedge_root: Utf8PathBuf) -> Utf8PathBuf {
-    tedge_root.join(".agent")
+pub fn agent_default_state_dir(tedge_root: &TedgePaths) -> ManagedDir {
+    tedge_root.dir(".agent").unwrap()
 }
 
 /// Return the given `state_dir` once checked that it can be used to persist the agent state.
 ///
 /// If for some reason the configured state directory cannot be used,
 /// then fallback to the default directory under tedge root (`/etc/tedge/.agent`).
-pub fn agent_state_dir(state_dir: Utf8PathBuf, tedge_root: Utf8PathBuf) -> Utf8PathBuf {
+pub fn agent_state_dir(state_dir: &TedgePaths, tedge_root: &TedgePaths) -> ManagedDir {
     // Check that the given directory is actually writable, by creating an empty test file
-    let test_file = state_dir.join(state_dir.join(".--test--"));
-    match std::fs::write(&test_file, "") {
+    let test_file = state_dir.file(".--test--").unwrap();
+    let test_file_path = test_file.path();
+    match std::fs::write(test_file_path, "") {
         Ok(_) => {
-            let _ = std::fs::remove_file(&test_file);
-            state_dir
+            let _ = std::fs::remove_file(test_file_path);
+            state_dir.root_dir()
         }
         Err(err) => {
             warn!("Cannot use {state_dir:?} to store tedge-agent state: {err}");
@@ -43,9 +46,9 @@ impl<T: DeserializeOwned + Serialize> AgentStateRepository<T> {
     /// Create a new agent state file in the given state directory
     /// or in the tedge root directory if the given directory is not suitable
     /// (e.g. the directory doesn't exist or is not writable).
-    pub fn new(state_dir: Utf8PathBuf, tedge_root: Utf8PathBuf, file_name: &str) -> Self {
-        let state_dir = agent_state_dir(state_dir, tedge_root);
-        Self::with_state_dir(state_dir, file_name)
+    pub fn new(state_dir: TedgePaths, tedge_root: TedgePaths, file_name: &str) -> Self {
+        let state_dir = agent_state_dir(&state_dir, &tedge_root);
+        Self::with_state_dir(state_dir.into(), file_name)
     }
 
     /// Create a new agent state file in the given state directory.
@@ -98,6 +101,7 @@ mod tests {
     use serde::Deserialize;
     use serde::Serialize;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_utils::paths::TedgePaths;
 
     #[derive(Debug, Default, Deserialize, Eq, PartialEq, Serialize, Clone)]
     pub struct State {
@@ -107,8 +111,8 @@ mod tests {
 
     fn new_test_state_repository(temp_dir: &TempTedgeDir) -> AgentStateRepository<State> {
         AgentStateRepository::new(
-            "/some/unknown/dir".into(),
-            temp_dir.utf8_path_buf(),
+            TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
+            TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", ""),
             "current-operation",
         )
     }
@@ -120,8 +124,8 @@ mod tests {
             .file("current-operation")
             .with_raw_content(r#"{"operation_id":"1234","operation":"list"}"#);
         let repo: AgentStateRepository<State> = AgentStateRepository::new(
-            temp_dir.utf8_path_buf(),
-            "/some/unknown/dir".into(),
+            TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", ""),
+            TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
             "current-operation",
         );
 
@@ -139,8 +143,8 @@ mod tests {
         let temp_dir = TempTedgeDir::new();
         temp_dir.dir(".agent").file("current-operation");
         let repo: AgentStateRepository<State> = AgentStateRepository::new(
-            "/some/unknown/dir".into(),
-            temp_dir.utf8_path_buf(),
+            TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
+            TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", ""),
             "current-operation",
         );
 
@@ -151,8 +155,8 @@ mod tests {
     async fn fail_when_none_of_the_given_directory_exist() {
         let temp_dir = TempTedgeDir::new();
         let repo: AgentStateRepository<State> = AgentStateRepository::new(
-            "/some/unknown/dir".into(),
-            temp_dir.utf8_path_buf(),
+            TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
+            TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", ""),
             "current-operation",
         );
 

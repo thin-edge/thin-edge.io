@@ -2,6 +2,8 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::path::Path;
 
+// TODO: We might consider removing this file entirely.
+
 /// Representation of ThinEdge data directory.
 /// Default is /var/tedge.
 /// All directories under the root data directory must be listed here.

@@ -1,13 +1,14 @@
 use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::SudoCommandBuilder;
+use tedge_utils::paths::TedgePaths;
 
 #[derive(Debug, Clone)]
 pub struct RestartManagerConfig {
     pub device_topic_id: EntityTopicId,
     pub tmp_dir: Utf8PathBuf,
-    pub config_dir: Utf8PathBuf,
-    pub state_dir: Utf8PathBuf,
+    pub config_dir: TedgePaths,
+    pub state_dir: TedgePaths,
     pub sudo: SudoCommandBuilder,
 }
 
@@ -19,8 +20,8 @@ impl RestartManagerConfig {
         Ok(RestartManagerConfig {
             device_topic_id: device_topic_id.clone(),
             tmp_dir: tedge_config.tmp.path.clone().into(),
-            config_dir: tedge_config.root_dir().to_owned(),
-            state_dir: tedge_config.agent.state.path.clone().into(),
+            config_dir: tedge_config.config_root(),
+            state_dir: tedge_config.state_root(),
             sudo: SudoCommandBuilder::new(tedge_config),
         })
     }

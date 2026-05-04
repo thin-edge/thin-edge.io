@@ -25,6 +25,7 @@ use tedge_api::commands::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::SudoCommandBuilder;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_utils::paths::TedgePaths;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
@@ -180,13 +181,15 @@ async fn spawn_software_manager(
     let mut converter_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
+    let config_root = TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "");
+
     let config = SoftwareManagerConfig {
         device: EntityTopicId::default_main_device(),
         tmp_dir: tmp_dir.utf8_path_buf(),
-        config_dir: tmp_dir.utf8_path_buf(),
-        state_dir: "/some/unknown/dir".into(),
-        sm_plugins_dir: tmp_dir.utf8_path_buf(),
-        log_dir: tmp_dir.utf8_path_buf(),
+        config_dir: config_root.clone(),
+        state_dir: TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
+        sm_plugins_dir: config_root.dir("sm-plugins").unwrap(),
+        log_dir: TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "").root_dir(),
         default_plugin_type: None,
         sudo: SudoCommandBuilder::with_program(SUDO),
     };

@@ -19,6 +19,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::RestartCommand;
 use tedge_config::SudoCommandBuilder;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_utils::paths::TedgePaths;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
@@ -115,8 +116,8 @@ async fn spawn_restart_manager(
     let config = RestartManagerConfig {
         device_topic_id: EntityTopicId::default_main_device(),
         tmp_dir: tmp_dir.utf8_path_buf(),
-        config_dir: tmp_dir.utf8_path_buf(),
-        state_dir: "/some/unknown/dir".into(),
+        config_dir: TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", ""),
+        state_dir: TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
         sudo: SudoCommandBuilder::enabled(true),
     };
 

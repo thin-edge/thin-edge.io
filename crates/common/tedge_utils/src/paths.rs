@@ -299,6 +299,18 @@ impl fmt::Display for ManagedDir {
     }
 }
 
+impl AsRef<Utf8Path> for ManagedDir {
+    fn as_ref(&self) -> &Utf8Path {
+        self.path()
+    }
+}
+
+impl From<ManagedDir> for Utf8PathBuf {
+    fn from(dir: ManagedDir) -> Self {
+        dir.path
+    }
+}
+
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct ManagedFile {
