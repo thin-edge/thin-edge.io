@@ -24,11 +24,13 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Service;
 use tedge_config::OptionalConfig;
 use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::TedgePaths;
 use tokio::net::TcpListener;
 use tracing::log::info;
 
 pub struct HttpServerActor {
-    file_transfer_dir: Utf8PathBuf,
+    file_transfer_dir: ManagedDir,
+    data_dir: TedgePaths,
     rustls_config: Option<ServerConfig>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
     listener: TcpListener,
@@ -40,6 +42,7 @@ pub struct HttpServerActor {
 // hence they need to be separate types
 pub(crate) struct HttpServerConfig<CertKeyPath = Utf8PathBuf, CaPath = Utf8PathBuf> {
     pub file_transfer_dir: ManagedDir,
+    pub data_dir: TedgePaths,
     pub cert_path: OptionalConfig<CertKeyPath>,
     pub key_path: OptionalConfig<CertKeyPath>,
     pub ca_path: OptionalConfig<CaPath>,
@@ -54,7 +57,11 @@ impl Actor for HttpServerActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        let agent_state = AgentState::new(self.file_transfer_dir, self.entity_store_handle);
+        let agent_state = AgentState::new(
+            self.file_transfer_dir,
+            self.data_dir,
+            self.entity_store_handle,
+        );
 
         let server = http_server(self.listener, self.rustls_config, agent_state)?;
 
@@ -72,7 +79,8 @@ impl Actor for HttpServerActor {
 }
 
 pub struct HttpServerBuilder {
-    file_transfer_dir: Utf8PathBuf,
+    file_transfer_dir: ManagedDir,
+    data_dir: TedgePaths,
     rustls_config: Option<ServerConfig>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     signal_receiver: mpsc::Receiver<RuntimeRequest>,
@@ -98,7 +106,8 @@ impl HttpServerBuilder {
                 config.ca_path,
                 "File transfer service",
             )?,
-            file_transfer_dir: config.file_transfer_dir.into(),
+            file_transfer_dir: config.file_transfer_dir,
+            data_dir: config.data_dir,
             signal_sender,
             signal_receiver,
             listener,
@@ -119,6 +128,7 @@ impl Builder<HttpServerActor> for HttpServerBuilder {
     fn try_build(self) -> Result<HttpServerActor, Self::Error> {
         Ok(HttpServerActor {
             file_transfer_dir: self.file_transfer_dir,
+            data_dir: self.data_dir,
             rustls_config: self.rustls_config,
             signal_receiver: self.signal_receiver,
             listener: self.listener,
@@ -374,10 +384,10 @@ mod tests {
     }
 
     fn http_config(ttd: &TempTedgeDir, bind_port: u16) -> TestConfig {
+        let data_dir = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
         TestConfig {
-            file_transfer_dir: TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "")
-                .dir("file-transfer")
-                .unwrap(),
+            file_transfer_dir: data_dir.dir("file-transfer").unwrap(),
+            data_dir,
             cert_path: OptionalConfig::empty("http.cert_path"),
             key_path: OptionalConfig::empty("http.key_path"),
             ca_path: OptionalConfig::empty("http.ca_path"),
@@ -401,10 +411,11 @@ mod tests {
             None
         };
 
+        let data_dir = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
+
         Ok(TestConfig {
-            file_transfer_dir: TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "")
-                .dir("file-transfer")
-                .unwrap(),
+            file_transfer_dir: data_dir.dir("file-transfer").unwrap(),
+            data_dir,
             cert_path: OptionalConfig::present(InjectedValue(cert), "http.cert_path"),
             key_path: OptionalConfig::present(InjectedValue(key), "http.key_path"),
             ca_path: root_certs

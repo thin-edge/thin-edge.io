@@ -141,6 +141,7 @@ impl AgentConfig {
 
         let http_config = HttpServerConfig {
             file_transfer_dir: data_dir.dir("file-transfer")?,
+            data_dir: data_dir.clone(),
             cert_path: tedge_config.http.cert_path.clone().map(Utf8PathBuf::from),
             key_path: tedge_config.http.key_path.clone().map(Utf8PathBuf::from),
             ca_path: tedge_config.http.ca_path.clone().map(Utf8PathBuf::from),

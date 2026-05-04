@@ -583,6 +583,7 @@ mod tests {
     use tedge_api::entity_store;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_utils::paths::TedgePaths;
     use test_case::test_case;
     use tower::Service;
 
@@ -1699,13 +1700,15 @@ mod tests {
 
     fn setup() -> TestHandle {
         let ttd: TempTedgeDir = TempTedgeDir::new();
-        let file_transfer_dir = ttd.utf8_path_buf();
+        let data_dir = TedgePaths::from_root_with_defaults(ttd.utf8_path_buf(), "", "");
+        let file_transfer_dir = data_dir.dir("file-transfer").unwrap();
 
         let mut entity_store_box = ServerMessageBoxBuilder::new("EntityStoreBox", 16);
         let entity_store_handle = ClientMessageBox::new(&mut entity_store_box);
 
         let agent_state = AgentState {
             file_transfer_dir,
+            data_dir,
             entity_store_handle,
         };
         // TODO: Add a timeout to this router. Attempts to add a tower_http::timer::TimeoutLayer as a layer failed.

@@ -66,8 +66,8 @@ async fn test_pending_software_update_operation() -> Result<(), DynError> {
 async fn test_new_software_update_operation() -> Result<(), DynError> {
     let temp_dir = TempTedgeDir::new();
     temp_dir.dir(".agent");
-    temp_dir.file("apt");
-    temp_dir.file("docker");
+    temp_dir.dir("sm-plugins").file("apt");
+    temp_dir.dir("sm-plugins").file("docker");
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
