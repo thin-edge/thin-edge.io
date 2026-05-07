@@ -304,7 +304,7 @@ pub async fn test_cli_flow_registry(
     let mut flows = match mapper_config {
         None => BaseFlowRegistry::new(HashMap::new(), flows_dir),
         Some(effective_mapper_config) => BaseFlowRegistry::new(effective_mapper_config, flows_dir),
-    };
+    }?;
     load_builtin_transformers(&mut flows);
     Ok(flows)
 }
@@ -326,7 +326,7 @@ async fn flow_registry(
         Some(effective_mapper_config) => {
             ConnectedFlowRegistry::new(effective_mapper_config, flows_dir)
         }
-    };
+    }?;
 
     load_builtin_transformers(&mut flows);
     Ok(flows)

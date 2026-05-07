@@ -649,7 +649,8 @@ type ActorHandle = tokio::task::JoinHandle<Result<(), tedge_actors::RuntimeError
 
 async fn spawn_flows_actor(config_dir: &TempDir, mqtt: &mut MockMqtt) -> ActorHandle {
     let mapper_config = HashMap::new();
-    let flows = ConnectedFlowRegistry::new(mapper_config, config_dir.path().to_str().unwrap());
+    let flows =
+        ConnectedFlowRegistry::new(mapper_config, config_dir.path().to_str().unwrap()).unwrap();
     let mut flows_builder = FlowsMapperBuilder::try_new(flows, FlowsMapperConfig::default())
         .await
         .expect("Failed to create FlowsMapper");

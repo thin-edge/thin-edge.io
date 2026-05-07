@@ -41,12 +41,15 @@ pub struct BaseFlowRegistry {
 }
 
 impl BaseFlowRegistry {
-    pub fn new(mapper_params: impl MapperParams, flows_dir: impl AsRef<Utf8Path>) -> Self {
-        BaseFlowRegistry {
-            flows: FlowStore::new(flows_dir),
+    pub fn new(
+        mapper_params: impl MapperParams,
+        flows_dir: impl AsRef<Utf8Path>,
+    ) -> Result<Self, std::io::Error> {
+        Ok(BaseFlowRegistry {
+            flows: FlowStore::new(flows_dir)?,
             builtins: BuiltinTransformers::default(),
             mapper_params: Box::new(mapper_params),
-        }
+        })
     }
 }
 
@@ -334,6 +337,9 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
 #[derive(thiserror::Error, Debug)]
 pub enum UpdateFlowRegistryError {
     #[error(transparent)]
+    IoError(#[from] std::io::Error),
+
+    #[error(transparent)]
     FileError(#[from] file::FileError),
 
     #[error(transparent)]
@@ -350,12 +356,13 @@ pub struct FlowStore<F> {
 }
 
 impl<F> FlowStore<F> {
-    pub fn new(config_dir: impl AsRef<Utf8Path>) -> Self {
-        FlowStore {
-            config_dir: config_dir.as_ref().to_owned(),
+    pub fn new(config_dir: impl AsRef<Utf8Path>) -> Result<Self, std::io::Error> {
+        let config_dir = config_dir.as_ref().to_owned().canonicalize_utf8()?;
+        Ok(FlowStore {
+            config_dir,
             flows: HashMap::new(),
             unloaded_flows: HashSet::new(),
-        }
+        })
     }
 
     pub fn config_dir(&self) -> &Utf8Path {

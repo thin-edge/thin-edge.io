@@ -212,10 +212,7 @@ impl TEdgeFlowsCli {
         flows_dir: &Utf8PathBuf,
         js_config: JsRuntimeConfig,
     ) -> Result<MessageProcessor<BaseFlowRegistry>, Error> {
-        let flows_dir = flows_dir
-            .canonicalize_utf8()
-            .context("Invalid flows-dir path")?;
-        let mut processor = Self::init_processor(config, mapper_dir, &flows_dir, js_config)
+        let mut processor = Self::init_processor(config, mapper_dir, flows_dir, js_config)
             .await
             .with_context(|| format!("loading flows and steps from {flows_dir}"))?;
         processor.load_all_flows().await;
@@ -233,16 +230,14 @@ impl TEdgeFlowsCli {
             .await
             .with_context(|| format!("loading flow {path}"))?;
 
-        let resolved_path = if path.is_absolute() {
-            path.clone()
-        } else if tokio::fs::try_exists(path).await.unwrap_or(false) {
-            // Exists relative to current working directory
-            path.canonicalize_utf8().unwrap_or(path.clone())
-        } else {
-            // Try to find the file under flows_dir using glob
-            Self::find_in_flows_dir(flows_dir, path).await?
+        let path = match tokio::fs::try_exists(path).await {
+            Ok(true) => path.clone(),
+            _ => {
+                // Try to find the file under flows_dir using glob
+                Self::find_in_flows_dir(flows_dir, path).await?
+            }
         };
-
+        let resolved_path = path.canonicalize_utf8().unwrap_or(path.clone());
         match resolved_path.extension() {
             Some("toml") => processor.load_single_flow(&resolved_path).await,
             _ => processor.load_single_script(&resolved_path).await,
