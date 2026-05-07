@@ -5,6 +5,7 @@ use camino::Utf8Path;
 use std::io::IsTerminal;
 use std::str::FromStr;
 use std::sync::Arc;
+use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::util::SubscriberInitExt;
 
 const DEFAULT_LEVEL: tracing::Level = tracing::Level::INFO;
@@ -69,6 +70,17 @@ fn logger(
     default_level: tracing::Level,
 ) -> Result<Arc<dyn tracing::Subscriber + Send + Sync>, SystemTomlError> {
     let subscriber = subscriber_builder!();
+
+    // Added by systemd if the process is running as systemd unit
+    // https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#%24INVOCATION_ID
+    let is_running_as_systemd_unit = std::env::var("INVOCATION_ID").is_ok();
+
+    // disable time formatting if journald because journald already records the time
+    let subscriber = if is_running_as_systemd_unit {
+        subscriber.with_timer(TimeFormat::Disabled)
+    } else {
+        subscriber.with_timer(TimeFormat::Enabled)
+    };
 
     // first use log level from flags
     let log_level = flags
@@ -139,6 +151,20 @@ pub fn set_log_level(log_level: tracing::Level) {
             .init();
     } else {
         subscriber.with_max_level(log_level).init();
+    }
+}
+
+enum TimeFormat {
+    Enabled,
+    Disabled,
+}
+
+impl FormatTime for TimeFormat {
+    fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
+        match self {
+            Self::Enabled => tracing_subscriber::fmt::time::UtcTime::rfc_3339().format_time(w),
+            Self::Disabled => ().format_time(w),
+        }
     }
 }
 
