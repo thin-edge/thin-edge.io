@@ -123,8 +123,8 @@ pub enum IntervalConfig {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
-    #[error("Not a valid filename for a flow")]
-    IncorrectFlowFilename,
+    #[error("The flow name cannot be derived from its relative path to {dir}")]
+    FlowNameCannotBeDerived { dir: Utf8PathBuf, path: Utf8PathBuf },
 
     #[error("Not a valid MQTT topic: {0}")]
     IncorrectTopic(String),
@@ -317,7 +317,10 @@ impl FlowConfig {
         }
 
         let Some(name) = derive_flow_name(flows_dir, &source) else {
-            return Err(ConfigError::IncorrectFlowFilename);
+            return Err(ConfigError::FlowNameCannotBeDerived {
+                dir: flows_dir.to_owned(),
+                path: source.to_owned(),
+            });
         };
 
         detect_loop(&name, &input, &output, self.expect_loop)?;
