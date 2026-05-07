@@ -179,7 +179,7 @@ rcgen = { version = "0.14", features = ["pem", "zeroize"] }
 regex = "1.4"
 reqwest = { version = "0.12", default-features = false }
 ron = "0.12"
-rpassword = "7.4"
+rpassword = "7.5"
 rsa = "0.9.10"
 rstest = "0.26"
 rumqttc = { git = "https://github.com/didier-wenzek/rumqtt", branch = "chore/upgrade-rustls-webpki", default-features = false, features = [
