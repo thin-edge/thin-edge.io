@@ -154,7 +154,6 @@ pub enum ConfigError {
 
 /// ```
 /// use tedge_flows::derive_flow_name;
-/// assert_eq!(derive_flow_name("/flows".into(), "/flows/flow.toml".into()), Some("flow".into()));
 /// assert_eq!(derive_flow_name("/flows".into(), "/flows/hello.toml".into()), Some("hello".into()));
 /// assert_eq!(derive_flow_name("/flows".into(), "/flows/hello/flow.toml".into()), Some("hello".into()));
 /// assert_eq!(derive_flow_name("/flows".into(), "/flows/hello/world.toml".into()), Some("hello/world".into()));
@@ -163,6 +162,10 @@ pub enum ConfigError {
 /// assert_eq!(derive_flow_name("/flows".into(), "/flows/hello/params.toml".into()), None);
 /// assert_eq!(derive_flow_name("/flows".into(), "/flows/hello/world.js".into()), None);
 /// assert_eq!(derive_flow_name("/flows".into(), "/unrelated/flows/hello.toml".into()), None);
+/// // Not recommended but working:
+/// assert_eq!(derive_flow_name("/flows".into(), "/flows/flow.toml".into()), Some("flow".into()));
+/// assert_eq!(derive_flow_name("/flows".into(), "/flows/params/flow.toml".into()), Some("params".into()));
+/// assert_eq!(derive_flow_name("/flows".into(), "/flows/flow/flow.toml".into()), Some("flow".into()));
 /// ```
 pub fn derive_flow_name(flows_dir: &Utf8Path, flow_path: &Utf8Path) -> Option<String> {
     let path = flow_path.strip_prefix(flows_dir).ok()?;
