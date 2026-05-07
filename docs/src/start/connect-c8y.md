@@ -186,47 +186,32 @@ If your device is not yet registered, you will find the digital-twin created in 
 sudo tedge connect c8y
 ```
 
+<UserContext>
+
 ```text title="Output"
-Checking if systemd is available.
-
-Checking if configuration for requested bridge already exists.
-
-Validating the bridge certificates.
-
-Creating the device in Cumulocity cloud.
-
-Saving configuration for requested bridge.
-
-Restarting mosquitto service.
-
-Awaiting mosquitto to start. This may take up to 5 seconds.
-
-Enabling mosquitto service on reboots.
-
-Successfully created bridge connection!
-
-Sending packets to check connection. This may take up to 2 seconds.
-
-Connection check is successful.
-
-Checking if tedge-mapper is installed.
-
-Starting tedge-mapper-c8y service.
-
-Persisting tedge-mapper-c8y on reboot.
-
-tedge-mapper-c8y service successfully started and enabled!
-
-Enabling software management.
-
-Checking if tedge-agent is installed.
-
-Starting tedge-agent service.
-
-Persisting tedge-agent on reboot.
-
-tedge-agent service successfully started and enabled!
+Connecting to Cumulocity:
+        mapper configuration file: /etc/tedge/mappers/c8y/mapper.toml
+        device id: $DEVICE_ID
+        cloud profile: <none>
+        cloud host: $C8Y_URL:8883
+        auth type: Certificate
+        certificate file: /etc/tedge/device-certs/tedge-certificate.pem
+        cryptoki: off
+        bridge: built-in
+        service manager: systemd
+        mosquitto version: 2.0.21
+        proxy: Not configured
+Updating bridge rule templates... ✓
+Creating device in Cumulocity cloud... ✓
+Restarting mosquitto... ✓
+Waiting for mosquitto to be listening for connections... ✓
+Enabling tedge-mapper-c8y... ✓
+Verifying device is connected to cloud... ✓
+Checking Cumulocity is connected to intended tenant... ✓
+Enabling tedge-agent... ✓
 ```
+
+</UserContext>
 
 If your device does not have internet access and you want to create the bridge configuration, you can run a `tedge connect c8y` with the `--offline` flag.
 
@@ -234,45 +219,30 @@ If your device does not have internet access and you want to create the bridge c
 sudo tedge connect c8y --offline
 ```
 
+<UserContext>
+
 ```text title="Output"
-Checking if systemd is available.
-
-Checking if configuration for requested bridge already exists.
-
-Validating the bridge certificates.
-
+Connecting to Cumulocity:
+        mapper configuration file: /etc/tedge/mappers/c8y/mapper.toml
+        device id: $DEVICE_ID
+        cloud profile: <none>
+        cloud host: $C8Y_URL:8883
+        auth type: Certificate
+        certificate file: /etc/tedge/device-certs/tedge-certificate.pem
+        cryptoki: off
+        bridge: built-in
+        service manager: systemd
+        mosquitto version: 2.0.21
+        proxy: Not configured
+Updating bridge rule templates... ✓
 Offline mode. Skipping device creation in Cumulocity cloud.
-
-Saving configuration for requested bridge.
-
-Restarting mosquitto service.
-
-Awaiting mosquitto to start. This may take up to 5 seconds.
-
-Enabling mosquitto service on reboots.
-
-Successfully created bridge connection!
-
-Offline mode. Skipping connection check.
-
-Checking if tedge-mapper is installed.
-
-Starting tedge-mapper-c8y service.
-
-Persisting tedge-mapper-c8y on reboot.
-
-tedge-mapper-c8y service successfully started and enabled!
-
-Enabling software management.
-
-Checking if tedge-agent is installed.
-
-Starting tedge-agent service.
-
-Persisting tedge-agent on reboot.
-
-tedge-agent service successfully started and enabled!
+Restarting mosquitto... ✓
+Waiting for mosquitto to be listening for connections... ✓
+Enabling tedge-mapper-c8y... ✓
+Enabling tedge-agent... ✓
 ```
+
+</UserContext>
 
 If the device certificate is trusted by Cumulocity, the %%te%% instance will automatically connect to the cloud once connectivity is restored.
 

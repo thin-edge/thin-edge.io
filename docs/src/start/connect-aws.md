@@ -248,37 +248,27 @@ At last, it sends packets to AWS IoT Core to check the connection.
 sudo tedge connect aws
 ```
 
+<UserContext>
+
 ```text title="Output"
-Checking if systemd is available.
-
-Checking if configuration for requested bridge already exists.
-
-Validating the bridge certificates.
-
-Saving configuration for requested bridge.
-
-Restarting mosquitto service.
-
-Awaiting mosquitto to start. This may take up to 5 seconds.
-
-Enabling mosquitto service on reboots.
-
-Successfully created bridge connection!
-
-Sending packets to check connection. This may take up to 2 seconds.
-
-Received expected response on topic aws/connection-success, connection check is successful.
-Connection check is successful.
-
-Checking if tedge-mapper is installed.
-
-Starting tedge-mapper-aws service.
-
-Persisting tedge-mapper-aws on reboot.
-
-tedge-mapper-aws service successfully started and enabled!
-
+Connecting to Aws:
+        mapper configuration file: /etc/tedge/mappers/aws/mapper.toml
+        device id: $DEVICE_ID
+        cloud profile: <none>
+        cloud host: $AWS_URL:8883
+        auth type: Certificate
+        certificate file: /etc/tedge/device-certs/tedge-certificate.pem
+        cryptoki: off
+        bridge: built-in
+        service manager: systemd
+        proxy: Not configured
+Restarting mosquitto... ✓
+Waiting for mosquitto to be listening for connections... ✓
+Enabling tedge-mapper-aws... ✓
+Verifying device is connected to cloud... ✓
 ```
+
+</UserContext>
 
 If your device does not have internet access and you want to create the bridge configuration, you can run a `tedge connect aws` with the `--offline` flag.
 
@@ -286,34 +276,26 @@ If your device does not have internet access and you want to create the bridge c
 sudo tedge connect aws --offline
 ```
 
+<UserContext>
+
 ```text title="Output"
-Checking if systemd is available.
-
-Checking if configuration for requested bridge already exists.
-
-Validating the bridge certificates.
-
-Saving configuration for requested bridge.
-
-Restarting mosquitto service.
-
-Awaiting mosquitto to start. This may take up to 5 seconds.
-
-Enabling mosquitto service on reboots.
-
-Successfully created bridge connection!
-
-Offline mode. Skipping connection check.
-
-Checking if tedge-mapper is installed.
-
-Starting tedge-mapper-aws service.
-
-Persisting tedge-mapper-aws on reboot.
-
-tedge-mapper-aws service successfully started and enabled!
-
+Connecting to Aws:
+        mapper configuration file: /etc/tedge/mappers/aws/mapper.toml
+        device id: $DEVICE_ID
+        cloud profile: <none>
+        cloud host: $AWS_URL:8883
+        auth type: Certificate
+        certificate file: /etc/tedge/device-certs/tedge-certificate.pem
+        cryptoki: off
+        bridge: built-in
+        service manager: systemd
+        proxy: Not configured
+Restarting mosquitto... ✓
+Waiting for mosquitto to be listening for connections... ✓
+Enabling tedge-mapper-aws... ✓
 ```
+
+</UserContext>
 
 :::tip
 If you having troubles with the connection, then check the following items:

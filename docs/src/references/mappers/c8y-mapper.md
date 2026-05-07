@@ -940,11 +940,28 @@ are also mapped to their corresponding _supported logs_ and _supported configs_ 
 **Cumulocity (input)**
 
 ```text title="Topic"
-c8y/s/ds
+c8y/devicecontrol/notifications
 ```
 
-```csv title="Payload"
-510,<main-device-id>
+```json5 title="Payload"
+{
+  "delivery": {
+    "log": [],
+    "time": "2026-05-07T16:16:42.963Z",
+    "status": "PENDING"
+  },
+  "agentId": "95438285",
+  "creationTime": "2026-05-07T16:16:42.900Z",
+  "deviceId": "95438285",
+  "id": "<c8y-operation-id>",
+  "status": "PENDING",
+  "description": "Restart device",
+  "c8y_Restart": {},
+  "externalSource": {
+    "externalId": "<main-device-id>",
+    "type": "c8y_Serial"
+  }
+}
 ```
 
 </div>
@@ -954,12 +971,12 @@ c8y/s/ds
 **%%te%% (output)**
 
 ```text title="Topic"
-te/device/main///cmd/restart/<cmd-id>
+te/device/main///cmd/restart/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
 {
-    "status": "init"
+  "status": "init"
 }
 ```
 
@@ -980,12 +997,12 @@ the mapper recognizes and maps only the following `status` values as follows:
   <td>
 
 ```text title="Topic"
-te/device/main///cmd/restart/<cmd-id>
+te/device/main///cmd/restart/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
 {
-    "status": "executing"
+  "status": "executing"
 }
 ```
 
@@ -998,7 +1015,7 @@ c8y/s/us
 ```
 
 ```text title="Payload"
-501,c8y_Restart
+504,<c8y-operation-id>
 ```
 
   </td>
@@ -1008,12 +1025,12 @@ c8y/s/us
   <td>
 
 ```text title="Topic"
-te/device/main///cmd/restart/<cmd-id>
+te/device/main///cmd/restart/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
 {
-    "status": "successful"
+  "status": "successful"
 }
 ```
 
@@ -1026,7 +1043,7 @@ c8y/s/us
 ```
 
 ```text title="Payload"
-503,c8y_Restart
+506,<c8y-operation-id>
 ```
 
   </td>
@@ -1036,12 +1053,12 @@ c8y/s/us
   <td>
 
 ```text title="Topic"
-te/device/main///cmd/restart/<cmd-id>
+te/device/main///cmd/restart/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
 {
-    "status": "failed"
+  "status": "failed"
 }
 ```
 
@@ -1054,7 +1071,7 @@ c8y/s/us
 ```
 
 ```text title="Payload"
-502,c8y_Restart
+505,<c8y-operation-id>
 ```
 
   </td>
@@ -1071,11 +1088,28 @@ All other `status` values are just ignored.
 **Cumulocity (input)**
 
 ```text title="Topic"
-c8y/s/ds
+c8y/devicecontrol/notifications
 ```
 
-```csv title="Payload"
-510,<main-device-id>:device:child01
+```json5 title="Payload"
+{
+  "delivery": {
+    "log": [],
+    "time": "2026-05-07T16:16:42.963Z",
+    "status": "PENDING"
+  },
+  "agentId": "95438285",
+  "creationTime": "2026-05-07T16:16:42.900Z",
+  "deviceId": "95438285",
+  "id": "<c8y-operation-id>",
+  "status": "PENDING",
+  "description": "Restart device",
+  "c8y_Restart": {},
+  "externalSource": {
+    "externalId": "<main-device-id>:device:child01",
+    "type": "c8y_Serial"
+  }
+}
 ```
 
 </div>
@@ -1085,11 +1119,13 @@ c8y/s/ds
 **%%te%% (output)**
 
 ```text title="Topic"
-te/device/child01///cmd/restart
+te/device/child01///cmd/restart/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
-{}
+{
+  "status": "init"
+}
 ```
 
 </div>
@@ -1101,11 +1137,43 @@ te/device/child01///cmd/restart
 **Cumulocity (input)**
 
 ```text title="Topic"
-c8y/s/ds
+c8y/devicecontrol/notifications
 ```
 
-```csv title="Payload"
-528,<main-device-id>,nodered::debian,1.0.0,<c8y-url>,install,collectd,5.7,,install,rolldice,1.16,,delete
+```json title="Payload"
+{
+  "delivery": {
+    "log": [],
+    "time": "2026-05-07T22:05:30.610Z",
+    "status": "PENDING"
+  },
+  "agentId": "95438285",
+  "creationTime": "2026-05-07T22:05:30.566Z",
+  "deviceId": "95438285",
+  "id": "<c8y-operation-id>",
+  "status": "PENDING",
+  "description": "Apply software changes: install \"collectd\" (version: 1.16), delete \"local/hello-flow\" (version: 2.0.0)",
+  "c8y_SoftwareUpdate": [
+    {
+      "softwareType": "apt",
+      "name": "collectd",
+      "action": "install",
+      "id": "33108227",
+      "version": "1.16",
+      "url": "<c8y-url>"
+    },
+    {
+      "softwareType": "flow",
+      "name": "local/hello-flow",
+      "action": "delete",
+      "version": "2.0.0"
+    }
+  ],
+  "externalSource": {
+    "externalId": "<main-device-id>",
+    "type": "c8y_Serial"
+  }
+}
 ```
 
 </div>
@@ -1115,42 +1183,41 @@ c8y/s/ds
 **%%te%% (output)**
 
 ```text title="Topic"
-te/device/main///cmd/software_update/<cmd_id>
+te/device/main///cmd/software_update/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
 {
-    "status": "init",
-    "updateList": [
-        {
-            "type": "debian",
-            "modules": [
-                {
-                    "name": "nodered",
-                    "version": "1.0.0",
-                    "url": "<tedge-url>",
-                    "action": "install"
-                },
-                {
-                    "name": "collectd",
-                    "version": "5.7",
-                    "action": "install"
-                },
-                {
-                    "name": "rolldice",
-                    "version": "1.16",
-                    "action": "remove"
-                }
-            ]
-        }
-    ]
+   "status":"init",
+   "updateList":[
+      {
+         "type":"apt",
+         "modules":[
+            {
+               "name":"collectd",
+               "version":"1.16",
+               "url":"<c8y-proxy-url>",
+               "action":"install"
+            }
+         ]
+      },
+      {
+         "type":"flow",
+         "modules":[
+            {
+               "name":"local/hello-flow",
+               "version":"2.0.0",
+               "action":"remove"
+            }
+         ]
+      }
+   ]
 }
 ```
 
 </div>
 
-Where the `collectd` binary from the `<c8y-url>` is downloaded to the tedge file transfer repository by the mapper,
-and the local `<tedge-url>` of that binary is included in the mapped request.
+Where the `<c8y-url>` from Cumulocity is rewritten by the mapper to a `<c8y-proxy-url>` — a locally accessible URL served by the C8Y HTTP proxy — so the tedge-agent can download the collectd package directly from the proxy during installation.
 
 ### Configuration Snapshot
 
@@ -1159,11 +1226,30 @@ and the local `<tedge-url>` of that binary is included in the mapped request.
 **Cumulocity (input)**
 
 ```text title="Topic"
-c8y/s/ds
+c8y/devicecontrol/notifications
 ```
 
-```csv title="Payload"
-526,<main-device-id>,collectd
+```json5 title="Payload"
+{
+  "delivery": {
+    "log": [],
+    "time": "2026-05-07T22:11:25.256Z",
+    "status": "PENDING"
+  },
+  "agentId": "95438285",
+  "creationTime": "2026-05-07T22:11:25.196Z",
+  "deviceId": "95438285",
+  "id": "<c8y-operation-id>",
+  "status": "PENDING",
+  "description": "Retrieve collectd configuration snapshot from device",
+  "c8y_UploadConfigFile": {
+    "type": "collectd"
+  },
+  "externalSource": {
+    "externalId": "<main-device-id>",
+    "type": "c8y_Serial"
+  }
+}
 ```
 
 </div>
@@ -1173,20 +1259,20 @@ c8y/s/ds
 **%%te%% (output)**
 
 ```text title="Topic"
-te/device/main///cmd/config_snapshot/<cmd_id>
+te/device/main///cmd/config_snapshot/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
 {
-    "status": "init",
-    "type": "collectd",
-    "url": "<tedge-url>"
+  "status": "init",
+  "type": "collectd",
+  "tedgeUrl": "<tedge-url>"
 }
 ```
 
 </div>
 
-Where the `url` is the target URL in the tedge file transfer repository to which the config snapshot must be uploaded.
+Where the `tedgeUrl` is the target URL in the tedge file transfer repository to which the config snapshot must be uploaded.
 
 ### Configuration Update
 
@@ -1195,11 +1281,31 @@ Where the `url` is the target URL in the tedge file transfer repository to which
 **Cumulocity (input)**
 
 ```text title="Topic"
-c8y/s/ds
+c8y/devicecontrol/notifications
 ```
 
-```csv title="Payload"
-524,<main-device-id>,<c8y-url>,collectd
+```json5 title="Payload"
+{
+  "delivery": {
+    "log": [],
+    "time": "2026-05-07T22:14:25.413Z",
+    "status": "PENDING"
+  },
+  "agentId": "95438285",
+  "creationTime": "2026-05-07T22:14:25.371Z",
+  "deviceId": "95438285",
+  "id": "<c8y-operation-id>",
+  "status": "PENDING",
+  "c8y_DownloadConfigFile": {
+    "type": "collectd",
+    "url": "<c8y-url>"
+  },
+  "description": "Send configuration snapshot collectd of configuration type collectd to device",
+  "externalSource": {
+    "externalId": "<main-device-id>",
+    "type": "c8y_Serial"
+  }
+}
 ```
 
 </div>
@@ -1209,21 +1315,21 @@ c8y/s/ds
 **%%te%% (output)**
 
 ```text title="Topic"
-te/device/main///cmd/config_update/<cmd_id>
+te/device/main///cmd/config_update/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
 {
-    "status": "init",
-    "type": "collectd",
-    "url": "<tedge-url>"
+  "status": "init",
+  "type": "collectd",
+  "remoteUrl": "<c8y-proxy-url>",
+  "serverUrl": "<c8y-url>"
 }
 ```
 
 </div>
 
-Where the `collectd` configuration binary from the `<c8y-url>` is downloaded to the tedge file transfer repository by the mapper,
-and the local `<tedge-url>` of that binary is included in the mapped request.
+Where the `<c8y-url>` from Cumulocity is rewritten by the mapper to a `<c8y-proxy-url>` — a locally accessible URL served by the C8Y HTTP proxy — and included as `remoteUrl` in the mapped request so the tedge-agent can download the `collectd` configuration file directly from the proxy during execution.
 
 ### Log Upload
 
@@ -1232,11 +1338,34 @@ and the local `<tedge-url>` of that binary is included in the mapped request.
 **Cumulocity (input)**
 
 ```text title="Topic"
-c8y/s/ds
+c8y/devicecontrol/notifications
 ```
 
-```csv title="Payload"
-522,<main-device-id>,tedge-agent,2013-06-22T17:03:14.000+02:00,2013-06-22T18:03:14.000+02:00,ERROR,1000
+```json5 title="Payload"
+{
+  "delivery": {
+    "log": [],
+    "time": "2026-05-07T22:17:17.599Z",
+    "status": "PENDING"
+  },
+  "agentId": "95438285",
+  "creationTime": "2026-05-07T22:17:17.539Z",
+  "deviceId": "95438285",
+  "id": "<c8y-operation-id>",
+  "status": "PENDING",
+  "c8y_LogfileRequest": {
+    "searchText": "ERROR",
+    "logFile": "tedge-agent",
+    "dateTo": "2026-05-08T00:17:10+0200",
+    "dateFrom": "2026-05-07T00:17:10+0200",
+    "maximumLines": 1000
+  },
+  "description": "Log file request",
+  "externalSource": {
+    "externalId": "<main-device-id>",
+    "type": "c8y_Serial"
+  }
+}
 ```
 
 </div>
@@ -1246,7 +1375,7 @@ c8y/s/ds
 **%%te%% (output)**
 
 ```text title="Topic"
-te/device/main///cmd/log_upload/<cmd_id>
+te/device/main///cmd/log_upload/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
@@ -1254,8 +1383,8 @@ te/device/main///cmd/log_upload/<cmd_id>
   "status": "init",
   "type": "tedge-agent",
   "tedgeUrl": "<tedge-url>",
-  "dateFrom": "2013-06-22T17:03:14.000+02:00",
-  "dateTo": "2013-06-23T18:03:14.000+02:00",
+  "dateFrom": "2026-05-07T00:17:10+02:00",
+  "dateTo": "2026-05-08T00:17:10+02:00",
   "searchText": "ERROR",
   "lines": 1000
 }
@@ -1263,7 +1392,182 @@ te/device/main///cmd/log_upload/<cmd_id>
 
 </div>
 
-Where the `url` is the target URL in the tedge file transfer repository to which the config snapshot must be uploaded.
+Where the `tedgeUrl` is the target URL in the tedge file transfer repository to which the log file must be uploaded.
+
+### Firmware Update
+
+<div class="code-indent-left">
+
+**Cumulocity (input)**
+
+```text title="Topic"
+c8y/devicecontrol/notifications
+```
+
+```json5 title="Payload"
+{
+  "delivery": {
+    "log": [],
+    "time": "2026-05-07T23:09:45.993Z",
+    "status": "PENDING"
+  },
+  "agentId": "95438285",
+  "creationTime": "2026-05-07T23:09:45.901Z",
+  "deviceId": "95438285",
+  "id": "<c8y-operation-id>",
+  "status": "PENDING",
+  "c8y_Firmware": {
+    "name": "core-image-tedge-mender-raspberrypi4-64",
+    "version": "2.0.0-tpm2",
+    "url": "<c8y-url>"
+  },
+  "description": "Update firmware to: \"core-image-tedge-mender-raspberrypi4-64\" (version: 2.0.0-tpm2)",
+  "externalSource": {
+    "externalId": "<main-device-id>",
+    "type": "c8y_Serial"
+  }
+}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**%%te%% (output)**
+
+```text title="Topic"
+te/device/main///cmd/firmware_update/c8y-mapper-<c8y-operation-id>
+```
+
+```json5 title="Payload"
+{
+  "status": "init",
+  "tedgeUrl": "<c8y-proxy-url>",
+  "remoteUrl": "<c8y-url>",
+  "name": "core-image-tedge-mender-raspberrypi4-64",
+  "version": "2.0.0-tpm2"
+}
+```
+
+</div>
+
+Where the `<c8y-url>` from Cumulocity is rewritten by the mapper to a `<c8y-proxy-url>` — a locally accessible URL served by the C8Y HTTP proxy — and included as `tedgeUrl` in the mapped request, while the original `<c8y-url>` is preserved in `remoteUrl` for reference.
+
+### Device Profile
+
+<div class="code-indent-left">
+
+**Cumulocity (input)**
+
+```text title="Topic"
+c8y/devicecontrol/notifications
+```
+
+```json5 title="Payload"
+{
+  "delivery": {
+    "log": [],
+    "time": "2026-05-07T22:22:57.822Z",
+    "status": "PENDING"
+  },
+  "agentId": "95438285",
+  "creationTime": "2026-05-07T22:22:57.763Z",
+  "deviceId": "95438285",
+  "id": "<c8y-operation-id>",
+  "status": "PENDING",
+  "profileName": "Test",
+  "profileId": "80440202",
+  "c8y_DeviceProfile": {
+    "software": [
+      {
+        "softwareType": "flow",
+        "name": "local/hello-flow",
+        "action": "install",
+        "version": "2.0.0",
+        "url": "<c8y-url>"
+      }
+    ],
+    "configuration": [
+      {
+        "name": "tedge-log-plugin",
+        "type": "tedge-log-plugin",
+        "url": "<c8y-url>"
+      }
+    ],
+    "firmware": {
+      "name": "core-image-tedge-mender-raspberrypi4-64",
+      "version": "2.0.0",
+      "url": "<c8y-url>"
+    }
+  },
+  "description": "Assign device profile Test to device",
+  "externalSource": {
+    "externalId": "<main-device-id>",
+    "type": "c8y_Serial"
+  }
+}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**%%te%% (output)**
+
+```text title="Topic"
+te/device/main///cmd/config_snapshot/c8y-mapper-<c8y-operation-id>
+```
+
+```json5 title="Payload"
+{
+  "status": "init",
+  "name": "Test",
+  "operations": [
+    {
+      "operation": "firmware_update",
+      "payload": {
+        "name": "core-image-tedge-mender-raspberrypi4-64",
+        "version": "2.0.0-tpm2",
+        "remoteUrl": "<c8y-proxy-url>"
+      },
+      "@skip": false
+    },
+    {
+      "operation": "config_update",
+      "payload": {
+        "name": "tedge-log-plugin",
+        "type": "tedge-log-plugin",
+        "remoteUrl": "<c8y-proxy-url>",
+        "serverUrl": "<c8y-url>"
+      },
+      "@skip": false
+    },
+    {
+      "operation": "software_update",
+      "payload": {
+        "updateList": [
+          {
+            "type": "flow",
+            "modules": [
+              {
+                "name": "local/hello-flow",
+                "version": "2.0.0",
+                "url": "<c8y-proxy-url>",
+                "action": "install"
+              }
+            ]
+          }
+        ]
+      },
+      "@skip": false
+    }
+  ]
+}
+```
+
+</div>
+
+Where the `<c8y-url>` fields from Cumulocity are rewritten by the mapper to `<c8y-proxy-url>` — locally accessible URLs served by the C8Y HTTP proxy — so the tedge-agent can fetch each resource directly from the proxy during execution.
 
 ## Signals
 
