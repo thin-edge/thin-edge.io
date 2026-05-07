@@ -160,6 +160,9 @@ impl AuthenticationConfig {
             return Ok(None);
         }
 
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
         let tls_config =
             rustls::ClientConfig::builder().with_root_certificates(self.cert_store.clone());
 

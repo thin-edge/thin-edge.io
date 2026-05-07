@@ -20,6 +20,9 @@ async fn get_over_https() {
 }
 
 async fn spawn_http_actor() -> ClientMessageBox<HttpRequest, HttpResult> {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
     let config = ClientConfig::builder()
         .with_root_certificates(RootCertStore::empty())
         .with_no_client_auth();

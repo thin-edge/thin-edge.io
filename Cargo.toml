@@ -182,10 +182,10 @@ ron = "0.12"
 rpassword = "7.4"
 rsa = "0.9.10"
 rstest = "0.26"
-rumqttc = { version = "0.25.1", default-features = false, features = [
+rumqttc = { git = "https://github.com/didier-wenzek/rumqtt", branch = "chore/upgrade-rustls-webpki", default-features = false, features = [
     "use-rustls-no-provider",
 ] }
-rumqttd = "0.20"
+rumqttd = { git = "https://github.com/didier-wenzek/rumqtt", branch = "chore/upgrade-rustls-webpki" }
 rustls = { version = "0.23", default-features = false, features = [
     "std",
     "tls12",
@@ -216,7 +216,7 @@ tokio = { version = "1.44", default-features = false, features = [
     "sync",
     "process",
 ] }
-tokio-rustls = { version = "0.26.1", default-features = false }
+tokio-rustls = { version = "0.26.4", default-features = false }
 tokio-stream = { version = "0.1", features = ["fs"] }
 tokio-tungstenite = { version = "0.28" }
 tokio-util = { version = "0.7", features = ["codec"] }

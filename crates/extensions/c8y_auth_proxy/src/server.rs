@@ -860,7 +860,9 @@ mod tests {
                 ]
             }
         }
-
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
         let mut config = ClientConfig::builder()
             .with_root_certificates(Arc::new(RootCertStore::empty()))
             .with_no_client_auth();
