@@ -50,6 +50,7 @@ use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::Topic;
 use tracing::debug;
 use tracing::error;
+use tracing::info;
 
 /// State required by the operation handlers.
 pub(super) struct OperationContext {
@@ -170,6 +171,7 @@ impl OperationContext {
         ) {
             OperationOutcome::Ignored => {}
             OperationOutcome::Executing { mut extra_messages } => {
+                info!(target: "C8Y", topic = %message.topic.name, "Notifying c8y: operation set to EXECUTING");
                 let c8y_state_executing_payload = match self.get_operation_id(&cmd_id) {
                     Some(op_id) if self.smart_rest_use_operation_id => {
                         set_operation_executing_with_id(&op_id)
@@ -188,6 +190,7 @@ impl OperationContext {
                 }
             }
             OperationOutcome::Finished { messages } => {
+                info!(target: "C8Y", topic = %message.topic.name, "Notifying c8y: operation completed");
                 if let Err(e) = self
                     .upload_operation_log(&external_id, &cmd_id, &operation, &command)
                     .await
@@ -291,6 +294,7 @@ async fn clear_command_topic(
     command: GenericCommandState,
     mqtt_publisher: &mut LoggingSender<MqttMessage>,
 ) {
+    info!(target: "C8Y", topic = %command.topic.name, "Clearing command topic");
     let command = command.clear();
     let clearing_message = command.into_message();
     assert!(clearing_message.payload_bytes().is_empty());
