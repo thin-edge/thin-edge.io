@@ -1,5 +1,4 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
-[![Discord Shield](https://discord.com/api/guilds/832211156520796171/widget.png?style=shield)](https://discord.com/invite/sVX3B8nj5d)
 [![Build and Deploy to Github Pages](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/gh-pages.yml)
 [![build-workflow](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml/badge.svg)](https://github.com/thin-edge/thin-edge.io/actions/workflows/build-workflow.yml)
 <!--- [![codecov](https://codecov.io/gh/thin-edge/thin-edge.io/branch/main/graph/badge.svg?token=ZE7576TLOK)](https://codecov.io/gh/thin-edge/thin-edge.io)  --->
@@ -85,7 +84,7 @@ Distributed under the Apache 2.0 License. See [LICENSE](LICENSE.txt) for more in
 <!-- CONTACT -->
 # Contact
 
-Discord - [Join the thin-edge.io community now!](https://discord.com/invite/sVX3B8nj5d)
+Announcements/Questions - [Join the thin-edge.io community on the Cumulocity tech community](https://community.cumulocity.com)
 
 LinkedIn - [@thin_edge_io](https://www.linkedin.com/company/thin-edge/)
 
