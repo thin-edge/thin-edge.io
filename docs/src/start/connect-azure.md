@@ -144,35 +144,27 @@ At last, it sends packets to Azure IoT Hub to check the connection.
 sudo tedge connect az
 ```
 
+<UserContext>
+
 ```text title="Output"
-Checking if systemd is available.
-
-Checking if configuration for requested bridge already exists.
-
-Validating the bridge certificates.
-
-Saving configuration for requested bridge.
-
-Restarting mosquitto service.
-
-Awaiting mosquitto to start. This may take up to 5 seconds.
-
-Enabling mosquitto service on reboots.
-
-Successfully created bridge connection!
-
-Sending packets to check connection. This may take up to 2 seconds.
-
-Connection check is successful.
-
-Checking if tedge-mapper is installed.
-
-Starting tedge-mapper-az service.
-
-Persisting tedge-mapper-az on reboot.
-
-tedge-mapper-az service successfully started and enabled!
+Connecting to Azure:
+        mapper configuration file: /etc/tedge/mappers/az/mapper.toml
+        device id: $DEVICE_ID
+        cloud profile: <none>
+        cloud host: $AZURE_URL:8883
+        auth type: Certificate
+        certificate file: /etc/tedge/device-certs/tedge-certificate.pem
+        cryptoki: off
+        bridge: built-in
+        service manager: systemd
+        proxy: Not configured
+Restarting mosquitto... ✓
+Waiting for mosquitto to be listening for connections... ✓
+Enabling tedge-mapper-az... ✓
+Verifying device is connected to cloud... ✓
 ```
+
+</UserContext>
 
 If your device does not have internet access and you want to create the bridge configuration, you can run a `tedge connect az` with the `--offline` flag.
 
@@ -180,33 +172,26 @@ If your device does not have internet access and you want to create the bridge c
 sudo tedge connect az --offline
 ```
 
+<UserContext>
+
 ```text title="Output"
-Checking if systemd is available.
-
-Checking if configuration for requested bridge already exists.
-
-Validating the bridge certificates.
-
-Saving configuration for requested bridge.
-
-Restarting mosquitto service.
-
-Awaiting mosquitto to start. This may take up to 5 seconds.
-
-Enabling mosquitto service on reboots.
-
-Successfully created bridge connection!
-
-Offline mode. Skipping connection check.
-
-Checking if tedge-mapper is installed.
-
-Starting tedge-mapper-az service.
-
-Persisting tedge-mapper-az on reboot.
-
-tedge-mapper-az service successfully started and enabled!
+Connecting to Azure:
+        mapper configuration file: /etc/tedge/mappers/az/mapper.toml
+        device id: $DEVICE_ID
+        cloud profile: <none>
+        cloud host: $AZURE_URL:8883
+        auth type: Certificate
+        certificate file: /etc/tedge/device-certs/tedge-certificate.pem
+        cryptoki: off
+        bridge: built-in
+        service manager: systemd
+        proxy: Not configured
+Restarting mosquitto... ✓
+Waiting for mosquitto to be listening for connections... ✓
+Enabling tedge-mapper-az... ✓
 ```
+
+</UserContext>
 
 ## Sending your first telemetry data {#send}
 
