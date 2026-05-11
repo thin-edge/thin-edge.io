@@ -1,10 +1,9 @@
 use crate::error::FirmwareManagementError;
 
-use camino::Utf8PathBuf;
 use std::fs;
 use std::path::Path;
 use tedge_utils::file::overwrite_file;
-use tedge_utils::paths::TedgePaths;
+use tedge_utils::paths::ManagedDir;
 
 #[derive(Debug, Eq, PartialEq, Default, Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
@@ -22,13 +21,10 @@ pub struct FirmwareOperationEntry {
 impl FirmwareOperationEntry {
     pub async fn create_status_file(
         &self,
-        firmware_dir: impl AsRef<Path>,
+        firmware_dir: &ManagedDir,
     ) -> Result<(), FirmwareManagementError> {
         let content = serde_json::to_string(self)?;
-        let firmware_dir = firmware_dir.as_ref().to_path_buf();
-        let utf8_firmware_dir =
-            Utf8PathBuf::try_from(firmware_dir).expect("Firmware dir should be a valid UTF-8 path");
-        TedgePaths::from_root_with_defaults(&utf8_firmware_dir, "", "")
+        firmware_dir
             .file(&self.operation_id)?
             .with_mode(0o644)
             .create_if_missing(content)
