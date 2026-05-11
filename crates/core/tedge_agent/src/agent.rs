@@ -360,7 +360,7 @@ impl Agent {
         let config_actor_builder: Option<ConfigManagerBuilder> =
             if self.config.capabilities.config_snapshot || self.config.capabilities.config_update {
                 let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
-                    config_dir: self.config.config_dir.root().into(),
+                    config_dir: self.config.config_dir.clone(),
                     mqtt_topic_root: mqtt_schema.clone(),
                     mqtt_device_topic_id: device_topic_id.clone(),
                     tedge_http_host: self.config.tedge_http_host,

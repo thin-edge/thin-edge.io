@@ -9,7 +9,6 @@ mod tests;
 
 use crate::plugin_manager::ExternalPlugins;
 use actor::*;
-use camino::Utf8PathBuf;
 pub use config::*;
 use log::error;
 use serde_json::json;
@@ -114,26 +113,22 @@ impl ConfigManagerBuilder {
             .persist(workflow_definition)
             .await?;
 
-        if config.plugin_config_path.exists() {
+        if config.plugin_config_path.path().exists() {
             return Ok(());
         }
 
         // creating plugin config parent dir
-        let config_plugin_dir = Utf8PathBuf::try_from(config.plugin_config_dir.clone())
-            .expect("Plugin config dir should be a valid UTF-8 path");
-        TedgePaths::from_root_with_defaults(&config_plugin_dir, "", "")
-            .root_dir()
-            .ensure()
-            .await?;
+        config.plugin_config_dir.ensure().await?;
 
         let legacy_plugin_config = config
             .config_dir
+            .root()
             .join("c8y")
             .join("c8y-configuration-plugin.toml");
         if legacy_plugin_config.exists() {
             move_file(
                 legacy_plugin_config,
-                &config.plugin_config_path,
+                &config.plugin_config_path.path(),
                 PermissionEntry::default(),
             )
             .await?;
@@ -141,11 +136,9 @@ impl ConfigManagerBuilder {
         }
 
         // create tedge-configuration-plugin.toml
-        let tedge_config_path = format!("{}/tedge.toml", config.config_dir.to_string_lossy());
-        let tedge_log_plugin_config_path = format!(
-            "{}/plugins/tedge-log-plugin.toml",
-            config.config_dir.to_string_lossy()
-        );
+        let tedge_config_path = format!("{}/tedge.toml", config.config_dir.root());
+        let tedge_log_plugin_config_path =
+            format!("{}/plugins/tedge-log-plugin.toml", config.config_dir.root());
         let example_config = toml! {
             [[files]]
             path = tedge_config_path
@@ -159,7 +152,7 @@ impl ConfigManagerBuilder {
             mode = 0o644
         }
         .to_string();
-        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes())?;
+        atomically_write_file_sync(config.plugin_config_path.path(), example_config.as_bytes())?;
 
         Ok(())
     }
@@ -180,7 +173,7 @@ impl ConfigManagerBuilder {
     /// - for configuration changes
     /// - for plugin changes
     fn watched_directories(config: &ConfigManagerConfig) -> Vec<PathBuf> {
-        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        let mut watch_dirs = vec![config.plugin_config_dir.path().into()];
         for dir in &config.plugin_dirs {
             watch_dirs.push(dir.into());
         }
