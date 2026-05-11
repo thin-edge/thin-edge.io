@@ -315,12 +315,18 @@ impl ConfigManagerWorker {
         let (config_type, plugin_name) = parse_config_type(&request.config_type);
         let plugin = self.get_plugin(plugin_name)?;
 
-        let config_path = self.config.tmp_path.join(format!(
+        // Create a temporary directory that will be automatically cleaned up when dropped
+        let temp_dir = tempfile::tempdir_in(self.config.tmp_path.as_std_path())
+            .context("Failed to create a temporary directory")?;
+
+        let config_path = Utf8PathBuf::try_from(temp_dir.path().join(format!(
             "{}_{}_{}.conf",
             config_type,
             plugin_name,
             OffsetDateTime::now_utc().unix_timestamp()
-        ));
+        )))
+        .map_err(|e| e.into_io_error())
+        .context("Could not parse config path as UTF-8")?;
 
         // Extract cmd_id from topic for CommandLog
         let cmd_id = self.extract_command_id(topic)?;
@@ -364,6 +370,7 @@ impl ConfigManagerWorker {
         let upload_response =
             upload_result.context("config-manager failed uploading configuration snapshot")?;
 
+        // temp_dir is dropped here, automatically cleaning up the temporary file
         Ok(upload_response.file_path)
     }
 

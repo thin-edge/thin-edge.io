@@ -45,7 +45,6 @@ impl OperationContext {
             }
         };
 
-        let smartrest_topic = &target.smartrest_publish_topic;
         let cmd_id = command.cmd_id.as_str();
 
         match command.status() {
@@ -53,81 +52,106 @@ impl OperationContext {
                 extra_messages: vec![],
             }),
             CommandStatus::Successful => {
-                // Send a request to the Downloader to download the file asynchronously from FTS
-                let config_filename = format!(
-                    "{}-{}",
-                    command.payload.config_type.replace('/', ":"),
-                    cmd_id
-                );
-
-                // look mum, no copying!
-                let tedge_file_url = match command.payload.tedge_url {
-                    Some(ref tedge_file_url) => Cow::Borrowed(tedge_file_url),
-                    None => {
-                        let tedge_file_url = format!(
-                            "http://{}/te/v1/files/{external_id}/config_snapshot/{config_filename}",
-                            &self.tedge_http_host,
-                            external_id = target.external_id.as_ref()
-                        );
-                        Cow::Owned(tedge_file_url)
-                    }
-                };
-
-                let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
-                    .context("Failed to create a temporary directory")?;
-
-                let destination_path = destination_dir.path().join(config_filename);
-
-                let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
-
-                let (_, download_result) = self
-                    .downloader
-                    .clone()
-                    .await_response((cmd_id.to_string(), download_request))
-                    .await
-                    .context("Unexpected ChannelError")?;
-
-                download_result.context( "tedge-mapper-c8y failed to download configuration snapshot from file-transfer service")?;
-
-                let file_path = Utf8PathBuf::try_from(destination_path)
-                    .map_err(|e| e.into_io_error())
-                    .context("Could not parse destination path as utf-8")?;
-                let event_type = command.payload.config_type.clone();
-
-                // Upload the file to C8y
-                let (c8y_binary_url, upload_result) = self
-                    .upload_file(
-                        &target.external_id,
-                        &file_path,
-                        None,
-                        None,
-                        cmd_id,
-                        event_type,
-                        None,
-                    )
-                    .await
-                    .context("Could not upload config file to C8y")?;
-
-                let smartrest_response = super::get_smartrest_response_for_upload_result(
-                    upload_result,
-                    c8y_binary_url.as_str(),
-                    CumulocitySupportedOperations::C8yUploadConfigFile,
-                    self.smart_rest_use_operation_id,
-                    self.get_operation_id(cmd_id),
-                );
-
-                let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_response);
-
-                Ok(OperationOutcome::Finished {
-                    messages: vec![c8y_notification],
-                })
+                let tedge_file_url = command.payload.tedge_url.clone();
+                let outcome = self
+                    .upload_config_snapshot_to_c8y(target, cmd_id, &command)
+                    .await;
+                // Always delete the file from the file transfer service,
+                // even if the upload to C8y fails.
+                if let Some(url) = tedge_file_url {
+                    self.http_delete(&url).await;
+                }
+                outcome
             }
-            CommandStatus::Failed { reason } => Err(anyhow::anyhow!(reason).into()),
+            CommandStatus::Failed { reason } => {
+                if let Some(ref url) = command.payload.tedge_url {
+                    self.http_delete(url).await;
+                }
+                Err(anyhow::anyhow!(reason).into())
+            }
             _ => {
                 // Do nothing as other components might handle those states
                 Ok(OperationOutcome::Ignored)
             }
         }
+    }
+
+    async fn upload_config_snapshot_to_c8y(
+        &self,
+        target: &EntityTarget,
+        cmd_id: &str,
+        command: &ConfigSnapshotCmd,
+    ) -> Result<OperationOutcome, OperationError> {
+        let smartrest_topic = &target.smartrest_publish_topic;
+
+        let config_filename = format!(
+            "{}-{}",
+            command.payload.config_type.replace('/', ":"),
+            cmd_id
+        );
+
+        // look mum, no copying!
+        let tedge_file_url = match command.payload.tedge_url {
+            Some(ref tedge_file_url) => Cow::Borrowed(tedge_file_url),
+            None => {
+                let tedge_file_url = format!(
+                    "http://{}/te/v1/files/{external_id}/config_snapshot/{config_filename}",
+                    &self.tedge_http_host,
+                    external_id = target.external_id.as_ref()
+                );
+                Cow::Owned(tedge_file_url)
+            }
+        };
+
+        let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
+            .context("Failed to create a temporary directory")?;
+        let destination_path = destination_dir.path().join(config_filename);
+
+        let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
+
+        let (_, download_result) = self
+            .downloader
+            .clone()
+            .await_response((cmd_id.to_string(), download_request))
+            .await
+            .context("Unexpected ChannelError")?;
+
+        download_result.context(
+            "tedge-mapper-c8y failed to download configuration snapshot from file-transfer service",
+        )?;
+
+        let file_path = Utf8PathBuf::try_from(destination_path)
+            .map_err(|e| e.into_io_error())
+            .context("Could not parse destination path as utf-8")?;
+        let event_type = command.payload.config_type.clone();
+
+        // Upload the file to C8y
+        let (c8y_binary_url, upload_result) = self
+            .upload_file(
+                &target.external_id,
+                &file_path,
+                None,
+                None,
+                cmd_id,
+                event_type,
+                None,
+            )
+            .await
+            .context("Could not upload config file to C8y")?;
+
+        let smartrest_response = super::get_smartrest_response_for_upload_result(
+            upload_result,
+            c8y_binary_url.as_str(),
+            CumulocitySupportedOperations::C8yUploadConfigFile,
+            self.smart_rest_use_operation_id,
+            self.get_operation_id(cmd_id),
+        );
+
+        let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_response);
+
+        Ok(OperationOutcome::Finished {
+            messages: vec![c8y_notification],
+        })
     }
 }
 
@@ -255,6 +279,7 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        spawn_dummy_c8y_http_proxy(test_handle.http);
 
         skip_init_messages(&mut mqtt).await;
 
@@ -302,6 +327,7 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        spawn_dummy_c8y_http_proxy(test_handle.http);
 
         skip_init_messages(&mut mqtt).await;
 
@@ -367,6 +393,7 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+        spawn_dummy_c8y_http_proxy(test_handle.http);
 
         skip_init_messages(&mut mqtt).await;
 
