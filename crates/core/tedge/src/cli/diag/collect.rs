@@ -39,7 +39,8 @@ impl Command for DiagCollectCommand {
     }
 
     async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        TedgePaths::from_root_with_defaults(&self.diag_dir, "", "")
+        let diag_dir_root = TedgePaths::from_root_with_defaults(&self.diag_dir, "", "");
+        diag_dir_root
             .root_dir()
             .ensure()
             .await
@@ -61,7 +62,7 @@ impl Command for DiagCollectCommand {
         for plugin in plugins {
             let banner = format!("Executing {plugin}");
             let spinner = Spinner::start(banner.clone());
-            let res = self.execute_diag_plugin(&plugin).await;
+            let res = self.execute_diag_plugin(&diag_dir_root, &plugin).await;
 
             match spinner.finish(res) {
                 Ok(exit_status) => {
@@ -157,16 +158,16 @@ impl DiagCollectCommand {
 
     async fn execute_diag_plugin(
         &self,
+        diag_dir_root: &TedgePaths,
         plugin_path: &Utf8Path,
     ) -> Result<ExitStatus, anyhow::Error> {
         let plugin_name = plugin_path
             .file_stem()
             .with_context(|| format!("No file name for {plugin_path}"))?;
-        let plugin_output_dir = self.diag_dir.join(plugin_name);
-        let output_file = plugin_output_dir.join("output.log");
+        let plugin_output_dir = diag_dir_root.dir(plugin_name)?;
+        let output_file = plugin_output_dir.path().join("output.log");
 
-        TedgePaths::from_root_with_defaults(&plugin_output_dir, "", "")
-            .root_dir()
+        plugin_output_dir
             .ensure()
             .await
             .with_context(|| format!("Failed to create output directory at {plugin_output_dir}"))?;
@@ -175,7 +176,7 @@ impl DiagCollectCommand {
         command
             .arg("collect")
             .arg("--output-dir")
-            .arg(&plugin_output_dir)
+            .arg(plugin_output_dir.path())
             .arg("--config-dir")
             .arg(&self.config_dir);
         let child = command.spawn()?;
@@ -337,13 +338,17 @@ mod tests {
     async fn test_execute_diag_plugins() {
         let ttd = TempTedgeDir::new();
         let command = DiagCollectCommand::new(&ttd);
+        let diag_root_dir = TedgePaths::from_root_with_defaults(&command.diag_dir, "", "");
         let plugin_a_path = command.first_plugin_dir().join("plugin_a.sh");
         with_exec_permission(
             command.first_plugin_dir().join(&plugin_a_path),
             "#!/bin/sh\nls",
         );
 
-        let status = command.execute_diag_plugin(&plugin_a_path).await.unwrap();
+        let status = command
+            .execute_diag_plugin(&diag_root_dir, &plugin_a_path)
+            .await
+            .unwrap();
         assert!(status.success());
 
         let log_path = command.diag_dir.join("plugin_a").join("output.log");
