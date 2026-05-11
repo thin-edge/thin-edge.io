@@ -21,13 +21,17 @@ Normalizes flows-dir path
     ${out1}    Execute Command    cmd=cd ${flows_dir} && tedge flows test --flows-dir . "" "" 2>&1    exp_exit_code=0
     ${out2}    Execute Command    cmd=cd ${child_dir} && tedge flows test --flows-dir ../ "" "" 2>&1    exp_exit_code=0
     ${out3}    Execute Command    cmd=tedge flows test --flows-dir ${symlink} "" "" 2>&1    exp_exit_code=0
+    ${out4}    Execute Command
+    ...    cmd=tedge flows test --flows-dir ${symlink} "" "" --flow ${flows_dir}/events.js 2>&1
+    ...    exp_exit_code=0
 
     # test shouldn't fail due to invalid path (path containing .)
     # TODO: should we return an error exit code if any flow in test failed to compile? Currently we return 0.
-    VAR    ${fail_due_to_invalid_path}    Failed to compile flow on-startup.toml: Not a valid filename for a flow
+    VAR    ${fail_due_to_invalid_path}    The flow name cannot be derived
     Should Not Contain    ${out1}    ${fail_due_to_invalid_path}
     Should Not Contain    ${out2}    ${fail_due_to_invalid_path}
     Should Not Contain    ${out3}    ${fail_due_to_invalid_path}
+    Should Not Contain    ${out4}    ${fail_due_to_invalid_path}
 
     Execute Command    rm -r ${child_dir} ${symlink}
 

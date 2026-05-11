@@ -140,12 +140,15 @@ pub struct ConnectedFlowRegistry {
 }
 
 impl ConnectedFlowRegistry {
-    pub fn new(mapper_params: impl MapperParams, flows_dir: impl AsRef<Utf8Path>) -> Self {
-        ConnectedFlowRegistry {
-            flows: FlowStore::new(flows_dir),
+    pub fn new(
+        mapper_params: impl MapperParams,
+        flows_dir: impl AsRef<Utf8Path>,
+    ) -> Result<Self, std::io::Error> {
+        Ok(ConnectedFlowRegistry {
+            flows: FlowStore::new(flows_dir)?,
             builtins: BuiltinTransformers::default(),
             mapper_params: Box::new(mapper_params),
-        }
+        })
     }
 }
 

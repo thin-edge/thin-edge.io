@@ -1972,7 +1972,7 @@ async fn mapper_converts_custom_operation_for_main_device() {
             r#"[exec]
             topic = "c8y/devicecontrol/notifications"
             on_fragment = "c8y_Command"
-            
+
             [exec.workflow]
             operation = "command"
             input = "${.payload.c8y_Command}"
@@ -2128,7 +2128,7 @@ async fn mapper_converts_custom_operation_for_main_device_without_workflow_input
             r#"[exec]
             topic = "c8y/devicecontrol/notifications"
             on_fragment = "c8y_Command"
-            
+
             [exec.workflow]
             operation = "command"
             "#,
@@ -2196,7 +2196,7 @@ async fn mapper_converts_custom_operation_for_main_device_with_invalid_workflow_
             r#"[exec]
             topic = "c8y/devicecontrol/notifications"
             on_fragment = "c8y_Command"
-            
+
             [exec.workflow]
             operation = "command"
             input = "invalid input"
@@ -3216,7 +3216,7 @@ pub(crate) async fn c8y_mapper_builder(
         .await
         .unwrap();
     let mapper_config = HashMap::new();
-    let mut flows = ConnectedFlowRegistry::new(mapper_config, flows_dir);
+    let mut flows = ConnectedFlowRegistry::new(mapper_config, flows_dir).unwrap();
     crate::load_builtin_transformers(&mut flows);
     c8y_mapper_builder
         .persist_builtin_flows(&mut flows)

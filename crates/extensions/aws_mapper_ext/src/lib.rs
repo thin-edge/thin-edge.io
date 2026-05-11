@@ -759,7 +759,7 @@ mod tests {
         let flows_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
         let flows_path = Utf8Path::from_path(flows_dir.path()).unwrap();
         let mapper_config = HashMap::new();
-        let mut flows = ConnectedFlowRegistry::new(mapper_config, flows_path);
+        let mut flows = ConnectedFlowRegistry::new(mapper_config, flows_path).unwrap();
         load_builtin_transformers(&mut flows);
         converter.persist_builtin_flow(&mut flows).await.unwrap();
 

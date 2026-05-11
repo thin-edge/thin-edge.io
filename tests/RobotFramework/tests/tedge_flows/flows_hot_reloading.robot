@@ -31,6 +31,42 @@ Flow is reloaded after being touched many times
     ...    message_contains=42
     ...    date_from=${start}
 
+Flows are reloaded when the flow directory is a symlink
+    Stop Service    tedge-mapper-local
+    Execute Command    mkdir -p /data/tedge
+    Execute Command    mv /etc/tedge/mappers /data/tedge/mappers
+    Execute Command    ln -s /data/tedge/mappers /etc/tedge/mappers
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/greeting-flows/hello.js
+    ...    /data/tedge/mappers/local/flows/greeting-flows/hello.js
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/greeting-flows/hello.toml
+    ...    /data/tedge/mappers/local/flows/greeting-flows/hello.toml
+
+    ${start}    Get Unix Timestamp
+    Start Service    tedge-mapper-local
+    ${status}    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
+    ...    date_from=${start}
+    ...    message_contains=greeting-flows/hello.toml
+    Should Contain    ${status}[0]    "enabled"
+
+    ${start}    Get Unix Timestamp
+    Execute Command    touch /data/tedge/mappers/local/flows/greeting-flows/hello.toml
+    ${status}    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
+    ...    date_from=${start}
+    ...    message_contains=greeting-flows/hello.toml
+    Should Contain    ${status}[0]    "updated"
+
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub hello/in hi
+    Should Have MQTT Messages
+    ...    topic=hello/out
+    ...    minimum=1
+    ...    date_from=${start}
+    ...    message_contains=Hello World!
+
 
 *** Keywords ***
 Custom Setup
