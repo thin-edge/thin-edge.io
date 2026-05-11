@@ -285,7 +285,8 @@ impl LogManagerActor {
         info!(target: "log plugins", "Reloading supported log types");
 
         // Reload plugin configuration for up-to-date filtering rules
-        self.plugin_config = PluginConfig::from_file(&self.config.plugin_config_path).await;
+        self.plugin_config =
+            PluginConfig::from_file(self.config.plugin_config_path.path().as_ref()).await;
 
         // Note: The log manager now only handles external plugins.
         // The file-based plugin configuration is handled by the standalone plugin.

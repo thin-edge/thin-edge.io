@@ -398,7 +398,7 @@ impl Agent {
         // Instantiate log manager actor if the operation is enabled
         let log_actor_builder = if self.config.capabilities.log_upload {
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
-                config_dir: self.config.config_dir.root().into(),
+                config_dir: self.config.config_dir.clone(),
                 tmp_dir: self.config.tmp_dir.clone(),
                 log_dir: self.config.log_dir.root().to_path_buf(),
                 mqtt_schema: mqtt_schema.clone(),
@@ -408,7 +408,8 @@ impl Agent {
             })?;
 
             let plugin_config =
-                PluginConfig::from_file(&log_manager_config.plugin_config_path).await;
+                PluginConfig::from_file(log_manager_config.plugin_config_path.path().as_ref())
+                    .await;
             let mut log_actor = LogManagerBuilder::try_new(
                 log_manager_config,
                 plugin_config,

@@ -26,6 +26,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
+use tedge_utils::paths::TedgePaths;
 use toml::from_str;
 use toml::toml;
 use toml::Table;
@@ -100,22 +101,20 @@ async fn new_log_manager_builder(
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     UploaderMessageBox,
 ) {
+    let temp_dir = Utf8Path::from_path(temp_dir).unwrap();
+    let config_root = TedgePaths::from_root_with_defaults(temp_dir, "", "");
     let mut log_metadata_sync_topics =
         TopicFilter::new_unchecked("te/device/main///cmd/software_update/+");
     log_metadata_sync_topics.add_unchecked("te/device/main///cmd/config_update/+");
 
-    let plugin_config_path = temp_dir.join("tedge-log-plugin.toml");
+    let plugin_config_path = config_root.file("tedge-log-plugin.toml").unwrap();
     let config = LogManagerConfig {
         mqtt_schema: MqttSchema::default(),
-        config_dir: temp_dir.to_path_buf(),
-        tmp_dir: Arc::from(Utf8Path::from_path(temp_dir).unwrap()),
-        log_dir: temp_dir.to_path_buf().try_into().unwrap(),
-        plugin_dirs: vec![temp_dir
-            .to_path_buf()
-            .join("log-plugins")
-            .try_into()
-            .unwrap()],
-        plugin_config_dir: temp_dir.to_path_buf(),
+        config_dir: config_root.clone(),
+        tmp_dir: Arc::from(temp_dir),
+        log_dir: temp_dir.to_path_buf(),
+        plugin_dirs: vec![temp_dir.join("log-plugins")],
+        plugin_config_dir: config_root.root_dir(),
         plugin_config_path: plugin_config_path.clone(),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),
         logfile_request_topic: TopicFilter::new_unchecked("te/device/main///cmd/log_upload/+"),
@@ -123,7 +122,7 @@ async fn new_log_manager_builder(
         sudo_enabled: false,
     };
 
-    let plugin_config = PluginConfig::from_file(plugin_config_path.as_path()).await;
+    let plugin_config = PluginConfig::from_file(plugin_config_path.path().as_ref()).await;
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =

@@ -9,7 +9,6 @@ mod tests;
 
 use crate::plugin_manager::ExternalPlugins;
 pub use actor::*;
-use camino::Utf8PathBuf;
 pub use config::*;
 use std::path::PathBuf;
 use std::vec;
@@ -36,7 +35,6 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_utils::file::move_file;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
-use tedge_utils::paths::TedgePaths;
 use toml::toml;
 
 #[cfg(test)]
@@ -80,23 +78,22 @@ impl LogManagerBuilder {
     }
 
     pub async fn init(config: &LogManagerConfig) -> Result<(), anyhow::Error> {
-        if config.plugin_config_path.exists() {
+        if config.plugin_config_path.path().exists() {
             return Ok(());
         }
 
         // creating plugin config parent dir
-        let config_plugin_dir = Utf8PathBuf::try_from(config.plugin_config_dir.clone())
-            .expect("Plugin config dir should be a valid UTF-8 path");
-        TedgePaths::from_root_with_defaults(config_plugin_dir, "", "")
-            .root_dir()
-            .ensure()
-            .await?;
+        config.plugin_config_dir.ensure().await?;
 
-        let legacy_plugin_config = config.config_dir.join("c8y").join("c8y-log-plugin.toml");
+        let legacy_plugin_config = config
+            .config_dir
+            .root()
+            .join("c8y")
+            .join("c8y-log-plugin.toml");
         if legacy_plugin_config.exists() {
             move_file(
                 legacy_plugin_config,
-                &config.plugin_config_path,
+                &config.plugin_config_path.path(),
                 PermissionEntry::default(),
             )
             .await?;
@@ -111,7 +108,7 @@ impl LogManagerBuilder {
             path = agent_logs_path
         }
         .to_string();
-        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes())?;
+        atomically_write_file_sync(config.plugin_config_path.path(), example_config.as_bytes())?;
 
         Ok(())
     }
@@ -120,7 +117,7 @@ impl LogManagerBuilder {
     /// - for configuration changes
     /// - for plugin changes
     fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
-        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        let mut watch_dirs = vec![config.plugin_config_dir.path().into()];
         for dir in &config.plugin_dirs {
             watch_dirs.push(dir.into());
         }

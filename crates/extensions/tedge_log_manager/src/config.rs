@@ -6,7 +6,6 @@ use serde::Deserializer;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
@@ -17,6 +16,9 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_config::tedge_toml::ReadError;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::ManagedFile;
+use tedge_utils::paths::TedgePaths;
 use tracing::warn;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "tedge-log-plugin.toml";
@@ -26,12 +28,12 @@ pub const DEFAULT_PLUGIN_CONFIG_DIR_NAME: &str = "plugins/";
 #[derive(Clone, Debug)]
 pub struct LogManagerConfig {
     pub mqtt_schema: MqttSchema,
-    pub config_dir: PathBuf,
+    pub config_dir: TedgePaths,
     pub tmp_dir: Arc<Utf8Path>,
     pub log_dir: Utf8PathBuf,
     pub plugin_dirs: Vec<Utf8PathBuf>,
-    pub plugin_config_dir: PathBuf,
-    pub plugin_config_path: PathBuf,
+    pub plugin_config_dir: ManagedDir,
+    pub plugin_config_path: ManagedFile,
     pub logtype_reload_topic: Topic,
     pub logfile_request_topic: TopicFilter,
     pub log_metadata_sync_topics: TopicFilter,
@@ -39,7 +41,7 @@ pub struct LogManagerConfig {
 }
 
 pub struct LogManagerOptions {
-    pub config_dir: PathBuf,
+    pub config_dir: TedgePaths,
     pub tmp_dir: Arc<Utf8Path>,
     pub log_dir: Utf8PathBuf,
     pub mqtt_schema: MqttSchema,
@@ -56,8 +58,10 @@ impl LogManagerConfig {
         let mqtt_schema = cliopts.mqtt_schema;
         let mqtt_device_topic_id = cliopts.mqtt_device_topic_id;
 
-        let plugin_config_dir = config_dir.join(DEFAULT_PLUGIN_CONFIG_DIR_NAME);
-        let plugin_config_path = plugin_config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
+        let plugin_config_dir = config_dir.dir(DEFAULT_PLUGIN_CONFIG_DIR_NAME).unwrap();
+        let plugin_config_path = plugin_config_dir
+            .file(DEFAULT_PLUGIN_CONFIG_FILE_NAME)
+            .unwrap();
 
         let logtype_reload_topic = mqtt_schema.topic_for(
             &mqtt_device_topic_id,
