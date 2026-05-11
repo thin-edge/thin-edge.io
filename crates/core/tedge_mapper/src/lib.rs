@@ -10,7 +10,6 @@ use crate::custom::mapper::CustomMapper;
 use anyhow::bail;
 use anyhow::Context;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use std::collections::HashMap;
@@ -26,6 +25,7 @@ use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperConfig;
 use tedge_flows::UpdateFlowRegistryError;
+use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
 use tracing::error;
 use tracing::log::warn;
@@ -218,8 +218,9 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
         &mapper_opt.common.config_dir,
     )?;
 
-    let mappers_dir = mapper_opt.common.config_dir.join("mappers");
-    core::mappers_dir::warn_misconfigured_mapper_dirs(&mappers_dir).await;
+    let config_root = config.config_root();
+    let mappers_dir = config_root.dir("mappers")?;
+    core::mappers_dir::warn_misconfigured_mapper_dirs(mappers_dir.path()).await;
 
     // Run only one instance of a mapper (if enabled)
     let mut _flock = None;
@@ -235,22 +236,20 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
         warn!("This --clear option has been deprecated and will be removed in a future release");
         Ok(())
     } else {
-        component
-            .start(config, mapper_opt.common.config_dir.as_ref())
-            .await
+        component.start(config, &config_root).await
     }
 }
 
 pub fn mapper_dir(
-    config_dir: &Utf8Path,
+    config_dir: &TedgePaths,
     mapper: &str,
     profile: Option<&(impl fmt::Display + ?Sized)>,
-) -> Utf8PathBuf {
+) -> ManagedDir {
     let profiled_name = match profile {
         None => mapper.to_string(),
         Some(profile) => format!("{mapper}.{profile}"),
     };
-    config_dir.join("mappers").join(profiled_name)
+    config_dir.dir(format!("mappers/{profiled_name}")).unwrap()
 }
 
 pub(crate) fn flows_config(
@@ -287,11 +286,11 @@ fn load_builtin_transformers(flows: &mut impl FlowRegistryExt) {
 
 pub(crate) async fn mapper_flow_registry(
     tedge_config: &TEdgeConfig,
-    mapper_dir: impl AsRef<Utf8Path>,
+    mapper_dir: &ManagedDir,
 ) -> anyhow::Result<ConnectedFlowRegistry> {
-    let flows_dir = tedge_flows::flows_dir(mapper_dir.as_ref());
+    let flows_dir = tedge_flows::managed_flows_dir(mapper_dir);
     let mapper_config = effective_mapper_config(tedge_config, mapper_dir).await?;
-    let flows = flow_registry(mapper_config, flows_dir).await?;
+    let flows = flow_registry(mapper_config, &flows_dir).await?;
     Ok(flows)
 }
 
@@ -311,13 +310,9 @@ pub async fn test_cli_flow_registry(
 
 async fn flow_registry(
     mapper_config: Option<EffectiveMapperConfig>,
-    flows_dir: impl AsRef<Utf8Path>,
+    flows_dir: &ManagedDir,
 ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
-    if let Err(err) = TedgePaths::from_root_with_defaults(flows_dir.as_ref(), "", "")
-        .root_dir()
-        .ensure()
-        .await
-    {
+    if let Err(err) = flows_dir.ensure().await {
         error!(
             "failed to create flow directory '{}': {err}",
             flows_dir.as_ref()

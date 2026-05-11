@@ -18,7 +18,6 @@ use anyhow::bail;
 use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use tedge_actors::MessageSink;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
@@ -35,6 +34,8 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::MqttOptions;
+use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::TedgePaths;
 use tedge_watch_ext::WatchActorBuilder;
 
 /// A user-defined mapper instance, identified by its name.
@@ -46,7 +47,7 @@ pub struct CustomMapper {
 
 impl CustomMapper {
     /// Returns the mapper directory path for this instance.
-    pub fn mapper_dir(&self, config_dir: &Utf8Path) -> Utf8PathBuf {
+    pub fn mapper_dir(&self, config_dir: &TedgePaths) -> ManagedDir {
         let profile: Option<String> = None;
         crate::mapper_dir(config_dir, &self.name, profile.as_ref())
     }
@@ -273,7 +274,7 @@ pub async fn build_cloud_mqtt_options(
 /// `.connect_cmd`) and spawning them into the runtime — keeping the actor-graph
 /// wiring visible at the `start` level rather than buried inside a helper.
 async fn build_flows_actors(
-    mapper_dir: &Utf8Path,
+    mapper_dir: &ManagedDir,
     service_name: &str,
     tedge_config: &TEdgeConfig,
 ) -> anyhow::Result<(FlowsMapperBuilder, FsWatchActorBuilder, WatchActorBuilder)> {
@@ -323,18 +324,18 @@ impl TEdgeComponent for CustomMapper {
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
-        config_dir: &tedge_config::Path,
+        config_dir: &TedgePaths,
     ) -> anyhow::Result<()> {
         let mapper_dir = self.mapper_dir(config_dir);
         let service_name = self.service_name();
 
-        let startup = validate_and_load(&mapper_dir, config_dir).await?;
+        let startup = validate_and_load(mapper_dir.path(), config_dir.root()).await?;
 
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(&service_name, &tedge_config).await?;
 
         if let MapperStartup::WithBridge { ref config, .. } = startup {
-            let bridge_dir = mapper_dir.join("bridge");
+            let bridge_dir = mapper_dir.dir("bridge")?;
             let bridge_service_name = self.bridge_service_name();
             let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
             let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
@@ -342,12 +343,16 @@ impl TEdgeComponent for CustomMapper {
                 service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
 
             let effective = resolve_effective_config(config, &tedge_config, None, None).await?;
-            let (cloud_config, effective_auth) =
-                build_cloud_mqtt_options(&effective, &service_name, &mapper_dir, &tedge_config)
-                    .await?;
+            let (cloud_config, effective_auth) = build_cloud_mqtt_options(
+                &effective,
+                &service_name,
+                mapper_dir.path(),
+                &tedge_config,
+            )
+            .await?;
 
             let bridge_rules = load_bridge_rules_from_directory(
-                &bridge_dir,
+                bridge_dir.path(),
                 &tedge_config,
                 effective_auth,
                 None,
@@ -435,14 +440,19 @@ mod tests {
 
     mod mapper_dir {
         use super::*;
+        use camino::Utf8PathBuf;
 
         #[test]
         fn uses_name_in_no_prefix_dir() {
             let mapper = CustomMapper {
                 name: "thingsboard".to_string(),
             };
-            let dir = mapper.mapper_dir(Utf8Path::new("/etc/tedge"));
-            assert_eq!(dir, Utf8PathBuf::from("/etc/tedge/mappers/thingsboard"));
+            let config_root = TedgePaths::from_root_with_defaults("/etc/tedge", "", "");
+            let dir = mapper.mapper_dir(&config_root);
+            assert_eq!(
+                dir.path(),
+                Utf8PathBuf::from("/etc/tedge/mappers/thingsboard")
+            )
         }
     }
 
@@ -668,8 +678,9 @@ mod tests {
         #[tokio::test]
         async fn creates_flows_directory_if_absent() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-            tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+            let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
+            let mapper_dir = config_root.dir("mappers/testmapper").unwrap();
+            tokio::fs::create_dir_all(&mapper_dir.path()).await.unwrap();
             let tedge_config = TEdgeConfig::load_toml_str("");
 
             build_flows_actors(&mapper_dir, "tedge-mapper-testmapper", &tedge_config)
@@ -677,7 +688,7 @@ mod tests {
                 .unwrap();
 
             assert!(
-                mapper_dir.join("flows").is_dir(),
+                mapper_dir.path().join("flows").is_dir(),
                 "flows/ directory should have been created"
             );
         }
@@ -689,6 +700,7 @@ mod tests {
         use crate::custom::config::BridgeConfig;
         use crate::custom::config::DeviceConfig;
         use crate::custom::resolve::resolve_effective_config;
+        use camino::Utf8PathBuf;
         use tedge_config::TEdgeConfig;
         use tedge_test_utils::fs::TempTedgeDir;
 

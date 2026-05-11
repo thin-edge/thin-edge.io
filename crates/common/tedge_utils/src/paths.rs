@@ -220,6 +220,33 @@ impl ManagedDir {
         self
     }
 
+    pub fn dir(&self, path: impl AsRef<Utf8Path>) -> Result<ManagedDir, PathsError> {
+        let path = path.as_ref();
+        validate_managed_path(path)?;
+        Ok(ManagedDir {
+            root: self.root.clone(),
+            path: self.path.join(path),
+            owner: self.owner.clone(),
+            mode: DEFAULT_DIR_MODE,
+            respect_existing: false,
+            warn_and_ignore_permission_errors: false,
+        })
+    }
+
+    // TODO: create `dir_unchecked`?
+
+    pub fn file(&self, path: impl AsRef<Utf8Path>) -> Result<ManagedFile, PathsError> {
+        let path = path.as_ref();
+        validate_managed_path(path)?;
+        Ok(ManagedFile {
+            root: self.root.clone(),
+            path: self.path.join(path),
+            owner: self.owner.clone(),
+            mode: DEFAULT_FILE_MODE,
+            warn_and_ignore_permission_errors: false,
+        })
+    }
+
     pub async fn ensure(&self) -> Result<(), PathsError> {
         if self.warn_and_ignore_permission_errors {
             self.ensure_without_strict_permissions().await
@@ -1112,6 +1139,49 @@ mod tests {
                 .unwrap(),
             "test content"
         );
+    }
+
+    #[test]
+    fn managed_dir_dir_resolves_subpath() {
+        let root = TedgePaths::from_root_with_defaults("/etc/tedge", "tedge", "tedge");
+        let mappers = root.dir("mappers").unwrap();
+        let c8y = mappers.dir("c8y").unwrap();
+        assert_eq!(c8y.path(), Utf8Path::new("/etc/tedge/mappers/c8y"));
+    }
+
+    #[test]
+    fn managed_dir_file_resolves_subpath() {
+        let root = TedgePaths::from_root_with_defaults("/etc/tedge", "tedge", "tedge");
+        let mappers = root.dir("mappers").unwrap();
+        let file = mappers.file("config.toml").unwrap();
+        assert_eq!(file.path(), Utf8Path::new("/etc/tedge/mappers/config.toml"));
+    }
+
+    #[test]
+    fn managed_dir_dir_rejects_parent_relative_paths() {
+        let root = TedgePaths::from_root_with_defaults("/etc/tedge", "tedge", "tedge");
+        let mappers = root.dir("mappers").unwrap();
+        let err = mappers.dir("../escape").unwrap_err();
+        assert!(matches!(err, PathsError::InvalidManagedPath { .. }));
+    }
+
+    #[test]
+    fn managed_dir_file_rejects_parent_relative_paths() {
+        let root = TedgePaths::from_root_with_defaults("/etc/tedge", "tedge", "tedge");
+        let mappers = root.dir("mappers").unwrap();
+        let err = mappers.file("../escape").unwrap_err();
+        assert!(matches!(err, PathsError::InvalidManagedPath { .. }));
+    }
+
+    #[test]
+    fn managed_dir_inherits_owner() {
+        let root = TedgePaths::from_root_with_defaults("/etc/tedge", "tedge", "tedge");
+        let mappers = root
+            .dir("mappers")
+            .unwrap()
+            .with_owner(Owner::user_group("mosquitto", "mosquitto"));
+        let c8y = mappers.dir("c8y").unwrap();
+        assert_eq!(c8y.owner(), &Owner::user_group("mosquitto", "mosquitto"));
     }
 
     async fn mode_bits(path: impl AsRef<std::path::Path>) -> u32 {
