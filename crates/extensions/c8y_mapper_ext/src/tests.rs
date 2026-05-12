@@ -3046,7 +3046,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(tmp_dir: &TempTedgeDir, init: bool) -
 }
 
 pub(crate) struct TestHandle {
-    pub mqtt: MockMqttBox,
+    pub mqtt: MockMqttBox<MockMqttBoxUnbuffered>,
     pub http: FakeServerBox<HttpRequest, HttpResult>,
     pub fs: SimpleMessageBox<NoMessage, FsWatchEvent>,
     pub ul: FakeServerBox<IdUploadRequest, IdUploadResult>,
@@ -3343,7 +3343,7 @@ impl MockMqttBoxBuilder {
         }
     }
 
-    pub fn build(self) -> MockMqttBox {
+    pub fn build(self) -> MockMqttBox<MockMqttBoxUnbuffered> {
         let mut ignore_topics = TopicFilter::empty();
         ignore_topics.add_unchecked("te/+/+/+/+/status/flows");
 
@@ -3392,9 +3392,12 @@ impl RuntimeRequestSink for MockMqttBoxBuilder {
     }
 }
 
-pub async fn assert_received_not_contains_str<'a, I>(messages: &mut MockMqttBox, expected: I)
-where
+pub async fn assert_received_not_contains_str<'a, I, Box>(
+    messages: &mut MockMqttBox<Box>,
+    expected: I,
+) where
     I: IntoIterator<Item = (&'a str, &'a str)>,
+    Box: TestMqttBox,
 {
     for expected_msg in expected.into_iter() {
         messages.recv_short().await;
@@ -3415,9 +3418,10 @@ where
     }
 }
 
-pub async fn assert_received_contains_str<'a, I>(messages: &mut MockMqttBox, expected: I)
+pub async fn assert_received_contains_str<'a, I, Box>(messages: &mut MockMqttBox<Box>, expected: I)
 where
     I: IntoIterator<Item = (&'a str, &'a str)>,
+    Box: TestMqttBox,
 {
     'outer: for expected_msg in expected.into_iter() {
         // this always waits for a message even if we don't assert any more messages
@@ -3453,10 +3457,11 @@ where
     }
 }
 
-pub async fn assert_received_includes_json<I, S>(messages: &mut MockMqttBox, expected: I)
+pub async fn assert_received_includes_json<I, S, Box>(messages: &mut MockMqttBox<Box>, expected: I)
 where
     I: IntoIterator<Item = (S, serde_json::Value)>,
     S: AsRef<str>,
+    Box: TestMqttBox,
 {
     'outer: for expected_msg in expected.into_iter() {
         // this always waits for a message even if we don't assert any more messages
@@ -3490,6 +3495,10 @@ where
     }
 }
 
+pub trait TestMqttBox: MessageReceiverExt<MqttMessage> + Sender<MqttMessage> + Send {}
+impl<Box> TestMqttBox for Box where Box: MessageReceiverExt<MqttMessage> + Sender<MqttMessage> + Send
+{}
+
 /// An MQTT message box that stores received messages in a buffer and supports
 /// assertions for stored messages.
 ///
@@ -3499,8 +3508,8 @@ where
 /// something else asserts them later). This is most easily done by gathering
 /// all received messages to a buffer and then choosing to drop selected
 /// messages only once they're asserted.
-pub struct MockMqttBox {
-    mqtt: MqttInner,
+pub struct MockMqttBox<Box: TestMqttBox> {
+    mqtt: Box,
     messages: Arc<Mutex<VecDeque<MqttMessage>>>,
 
     // hack: some tests use different timeout and assertions need to know about it and proper
@@ -3508,38 +3517,26 @@ pub struct MockMqttBox {
     timeout: Option<Duration>,
 }
 
-enum MqttInner {
-    Unbuffered(MockMqttBoxUnbuffered),
-    UnbufferedTimeout(TimedMessageBox<MockMqttBoxUnbuffered>),
-}
-
-impl MockMqttBox {
-    pub fn new(mqtt: MockMqttBoxUnbuffered) -> Self {
+impl<M: TestMqttBox> MockMqttBox<M> {
+    pub fn new(mqtt: M) -> Self {
         Self {
-            mqtt: MqttInner::Unbuffered(mqtt),
+            mqtt,
             messages: Default::default(),
             timeout: Default::default(),
         }
     }
 
-    pub fn into_unbuffered(self) -> MockMqttBoxUnbuffered {
-        match self.mqtt {
-            MqttInner::Unbuffered(mqtt) => mqtt,
-            MqttInner::UnbufferedTimeout(_) => {
-                panic!("can't return after calling .with_timeout")
-            }
-        }
+    pub fn into_unbuffered(self) -> M {
+        self.mqtt
     }
 
-    pub fn with_timeout(mut self, duration: Duration) -> Self {
-        self.timeout = Some(duration);
-        let mqtt = match self.mqtt {
-            MqttInner::UnbufferedTimeout(_) => return self,
-            MqttInner::Unbuffered(mqtt) => mqtt,
-        };
-
-        self.mqtt = MqttInner::UnbufferedTimeout(mqtt.with_timeout(duration));
-        self
+    pub fn with_timeout(self, duration: Duration) -> MockMqttBox<TimedMessageBox<M>> {
+        // instead of putting timeout wrapper on top, put it on box
+        MockMqttBox {
+            mqtt: self.mqtt.with_timeout(duration),
+            messages: self.messages,
+            timeout: self.timeout,
+        }
     }
 
     /// Receives messages with a short timeout.
@@ -3616,18 +3613,10 @@ where
 }
 
 #[async_trait::async_trait]
-impl MessageReceiver<MqttMessage> for MockMqttBox {
+impl<M: TestMqttBox> MessageReceiver<MqttMessage> for MockMqttBox<M> {
     async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
         trace!("calling MockMqttBox::try_recv");
-        let recv = match &mut self.mqtt {
-            MqttInner::Unbuffered(mqtt) => {
-                tokio::time::timeout(Duration::from_secs(1), mqtt.try_recv())
-            }
-            MqttInner::UnbufferedTimeout(mqtt) => {
-                tokio::time::timeout(Duration::from_secs(20), mqtt.try_recv())
-            }
-        };
-        let message = recv.await.unwrap_or(Ok(None))?;
+        let message = self.mqtt.try_recv().await?;
         trace!("message returned");
         if let Some(message) = &message {
             self.messages.lock().unwrap().push_back(message.clone());
@@ -3640,20 +3629,14 @@ impl MessageReceiver<MqttMessage> for MockMqttBox {
     }
 
     async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
-        match &mut self.mqtt {
-            MqttInner::Unbuffered(mqtt) => mqtt.recv_signal().await,
-            MqttInner::UnbufferedTimeout(mqtt) => mqtt.recv_signal().await,
-        }
+        self.mqtt.recv_signal().await
     }
 }
 
 #[async_trait::async_trait]
-impl Sender<MqttMessage> for MockMqttBox {
+impl<M: TestMqttBox> Sender<MqttMessage> for MockMqttBox<M> {
     async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
-        match &mut self.mqtt {
-            MqttInner::Unbuffered(mqtt) => mqtt.send(message).await,
-            MqttInner::UnbufferedTimeout(mqtt) => mqtt.send(message).await,
-        }
+        self.mqtt.send(message).await
     }
 }
 
