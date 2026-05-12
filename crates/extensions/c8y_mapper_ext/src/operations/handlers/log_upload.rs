@@ -125,6 +125,8 @@ impl OperationContext {
 mod tests {
     use super::*;
     use crate::config::C8yMapperConfig;
+    use crate::tests::helpers::assert_received_contains_str;
+    use crate::tests::helpers::assert_received_includes_json;
     use crate::tests::*;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
@@ -133,8 +135,6 @@ mod tests {
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
     use tedge_downloader_ext::DownloadResponse;
-    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
-    use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_uploader_ext::UploadResponse;
@@ -149,7 +149,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate c8y_LogfileRequest JSON over MQTT request
         mqtt.send(MqttMessage::new(
@@ -198,7 +197,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
 
         // Register the device upfront
         mqtt.send(MqttMessage::new(
@@ -207,7 +205,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
 
         // Simulate log_upload cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -217,7 +214,6 @@ mod tests {
         .await
         .expect("Send failed");
 
-        mqtt.skip(2).await; //Skip supported ops and supported log types messages
 
         // Simulate c8y_LogfileRequest JSON over MQTT request
         mqtt.send(MqttMessage::new(
@@ -265,7 +261,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate log_upload cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -298,7 +293,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
 
         // Register the device upfront
         mqtt.send(MqttMessage::new(
@@ -307,7 +301,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
 
         // Simulate log_upload cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -365,7 +358,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate log_upload command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -420,7 +412,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Register the device upfront
         mqtt.send(MqttMessage::new(
@@ -429,7 +420,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
 
         // Simulate log_upload command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -499,7 +489,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate log_upload command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -554,7 +543,6 @@ mod tests {
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
         let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate log_upload command with "successful" state
         mqtt.send(MqttMessage::new(
@@ -630,7 +618,6 @@ mod tests {
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
         let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Register the device upfront
         mqtt.send(MqttMessage::new(
@@ -639,7 +626,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
 
         // Simulate log_upload command with "successful" state
         mqtt.send(MqttMessage::new(
@@ -719,7 +705,6 @@ mod tests {
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
         let mut ul = ul.with_timeout(TEST_TIMEOUT_MS);
         let mut dl = dl.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate log_upload command with "successful" state
         mqtt.send(MqttMessage::new(

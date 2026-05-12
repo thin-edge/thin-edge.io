@@ -95,8 +95,11 @@ impl<M: TestMqttBox> MockMqttBox<M> {
     }
 
     #[track_caller]
-    pub fn contains_message(&mut self, topic: &str, payload: &str) -> bool {
-        self.any(|m| m.topic.name == topic && m.payload_str().unwrap().contains(payload))
+    pub fn contains_message(&mut self, topic_filter: &str, payload: &str) -> bool {
+        self.any(|m| {
+            TopicFilter::new_unchecked(topic_filter).accept(m)
+                && m.payload_str().unwrap().contains(payload)
+        })
     }
 
     #[track_caller]
