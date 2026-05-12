@@ -66,8 +66,11 @@ use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::file::create_directory_with_defaults;
 
-mod mock_mqtt_box;
+pub mod mock_mqtt_box;
 use mock_mqtt_box::*;
+
+pub mod helpers;
+use helpers::*;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
@@ -1144,8 +1147,6 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     )
     .await
     .expect("Send failed");
-
-    // Skip tedge-agent health status mapping
 
     // Simulate FsEvent for the creation of a new operation file
     fs.send(FsWatchEvent::FileCreated(
