@@ -89,13 +89,12 @@ mod tests {
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::CommandStatus;
     use tedge_api::SoftwareUpdateCommand;
-    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
-    use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_test_utils::fs::TempTedgeDir;
 
     use crate::config::C8yMapperConfig;
-    use crate::tests::skip_init_messages;
+    use crate::tests::helpers::assert_received_contains_str;
+    use crate::tests::helpers::assert_received_includes_json;
     use crate::tests::spawn_c8y_mapper_actor;
     use crate::tests::spawn_c8y_mapper_actor_with_config;
     use crate::tests::spawn_dummy_c8y_http_proxy;
@@ -114,8 +113,6 @@ mod tests {
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate c8y_SoftwareUpdate JSON over MQTT request
         mqtt.send(MqttMessage::new(
@@ -176,7 +173,6 @@ mod tests {
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Prepare and publish a software update status response message `executing` on `te/device/main///cmd/software_update/123`.
         let mqtt_schema = MqttSchema::default();
@@ -233,7 +229,6 @@ mod tests {
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Prepare and publish a software update status response message `executing` on `te/device/main///cmd/software_update/123`.
         let mqtt_schema = MqttSchema::default();
@@ -282,7 +277,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // The agent publish an error
         let mqtt_schema = MqttSchema::default();
@@ -333,7 +327,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // The agent publish an error
         let mqtt_schema = MqttSchema::default();
@@ -385,7 +378,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Publish a c8y_SoftwareUpdate via JSON over MQTT that contains a wrong action `remove`, that is not known by c8y.
         mqtt.send(MqttMessage::new(
