@@ -287,6 +287,7 @@ impl Flow {
             if step.should_execute_interval(now) {
                 let step_started_at = stats.flow_step_start(&js, "onInterval");
                 let tick_output = step.on_interval(js_runtime, timestamp).await;
+                step.update_after_interval(Instant::now());
                 match &tick_output {
                     Ok(messages) => {
                         stats.flow_step_done(&js, "onInterval", step_started_at, messages.len())

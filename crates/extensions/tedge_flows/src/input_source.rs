@@ -1,4 +1,5 @@
 use crate::flow::Message;
+use crate::next_deadline_after;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
 use std::time::Duration;
@@ -190,6 +191,6 @@ impl PollInterval {
     }
 
     fn update_after_poll(&mut self, now: Instant) {
-        self.next_deadline = now + self.polling_interval;
+        self.next_deadline = next_deadline_after(self.next_deadline, self.polling_interval, now);
     }
 }

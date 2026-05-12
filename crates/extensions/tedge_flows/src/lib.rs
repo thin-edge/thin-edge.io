@@ -58,6 +58,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_watch_ext::WatchActorBuilder;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
+use tokio::time::Instant;
 pub use transformers::Transformer;
 
 pub struct FlowsMapperConfig {
@@ -131,6 +132,22 @@ pub fn flows_dir(mapper_dir: &Utf8Path) -> Utf8PathBuf {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Tick;
+
+pub(crate) fn next_deadline_after(deadline: Instant, interval: Duration, now: Instant) -> Instant {
+    debug_assert!(!interval.is_zero());
+    if deadline > now {
+        return deadline;
+    }
+
+    let missed_intervals = now.duration_since(deadline).as_nanos() / interval.as_nanos() + 1;
+
+    match u32::try_from(missed_intervals) {
+        // Keep the original cadence, but skip any deadlines that have already passed.
+        Ok(missed_intervals) => deadline + interval * missed_intervals,
+        // If we're this far (~4.2million invocations) behind, just restart the schedule from now.
+        Err(_) => now + interval,
+    }
+}
 
 pub struct FlowsMapperBuilder {
     config: FlowsMapperConfig,
@@ -280,5 +297,44 @@ impl LoadError {
             path: path.to_owned(),
             error,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn next_deadline_after_keeps_future_deadline() {
+        let start = Instant::now();
+        let deadline = start + Duration::from_secs(1);
+
+        assert_eq!(
+            next_deadline_after(deadline, Duration::from_secs(1), start),
+            deadline
+        );
+    }
+
+    #[test]
+    fn next_deadline_after_advances_from_current_deadline() {
+        let start = Instant::now();
+        let deadline = start + Duration::from_secs(1);
+
+        assert_eq!(
+            next_deadline_after(deadline, Duration::from_secs(1), deadline),
+            start + Duration::from_secs(2)
+        );
+    }
+
+    #[test]
+    fn next_deadline_after_skips_missed_intervals() {
+        let start = Instant::now();
+        let deadline = start + Duration::from_secs(1);
+        let now = start + Duration::from_millis(3500);
+
+        assert_eq!(
+            next_deadline_after(deadline, Duration::from_secs(1), now),
+            start + Duration::from_secs(4)
+        );
     }
 }

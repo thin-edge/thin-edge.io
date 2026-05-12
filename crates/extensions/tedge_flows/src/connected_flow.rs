@@ -89,7 +89,7 @@ impl ConnectedFlow {
         };
 
         let messages = source.poll(timestamp).await;
-        source.update_after_poll(now);
+        source.update_after_poll(Instant::now());
         let messages = messages?;
         Ok(messages)
     }
