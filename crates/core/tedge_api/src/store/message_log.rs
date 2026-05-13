@@ -1,8 +1,10 @@
 //! The message log is a persistent append-only log of MQTT messages.
 //! Each line is the JSON representation of that MQTT message.
 //! The underlying file is a JSON lines file.
+use indexmap::IndexMap;
 use mqtt_channel::MqttMessage;
 use serde_json::json;
+use std::collections::HashSet;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufRead;
@@ -10,9 +12,12 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
 
 const LOG_FILE_NAME: &str = "entity_store.jsonl";
+const LOG_FILE_TEMP_NAME: &str = "entity_store.jsonl.tmp";
 const LOG_FORMAT_VERSION: &str = "1.0";
+const DEFAULT_REDUNDANCY_THRESHOLD: usize = 100;
 
 #[derive(thiserror::Error, Debug)]
 pub enum LogEntryError {
@@ -65,6 +70,10 @@ impl MessageLogReader {
 /// A writer to append new MQTT messages to the end of the log
 pub(crate) struct MessageLogWriter {
     writer: BufWriter<File>,
+    log_dir: PathBuf,
+    redundancy_threshold: usize,
+    unique_topics: HashSet<String>,
+    total_entries: usize,
 }
 
 impl MessageLogWriter {
@@ -72,36 +81,76 @@ impl MessageLogWriter {
     where
         P: AsRef<Path>,
     {
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log_dir.as_ref().join(LOG_FILE_NAME))?;
-
-        // If the file is empty append the version information as a header
-        let metadata = file.metadata()?;
-        let file_is_empty = metadata.len() == 0;
-
-        let mut writer = BufWriter::new(file);
-
-        if file_is_empty {
-            let version_info = json!({ "version": LOG_FORMAT_VERSION }).to_string();
-            writeln!(writer, "{}", version_info)?;
-        }
-
-        Ok(MessageLogWriter { writer })
+        Self::open(log_dir, DEFAULT_REDUNDANCY_THRESHOLD, false)
     }
 
     pub fn new_truncated<P>(log_dir: P) -> Result<MessageLogWriter, std::io::Error>
     where
         P: AsRef<Path>,
     {
-        let _ = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(log_dir.as_ref().join(LOG_FILE_NAME))?;
+        Self::open(log_dir, DEFAULT_REDUNDANCY_THRESHOLD, true)
+    }
 
-        MessageLogWriter::new(log_dir)
+    #[cfg(test)]
+    pub fn new_with_redundancy_threshold<P>(
+        log_dir: P,
+        redundancy_threshold: usize,
+    ) -> Result<MessageLogWriter, std::io::Error>
+    where
+        P: AsRef<Path>,
+    {
+        Self::open(log_dir, redundancy_threshold, false)
+    }
+
+    fn open<P>(
+        log_dir: P,
+        redundancy_threshold: usize,
+        truncate: bool,
+    ) -> Result<MessageLogWriter, std::io::Error>
+    where
+        P: AsRef<Path>,
+    {
+        let log_dir = log_dir.as_ref();
+        let log_path = log_dir.join(LOG_FILE_NAME);
+
+        // Read the existing file to build the topic index for accurate redundancy tracking.
+        let mut unique_topics = HashSet::new();
+        let mut total_entries = 0;
+
+        let file = if !truncate {
+            if let Ok(mut reader) = MessageLogReader::new(log_dir) {
+                while let Some(msg) = reader.next_message().map_err(std::io::Error::other)? {
+                    unique_topics.insert(msg.topic.name.clone());
+                    total_entries += 1;
+                }
+            }
+
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)?
+        } else {
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&log_path)?
+        };
+
+        let metadata = file.metadata()?;
+        let mut writer = BufWriter::new(file);
+
+        if metadata.len() == 0 {
+            writeln!(writer, "{}", json!({ "version": LOG_FORMAT_VERSION }))?;
+        }
+
+        Ok(MessageLogWriter {
+            writer,
+            log_dir: log_dir.to_path_buf(),
+            redundancy_threshold,
+            unique_topics,
+            total_entries,
+        })
     }
 
     /// Append the JSON representation of the given message to the log.
@@ -111,6 +160,61 @@ impl MessageLogWriter {
         writeln!(self.writer, "{}", json_line)?;
         self.writer.flush()?;
         self.writer.get_ref().sync_all()?;
+
+        let is_new_topic = self.unique_topics.insert(message.topic.name.clone());
+        self.total_entries += 1;
+
+        if !is_new_topic {
+            let redundant_count = self.total_entries - self.unique_topics.len();
+            if redundant_count >= self.redundancy_threshold {
+                self.compact()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn compact(&mut self) -> Result<(), std::io::Error> {
+        let mut compacted_messages = IndexMap::new();
+        let mut reader = MessageLogReader::new(&self.log_dir)?;
+        while let Some(msg) = reader.next_message().map_err(std::io::Error::other)? {
+            let topic = msg.topic.name.clone();
+            if msg.payload_bytes().is_empty() {
+                compacted_messages.shift_remove(&topic);
+            } else {
+                compacted_messages.insert(topic, msg);
+            }
+        }
+        drop(reader);
+
+        // Write to a temp file so that any failure leaves the original log intact.
+        let temp_path = self.log_dir.join(LOG_FILE_TEMP_NAME);
+        {
+            let temp_file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&temp_path)?;
+            let mut temp_writer = BufWriter::new(temp_file);
+
+            writeln!(temp_writer, "{}", json!({ "version": LOG_FORMAT_VERSION }))?;
+            for msg in compacted_messages.values() {
+                writeln!(temp_writer, "{}", serde_json::to_string(msg)?)?;
+            }
+            temp_writer.flush()?;
+            temp_writer.get_ref().sync_all()?;
+        } // temp_file closed before rename
+
+        // Atomically replace the log with the compacted version.
+        std::fs::rename(&temp_path, self.log_dir.join(LOG_FILE_NAME))?;
+
+        let file = OpenOptions::new()
+            .append(true)
+            .open(self.log_dir.join(LOG_FILE_NAME))?;
+        self.writer = BufWriter::new(file);
+        self.unique_topics = compacted_messages.keys().cloned().collect();
+        self.total_entries = compacted_messages.len();
+
         Ok(())
     }
 }
@@ -156,7 +260,9 @@ mod tests {
         let temp_dir = tempdir().unwrap();
 
         let mut writer = MessageLogWriter::new(&temp_dir).unwrap();
-        writer.append_message(&make_message("topic", "payload")).unwrap();
+        writer
+            .append_message(&make_message("topic", "payload"))
+            .unwrap();
 
         let mut reader = MessageLogReader::new(&temp_dir).unwrap();
         reader.next_message().unwrap();
@@ -177,6 +283,258 @@ mod tests {
         MessageLogWriter::new_truncated(&temp_dir).unwrap();
 
         let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn truncated_log_starts_with_empty_topic_index() {
+        let temp_dir = tempdir().unwrap();
+
+        let mut writer = MessageLogWriter::new(&temp_dir).unwrap();
+        writer
+            .append_message(&make_message("topic", "payload"))
+            .unwrap();
+
+        let writer = MessageLogWriter::new_truncated(&temp_dir).unwrap();
+
+        assert_eq!(writer.unique_topics.len(), 0);
+        assert_eq!(writer.total_entries, 0);
+    }
+
+    #[test]
+    fn compaction_keeps_parent_before_child_in_first_surviving_topic_order() {
+        let temp_dir = tempdir().unwrap();
+
+        // threshold=1: compact as soon as there is 1 redundant entry
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
+        writer
+            .append_message(&make_message(
+                "te/device/child0//",
+                r#"{"@type":"child-device"}"#,
+            ))
+            .unwrap(); // redundant=0
+        writer
+            .append_message(&make_message(
+                "te/device/child01//",
+                r#"{"@type":"child-device","@parent":"device/child0"}"#,
+            ))
+            .unwrap(); // redundant=0
+        writer
+            .append_message(&make_message(
+                "te/device/child0//",
+                r#"{"@type":"child-device","name":"Child 0"}"#,
+            ))
+            .unwrap(); // redundant=1 → compact
+
+        // After compaction: latest value per topic, keeping parent before child for replay.
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message(
+                "te/device/child0//",
+                r#"{"@type":"child-device","name":"Child 0"}"#
+            ))
+        );
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message(
+                "te/device/child01//",
+                r#"{"@type":"child-device","@parent":"device/child0"}"#
+            ))
+        );
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn compaction_removes_topics_where_latest_message_is_empty() {
+        let temp_dir = tempdir().unwrap();
+
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
+        writer
+            .append_message(&make_message("topic1", "v1"))
+            .unwrap();
+        writer
+            .append_message(&make_message("topic2", "v2"))
+            .unwrap();
+        writer.append_message(&make_message("topic1", "")).unwrap();
+
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message("topic2", "v2"))
+        );
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn compaction_does_not_preserve_position_after_empty_payload() {
+        let temp_dir = tempdir().unwrap();
+
+        // threshold=1: compact as soon as there is 1 redundant entry
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
+        writer
+            .append_message(&make_message(
+                "te/device/child_a//",
+                r#"{"@type":"child-device"}"#,
+            ))
+            .unwrap(); // redundant=0
+        writer
+            .append_message(&make_message(
+                "te/device/child_b//",
+                r#"{"@type":"child-device"}"#,
+            ))
+            .unwrap(); // redundant=0
+        writer
+            .append_message(&make_message("te/device/child_a//", ""))
+            .unwrap(); // redundant=1 → compact; child_a removed from log
+
+        // child_a is no longer in unique_topics after compaction, so this is treated as a new topic
+        writer
+            .append_message(&make_message(
+                "te/device/child_a//",
+                r#"{"@type":"child-device","name":"Child A"}"#,
+            ))
+            .unwrap();
+
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        // child_b retains its original position; child_a lost its position when it received an
+        // empty payload and was removed during compaction
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message(
+                "te/device/child_b//",
+                r#"{"@type":"child-device"}"#
+            ))
+        );
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message(
+                "te/device/child_a//",
+                r#"{"@type":"child-device","name":"Child A"}"#
+            ))
+        );
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn writing_to_new_topics_does_not_trigger_compaction() {
+        let temp_dir = tempdir().unwrap();
+
+        // threshold=1, but all topics are unique — redundant count stays 0, no compaction
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
+        let messages: Vec<_> = (0..5)
+            .map(|i| make_message(&format!("topic{i}"), "v1"))
+            .collect();
+        for msg in &messages {
+            writer.append_message(msg).unwrap();
+        }
+
+        // All 5 messages should be present — no compaction triggered
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        for expected in &messages {
+            assert_eq!(reader.next_message().unwrap().as_ref(), Some(expected));
+        }
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn duplicates_below_the_threshold_are_not_compacted() {
+        let temp_dir = tempdir().unwrap();
+
+        // threshold=3: tolerates up to 2 redundant entries; compacts only at 3
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 3).unwrap();
+        writer
+            .append_message(&make_message("topic1", "v1"))
+            .unwrap(); // redundant=0
+        writer
+            .append_message(&make_message("topic1", "v2"))
+            .unwrap(); // redundant=1
+        writer
+            .append_message(&make_message("topic1", "v3"))
+            .unwrap(); // redundant=2, still below 3
+
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message("topic1", "v1"))
+        );
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message("topic1", "v2"))
+        );
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message("topic1", "v3"))
+        );
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn writer_can_continue_writing_after_compaction() {
+        let temp_dir = tempdir().unwrap();
+
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
+        writer
+            .append_message(&make_message("topic1", "v1"))
+            .unwrap();
+        writer
+            .append_message(&make_message("topic1", "v2"))
+            .unwrap(); // redundant=1 → compact
+
+        // Write more messages after compaction
+        writer
+            .append_message(&make_message("topic2", "v1"))
+            .unwrap();
+        writer
+            .append_message(&make_message("topic2", "v2"))
+            .unwrap(); // redundant=1 → compact again
+
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message("topic1", "v2"))
+        );
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message("topic2", "v2"))
+        );
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn new_writer_correctly_loads_compacted_state() {
+        let temp_dir = tempdir().unwrap();
+
+        // First writer: trigger compaction, then drop
+        {
+            let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
+            writer
+                .append_message(&make_message("topic1", "v1"))
+                .unwrap();
+            writer
+                .append_message(&make_message("topic2", "v2"))
+                .unwrap();
+            writer
+                .append_message(&make_message("topic1", "v3"))
+                .unwrap(); // redundant=1 → compact
+        }
+
+        // Second writer: reads compacted state (2 unique topics, 0 redundant)
+        // One more duplicate should immediately trigger another compaction.
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
+        writer
+            .append_message(&make_message("topic2", "v4"))
+            .unwrap(); // redundant=1 → compact
+
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message("topic1", "v3"))
+        );
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message("topic2", "v4"))
+        );
         assert_eq!(reader.next_message().unwrap(), None);
     }
 
