@@ -124,41 +124,63 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_append_and_retrieve() {
+    fn reading_from_empty_log_returns_none() {
+        let temp_dir = tempdir().unwrap();
+        MessageLogWriter::new(&temp_dir).unwrap();
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn messages_are_read_back_in_the_order_they_were_written() {
+        let temp_dir = tempdir().unwrap();
+        let messages = [
+            make_message("topic1", "payload1"),
+            make_message("topic2", "payload2"),
+            make_message("topic3", "payload3"),
+        ];
+
+        let mut writer = MessageLogWriter::new(&temp_dir).unwrap();
+        for message in &messages {
+            writer.append_message(message).unwrap();
+        }
+
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        for expected in &messages {
+            assert_eq!(reader.next_message().unwrap().as_ref(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn reading_past_the_last_message_returns_none() {
         let temp_dir = tempdir().unwrap();
 
-        // Prepare some dummy messages
-        let mut messages = vec![];
-        for i in 1..5 {
-            let message = MqttMessage::new(
-                &Topic::new(&format!("topic{i}")).unwrap(),
-                format!("payload{i}"),
-            );
-            messages.push(message);
+        let mut writer = MessageLogWriter::new(&temp_dir).unwrap();
+        writer.append_message(&make_message("topic", "payload")).unwrap();
+
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        reader.next_message().unwrap();
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn truncated_log_discards_previously_written_messages() {
+        let temp_dir = tempdir().unwrap();
+
+        let mut writer = MessageLogWriter::new(&temp_dir).unwrap();
+        for i in 1..=3 {
+            writer
+                .append_message(&make_message(&format!("topic{i}"), &format!("payload{i}")))
+                .unwrap();
         }
 
-        // Populate the log
-        {
-            let mut message_log = MessageLogWriter::new(&temp_dir).unwrap();
-            let mut message_log_reader = MessageLogReader::new(&temp_dir).unwrap();
+        MessageLogWriter::new_truncated(&temp_dir).unwrap();
 
-            assert_eq!(message_log_reader.next_message().unwrap(), None);
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
 
-            for message in messages.clone() {
-                message_log.append_message(&message).unwrap();
-            }
-        }
-
-        // Read from the log
-        {
-            // Reload the message log
-            let mut message_log_reader = MessageLogReader::new(&temp_dir).unwrap();
-
-            for message in messages {
-                assert_eq!(message_log_reader.next_message().unwrap(), Some(message));
-            }
-            // EOF -> None
-            assert_eq!(message_log_reader.next_message().unwrap(), None);
-        }
+    fn make_message(topic: &str, payload: &str) -> MqttMessage {
+        MqttMessage::new(&Topic::new(topic).unwrap(), payload)
     }
 }
