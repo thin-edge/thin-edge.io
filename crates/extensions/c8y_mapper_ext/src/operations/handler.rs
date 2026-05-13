@@ -18,8 +18,8 @@ use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::workflow::GenericCommandState;
 use tedge_mqtt_ext::MqttMessage;
-use tracing::debug;
 use tracing::error;
+use tracing::info;
 use tracing::warn;
 
 /// Handles operations.
@@ -152,7 +152,7 @@ impl OperationHandler {
         match current_operation {
             Entry::Vacant(entry) => {
                 let Some(status) = status else {
-                    debug!(topic = %entry.key(), "unexpected clearing message");
+                    info!(target: "C8Y", topic = %entry.key(), "unexpected clearing message");
                     return;
                 };
 
@@ -167,9 +167,8 @@ impl OperationHandler {
             Entry::Occupied(entry) => {
                 let previous_status = entry.get().status.as_str();
                 if status.as_ref().is_some_and(|s| *s == previous_status) {
-                    debug!(
-                        "already handling operation message with this topic and status, ignoring"
-                    );
+                    info!(target: "C8Y", topic = %entry.key(), status = %previous_status,
+                        "already handling operation message with this topic and status, ignoring");
                     return;
                 }
 

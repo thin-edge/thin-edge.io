@@ -28,6 +28,7 @@ use tedge_api::workflow::StateExcerpt;
 use tedge_api::Jsonify;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
+use tracing::info;
 use tracing::warn;
 
 use crate::converter::CumulocityConverter;
@@ -103,9 +104,9 @@ impl CumulocityConverter {
         };
 
         // Command messages must be retained
-        Ok(vec![
-            MqttMessage::new(&topic, request.to_json()).with_retain()
-        ])
+        let payload = request.to_json();
+        info!(target: "C8Y", topic = %topic.name, payload = %payload, "Forwarding c8y operation to device");
+        Ok(vec![MqttMessage::new(&topic, payload).with_retain()])
     }
 
     /// Convert c8y_LogfileRequest operation to a ThinEdge log_upload command
@@ -145,9 +146,9 @@ impl CumulocityConverter {
         };
 
         // Command messages must be retained
-        Ok(vec![
-            MqttMessage::new(&topic, request.to_json()).with_retain()
-        ])
+        let payload = request.to_json();
+        info!(target: "C8Y", topic = %topic.name, payload = %payload, "Forwarding c8y operation to device");
+        Ok(vec![MqttMessage::new(&topic, payload).with_retain()])
     }
 
     /// Converts a log_upload metadata message to
@@ -222,9 +223,9 @@ impl CumulocityConverter {
         };
 
         // Command messages must be retained
-        Ok(vec![
-            MqttMessage::new(&topic, request.to_json()).with_retain()
-        ])
+        let payload = request.to_json();
+        info!(target: "C8Y", topic = %topic.name, payload = %payload, "Forwarding c8y operation to device");
+        Ok(vec![MqttMessage::new(&topic, payload).with_retain()])
     }
 
     pub async fn register_firmware_update_operation(
@@ -295,7 +296,9 @@ impl CumulocityConverter {
         };
 
         // Command messages must be retained
-        vec![MqttMessage::new(&topic, request.to_json()).with_retain()]
+        let payload = request.to_json();
+        info!(target: "C8Y", topic = %topic.name, payload = %payload, "Forwarding c8y operation to device");
+        vec![MqttMessage::new(&topic, payload).with_retain()]
     }
 
     async fn convert_config_metadata(
@@ -396,9 +399,9 @@ impl CumulocityConverter {
         }
 
         // Command messages must be retained
-        Ok(vec![
-            MqttMessage::new(&topic, request.to_json()).with_retain()
-        ])
+        let payload = request.to_json();
+        info!(target: "C8Y", topic = %topic.name, payload = %payload, "Forwarding c8y operation to device");
+        Ok(vec![MqttMessage::new(&topic, payload).with_retain()])
     }
 
     /// Converts a device_profile metadata message to supported operation "c8y_DeviceProfile"
@@ -475,6 +478,7 @@ impl CumulocityConverter {
         let request = GenericCommandState::new(topic, CommandStatus::Init.to_string(), payload)
             .update_with_json(inject_object);
 
+        info!(target: "C8Y", topic = %request.topic, payload = %request.payload, "Forwarding c8y operation to device");
         Ok(vec![request.into_message()])
     }
 }
