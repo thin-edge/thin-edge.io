@@ -35,6 +35,9 @@ Update tedge version from previous using Cumulocity
     ...    {"name": "tedge-agent", "softwareType": "apt", "version": "${PREV_VERSION}"}
     ...    {"name": "tedge-watchdog", "softwareType": "apt", "version": "${PREV_VERSION}"}
     ...    {"name": "tedge-apt-plugin", "softwareType": "apt", "version": "${PREV_VERSION}"}
+
+    ${config_original}=    Execute Command    cmd=cat /etc/tedge/tedge.toml    strip=True
+
     # Install desired version
     Create Local Repository
     ${operation}=    Install Software
@@ -71,6 +74,10 @@ Update tedge version from previous using Cumulocity
     Should Be Equal    ${OUTPUT}    inactive    msg=Service should still be stopped
     ${OUTPUT}=    Execute Command    systemctl is-enabled tedge-mapper-az || exit 1    exp_exit_code=1    strip=True
     Should Be Equal    ${OUTPUT}    disabled    msg=Service should still be disabled
+
+    File Should Exist    /etc/tedge/tedge.toml.bak
+    ${config_backup}=    Execute Command    cmd=cat /etc/tedge/tedge.toml.bak    strip=True
+    Should Contain    ${config_backup}    [c8y]
 
     # Check that the mapper is reacting to operations after the upgrade
     # Notes:
