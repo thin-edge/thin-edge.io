@@ -2,6 +2,7 @@ use crate::config::ConfigError;
 use crate::js_runtime::JsRuntime;
 use crate::js_script::JsScript;
 use crate::js_value::JsonValue;
+use crate::next_deadline_after;
 use crate::transformers::Transformer;
 use crate::FlowContextUpdate;
 use crate::FlowError;
@@ -154,17 +155,18 @@ impl FlowStep {
         }
 
         match self.next_execution {
-            Some(deadline) if now >= deadline => {
-                // Time to execute - schedule next execution
-                self.next_execution = Some(now + self.interval);
-                true
-            }
+            Some(deadline) if now >= deadline => true,
             None => {
-                // First execution - initialize and execute
                 self.next_execution = Some(now + self.interval);
                 true
             }
             _ => false,
+        }
+    }
+
+    pub fn update_after_interval(&mut self, now: Instant) {
+        if let Some(deadline) = self.next_execution {
+            self.next_execution = Some(next_deadline_after(deadline, self.interval, now));
         }
     }
 

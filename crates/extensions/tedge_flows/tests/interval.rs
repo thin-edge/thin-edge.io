@@ -4,12 +4,14 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::ChannelError;
 use tedge_actors::CloneSender;
-use tedge_actors::MappingSender;
+use tedge_actors::DynSender;
 use tedge_actors::MessageReceiver;
 use tedge_actors::MessageSink;
 use tedge_actors::MessageSource;
 use tedge_actors::NoConfig;
+use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowsMapperBuilder;
@@ -17,6 +19,7 @@ use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
+use tedge_mqtt_ext::TopicFilter;
 use tempfile::TempDir;
 
 #[tokio::test(start_paused = true)]
@@ -73,6 +76,112 @@ async fn interval_executes_at_configured_frequency() {
 
     actor_handle.abort();
     let _ = actor_handle.await;
+}
+
+#[tokio::test]
+async fn process_polling_flows_do_not_starve_on_message_flows() {
+    let config_dir = create_test_flow_dir();
+    let collector = config_dir.path().join("collect_mongo_disk.sh");
+
+    write_file(
+        &config_dir,
+        "params.toml",
+        r#"
+        interval = "1ns"
+    "#,
+    );
+
+    write_file(
+        &config_dir,
+        "collect_mongo_disk.sh",
+        r#"
+        sleep 0.5
+        echo '{"disk":"almost-full"}'
+    "#,
+    );
+
+    write_file(
+        &config_dir,
+        "main.js",
+        r#"
+        export function onMessage(message, _config) {
+            return {
+                topic: message.topic,
+                payload: message.payload
+            };
+        }
+    "#,
+    );
+
+    write_file(
+        &config_dir,
+        "process_flow.toml",
+        &format!(
+            r#"
+        [input.process]
+        topic = "mongo_disk"
+        command = "/bin/sh {}"
+        interval = "${{params.interval}}"
+
+        [[steps]]
+        script = "main.js"
+    "#,
+            collector.display()
+        ),
+    );
+
+    write_file(
+        &config_dir,
+        "consume_mongo_disk.js",
+        r#"
+        const utf8 = new TextDecoder();
+
+        export function onMessage(message, _config) {
+            return [{
+                topic: "test/message",
+                payload: utf8.decode(message.payload)
+            }];
+        }
+    "#,
+    );
+
+    write_file(
+        &config_dir,
+        "message_flow.toml",
+        r#"
+        input.mqtt.topics = ["mongo_disk"]
+
+        [[steps]]
+        script = "consume_mongo_disk.js"
+    "#,
+    );
+
+    let captured_messages = CapturedMessages::default();
+    let mut mqtt = MockMqtt::new(captured_messages.clone());
+    let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
+
+    let processed_message = tokio::time::timeout(Duration::from_millis(5000), async {
+        loop {
+            if captured_messages.count_topic("test/message") > 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .is_ok();
+
+    let process_outputs = captured_messages.count_topic("mongo_disk");
+    let message_outputs = captured_messages.count_topic("test/message");
+
+    actor_handle.abort();
+    let _ = actor_handle.await;
+
+    assert!(
+        processed_message,
+        "Message flow should process MQTT input published by the process-polling flow; \
+         got {process_outputs} mongo_disk outputs but {message_outputs} processed messages"
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -668,10 +777,13 @@ async fn spawn_flows_actor(config_dir: &TempDir, mqtt: &mut MockMqtt) -> ActorHa
     handle
 }
 
+type MqttReceiver = (TopicFilter, DynSender<MqttMessage>);
+
 struct MockMqtt {
     inbox: Option<SimpleMessageBoxBuilder<MqttRequest, MqttMessage>>,
     captured: CapturedMessages,
     sender: Mutex<Option<tedge_actors::DynSender<MqttRequest>>>,
+    subscribers: Arc<Mutex<Vec<MqttReceiver>>>,
     message_box: Option<tedge_actors::SimpleMessageBox<MqttRequest, MqttMessage>>,
 }
 
@@ -686,6 +798,7 @@ impl MockMqtt {
             )),
             captured,
             sender: Mutex::new(None),
+            subscribers: Arc::new(Mutex::new(Vec::new())),
             message_box: None,
         }
     }
@@ -717,7 +830,10 @@ impl MessageSource<MqttMessage, &mut DynSubscriptions> for MockMqtt {
         config: &mut DynSubscriptions,
         peer: &impl MessageSink<MqttMessage>,
     ) {
-        config.set_client_id_usize(0);
+        let mut subscribers = self.subscribers.lock().unwrap();
+        config.set_client_id_usize(subscribers.len());
+        subscribers.push((TopicFilter::new_unchecked("#"), peer.get_sender()));
+
         let inbox = self
             .inbox
             .as_mut()
@@ -734,16 +850,45 @@ impl MessageSink<MqttRequest> for MockMqtt {
         }
 
         let captured = self.captured.messages.clone();
-        let inbox_sender = self.inbox.as_ref().unwrap().get_sender();
-        let sender = Box::new(MappingSender::new(inbox_sender, move |req| {
-            if let MqttRequest::Publish(msg) = &req {
-                captured.lock().unwrap().push(msg.clone());
-            }
-            Some(req)
-        }));
+        let sender = Box::new(BrokerSender {
+            captured,
+            subscribers: self.subscribers.clone(),
+        });
 
         *cached_sender = Some(sender.sender_clone());
         sender
+    }
+}
+
+#[derive(Clone)]
+struct BrokerSender {
+    captured: Arc<Mutex<Vec<MqttMessage>>>,
+    subscribers: Arc<Mutex<Vec<MqttReceiver>>>,
+}
+
+#[async_trait::async_trait]
+impl Sender<MqttRequest> for BrokerSender {
+    async fn send(&mut self, request: MqttRequest) -> Result<(), ChannelError> {
+        match request {
+            MqttRequest::Publish(message) => {
+                self.captured.lock().unwrap().push(message.clone());
+                let mut recipients: Vec<DynSender<MqttMessage>> = self
+                    .subscribers
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|(filter, _)| filter.accept(&message))
+                    .map(|(_, sender)| sender.sender_clone())
+                    .collect::<Vec<_>>();
+
+                for sender in recipients.iter_mut() {
+                    sender.send(message.clone()).await?;
+                }
+            }
+            MqttRequest::Subscribe(_) => {}
+            MqttRequest::RetrieveRetain(sender, _) => sender.close_channel(),
+        }
+        Ok(())
     }
 }
 

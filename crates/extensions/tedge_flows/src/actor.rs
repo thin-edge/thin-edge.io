@@ -14,7 +14,6 @@ use crate::Tick;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use futures::FutureExt;
 use serde_json::json;
 use std::cmp::min;
 use std::collections::HashSet;
@@ -50,6 +49,7 @@ pub struct FlowsMapper {
     watched_commands: HashSet<Utf8PathBuf>,
     processor: MessageProcessor<ConnectedFlowRegistry>,
     next_dump: Instant,
+    deferred_tick: bool,
 }
 
 impl FlowsMapper {
@@ -72,6 +72,7 @@ impl FlowsMapper {
             watched_commands,
             processor,
             next_dump,
+            deferred_tick: false,
         }
     }
 }
@@ -121,16 +122,14 @@ impl FlowsMapper {
             .processor
             .next_interval_deadline()
             .map_or(self.next_dump, |deadline| min(deadline, self.next_dump));
-        let deadline_future = sleep_until(deadline).map(|_| Some(InputMessage::Tick(Tick)));
-        let incoming_message_future = self.messages.recv();
 
-        futures::pin_mut!(incoming_message_future);
-        futures::pin_mut!(deadline_future);
-
-        futures::future::select(deadline_future, incoming_message_future)
-            .await
-            .factor_first()
-            .0
+        tokio::select! {
+            message = self.messages.recv() => {
+                self.deferred_tick = false;
+                message
+            }
+            _ = sleep_until(deadline) => Some(InputMessage::Tick(Tick)),
+        }
     }
 
     async fn send_updated_subscriptions(&mut self) -> Result<(), RuntimeError> {
