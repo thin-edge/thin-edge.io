@@ -250,7 +250,7 @@ Reloading a broken script when its permission is fixed
     ...    minimum=1
     ...    message_contains="temperature":{"temperature":{"value":259.12}}
     ...    date_from=${start}
-    [Teardown]    Execute Command    cmd=chmod a-r /etc/tedge/mappers/local/flows/te_to_c8y.js
+    [Teardown]    Execute Command    cmd=chmod a+r /etc/tedge/mappers/local/flows/te_to_c8y.js
 
 Publishing transformation errors
     Install Flow    input-flows    publish-js-errors.toml
@@ -625,6 +625,7 @@ Script runs onStartup function
     ...    maximum=1
     ...    date_from=${start}
     Should Be Equal    ${messages}[0]    onstartup on_startup 2
+    [Teardown]    Uninstall Nested Flow    onstartup
 
 
 *** Keywords ***
