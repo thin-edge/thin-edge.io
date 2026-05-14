@@ -140,6 +140,7 @@ hyper-rustls = { version = "0.27.5", default-features = false, features = [
     "http2",
 ] }
 hyper-util = { version = "0.1" }
+indexmap = "2.11"
 itertools = "0.14"
 log = "0.4"
 maplit = "1.0"

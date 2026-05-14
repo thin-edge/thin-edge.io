@@ -1,6 +1,7 @@
 //! The message log is a persistent append-only log of MQTT messages.
 //! Each line is the JSON representation of that MQTT message.
 //! The underlying file is a JSON lines file.
+use indexmap::IndexMap;
 use mqtt_channel::MqttMessage;
 use serde_json::json;
 use std::collections::HashSet;
@@ -110,29 +111,31 @@ impl MessageLogWriter {
         P: AsRef<Path>,
     {
         let log_dir = log_dir.as_ref();
-
-        if truncate {
-            OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(log_dir.join(LOG_FILE_NAME))?;
-        }
+        let log_path = log_dir.join(LOG_FILE_NAME);
 
         // Read the existing file to build the topic index for accurate redundancy tracking.
         let mut unique_topics = HashSet::new();
         let mut total_entries = 0;
-        if let Ok(mut reader) = MessageLogReader::new(log_dir) {
-            while let Some(msg) = reader.next_message().map_err(std::io::Error::other)? {
-                unique_topics.insert(msg.topic.name.clone());
-                total_entries += 1;
-            }
-        }
 
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log_dir.join(LOG_FILE_NAME))?;
+        let file = if !truncate {
+            if let Ok(mut reader) = MessageLogReader::new(log_dir) {
+                while let Some(msg) = reader.next_message().map_err(std::io::Error::other)? {
+                    unique_topics.insert(msg.topic.name.clone());
+                    total_entries += 1;
+                }
+            }
+
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)?
+        } else {
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&log_path)?
+        };
 
         let metadata = file.metadata()?;
         let mut writer = BufWriter::new(file);
@@ -172,23 +175,17 @@ impl MessageLogWriter {
     }
 
     fn compact(&mut self) -> Result<(), std::io::Error> {
-        self.writer.flush()?;
-
-        let mut all_messages = Vec::new();
+        let mut compacted_messages = IndexMap::new();
         let mut reader = MessageLogReader::new(&self.log_dir)?;
         while let Some(msg) = reader.next_message().map_err(std::io::Error::other)? {
-            all_messages.push(msg);
+            let topic = msg.topic.name.clone();
+            if msg.payload_bytes().is_empty() {
+                compacted_messages.shift_remove(&topic);
+            } else {
+                compacted_messages.insert(topic, msg);
+            }
         }
         drop(reader);
-
-        // Keep the last occurrence of each topic, in order of last write (move-to-end semantics).
-        let mut seen = HashSet::new();
-        let mut deduped: Vec<_> = all_messages
-            .into_iter()
-            .rev()
-            .filter(|msg| seen.insert(msg.topic.name.clone()))
-            .collect();
-        deduped.reverse();
 
         // Write to a temp file so that any failure leaves the original log intact.
         let temp_path = self.log_dir.join(LOG_FILE_TEMP_NAME);
@@ -201,7 +198,7 @@ impl MessageLogWriter {
             let mut temp_writer = BufWriter::new(temp_file);
 
             writeln!(temp_writer, "{}", json!({ "version": LOG_FORMAT_VERSION }))?;
-            for msg in &deduped {
+            for msg in compacted_messages.values() {
                 writeln!(temp_writer, "{}", serde_json::to_string(msg)?)?;
             }
             temp_writer.flush()?;
@@ -215,7 +212,8 @@ impl MessageLogWriter {
             .append(true)
             .open(self.log_dir.join(LOG_FILE_NAME))?;
         self.writer = BufWriter::new(file);
-        self.total_entries = deduped.len();
+        self.unique_topics = compacted_messages.keys().cloned().collect();
+        self.total_entries = compacted_messages.len();
 
         Ok(())
     }
@@ -289,30 +287,145 @@ mod tests {
     }
 
     #[test]
-    fn compaction_deduplicates_topics_when_redundancy_threshold_is_exceeded() {
+    fn truncated_log_starts_with_empty_topic_index() {
+        let temp_dir = tempdir().unwrap();
+
+        let mut writer = MessageLogWriter::new(&temp_dir).unwrap();
+        writer
+            .append_message(&make_message("topic", "payload"))
+            .unwrap();
+
+        let writer = MessageLogWriter::new_truncated(&temp_dir).unwrap();
+
+        assert_eq!(writer.unique_topics.len(), 0);
+        assert_eq!(writer.total_entries, 0);
+    }
+
+    #[test]
+    fn compaction_keeps_parent_before_child_in_first_surviving_topic_order() {
         let temp_dir = tempdir().unwrap();
 
         // threshold=1: compact as soon as there is 1 redundant entry
         let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
         writer
-            .append_message(&make_message("topic1", "v1"))
+            .append_message(&make_message(
+                "te/device/child0//",
+                r#"{"@type":"child-device"}"#,
+            ))
             .unwrap(); // redundant=0
         writer
-            .append_message(&make_message("topic2", "v2"))
+            .append_message(&make_message(
+                "te/device/child01//",
+                r#"{"@type":"child-device","@parent":"device/child0"}"#,
+            ))
             .unwrap(); // redundant=0
         writer
-            .append_message(&make_message("topic1", "v3"))
+            .append_message(&make_message(
+                "te/device/child0//",
+                r#"{"@type":"child-device","name":"Child 0"}"#,
+            ))
             .unwrap(); // redundant=1 → compact
 
-        // After compaction: one entry per topic, latest value, move-to-end order
+        // After compaction: latest value per topic, keeping parent before child for replay.
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message(
+                "te/device/child0//",
+                r#"{"@type":"child-device","name":"Child 0"}"#
+            ))
+        );
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message(
+                "te/device/child01//",
+                r#"{"@type":"child-device","@parent":"device/child0"}"#
+            ))
+        );
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn compaction_removes_topics_where_latest_message_is_empty() {
+        let temp_dir = tempdir().unwrap();
+
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
+        writer
+            .append_message(&make_message("topic1", "v1"))
+            .unwrap();
+        writer
+            .append_message(&make_message("topic2", "v2"))
+            .unwrap();
+        writer.append_message(&make_message("topic1", "")).unwrap();
+
         let mut reader = MessageLogReader::new(&temp_dir).unwrap();
         assert_eq!(
             reader.next_message().unwrap(),
             Some(make_message("topic2", "v2"))
         );
+        assert_eq!(reader.next_message().unwrap(), None);
+    }
+
+    #[test]
+    fn compaction_reinserts_reregistered_parent_after_empty_messages() {
+        let temp_dir = tempdir().unwrap();
+
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 3).unwrap();
+        writer
+            .append_message(&make_message(
+                "te/device/child0//",
+                r#"{"@type":"child-device"}"#,
+            ))
+            .unwrap();
+        writer
+            .append_message(&make_message(
+                "te/device/child2//",
+                r#"{"@type":"child-device"}"#,
+            ))
+            .unwrap();
+        writer
+            .append_message(&make_message("te/device/child0//", ""))
+            .unwrap();
+        writer
+            .append_message(&make_message(
+                "te/device/child01//",
+                r#"{"@type":"child-device","@parent":"device/child0"}"#,
+            ))
+            .unwrap();
+        writer
+            .append_message(&make_message(
+                "te/device/child0//",
+                r#"{"@type":"child-device","name":"Child 0"}"#,
+            ))
+            .unwrap();
+        writer
+            .append_message(&make_message(
+                "te/device/child2//",
+                r#"{"@type":"child-device","name":"Child 2"}"#,
+            ))
+            .unwrap();
+
+        let mut reader = MessageLogReader::new(&temp_dir).unwrap();
         assert_eq!(
             reader.next_message().unwrap(),
-            Some(make_message("topic1", "v3"))
+            Some(make_message(
+                "te/device/child2//",
+                r#"{"@type":"child-device","name":"Child 2"}"#
+            ))
+        );
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message(
+                "te/device/child01//",
+                r#"{"@type":"child-device","@parent":"device/child0"}"#
+            ))
+        );
+        assert_eq!(
+            reader.next_message().unwrap(),
+            Some(make_message(
+                "te/device/child0//",
+                r#"{"@type":"child-device","name":"Child 0"}"#
+            ))
         );
         assert_eq!(reader.next_message().unwrap(), None);
     }

@@ -13,6 +13,7 @@ camino = { workspace = true, features = ["serde1"] }
 clock = { workspace = true }
 csv = { workspace = true }
 download = { workspace = true }
+indexmap = { workspace = true }
 json-writer = { workspace = true }
 log = { workspace = true }
 mqtt_channel = { workspace = true }
