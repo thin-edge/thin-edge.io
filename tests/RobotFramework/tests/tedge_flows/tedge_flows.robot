@@ -539,15 +539,27 @@ Flow with loop detection disabled
     [Teardown]    Uninstall Flow    loop.toml
 
 Script runs onStartup function
+    # Pause briefly to ensure we are after the last test/retry and any previous logs
+    Execute Command    sleep 1
+    ${start}    Get Unix Timestamp
+
     Install Nested Flow    onstartup
 
     # assert on_startups are run in order
-    ${messages}    Logs Should Contain    JavaScript.Console: "onstartup    min_matches=3    max_matches=3
+    ${messages}    Logs Should Contain
+    ...    JavaScript.Console: "onstartup
+    ...    min_matches=3
+    ...    max_matches=3
+    ...    date_from=${start}
     Should Contain    ${messages}[0]    JavaScript.Console: "onstartup on_startup 1"
     Should Contain    ${messages}[1]    JavaScript.Console: "onstartup on_startup 2"
     Should Contain    ${messages}[2]    JavaScript.Console: "onstartup on_message 2"
 
-    ${messages}    Should Have MQTT Messages    topic=test/onstartup    message_contains=onstartup    maximum=2
+    ${messages}    Should Have MQTT Messages
+    ...    topic=test/onstartup
+    ...    message_contains=onstartup
+    ...    maximum=2
+    ...    date_from=${start}
     Should Be Equal    ${messages}[0]    onstartup on_startup 2
     Should Be Equal    ${messages}[1]    onstartup on_message 2
 
