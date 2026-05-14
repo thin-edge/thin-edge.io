@@ -10,6 +10,13 @@ Test Tags           theme:c8y    theme:telemetry
 
 
 *** Test Cases ***
+Agent twin message published on startup
+    ${expected_version}=    Execute Command    tedge --version | cut -d' ' -f2    strip=${True}
+    ${messages}=    Should Have MQTT Messages    te/device/main///twin/agent
+    Should Contain    ${messages[0]}    "name":"thin-edge.io"
+    Should Contain    ${messages[0]}    "url":"https://thin-edge.io"
+    Should Contain    ${messages[0]}    "version":"${expected_version}"
+
 Update Inventory data via inventory.json
     ${mo}=    Cumulocity.Device Should Have Fragments    customData    types
     Should Be Equal    ${mo["customData"]["mode"]}    ACTIVE
@@ -65,6 +72,7 @@ Custom Setup
     Device Should Exist    ${DEVICE_SN}
     ThinEdgeIO.Transfer To Device    ${CURDIR}/inventory.json    /etc/tedge/device/
     Restart Service    tedge-agent
+    Service Health Status Should Be Up    tedge-agent
 
 Validate inventory fragment updates via twin topics
     [Arguments]    ${device_xid}=${DEVICE_SN}    ${device_tid}=${device_xid}

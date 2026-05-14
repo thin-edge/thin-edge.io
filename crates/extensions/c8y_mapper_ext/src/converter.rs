@@ -1258,7 +1258,7 @@ impl CumulocityConverter {
     }
 
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut messages = vec![self.c8y_agent_inventory_fragment()?];
+        let mut messages = vec![];
 
         // supported operations for the main device
         let supported_operations_message =

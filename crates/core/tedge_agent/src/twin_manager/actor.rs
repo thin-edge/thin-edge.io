@@ -63,8 +63,17 @@ impl Actor for TwinManagerActor {
             }
         }
 
-        // Publish any remaining twin data loaded from the inventory JSON file
+        // Publish the agent version fragment as twin data
         let device_id = self.config.device_topic_id.clone();
+        let agent_fragment = serde_json::json!({
+            "name": "thin-edge.io",
+            "url": "https://thin-edge.io",
+            "version": env!("CARGO_PKG_VERSION"),
+        });
+        self.publish_twin_data(&device_id, "agent".to_string(), agent_fragment)
+            .await;
+
+        // Publish any remaining twin data loaded from the inventory JSON file
         for (key, value) in inventory_map {
             self.publish_twin_data(&device_id, key, value).await;
         }

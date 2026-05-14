@@ -79,26 +79,48 @@ async fn mapper_publishes_init_messages_on_startup() {
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
+}
+
+#[tokio::test]
+async fn mapper_converts_agent_twin_to_c8y_agent_fragment() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    skip_init_messages(&mut mqtt).await;
+
     let version = env!("CARGO_PKG_VERSION");
+
+    // Simulate tedge-agent publishing the agent twin fragment
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///twin/agent"),
+        json!({
+            "name": "thin-edge.io",
+            "url": "https://thin-edge.io",
+            "version": version
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
 
     assert_received_contains_str(
         &mut mqtt,
-        [
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                json!({
-                    "c8y_Agent" : {
-                        "name": "thin-edge.io",
-                        "url": "https://thin-edge.io",
-                        "version": version
-                    }
-                })
-                .to_string()
-                .as_str(),
-            ),
-            ("c8y/s/us", "114"),
-            ("c8y/s/us", "500"),
-        ],
+        [(
+            "c8y/inventory/managedObjects/update/test-device",
+            json!({
+                "c8y_Agent" : {
+                    "name": "thin-edge.io",
+                    "url": "https://thin-edge.io",
+                    "version": version
+                }
+            })
+            .to_string()
+            .as_str(),
+        )],
     )
     .await;
 }
@@ -1141,8 +1163,6 @@ async fn mapper_publishes_supported_operations() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.skip(1).await;
 
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2"
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2")]).await;
@@ -3323,18 +3343,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
 
 pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessage>) {
     //Skip all the init messages by still doing loose assertions
-    assert_received_contains_str(
-        mqtt,
-        [
-            (
-                "c8y/inventory/managedObjects/update/test-device",
-                "c8y_Agent",
-            ),
-            ("c8y/s/us", "114"),
-            ("c8y/s/us", "500"),
-        ],
-    )
-    .await;
+    assert_received_contains_str(mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
 }
 
 pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, HttpResult>) {
