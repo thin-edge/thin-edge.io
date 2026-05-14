@@ -22,6 +22,10 @@ Log operation ignore date range when log file has a static path
     ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Log File Contents Should Be Equal    ${operation}    1 first line\n
 
+    # Validate that all temporary files created for the log upload operation are cleaned up
+    Execute Command    ls /tmp/example*    exp_exit_code=2
+    Execute Command    ls /var/tedge/file-transfer/${DEVICE_SN}/log_upload/example*    exp_exit_code=2
+
 Request with non-existing log type
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000

@@ -579,6 +579,10 @@ Get Configuration from Device
     ...    ${events[0]["id"]}
     ...    name=^${external_id}_[\\w\\W]+-c8y-mapper-\\d+$
 
+    # Validate that all temporary files created for the config_snapshot operation are cleaned up
+    Execute Command    ls /tmp/${config_type}*    exp_exit_code=2
+    Execute Command    ls /var/tedge/file-transfer/${PARENT_SN}/config_snapshot/${config_type}*    exp_exit_code=2
+
     RETURN    ${contents}
 
 #
