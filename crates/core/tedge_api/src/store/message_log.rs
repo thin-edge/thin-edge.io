@@ -367,64 +367,50 @@ mod tests {
     }
 
     #[test]
-    fn compaction_reinserts_reregistered_parent_after_empty_messages() {
+    fn compaction_does_not_preserve_position_after_empty_payload() {
         let temp_dir = tempdir().unwrap();
 
-        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 3).unwrap();
+        // threshold=1: compact as soon as there is 1 redundant entry
+        let mut writer = MessageLogWriter::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
         writer
             .append_message(&make_message(
-                "te/device/child0//",
+                "te/device/child_a//",
                 r#"{"@type":"child-device"}"#,
             ))
-            .unwrap();
+            .unwrap(); // redundant=0
         writer
             .append_message(&make_message(
-                "te/device/child2//",
+                "te/device/child_b//",
                 r#"{"@type":"child-device"}"#,
             ))
-            .unwrap();
+            .unwrap(); // redundant=0
         writer
-            .append_message(&make_message("te/device/child0//", ""))
-            .unwrap();
-        writer
-            .append_message(&make_message(
-                "te/device/child01//",
-                r#"{"@type":"child-device","@parent":"device/child0"}"#,
-            ))
-            .unwrap();
+            .append_message(&make_message("te/device/child_a//", ""))
+            .unwrap(); // redundant=1 → compact; child_a removed from log
+
+        // child_a is no longer in unique_topics after compaction, so this is treated as a new topic
         writer
             .append_message(&make_message(
-                "te/device/child0//",
-                r#"{"@type":"child-device","name":"Child 0"}"#,
-            ))
-            .unwrap();
-        writer
-            .append_message(&make_message(
-                "te/device/child2//",
-                r#"{"@type":"child-device","name":"Child 2"}"#,
+                "te/device/child_a//",
+                r#"{"@type":"child-device","name":"Child A"}"#,
             ))
             .unwrap();
 
         let mut reader = MessageLogReader::new(&temp_dir).unwrap();
+        // child_b retains its original position; child_a lost its position when it received an
+        // empty payload and was removed during compaction
         assert_eq!(
             reader.next_message().unwrap(),
             Some(make_message(
-                "te/device/child2//",
-                r#"{"@type":"child-device","name":"Child 2"}"#
+                "te/device/child_b//",
+                r#"{"@type":"child-device"}"#
             ))
         );
         assert_eq!(
             reader.next_message().unwrap(),
             Some(make_message(
-                "te/device/child01//",
-                r#"{"@type":"child-device","@parent":"device/child0"}"#
-            ))
-        );
-        assert_eq!(
-            reader.next_message().unwrap(),
-            Some(make_message(
-                "te/device/child0//",
-                r#"{"@type":"child-device","name":"Child 0"}"#
+                "te/device/child_a//",
+                r#"{"@type":"child-device","name":"Child A"}"#
             ))
         );
         assert_eq!(reader.next_message().unwrap(), None);
