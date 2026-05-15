@@ -306,7 +306,10 @@ impl FlowConfig {
         flows_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
-        let input = self.input.try_into()?;
+        let input = self
+            .input
+            .resolve_relative_process_paths(flows_dir)
+            .try_into()?;
         let output = self.output.try_into()?;
         let errors = self.errors.try_into()?;
         let mut steps = vec![];
@@ -470,6 +473,27 @@ impl InputConfig {
                 topic: topic.map(|t| params.substitute_inner_paths(&t)),
                 interval: interval.map(|i| i.substitute_params(params)).transpose()?,
             }),
+        }
+    }
+
+    fn resolve_relative_process_paths(self, flows_dir: &Utf8Path) -> Self {
+        match self {
+            InputConfig::Process {
+                command,
+                topic,
+                interval,
+            } => InputConfig::Process {
+                command: if Utf8Path::new(&command).is_relative() {
+                    path_clean::clean(flows_dir.join(&command))
+                        .to_string_lossy()
+                        .into_owned()
+                } else {
+                    command
+                },
+                topic,
+                interval,
+            },
+            input => input,
         }
     }
 }
@@ -910,5 +934,54 @@ topic = "te/device/main///e/"
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
 
         assert_eq!(expected_flow, flow.substitute_params(&params).unwrap());
+    }
+
+    #[tokio::test]
+    async fn flows_accept_relative_paths_to_input_processes() {
+        let flow_toml = r#"
+        [input.process]
+        command = "./test.sh"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let rs_transformers = BuiltinTransformers::default();
+        let mut js_runtime = JsRuntime::with_default().await.unwrap();
+        let flows_dir = Utf8Path::new("/flows");
+        let source = Utf8PathBuf::from("/flows/my_flow.toml");
+        let compiled = flow
+            .compile(&rs_transformers, &mut js_runtime, flows_dir, source)
+            .await
+            .unwrap();
+        assert_eq!(
+            compiled.input,
+            FlowInput::PollCommand {
+                topic: "/flows/test.sh".into(),
+                command: "/flows/test.sh".into(),
+                interval: Duration::from_secs(1),
+            }
+        )
+    }
+
+    #[test]
+    fn relative_process_paths_are_cleaned_up() {
+        let flow_toml = r#"
+        [input.process]
+        command = "./../flows/./my_flow/../test.sh"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let resolved = flow
+            .input
+            .resolve_relative_process_paths(Utf8Path::new("/flows"));
+        assert_eq!(
+            resolved,
+            InputConfig::Process {
+                topic: None,
+                command: "/flows/test.sh".into(),
+                interval: Some(IntervalConfig::Duration(Duration::from_secs(1))),
+            }
+        )
     }
 }

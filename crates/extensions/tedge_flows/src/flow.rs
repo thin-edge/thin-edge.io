@@ -68,6 +68,7 @@ pub enum SourceTag {
 }
 
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub enum FlowInput {
     Mqtt {
         topics: TopicFilter,
