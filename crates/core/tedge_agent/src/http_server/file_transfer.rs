@@ -22,8 +22,8 @@ use hyper::Request;
 use hyper::StatusCode;
 use std::io::ErrorKind;
 use tedge_actors::futures::StreamExt;
+use tedge_api::path::DataDir;
 use tedge_utils::paths::ManagedDir;
-use tedge_utils::paths::TedgePaths;
 use tokio::fs::File;
 use tokio::io;
 use tokio::io::AsyncBufReadExt;
@@ -33,7 +33,7 @@ use tokio::io::BufWriter;
 use tokio_util::io::ReaderStream;
 use tower_http::set_header::SetResponseHeaderLayer;
 
-pub(crate) fn file_transfer_router(file_transfer_dir: ManagedDir, data_dir: TedgePaths) -> Router {
+pub(crate) fn file_transfer_router(file_transfer_dir: ManagedDir, data_dir: DataDir) -> Router {
     Router::new()
         .route(
             "/v1/files/{*path}",
@@ -44,7 +44,7 @@ pub(crate) fn file_transfer_router(file_transfer_dir: ManagedDir, data_dir: Tedg
 
 pub(crate) fn file_transfer_legacy_router(
     file_transfer_dir: ManagedDir,
-    data_dir: TedgePaths,
+    data_dir: DataDir,
 ) -> Router {
     Router::new()
         .route(
@@ -186,6 +186,7 @@ mod tests {
     use hyper::Method;
     use hyper::StatusCode;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_utils::paths::TedgePaths;
     use test_case::test_case;
     use test_case::test_matrix;
     use tower::Service;
@@ -405,8 +406,9 @@ mod tests {
 
     fn app() -> (TempTedgeDir, Router) {
         let ttd = TempTedgeDir::new();
-        let data_dir = TedgePaths::from_root_with_defaults(ttd.utf8_path_buf(), "", "");
-        let file_transfer_dir = data_dir.dir("file-transfer").unwrap();
+        let data_dir: DataDir =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path_buf(), "", "").into();
+        let file_transfer_dir = data_dir.file_transfer_dir();
         let router = file_transfer_router(file_transfer_dir, data_dir);
         (ttd, router)
     }

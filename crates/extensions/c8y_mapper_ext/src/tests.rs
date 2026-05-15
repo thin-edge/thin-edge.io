@@ -3293,7 +3293,6 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     C8yMapperConfig::new(
         tmp_dir.utf8_path().into(),
         tmp_dir.utf8_path().into(),
-        tmp_dir.utf8_path_buf().into(),
         tmp_dir.utf8_path().into(),
         device_name,
         device_topic_id,

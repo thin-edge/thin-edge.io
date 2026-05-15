@@ -9,22 +9,22 @@ use futures::future::FutureExt;
 use rustls::ServerConfig;
 use std::future::Future;
 use tedge_actors::ClientMessageBox;
+use tedge_api::path::DataDir;
 use tedge_utils::paths::ManagedDir;
-use tedge_utils::paths::TedgePaths;
 use tokio::io;
 use tokio::net::TcpListener;
 
 #[derive(Clone)]
 pub(crate) struct AgentState {
     pub(crate) file_transfer_dir: ManagedDir,
-    pub(crate) data_dir: TedgePaths,
+    pub(crate) data_dir: DataDir,
     pub(crate) entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
 }
 
 impl AgentState {
     pub fn new(
         file_transfer_dir: ManagedDir,
-        data_dir: TedgePaths,
+        data_dir: DataDir,
         entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
     ) -> Self {
         AgentState {

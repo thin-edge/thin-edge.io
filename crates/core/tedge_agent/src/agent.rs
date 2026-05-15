@@ -81,7 +81,7 @@ pub(crate) struct AgentConfig {
     pub use_lock: bool,
     pub log_dir: TedgePaths,
     pub agent_log_dir: ManagedDir,
-    pub data_dir: TedgePaths,
+    pub data_dir: DataDir,
     pub state_dir: TedgePaths,
     pub operations_dir: ManagedDir,
     pub mqtt_device_topic_id: EntityTopicId,
@@ -139,7 +139,7 @@ impl AgentConfig {
         let http_port = tedge_config.http.bind.port;
 
         let http_config = HttpServerConfig {
-            file_transfer_dir: data_dir.dir("file-transfer")?,
+            file_transfer_dir: data_dir.file_transfer_dir(),
             data_dir: data_dir.clone(),
             cert_path: tedge_config.http.cert_path.clone().map(Utf8PathBuf::from),
             key_path: tedge_config.http.key_path.clone().map(Utf8PathBuf::from),
@@ -266,7 +266,7 @@ impl Agent {
         self.config.operations_dir.ensure().await?;
 
         // under data_dir (/var/tedge)
-        self.config.data_dir.dir("cache")?.ensure().await?;
+        self.config.data_dir.cache_dir().ensure().await?;
         self.config.http_config.file_transfer_dir.ensure().await?;
 
         // under log_dir (/var/log/tedge)
@@ -467,11 +467,10 @@ impl Agent {
             )
             .await?;
 
-            let data_dir: DataDir = self.config.data_dir.root().to_path_buf().into();
             let operation_file_cache_builder = FileCacheActorBuilder::new(
                 mqtt_schema,
                 self.config.fts_url.clone(),
-                data_dir,
+                self.config.data_dir.clone(),
                 &mut downloader_actor_builder,
                 &mut mqtt_actor_builder,
             );

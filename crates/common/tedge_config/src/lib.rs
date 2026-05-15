@@ -6,6 +6,7 @@ mod system_toml;
 pub use system_toml::*;
 
 pub mod tedge_toml;
+use tedge_api::path::DataDir;
 use tedge_config_macros::ProfileName;
 pub use tedge_toml::error::*;
 pub use tedge_toml::models;
@@ -52,9 +53,11 @@ impl TEdgeConfig {
     /// `file-transfer/`), firmware caches, and other service-specific data.
     ///
     /// Defaults to `/var/tedge`. (configurable via `data.path`)
-    pub fn data_root(&self) -> TedgePaths {
+    pub fn data_root(&self) -> DataDir {
         let system = self.read_system_config();
-        TedgePaths::from_root_with_defaults(self.data.path.clone(), system.user, system.group)
+        let paths =
+            TedgePaths::from_root_with_defaults(self.data.path.clone(), system.user, system.group);
+        DataDir::from(paths)
     }
 
     /// The root directory where `tedge-agent` persists its operational state

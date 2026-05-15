@@ -582,6 +582,7 @@ mod tests {
     use tedge_api::entity::EntityType;
     use tedge_api::entity_store;
     use tedge_api::mqtt_topics::EntityTopicId;
+    use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_utils::paths::TedgePaths;
     use test_case::test_case;
@@ -1700,8 +1701,9 @@ mod tests {
 
     fn setup() -> TestHandle {
         let ttd: TempTedgeDir = TempTedgeDir::new();
-        let data_dir = TedgePaths::from_root_with_defaults(ttd.utf8_path_buf(), "", "");
-        let file_transfer_dir = data_dir.dir("file-transfer").unwrap();
+        let data_dir: DataDir =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path_buf(), "", "").into();
+        let file_transfer_dir = data_dir.file_transfer_dir();
 
         let mut entity_store_box = ServerMessageBoxBuilder::new("EntityStoreBox", 16);
         let entity_store_handle = ClientMessageBox::new(&mut entity_store_box);

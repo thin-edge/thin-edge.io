@@ -3124,7 +3124,6 @@ pub(crate) mod tests {
         C8yMapperConfig::new(
             tmp_dir.utf8_path().into(),
             tmp_dir.utf8_path().into(),
-            tmp_dir.utf8_path_buf().into(),
             tmp_dir.utf8_path().into(),
             device_id,
             device_topic_id,

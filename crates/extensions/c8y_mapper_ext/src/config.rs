@@ -22,7 +22,6 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::TopicIdError;
-use tedge_api::path::DataDir;
 use tedge_api::service_health_topic;
 use tedge_api::substitution::Record;
 use tedge_config::models::AutoLogUpload;
@@ -69,7 +68,6 @@ pub struct C8yMapperConfig {
     pub smartrest_use_operation_id: bool,
     pub smartrest_child_device_create_with_device_marker: bool,
 
-    pub data_dir: DataDir,
     pub config_dir: Arc<Utf8Path>,
     pub logs_path: Arc<Utf8Path>,
     pub ops_dir: Arc<Utf8Path>,
@@ -85,7 +83,6 @@ impl C8yMapperConfig {
     pub fn new(
         config_dir: Arc<Utf8Path>,
         logs_path: Arc<Utf8Path>,
-        data_dir: DataDir,
         tmp_dir: Arc<Utf8Path>,
 
         device_id: String,
@@ -128,7 +125,6 @@ impl C8yMapperConfig {
             service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
 
         Self {
-            data_dir,
             device_id,
             device_topic_id,
             service_topic_id,
@@ -174,7 +170,6 @@ impl C8yMapperConfig {
         let config_dir: Arc<Utf8Path> = config_dir.as_ref().into();
 
         let logs_path = tedge_config.logs.path.as_path().into();
-        let data_dir: DataDir = tedge_config.data.path.as_path().to_owned().into();
         let tmp_dir = tedge_config.tmp.path.as_path().into();
 
         let device_id = c8y_config.device.id()?.to_string();
@@ -264,7 +259,6 @@ impl C8yMapperConfig {
         Ok(C8yMapperConfig::new(
             config_dir,
             logs_path,
-            data_dir,
             tmp_dir,
             device_id,
             device_topic_id,

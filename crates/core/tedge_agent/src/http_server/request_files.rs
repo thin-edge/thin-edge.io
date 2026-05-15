@@ -7,19 +7,19 @@ use axum::extract::Path;
 use axum::http::request::Parts;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use tedge_api::path::DataDir;
 use tedge_utils::paths::ManagedDir;
-use tedge_utils::paths::TedgePaths;
 
 use super::error::HttpRequestError;
 
 #[derive(Clone)]
 pub(super) struct FileTransferDir {
     file_transfer_dir: Arc<ManagedDir>,
-    data_dir: Arc<TedgePaths>,
+    data_dir: Arc<DataDir>,
 }
 
 impl FileTransferDir {
-    pub(super) fn new(file_transfer_dir: ManagedDir, data_dir: TedgePaths) -> Self {
+    pub(super) fn new(file_transfer_dir: ManagedDir, data_dir: DataDir) -> Self {
         Self {
             file_transfer_dir: Arc::new(file_transfer_dir),
             data_dir: Arc::new(data_dir),
@@ -34,7 +34,7 @@ pub struct FileTransferPath {
     /// The requested path, used to generate error messages, keeping the absolute path encapsulated
     pub request: RequestPath,
     /// The data root (e.g. `/var/tedge`), used to create parent directories with the correct root on upload
-    pub data_dir: Arc<TedgePaths>,
+    pub data_dir: Arc<DataDir>,
 }
 
 /// The path from a request, used to generate error messages
@@ -85,7 +85,7 @@ impl FromRequestParts<FileTransferDir> for FileTransferPath {
 fn local_path_for_file(
     request_path: RequestPath,
     file_transfer_dir: Arc<ManagedDir>,
-    data_dir: Arc<TedgePaths>,
+    data_dir: Arc<DataDir>,
 ) -> Result<FileTransferPath, HttpRequestError> {
     let full_path = file_transfer_dir.path().join(&request_path);
 

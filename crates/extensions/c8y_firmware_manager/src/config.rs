@@ -3,8 +3,9 @@ use crate::error::FirmwareManagementError;
 
 use c8y_api::http_proxy::C8yEndPoint;
 use c8y_api::smartrest::topic::C8yTopic;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use std::path::Path;
+
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_api::path::DataDir;
@@ -68,7 +69,7 @@ impl FirmwareManagerConfig {
         let local_http_address = tedge_config.http.client.host.clone();
         let local_http_port = tedge_config.http.client.port;
         let tmp_dir = tedge_config.tmp.path.clone().into();
-        let data_dir = tedge_config.data.path.as_path().to_owned().into();
+        let data_dir = tedge_config.data_root();
         let timeout_sec = tedge_config.firmware.child.update.timeout.duration();
 
         let c8y_prefix = c8y_config.bridge.topic_prefix.clone();
@@ -88,33 +89,36 @@ impl FirmwareManagerConfig {
 
     // It checks the directory exists in the system
     pub fn validate_and_get_cache_dir_path(&self) -> Result<Utf8PathBuf, FirmwareManagementError> {
-        validate_dir_exists(self.data_dir.cache_dir().as_path())?;
-        Ok(self.data_dir.cache_dir().clone())
+        let dir = self.data_dir.cache_dir();
+        validate_dir_exists(dir.path())?;
+        Ok(dir.path().to_owned())
     }
 
     // It checks the directory exists in the system
     pub fn validate_and_get_file_transfer_dir_path(
         &self,
     ) -> Result<Utf8PathBuf, FirmwareManagementError> {
-        validate_dir_exists(self.data_dir.file_transfer_dir().as_path())?;
-        Ok(self.data_dir.file_transfer_dir().clone())
+        let dir = self.data_dir.file_transfer_dir();
+        validate_dir_exists(dir.path())?;
+        Ok(dir.path().to_owned())
     }
 
     // It checks the directory exists in the system
     pub fn validate_and_get_firmware_dir_path(
         &self,
     ) -> Result<Utf8PathBuf, FirmwareManagementError> {
-        validate_dir_exists(self.data_dir.firmware_dir().as_path())?;
-        Ok(self.data_dir.firmware_dir().clone())
+        let dir = self.data_dir.firmware_dir();
+        validate_dir_exists(dir.path())?;
+        Ok(dir.path().to_owned())
     }
 }
 
-fn validate_dir_exists(dir_path: impl AsRef<Path>) -> Result<(), FirmwareManagementError> {
+fn validate_dir_exists(dir_path: impl AsRef<Utf8Path>) -> Result<(), FirmwareManagementError> {
     if dir_path.as_ref().is_dir() {
         Ok(())
     } else {
         Err(FirmwareManagementError::DirectoryNotFound {
-            path: dir_path.as_ref().to_path_buf(),
+            path: dir_path.as_ref().into(),
         })
     }
 }

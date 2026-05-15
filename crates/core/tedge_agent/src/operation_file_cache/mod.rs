@@ -202,7 +202,7 @@ impl FileCacheActor {
         let remote_url = &config_update_payload.remote_url;
 
         let file_cache_key = sha256::digest(remote_url);
-        let dest_path = self.data_dir.cache_dir().join(file_cache_key);
+        let dest_path = self.data_dir.cache_dir().path().join(file_cache_key);
         let topic = config_update_topic.name.clone();
 
         info!("Downloading config file from `{remote_url}` to cache");
@@ -265,7 +265,9 @@ impl FileCacheActor {
     ) -> Utf8PathBuf {
         let symlink_dir_path = self.data_dir.file_transfer_dir();
 
-        symlink_dir_path.join(symlink_path(entity_topic_id, config_type, cmd_id))
+        symlink_dir_path
+            .path()
+            .join(symlink_path(entity_topic_id, config_type, cmd_id))
     }
 }
 
