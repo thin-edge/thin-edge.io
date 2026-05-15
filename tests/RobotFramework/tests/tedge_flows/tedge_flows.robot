@@ -14,8 +14,9 @@ Normalizes flows-dir path
     [Documentation]    Checks flows are printed correctly when using relative paths, e.g. `.`, `../` or when using symlinks
     VAR    ${flows_dir}    /etc/tedge/mappers/local/flows
     VAR    ${child_dir}    ${flows_dir}/childdir
-    Execute Command    cmd=mkdir ${child_dir}
     VAR    ${symlink}    ${flows_dir}.link
+    Execute Command    cmd=rm -rf ${child_dir} ${symlink}
+    Execute Command    cmd=mkdir ${child_dir}
     Execute Command    cmd=ln -s ${flows_dir} ${symlink}
 
     ${out1}    Execute Command    cmd=cd ${flows_dir} && tedge flows test --flows-dir . "" "" 2>&1    exp_exit_code=0
@@ -33,7 +34,8 @@ Normalizes flows-dir path
     Should Not Contain    ${out3}    ${fail_due_to_invalid_path}
     Should Not Contain    ${out4}    ${fail_due_to_invalid_path}
 
-    Execute Command    rm -r ${child_dir} ${symlink}
+    Execute Command    rm -rf ${child_dir} ${symlink}
+    [Teardown]    Execute Command    cmd=rm -rf ${child_dir} ${symlink}
 
 Add missing timestamps
     ${transformed_msg}    Execute Command
@@ -187,12 +189,13 @@ Consuming messages from a file, periodically
     [Teardown]    Uninstall Flow    read-file-periodically.toml
 
 Appending messages to a file
+    Execute Command    cmd=rm -f /tmp/events.log
     Install Flow    input-flows    append-to-file.toml
     Execute Command    for i in $(seq 3); do tedge mqtt pub seq/events "$i"; done
     Execute Command    grep '\\[seq/events\\] 1' /tmp/events.log
     Execute Command    grep '\\[seq/events\\] 2' /tmp/events.log
     Execute Command    grep '\\[seq/events\\] 3' /tmp/events.log
-    [Teardown]    Uninstall Flow    append-to-file.toml
+    [Teardown]    Run Keywords    Uninstall Flow    append-to-file.toml    AND    Execute Command    cmd=rm -f /tmp/events.log
 
 Reloading a broken script when its permission is fixed
     # Break the script and make sure tedge-mapper-local can no more handle measurements
@@ -274,6 +277,8 @@ Display flows definitions directory
     Should Be Equal    ${directory}    /etc/tedge/mappers/local/flows
 
 Flow is added/removed when a directory is moved in/out
+    Execute Command
+    ...    cmd=rm -rf /myflow /tmp/myflow /etc/tedge/mappers/local/myflow /etc/tedge/mappers/local/flows/myflow
     # note: in the test image /tmp is on different filesystem, so moving between there and flows dir creates and deletes files in flows dir fs
     # moving between flows dir and its parent dir is in the same filesystem, so creates Modified events (it's technically only a rename)
 
@@ -309,6 +314,10 @@ Flow is added/removed when a directory is moved in/out
 
     Execute Command    mv /etc/tedge/mappers/local/flows/myflow /etc/tedge/mappers/local/myflow
     Assert flow is not running    after moving scripts dir inside the flow
+    [Teardown]    Run Keywords
+    ...    Execute Command    cmd=rm -rf /myflow /tmp/myflow /etc/tedge/mappers/local/myflow /etc/tedge/mappers/local/flows/myflow
+    ...    AND
+    ...    Start Service    tedge-mapper-local
 
 Setting MQTT attributes
     Install Nested Flow    mqtt-flows
@@ -389,6 +398,7 @@ Order of flow definition updates does not matter
     [Teardown]    Uninstall Nested Flow    issue-3978
 
 Params are dynamically reloaded
+    Execute Command    cmd=rm -fr /etc/tedge/mappers/local/flows/greeting-flows
     ${start}    Get Unix Timestamp
     ThinEdgeIO.Transfer To Device
     ...    ${CURDIR}/greeting-flows/hello.js
@@ -486,6 +496,7 @@ Params are dynamically reloaded
     ...    minimum=1
     ...    date_from=${start}
     ...    message_contains=Enjoy your day!
+    [Teardown]    Uninstall Nested Flow    greeting-flows
 
 Flow with static mqtt topic loop is rejected at load time
     Install Flow    infinite-loop-flows    mqtt-static-loop.toml
