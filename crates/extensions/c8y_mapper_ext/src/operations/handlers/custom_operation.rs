@@ -123,19 +123,17 @@ fn get_c8y_operation(
 #[cfg(test)]
 mod tests {
     use crate::config::C8yMapperConfig;
-    use crate::tests::skip_init_messages;
+    use crate::tests::helpers::assert_received_contains_str;
     use crate::tests::spawn_c8y_mapper_actor_with_config;
     use crate::tests::test_mapper_config;
     use crate::tests::TestHandle;
 
     use serde_json::json;
     use std::time::Duration;
-    use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::Sender;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
 
-    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
     use tedge_test_utils::fs::TempTedgeDir;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
@@ -150,8 +148,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate custom operation command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -205,8 +201,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // The child device must be registered first
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1//"),
@@ -215,8 +209,7 @@ mod tests {
         .await
         .expect("fail to register the child-device");
 
-        mqtt.skip(1).await; // Skip child device registration messages
-                            // Simulate custom operation command with "executing" state
+        // Simulate custom operation command with "executing" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1///cmd/command/c8y-mapper-1234"),
             json!({
@@ -271,8 +264,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Simulate custom operation command with "successful" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/command/c8y-mapper-1234"),
@@ -303,8 +294,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate custom operation command with "successful" state
         mqtt.send(MqttMessage::new(
@@ -337,8 +326,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate custom operation command with "successful" state
         mqtt.send(MqttMessage::new(
@@ -379,8 +366,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // The child device must be registered first
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1//"),
@@ -388,8 +373,6 @@ mod tests {
         ))
         .await
         .expect("fail to register the child-device");
-
-        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate custom operation command with "successful" state
         mqtt.send(MqttMessage::new(

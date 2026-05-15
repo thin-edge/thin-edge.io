@@ -83,14 +83,12 @@ mod tests {
     use std::time::Duration;
 
     use serde_json::json;
-    use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::Sender;
-    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    use crate::tests::skip_init_messages;
+    use crate::tests::helpers::assert_received_contains_str;
     use crate::tests::spawn_c8y_mapper_actor;
     use crate::tests::spawn_dummy_c8y_http_proxy;
     use crate::tests::TestHandle;
@@ -106,7 +104,6 @@ mod tests {
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate software_list request
         mqtt.send(MqttMessage::new(
