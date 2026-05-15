@@ -19,7 +19,6 @@ use crate::twin_manager::builder::TwinManagerConfig;
 use crate::AgentOpt;
 use crate::Capabilities;
 use anyhow::Context;
-use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::CloudHttpConfig;
 use flockfile::check_another_instance_is_not_running;
@@ -77,7 +76,7 @@ pub(crate) struct AgentConfig {
     pub sw_update_config: SoftwareManagerConfig,
     pub operation_config: OperationConfig,
     pub config_dir: TedgePaths,
-    pub tmp_dir: Arc<Utf8Path>, // TODO: change it to TedgePaths
+    pub tmp_dir: Arc<TedgePaths>,
     pub run_dir: TedgePaths,
     pub use_lock: bool,
     pub log_dir: TedgePaths,
@@ -107,7 +106,7 @@ impl AgentConfig {
         cliopts: AgentOpt,
     ) -> Result<Self, anyhow::Error> {
         let config_dir = tedge_config.config_root();
-        let tmp_dir = Arc::from(tedge_config.tmp.path.as_path()); // TODO: maybe can change to TedgePaths
+        let tmp_dir = Arc::from(tedge_config.tmp_root());
         let state_dir = tedge_config.state_root();
 
         let mqtt_topic_root = cliopts
@@ -400,7 +399,7 @@ impl Agent {
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
                 config_dir: self.config.config_dir.clone(),
                 tmp_dir: self.config.tmp_dir.clone(),
-                log_dir: self.config.log_dir.root().to_path_buf(),
+                log_dir: self.config.log_dir.clone(),
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: device_topic_id.clone(),
                 plugin_dirs: self.config.log_plugin_dirs,

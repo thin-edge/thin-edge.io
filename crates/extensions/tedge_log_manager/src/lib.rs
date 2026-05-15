@@ -101,7 +101,7 @@ impl LogManagerBuilder {
         }
 
         // creating tedge-log-plugin.toml
-        let agent_logs_path = format!("{}/agent/workflow-software_*", config.log_dir);
+        let agent_logs_path = format!("{}/agent/workflow-software_*", config.log_dir.root());
         let example_config = toml! {
             [[files]]
             type = "software-management"
@@ -216,7 +216,7 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
         let external_plugins = ExternalPlugins::new(
             self.config.plugin_dirs.clone(),
             self.config.sudo_enabled,
-            self.config.tmp_dir.clone(),
+            self.config.tmp_dir.root().into(),
         );
 
         Ok(LogManagerActor::new(

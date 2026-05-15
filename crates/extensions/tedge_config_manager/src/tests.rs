@@ -109,6 +109,11 @@ async fn new_config_manager_builder(
     UploaderMessageBox,
 ) {
     let config_root = TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", "");
+    let tmp_root = TedgePaths::from_root_with_defaults(
+        Utf8Path::from_path(&std::env::temp_dir()).unwrap(),
+        "",
+        "",
+    );
     let config = ConfigManagerConfig {
         config_dir: config_root.clone(),
         plugin_dirs: vec![temp_dir
@@ -120,7 +125,7 @@ async fn new_config_manager_builder(
         plugin_config_path: config_root.file("tedge-configuration-plugin.toml").unwrap(),
         config_snapshot_meta_topic: Topic::new_unchecked("te/device/main///cmd/config_snapshot"),
         config_update_meta_topic: Topic::new_unchecked("te/device/main///cmd/config_update"),
-        tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
+        tmp_path: Arc::from(tmp_root),
         ops_dir: temp_dir.dir("operations").utf8_path_buf(),
         mqtt_schema: MqttSchema::new(),
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
@@ -827,6 +832,11 @@ async fn execute_config_set_operation_step_file_not_found() -> Result<(), anyhow
 
 fn test_config(tempdir: &TempTedgeDir) -> ConfigManagerConfig {
     let config_root = TedgePaths::from_root_with_defaults(tempdir.utf8_path(), "", "");
+    let tmp_root = TedgePaths::from_root_with_defaults(
+        Utf8Path::from_path(&std::env::temp_dir()).unwrap(),
+        "",
+        "",
+    );
     ConfigManagerConfig {
         config_dir: config_root.clone(),
         plugin_dirs: vec![],
@@ -834,7 +844,7 @@ fn test_config(tempdir: &TempTedgeDir) -> ConfigManagerConfig {
         plugin_config_path: config_root
             .file("plugins/tedge-configuration-plugin.toml")
             .unwrap(),
-        tmp_path: Arc::from(Utf8Path::from_path(&std::env::temp_dir()).unwrap()),
+        tmp_path: Arc::from(tmp_root),
         ops_dir: tempdir.dir("operations").utf8_path_buf(),
         mqtt_schema: MqttSchema::default(),
         config_snapshot_meta_topic: Topic::new_unchecked(

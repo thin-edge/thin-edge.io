@@ -37,16 +37,31 @@ impl TEdgeConfig {
         SystemConfig::try_new(self.root_dir()).unwrap_or_default()
     }
 
+    /// The root directory for thin-edge configuration files such as `tedge.toml`
+    /// and subdirectories.
+    ///
+    /// Defaults to `/etc/tedge`.
     pub fn config_root(&self) -> TedgePaths {
         let system = self.read_system_config();
         TedgePaths::from_root_with_defaults(self.root_dir(), system.user, system.group)
     }
 
+    /// The root directory for persistent thin-edge data that needs to survive
+    /// service restarts. This includes the file-transfer repository used by
+    /// `tedge-agent` to stage files for child devices (stored under
+    /// `file-transfer/`), firmware caches, and other service-specific data.
+    ///
+    /// Defaults to `/var/tedge`. (configurable via `data.path`)
     pub fn data_root(&self) -> TedgePaths {
         let system = self.read_system_config();
         TedgePaths::from_root_with_defaults(self.data.path.clone(), system.user, system.group)
     }
 
+    /// The root directory where `tedge-agent` persists its operational state
+    /// across reboots, such as in-progress operation records used by the
+    /// software manager, restart manager, and operation workflow engine.
+    ///
+    /// Defaults to `/data/tedge/agent` (configurable via `agent.state.path`).
     pub fn state_root(&self) -> TedgePaths {
         let system = self.read_system_config();
         TedgePaths::from_root_with_defaults(
@@ -56,14 +71,32 @@ impl TEdgeConfig {
         )
     }
 
+    /// The root directory for thin-edge log files.
+    ///
+    /// Defaults to `/var/log/tedge`. (configurable via `logs.path`)
     pub fn logs_root(&self) -> TedgePaths {
         let system = self.read_system_config();
         TedgePaths::from_root_with_defaults(self.logs.path.clone(), system.user, system.group)
     }
 
+    /// The root directory for runtime files such as lock files (stored under
+    /// `lock/`) that prevent multiple instances of the same service from
+    /// running simultaneously, and restart marker files used by the restart
+    /// operation handler.
+    ///
+    /// Defaults to `/run`. (configurable via `run.path`)
     pub fn run_root(&self) -> TedgePaths {
         let system = self.read_system_config();
         TedgePaths::from_root_with_defaults(self.run.path.clone(), system.user, system.group)
+    }
+
+    /// The root directory for temporary files created during operations, such
+    /// as files staged before being moved to their final destination.
+    ///
+    /// Defaults to `/tmp`. (configurable via `tmp.path`)
+    pub fn tmp_root(&self) -> TedgePaths {
+        let system = self.read_system_config();
+        TedgePaths::from_root_with_defaults(self.tmp.path.clone(), system.user, system.group)
     }
 
     /// Load [TEdgeConfig], using a separate mapper config file as the default

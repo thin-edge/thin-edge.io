@@ -233,8 +233,6 @@ impl ManagedDir {
         })
     }
 
-    // TODO: create `dir_unchecked`?
-
     pub fn file(&self, path: impl AsRef<Utf8Path>) -> Result<ManagedFile, PathsError> {
         let path = path.as_ref();
         validate_managed_path(path)?;

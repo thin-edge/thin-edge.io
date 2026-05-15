@@ -1,4 +1,3 @@
-use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use regex::Regex;
 use serde::Deserialize;
@@ -29,8 +28,8 @@ pub const DEFAULT_PLUGIN_CONFIG_DIR_NAME: &str = "plugins/";
 pub struct LogManagerConfig {
     pub mqtt_schema: MqttSchema,
     pub config_dir: TedgePaths,
-    pub tmp_dir: Arc<Utf8Path>,
-    pub log_dir: Utf8PathBuf,
+    pub tmp_dir: Arc<TedgePaths>,
+    pub log_dir: TedgePaths,
     pub plugin_dirs: Vec<Utf8PathBuf>,
     pub plugin_config_dir: ManagedDir,
     pub plugin_config_path: ManagedFile,
@@ -42,8 +41,8 @@ pub struct LogManagerConfig {
 
 pub struct LogManagerOptions {
     pub config_dir: TedgePaths,
-    pub tmp_dir: Arc<Utf8Path>,
-    pub log_dir: Utf8PathBuf,
+    pub tmp_dir: Arc<TedgePaths>,
+    pub log_dir: TedgePaths,
     pub mqtt_schema: MqttSchema,
     pub mqtt_device_topic_id: EntityTopicId,
     pub plugin_dirs: Vec<Utf8PathBuf>,

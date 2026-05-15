@@ -1,4 +1,3 @@
-use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::SudoCommandBuilder;
 use tedge_config::TEdgeConfig;
@@ -8,7 +7,7 @@ use tedge_utils::paths::TedgePaths;
 #[derive(Debug, Clone)]
 pub struct SoftwareManagerConfig {
     pub device: EntityTopicId,
-    pub tmp_dir: Utf8PathBuf, // TODO: update to TedgePaths?
+    pub tmp_dir: TedgePaths,
     pub config_dir: TedgePaths,
     pub state_dir: TedgePaths,
     pub sm_plugins_dir: ManagedDir,
@@ -34,7 +33,7 @@ impl SoftwareManagerConfig {
 
         Ok(SoftwareManagerConfig {
             device,
-            tmp_dir: tedge_config.tmp.path.clone().into(),
+            tmp_dir: tedge_config.tmp_root(),
             config_dir: config_dir.clone(),
             state_dir: tedge_config.state_root(),
             sm_plugins_dir: config_dir.dir("sm-plugins")?,

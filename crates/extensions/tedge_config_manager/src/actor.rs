@@ -316,7 +316,7 @@ impl ConfigManagerWorker {
         let plugin = self.get_plugin(plugin_name)?;
 
         // Create a temporary directory that will be automatically cleaned up when dropped
-        let temp_dir = tempfile::tempdir_in(self.config.tmp_path.as_std_path())
+        let temp_dir = tempfile::tempdir_in(self.config.tmp_path.root().as_std_path())
             .context("Failed to create a temporary directory")?;
 
         let config_path = Utf8PathBuf::try_from(temp_dir.path().join(format!(
@@ -441,13 +441,13 @@ impl ConfigManagerWorker {
     ) -> Result<Option<Utf8PathBuf>, ConfigManagementError> {
         // because we might not have permissions to write to destination, save in tmpdir and then
         // move to destination later
-        let temp_path = &self.config.tmp_path.join(&request.config_type);
+        let temp_path = &self.config.tmp_path.dir(&request.config_type)?;
 
         let Some(tedge_url) = &request.tedge_url else {
             return Err(anyhow::anyhow!("tedge_url not present in config update payload").into());
         };
 
-        let download_request = DownloadRequest::new(tedge_url, temp_path.as_std_path());
+        let download_request = DownloadRequest::new(tedge_url, temp_path.path().as_std_path());
 
         info!(
             "Awaiting download for config type: {} from url: {}",
@@ -468,7 +468,7 @@ impl ConfigManagerWorker {
             .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
 
         let cmd_id = self.extract_command_id(topic)?;
-        let work_dir = self.config.tmp_path.clone();
+        let work_dir = self.config.tmp_path.root().to_path_buf();
 
         self.execute_config_set_step(
             topic,
@@ -538,7 +538,7 @@ impl ConfigManagerWorker {
         let from_path = get_path_property(&command, "setFrom")?;
 
         // Generate workdir for this operation
-        let work_dir = self.generate_work_dir(config_type, &cmd_id)?;
+        let work_dir = self.generate_work_dir(config_type, &cmd_id).await?;
 
         let result = self
             .execute_config_prepare_step(
@@ -781,20 +781,20 @@ impl ConfigManagerWorker {
     }
 
     /// Generate a unique working directory for a config operation
-    fn generate_work_dir(
+    async fn generate_work_dir(
         &self,
         config_type: &str,
         cmd_id: &str,
     ) -> Result<Utf8PathBuf, ConfigManagementError> {
         let timestamp = OffsetDateTime::now_utc().unix_timestamp();
-        let work_dir = self.config.tmp_path.join(format!(
+        let work_dir = self.config.tmp_path.dir(format!(
             "config_update-{}-{}-{}",
             config_type.replace(['/', ':', '\\'], "_"),
             cmd_id,
             timestamp
-        ));
-        std::fs::create_dir_all(&work_dir)?;
-        Ok(work_dir)
+        ))?;
+        work_dir.ensure().await?;
+        Ok(work_dir.path().to_owned())
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), RuntimeError> {

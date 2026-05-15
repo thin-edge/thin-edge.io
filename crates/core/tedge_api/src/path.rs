@@ -60,10 +60,6 @@ impl DataDir {
         self.0.join(path.as_ref().to_path_buf())
     }
 
-    pub fn root_dir(&self) -> Utf8PathBuf {
-        self.0.clone()
-    }
-
     /// Return `Utf8PathBuf` to ThinEdge file transfer repository.
     ///
     /// # Examples

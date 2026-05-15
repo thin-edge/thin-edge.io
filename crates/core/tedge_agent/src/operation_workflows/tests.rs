@@ -802,7 +802,7 @@ async fn spawn_mqtt_operation_converter(
         config_dir: config_root.clone(),
         state_dir: TedgePaths::from_root_with_defaults(tmp_path.join("running-operations"), "", ""),
         operations_dir: config_root.dir("operations").unwrap(),
-        tmp_dir: tmp_path.into(),
+        tmp_dir: TedgePaths::from_root_with_defaults(tmp_path.join(tmp_path), "", ""),
         capabilities: Capabilities::default(),
     };
     let mut workflow_actor_builder = WorkflowActorBuilder::new(

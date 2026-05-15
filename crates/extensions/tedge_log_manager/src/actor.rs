@@ -169,17 +169,17 @@ impl LogManagerActor {
             .unwrap_or((&request_payload.log_type, "file"));
 
         let log_path = if let Some(plugin) = self.external_plugins.by_plugin_type(plugin_name) {
-            let output_log_path = self.config.tmp_dir.join(format!(
+            let output_log_path = self.config.tmp_dir.file(format!(
                 "{}_{}_{}.log",
                 log_type,
                 plugin_name,
                 OffsetDateTime::now_utc().unix_timestamp()
-            ));
+            ))?;
 
             plugin
                 .get(
                     log_type,
-                    output_log_path.as_path(),
+                    output_log_path.path(),
                     Some(request_payload.date_from),
                     Some(request_payload.date_to),
                     request_payload.search_text.as_deref(),
@@ -187,7 +187,7 @@ impl LogManagerActor {
                 )
                 .await?;
 
-            output_log_path.to_path_buf()
+            output_log_path
         } else {
             return Err(LogManagementError::PluginError {
                 plugin_name: plugin_name.to_string(),
@@ -195,7 +195,7 @@ impl LogManagerActor {
             });
         };
 
-        let upload_request = UploadRequest::new(&request_payload.tedge_url, log_path.as_path());
+        let upload_request = UploadRequest::new(&request_payload.tedge_url, log_path.path());
 
         info!(
             target: "log plugins",

@@ -1,5 +1,4 @@
 use crate::Capabilities;
-use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::TEdgeConfig;
@@ -15,7 +14,7 @@ pub struct OperationConfig {
     pub config_dir: TedgePaths,
     pub state_dir: TedgePaths,
     pub operations_dir: ManagedDir,
-    pub tmp_dir: Utf8PathBuf, // TODO: change it to TedgePaths
+    pub tmp_dir: TedgePaths,
     pub capabilities: Capabilities,
 }
 
@@ -41,7 +40,7 @@ impl OperationConfig {
             config_dir: tedge_config.config_root(),
             state_dir: tedge_config.state_root(),
             operations_dir: config_dir.dir("operations")?,
-            tmp_dir: tedge_config.tmp.path.clone().into(),
+            tmp_dir: tedge_config.tmp_root(),
             capabilities,
         })
     }

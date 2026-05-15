@@ -1,4 +1,3 @@
-use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter;
@@ -24,7 +23,7 @@ pub struct ConfigManagerConfig {
     pub plugin_dirs: Vec<Utf8PathBuf>,
     pub plugin_config_dir: ManagedDir,
     pub plugin_config_path: ManagedFile,
-    pub tmp_path: Arc<Utf8Path>,
+    pub tmp_path: Arc<TedgePaths>,
     pub ops_dir: Utf8PathBuf,
     pub mqtt_schema: MqttSchema,
     pub config_snapshot_meta_topic: Topic,
@@ -42,7 +41,7 @@ pub struct ConfigManagerOptions {
     pub mqtt_topic_root: MqttSchema,
     pub mqtt_device_topic_id: EntityTopicId,
     pub tedge_http_host: Arc<str>,
-    pub tmp_path: Arc<Utf8Path>,
+    pub tmp_path: Arc<TedgePaths>,
     pub ops_dir: Utf8PathBuf,
     pub is_sudo_enabled: bool,
     pub config_snapshot_enabled: bool,

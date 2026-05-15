@@ -220,7 +220,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             command_sender: self.command_sender,
             script_runner: self.script_runner,
             downloader: self.downloader,
-            tmp_dir: self.config.tmp_dir,
+            tmp_dir: self.config.tmp_dir.root().into(),
         }
     }
 }

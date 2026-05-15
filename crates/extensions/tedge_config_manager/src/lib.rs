@@ -211,7 +211,7 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
         let external_plugins = ExternalPlugins::new(
             self.config.plugin_dirs.clone(),
             self.config.sudo_enabled,
-            self.config.tmp_path.clone(),
+            self.config.tmp_path.root().to_path_buf().into(),
         );
 
         Ok(ConfigManagerActor::new(
