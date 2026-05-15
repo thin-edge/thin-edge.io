@@ -166,6 +166,22 @@ Consuming messages from a process stdout, periodically
     Should Not Be Empty    ${messages[0]}    msg=Output should not be empty lines
     [Teardown]    Uninstall Flow    journalctl-cursor.toml
 
+Consuming messages from a process using a relative path command
+    [Documentation]    Relative paths in [input.process] command are resolved against the flows directory
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/relative-process-flows/relative-script.sh
+    ...    /etc/tedge/mappers/local/flows/relative-script.sh
+    Install Flow    relative-process-flows    relative-process.toml
+    ${start}    Get Unix Timestamp
+    ${messages}    Should Have MQTT Messages
+    ...    topic=test/relative-process
+    ...    minimum=1
+    ...    date_from=${start}
+    ...    message_contains=hello-from-relative-path
+    [Teardown]    Run Keywords
+    ...    Uninstall Flow    relative-process.toml
+    ...    AND    Execute Command    cmd=rm -f /etc/tedge/mappers/local/flows/relative-script.sh
+
 Consuming messages from the tail of file
     Install Flow    input-flows    tail-named-pipe.toml
     ${start}    Get Unix Timestamp
