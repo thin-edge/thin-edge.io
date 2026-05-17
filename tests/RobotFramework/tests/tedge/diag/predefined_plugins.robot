@@ -14,7 +14,6 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
     ...    output.log
     ...    tedge-agent.log
     ...    tedge-mapper-c8y.log
-    ...    tedge-mapper-collectd.log
     ...    tedge-config-list.log
     ...    tedge.toml
     ...    mappers/c8y/mapper.toml
@@ -25,7 +24,6 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
 
     Log Should Contain    tedge-agent.log    Starting tedge-agent.service
     Log Should Contain    tedge-mapper-c8y.log    Starting tedge-mapper-c8y.service
-    Log Should Contain    tedge-mapper-collectd.log    Starting tedge-mapper-collectd.service
     Log Should Contain    tedge-config-list.log    c8y.url
     Log Should Contain    mappers/c8y/mapper.toml    url
     Log Should Contain    mappers/tb/mapper.toml    mqtt.azure.com
@@ -106,7 +104,6 @@ Log Should Contain
 Custom Suite Setup
     Setup
     Execute Command    mkdir -p /results
-    Start Service    tedge-mapper-collectd
     Execute Command    mkdir -p /etc/tedge/mappers/tb
     Execute Command    printf 'url \= "mqtt.azure.com:1883"\n' > /etc/tedge/mappers/tb/mapper.toml
     Execute Command    tedge diag collect --keep-dir --output-dir /results --name test

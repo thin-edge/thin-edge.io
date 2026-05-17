@@ -10,12 +10,12 @@ repository = { workspace = true }
 
 [dependencies]
 async-trait = { workspace = true }
-tedge_actors = { workspace = true }
+serde_json = { workspace = true }
+tedge_flows = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 
 [dev-dependencies]
-tedge_actors = { workspace = true, features = ["test-helpers"] }
 tokio = { workspace = true, features = ["rt", "macros"] }
 
 [lints]

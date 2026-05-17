@@ -146,8 +146,4 @@ if user_exists "$TEDGE_USER" && group_exists "$TEDGE_GROUP"; then
         chown "$TEDGE_USER:$TEDGE_GROUP" /run/lock/tedge-mapper-aws.lock
     fi
 
-    if [ -f "/run/lock/tedge-mapper-collectd.lock" ]; then
-        chown "$TEDGE_USER:$TEDGE_GROUP" /run/lock/tedge-mapper-collectd.lock
-    fi
-
 fi # end: user_exists && group_exists

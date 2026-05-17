@@ -27,19 +27,10 @@ Test Tags           theme:monitoring    theme:c8y    theme:collectd
 
 
 *** Test Cases ***
-Check running collectd
-    Service Should Be Running    collectd
-
-Is collectd publishing MQTT messages?
-    ${messages}=    Should Have MQTT Messages    topic=collectd/#    minimum=1    maximum=None
-
 Check thin-edge monitoring
-    # 3. Enable thin-edge.io monitoring.
-    Execute Command    sudo systemctl enable tedge-mapper-collectd
-    Execute Command    sudo systemctl start tedge-mapper-collectd
     # Check thin-edge monitoring
     ${tedge_messages}=    Should Have MQTT Messages
-    ...    topic=te/device/main///m/
+    ...    topic=te/device/main///m/collectd
     ...    minimum=1
     ...    maximum=None
     ...    message_pattern=.*(memory|cpu|df-root).*
@@ -48,20 +39,22 @@ Check thin-edge monitoring
     ...    topic=c8y/measurement/measurements/create
     ...    minimum=1
     ...    maximum=None
-    Should Contain    ${c8y_messages[0]}    "type":"ThinEdgeMeasurement"
+    Should Contain    ${c8y_messages[0]}    "type":"collectd"
 
 Check grouping of measurements
     # This test step is only partially checking the grouping of the messages, because of the timeouts and the current design
     # if proper checks will be implemented this test would be failing from time to time
-
     Execute Command    sudo systemctl stop collectd
     Sleep    5s    reason=Needed because of the batching
+
     ${start_time}=    Get Unix Timestamp
-    Execute Command
-    ...    tedge mqtt pub collectd/localhost/temperature/temp1 "`date +%s.%N`:50" && tedge mqtt pub collectd/localhost/temperature/temp2 "`date +%s.%N`:40" && tedge mqtt pub collectd/localhost/pressure/pres1 "`date +%s.%N`:10" && tedge mqtt pub collectd/localhost/pressure/pres2 "`date +%s.%N`:20"
+    Execute Command    tedge mqtt pub collectd/localhost/temperature/temp1 "`date +%s.%N`:50"
+    Execute Command    tedge mqtt pub collectd/localhost/temperature/temp2 "`date +%s.%N`:40"
+    Execute Command    tedge mqtt pub collectd/localhost/pressure/pres1 "`date +%s.%N`:10"
+    Execute Command    tedge mqtt pub collectd/localhost/pressure/pres2 "`date +%s.%N`:20"
     ${c8y_messages}=    Should Have MQTT Messages
     ...    c8y/measurement/measurements/create
-    ...    maximum=4
+    ...    maximum=1
     ...    date_from=${start_time}
     Should Contain Any
     ...    ${c8y_messages[0]}
@@ -75,8 +68,11 @@ Check grouping of measurements
 Custom Setup
     ${DEVICE_SN}=    Setup
     Device Should Exist    ${DEVICE_SN}
-    # 1. Install collectd
-    # 2. Configure collectd
+    Start Service    tedge-mapper-local
+    Install Flow    collectd
+    Install Collectd
+
+Install Collectd
     Execute Command
     ...    sudo apt-get update && sudo apt-get install -y --no-install-recommends collectd-core libmosquitto1
     Execute Command    sudo cp /etc/tedge/contrib/collectd/collectd.conf /etc/collectd/collectd.conf
@@ -87,3 +83,13 @@ Custom Setup
     ...    sudo sed -iE 's/\\bInterval.*[0-9]\\+/Interval 1/g' /etc/collectd/collectd.conf && cat /etc/collectd/collectd.conf
 
     Execute Command    sudo systemctl restart collectd
+    ${messages}=    Should Have MQTT Messages    topic=collectd/#    minimum=1    maximum=None
+
+Install Flow
+    [Arguments]    ${directory}
+    ${start}=    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/    /etc/tedge/mappers/local/flows/${directory}/
+    Should Have MQTT Messages
+    ...    topic=te/device/main/service/tedge-mapper-local/status/flows
+    ...    date_from=${start}
+    ...    message_contains=${directory}

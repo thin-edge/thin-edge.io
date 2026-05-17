@@ -47,21 +47,7 @@ journalctl -u tedge-mapper-aws
 ```
 
 :::note
-Run `tedge_mapper --debug aws` to log more debug messages
-:::
-
-### Device monitoring logs {#device-logs}
-The %%te%% device monitoring component logs can be found as below
-
-#### Collectd mapper logs {#collectd-mapper}
-The log messages of the collectd mapper that sends the monitoring data to the cloud can be accessed as below
-
-```sh
-journalctl -u tedge-mapper-collectd
-```
-
-:::note
-Run `tedge-mapper --debug collectd` to log more debug messages
+Run `tedge-mapper --debug aws` to log more debug messages
 :::
 
 ### Software Management logs {#software-management}

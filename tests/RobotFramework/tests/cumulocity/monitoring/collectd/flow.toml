@@ -1,0 +1,7 @@
+input.mqtt.topics = ["collectd/+/+/+"]
+
+steps = [
+    { script = "collectd-to-te-measurements.js" },
+    { builtin = "time-window-batcher", interval = "1s" },
+    { script = "group-te-measurements.js", config = { topic = "te/device/main///m/collectd"} },
+]
