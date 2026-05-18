@@ -124,8 +124,8 @@ impl<'a, R: Rng> ShuffledMqttBox<'a, R> {
 #[async_trait::async_trait]
 impl<R: Rng + Send> MessageReceiver<MqttMessage> for ShuffledMqttBox<'_, R> {
     async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
-        // Inject one pending message before reading output
-        let _ = self.send_one().await;
+        // Inject all pending messages to actors before reading output
+        while let Ok(true) = self.send_one().await {}
 
         // Read directly from the inner receiver so we can loopback messages
         // to connected actors BEFORE applying the ignore filter.
