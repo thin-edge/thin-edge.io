@@ -62,7 +62,7 @@ impl OperationHandler {
                 capabilities: c8y_mapper_config.capabilities,
                 auto_log_upload: c8y_mapper_config.auto_log_upload,
                 tedge_http_host: c8y_mapper_config.tedge_http_host.clone(),
-                tmp_dir: c8y_mapper_config.tmp_dir.clone(),
+                tmp_dir: c8y_mapper_config.tmp_dir.root().into(),
                 mqtt_schema: c8y_mapper_config.mqtt_schema.clone(),
                 mqtt_publisher: mqtt_publisher.clone(),
                 software_management_api: c8y_mapper_config.software_management_api,
