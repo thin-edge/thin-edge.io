@@ -102,6 +102,12 @@ impl<'a, R: Rng> ShuffledMqttBox<'a, R> {
         Ok(true)
     }
 
+    async fn send_all(&mut self) -> Result<(), ChannelError> {
+        while self.send_one().await? {}
+
+        Ok(())
+    }
+
     /// Deliver a message to all matching actors in a random order, yielding
     /// between each delivery so that earlier recipients can process and
     /// publish before later recipients even receive the message.
@@ -558,6 +564,9 @@ async fn nested_child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
         })
         .to_string(),
     ));
+
+    // All the messages queued above are released from the broker
+    mqtt.send_all().await.unwrap();
 
     skip_init_messages(&mut mqtt).await;
 
