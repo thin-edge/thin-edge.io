@@ -11,8 +11,6 @@ use c8y_mapper_ext::availability::AvailabilityBuilder;
 use c8y_mapper_ext::availability::AvailabilityConfig;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
-use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use mqtt_channel::Config;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -41,6 +39,8 @@ use tedge_mqtt_bridge::QoS;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
+use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::TedgePaths;
 use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
@@ -64,7 +64,7 @@ pub fn auth_method(c8y_config: &MapperConfig<C8yMapperSpecificConfig>) -> AuthMe
 
 impl CumulocityMapper {
     /// Returns the mapper directory path for this instance.
-    pub fn mapper_dir(&self, config_dir: &Utf8Path) -> Utf8PathBuf {
+    pub fn mapper_dir(&self, config_dir: &TedgePaths) -> ManagedDir {
         crate::mapper_dir(config_dir, "c8y", self.profile.as_ref())
     }
 }
@@ -74,7 +74,7 @@ impl TEdgeComponent for CumulocityMapper {
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
-        cfg_dir: &tedge_config::Path,
+        cfg_dir: &TedgePaths,
     ) -> Result<(), anyhow::Error> {
         let c8y_config = tedge_config.mapper_config(&self.profile)?;
         let prefix = &c8y_config.bridge.topic_prefix;
@@ -84,7 +84,7 @@ impl TEdgeComponent for CumulocityMapper {
         let service_topic_id = EntityTopicId::default_main_service(&c8y_mapper_name)?;
 
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(
-            cfg_dir,
+            cfg_dir.root(),
             &tedge_config,
             &c8y_config,
             service_topic_id.clone(),
@@ -163,7 +163,7 @@ impl TEdgeComponent for CumulocityMapper {
         };
 
         let mapper_dir = self.mapper_dir(cfg_dir);
-        let mut flows = crate::mapper_flow_registry(&tedge_config, mapper_dir).await?;
+        let mut flows = crate::mapper_flow_registry(&tedge_config, &mapper_dir).await?;
         c8y_mapper_actor.persist_builtin_flows(&mut flows).await?;
         let service_config = flows_config(&tedge_config, &c8y_mapper_name)?;
 

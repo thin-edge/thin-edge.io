@@ -239,7 +239,7 @@ impl RestartManagerActor {
         let mut restart_commands = vec![];
 
         // reading `config_dir` to get the restart command or defaulting to `["init", "6"]'
-        let system_config = SystemConfig::try_new(&self.config.config_dir)?;
+        let system_config = SystemConfig::try_new(self.config.config_dir.root())?;
 
         let sync_command = self.config.sudo.command(SYNC).into();
         restart_commands.push(sync_command);
@@ -257,7 +257,7 @@ impl RestartManagerActor {
     }
 
     fn get_restart_timeout(&self) -> Duration {
-        SystemConfig::try_new(&self.config.config_dir)
+        SystemConfig::try_new(self.config.config_dir.root())
             .map(|config| config.system.reboot_timeout())
             .unwrap_or_else(|_| SystemSpecificCommands::default().reboot_timeout())
     }

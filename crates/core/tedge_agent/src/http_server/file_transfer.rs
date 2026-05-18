@@ -16,13 +16,14 @@ use axum::http::HeaderValue;
 use axum::routing::get;
 use axum::Router;
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use http_body::Frame;
 use http_body_util::StreamBody;
 use hyper::Request;
 use hyper::StatusCode;
 use std::io::ErrorKind;
 use tedge_actors::futures::StreamExt;
+use tedge_api::path::DataDir;
+use tedge_utils::paths::ManagedDir;
 use tokio::fs::File;
 use tokio::io;
 use tokio::io::AsyncBufReadExt;
@@ -32,16 +33,19 @@ use tokio::io::BufWriter;
 use tokio_util::io::ReaderStream;
 use tower_http::set_header::SetResponseHeaderLayer;
 
-pub(crate) fn file_transfer_router(file_transfer_dir: Utf8PathBuf) -> Router {
+pub(crate) fn file_transfer_router(file_transfer_dir: ManagedDir, data_dir: DataDir) -> Router {
     Router::new()
         .route(
             "/v1/files/{*path}",
             get(download_file).put(upload_file).delete(delete_file),
         )
-        .with_state(FileTransferDir::new(file_transfer_dir))
+        .with_state(FileTransferDir::new(file_transfer_dir, data_dir))
 }
 
-pub(crate) fn file_transfer_legacy_router(file_transfer_dir: Utf8PathBuf) -> Router {
+pub(crate) fn file_transfer_legacy_router(
+    file_transfer_dir: ManagedDir,
+    data_dir: DataDir,
+) -> Router {
     Router::new()
         .route(
             "/tedge/file-transfer/{*path}",
@@ -59,7 +63,7 @@ pub(crate) fn file_transfer_legacy_router(file_transfer_dir: Utf8PathBuf) -> Rou
             HeaderName::from_static("link"),
             HeaderValue::from_static("</te/v1/files>; rel=\"deprecation\""),
         ))
-        .with_state(FileTransferDir::new(file_transfer_dir))
+        .with_state(FileTransferDir::new(file_transfer_dir, data_dir))
 }
 
 #[axum::debug_handler(state = FileTransferDir)]
@@ -72,7 +76,11 @@ async fn upload_file(path: FileTransferPath, request: Request<Body>) -> Result<S
     }
 
     if let Some(directory) = path.full.parent() {
-        if let Err(err) = tedge_utils::file::create_directory_with_defaults(directory).await {
+        let managed_dir = match path.data_dir.dir(directory) {
+            Ok(d) => d,
+            Err(err) => return Err(internal_error(err, path.request)),
+        };
+        if let Err(err) = managed_dir.ensure().await {
             return Err(internal_error(err, path.request));
         }
 
@@ -177,8 +185,8 @@ mod tests {
     use http_body_util::BodyExt as _;
     use hyper::Method;
     use hyper::StatusCode;
-    use tedge_api::path::DataDir;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_utils::paths::TedgePaths;
     use test_case::test_case;
     use test_case::test_matrix;
     use tower::Service;
@@ -398,8 +406,10 @@ mod tests {
 
     fn app() -> (TempTedgeDir, Router) {
         let ttd = TempTedgeDir::new();
-        let ftd = DataDir::from(ttd.utf8_path_buf()).file_transfer_dir();
-        let router = file_transfer_router(ftd);
+        let data_dir: DataDir =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path_buf(), "", "").into();
+        let file_transfer_dir = data_dir.file_transfer_dir();
+        let router = file_transfer_router(file_transfer_dir, data_dir);
         (ttd, router)
     }
 

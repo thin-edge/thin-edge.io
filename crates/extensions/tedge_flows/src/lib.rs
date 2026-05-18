@@ -55,6 +55,7 @@ use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_utils::paths::ManagedDir;
 use tedge_watch_ext::WatchActorBuilder;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
@@ -128,6 +129,10 @@ fan_in_message_type!(InputMessage[MqttMessage, WatchEvent, FsWatchEvent, Tick]: 
 
 pub fn flows_dir(mapper_dir: &Utf8Path) -> Utf8PathBuf {
     mapper_dir.join("flows")
+}
+
+pub fn managed_flows_dir(mapper_dir: &ManagedDir) -> ManagedDir {
+    mapper_dir.dir("flows").unwrap()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

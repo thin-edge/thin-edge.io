@@ -20,10 +20,12 @@ use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::path::DataDir;
 use tedge_api::DownloadError;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_mqtt_ext::Topic;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_utils::paths::TedgePaths;
 use tokio::fs::remove_dir_all;
 use tokio::task::JoinHandle;
 
@@ -634,7 +636,11 @@ async fn spawn_firmware_manager(
         tedge_host,
         TEDGE_HTTP_PORT,
         tmp_dir.utf8_path_buf(),
-        tmp_dir.utf8_path_buf().into(),
+        DataDir::from(TedgePaths::from_root_with_defaults(
+            tmp_dir.utf8_path_buf(),
+            "",
+            "",
+        )),
         timeout_sec,
         "c8y".try_into().unwrap(),
         c8y_end_point,

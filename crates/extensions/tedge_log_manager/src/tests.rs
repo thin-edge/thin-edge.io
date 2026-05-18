@@ -5,7 +5,6 @@ use crate::LogUploadResult;
 use crate::PluginConfig;
 use camino::Utf8Path;
 use std::fs::read_to_string;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
@@ -26,6 +25,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
+use tedge_utils::paths::TedgePaths;
 use toml::from_str;
 use toml::toml;
 use toml::Table;
@@ -93,29 +93,29 @@ esac
 /// along two boxes to exchange MQTT and HTTP messages with the log actor
 #[allow(clippy::type_complexity)]
 async fn new_log_manager_builder(
-    temp_dir: &Path,
+    temp_dir: impl AsRef<Utf8Path>,
 ) -> (
     LogManagerBuilder,
     TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
     UploaderMessageBox,
 ) {
+    let config_root = TedgePaths::from_root_with_defaults(&temp_dir, "", "");
+    let tmp_root = config_root.clone();
+    let log_root = config_root.clone();
+
     let mut log_metadata_sync_topics =
         TopicFilter::new_unchecked("te/device/main///cmd/software_update/+");
     log_metadata_sync_topics.add_unchecked("te/device/main///cmd/config_update/+");
 
-    let plugin_config_path = temp_dir.join("tedge-log-plugin.toml");
+    let plugin_config_path = config_root.file("tedge-log-plugin.toml").unwrap();
     let config = LogManagerConfig {
         mqtt_schema: MqttSchema::default(),
-        config_dir: temp_dir.to_path_buf(),
-        tmp_dir: Arc::from(Utf8Path::from_path(temp_dir).unwrap()),
-        log_dir: temp_dir.to_path_buf().try_into().unwrap(),
-        plugin_dirs: vec![temp_dir
-            .to_path_buf()
-            .join("log-plugins")
-            .try_into()
-            .unwrap()],
-        plugin_config_dir: temp_dir.to_path_buf(),
+        config_dir: config_root.clone(),
+        tmp_dir: Arc::from(tmp_root),
+        log_dir: log_root,
+        plugin_dirs: vec![temp_dir.as_ref().join("log-plugins")],
+        plugin_config_dir: config_root.root_dir(),
         plugin_config_path: plugin_config_path.clone(),
         logtype_reload_topic: Topic::new_unchecked("te/device/main///cmd/log_upload"),
         logfile_request_topic: TopicFilter::new_unchecked("te/device/main///cmd/log_upload/+"),
@@ -123,7 +123,7 @@ async fn new_log_manager_builder(
         sudo_enabled: false,
     };
 
-    let plugin_config = PluginConfig::from_file(plugin_config_path.as_path()).await;
+    let plugin_config = PluginConfig::from_file(plugin_config_path.path().as_ref()).await;
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
@@ -152,7 +152,7 @@ async fn new_log_manager_builder(
 
 /// Spawn a log manager actor and return 2 boxes to exchange MQTT and HTTP messages with it
 async fn spawn_log_manager_actor(
-    temp_dir: &Path,
+    temp_dir: impl AsRef<Utf8Path>,
 ) -> (
     MqttMessageBox,
     SimpleMessageBox<NoMessage, FsWatchEvent>,
@@ -167,7 +167,7 @@ async fn spawn_log_manager_actor(
 #[tokio::test]
 async fn default_plugin_config() {
     let tempdir = TempTedgeDir::new();
-    let (_mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (_mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
     let plugin_config_content =
         read_to_string(tempdir.path().join("tedge-log-plugin.toml")).unwrap();
     let plugin_config_toml: Table = from_str(&plugin_config_content).unwrap();
@@ -188,7 +188,7 @@ async fn default_plugin_config() {
 #[tokio::test]
 async fn log_manager_reloads_log_types() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
 
@@ -206,7 +206,7 @@ async fn log_manager_reloads_log_types() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -281,7 +281,7 @@ async fn log_manager_upload_log_files_on_request() -> Result<(), anyhow::Error> 
 #[tokio::test]
 async fn filter_logs_by_line_count() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/5678");
 
@@ -345,7 +345,7 @@ async fn filter_logs_by_line_count() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn filter_logs_by_search_text() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/9012");
 
@@ -408,7 +408,7 @@ async fn filter_logs_by_search_text() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn filter_logs_by_search_text_and_line_count() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, mut uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/3456");
 
@@ -472,7 +472,7 @@ async fn filter_logs_by_search_text_and_line_count() -> Result<(), anyhow::Error
 #[tokio::test]
 async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -519,7 +519,7 @@ async fn request_logtype_that_does_not_exist() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _http, _fs) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _http, _fs) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     // Check for child device topic
     let another_device_topic = Topic::new_unchecked("te/device/child01///cmd/log_upload/1234");
@@ -549,7 +549,7 @@ async fn ignore_topic_for_another_device() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -578,7 +578,7 @@ async fn send_incorrect_payload() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let logfile_topic = Topic::new_unchecked("te/device/main///cmd/log_upload/1234");
 
@@ -625,7 +625,7 @@ async fn read_log_from_file_that_does_not_exist() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn log_types_published_on_software_update_message() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
     let software_update_topic = Topic::new_unchecked("te/device/main///cmd/software_update/1234");
@@ -683,7 +683,7 @@ async fn log_types_published_on_software_update_message() -> Result<(), anyhow::
 #[tokio::test]
 async fn log_types_published_on_config_update_message() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
     let config_update_topic = Topic::new_unchecked("te/device/main///cmd/config_update/1234");
@@ -759,7 +759,7 @@ async fn log_types_published_on_config_update_message() -> Result<(), anyhow::Er
 #[tokio::test]
 async fn log_types_not_published_on_random_command_update() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
-    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.path()).await;
+    let (mut mqtt, _fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
 
     let restart_topic = Topic::new_unchecked("te/device/main///cmd/restart/1234");
 

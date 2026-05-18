@@ -7,15 +7,23 @@ use axum::extract::Path;
 use axum::http::request::Parts;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use tedge_api::path::DataDir;
+use tedge_utils::paths::ManagedDir;
 
 use super::error::HttpRequestError;
 
 #[derive(Clone)]
-pub(super) struct FileTransferDir(Arc<Utf8Path>);
+pub(super) struct FileTransferDir {
+    file_transfer_dir: Arc<ManagedDir>,
+    data_dir: Arc<DataDir>,
+}
 
 impl FileTransferDir {
-    pub(super) fn new(file_transfer_dir: Utf8PathBuf) -> Self {
-        Self(Arc::from(file_transfer_dir))
+    pub(super) fn new(file_transfer_dir: ManagedDir, data_dir: DataDir) -> Self {
+        Self {
+            file_transfer_dir: Arc::new(file_transfer_dir),
+            data_dir: Arc::new(data_dir),
+        }
     }
 }
 
@@ -25,6 +33,8 @@ pub struct FileTransferPath {
     pub full: Utf8PathBuf,
     /// The requested path, used to generate error messages, keeping the absolute path encapsulated
     pub request: RequestPath,
+    /// The data root (e.g. `/var/tedge`), used to create parent directories with the correct root on upload
+    pub data_dir: Arc<DataDir>,
 }
 
 /// The path from a request, used to generate error messages
@@ -57,30 +67,35 @@ impl FromRequestParts<FileTransferDir> for FileTransferPath {
 
     async fn from_request_parts(
         parts: &mut Parts,
-        file_transfer_dir: &FileTransferDir,
+        state: &FileTransferDir,
     ) -> Result<Self, Self::Rejection> {
-        let Path(request_path) =
-            Path::<Utf8PathBuf>::from_request_parts(parts, &file_transfer_dir).await?;
-        local_path_for_file(RequestPath(request_path), &file_transfer_dir.0)
+        let Path(request_path) = Path::<Utf8PathBuf>::from_request_parts(parts, state).await?;
+        local_path_for_file(
+            RequestPath(request_path),
+            state.file_transfer_dir.clone(),
+            state.data_dir.clone(),
+        )
     }
 }
 
 /// Return the path of the file associated to the given `uri`
 ///
 /// This cleans up the path using [path_clean::clean] and then verifies that this
-/// path is actually under `config.file_transfer_dir`
+/// path is actually under `file_transfer_dir`
 fn local_path_for_file(
     request_path: RequestPath,
-    file_transfer_dir: &Utf8Path,
+    file_transfer_dir: Arc<ManagedDir>,
+    data_dir: Arc<DataDir>,
 ) -> Result<FileTransferPath, HttpRequestError> {
-    let full_path = file_transfer_dir.join(&request_path);
+    let full_path = file_transfer_dir.path().join(&request_path);
 
     let clean_path = clean_utf8_path(&full_path);
 
-    if clean_path.starts_with(file_transfer_dir) {
+    if clean_path.starts_with(file_transfer_dir.path()) {
         Ok(FileTransferPath {
             full: clean_path,
             request: request_path,
+            data_dir,
         })
     } else {
         Err(HttpRequestError::InvalidPath { path: request_path })

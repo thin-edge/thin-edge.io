@@ -321,19 +321,20 @@ impl FirmwareManagerActor {
     }
 
     async fn resend_operations_to_child_device(&mut self) -> Result<(), FirmwareManagementError> {
-        let firmware_dir_path = self.worker.config.data_dir.firmware_dir().clone();
+        let firmware_dir = self.worker.config.data_dir.firmware_dir();
+        let firmware_dir_path = firmware_dir.path();
         if !firmware_dir_path.is_dir() {
             // Do nothing if the persistent store directory does not exist yet.
             return Ok(());
         }
 
-        for entry in fs::read_dir(&firmware_dir_path)? {
+        for entry in fs::read_dir(firmware_dir_path)? {
             let file_path = entry?.path();
             if file_path.is_file() {
                 let operation_entry =
                     FirmwareOperationEntry::read_from_file(&file_path)?.increment_attempt();
 
-                operation_entry.overwrite_file(&firmware_dir_path).await?;
+                operation_entry.overwrite_file(firmware_dir_path).await?;
                 self.worker
                     .publish_firmware_update_request(operation_entry)
                     .await?;

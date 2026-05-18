@@ -19,7 +19,6 @@ use crate::twin_manager::builder::TwinManagerConfig;
 use crate::AgentOpt;
 use crate::Capabilities;
 use anyhow::Context;
-use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::CloudHttpConfig;
 use flockfile::check_another_instance_is_not_running;
@@ -62,7 +61,8 @@ use tedge_mqtt_ext::MqttConfig;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
-use tedge_utils::file::create_directory_with_defaults;
+use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::TedgePaths;
 use tracing::info;
 use tracing::instrument;
 
@@ -75,15 +75,15 @@ pub(crate) struct AgentConfig {
     pub restart_config: RestartManagerConfig,
     pub sw_update_config: SoftwareManagerConfig,
     pub operation_config: OperationConfig,
-    pub config_dir: Utf8PathBuf,
-    pub tmp_dir: Arc<Utf8Path>,
-    pub run_dir: Utf8PathBuf,
+    pub config_dir: TedgePaths,
+    pub tmp_dir: Arc<TedgePaths>,
+    pub run_dir: TedgePaths,
     pub use_lock: bool,
-    pub log_dir: Utf8PathBuf,
-    pub agent_log_dir: Utf8PathBuf,
+    pub log_dir: TedgePaths,
+    pub agent_log_dir: ManagedDir,
     pub data_dir: DataDir,
-    pub state_dir: Utf8PathBuf,
-    pub operations_dir: Utf8PathBuf,
+    pub state_dir: TedgePaths,
+    pub operations_dir: ManagedDir,
     pub mqtt_device_topic_id: EntityTopicId,
     pub service_topic_id: ServiceTopicId,
     pub mqtt_topic_root: Arc<str>,
@@ -105,9 +105,9 @@ impl AgentConfig {
         tedge_config: tedge_config::TEdgeConfig,
         cliopts: AgentOpt,
     ) -> Result<Self, anyhow::Error> {
-        let config_dir = tedge_config.root_dir().to_owned();
-        let tmp_dir = Arc::from(tedge_config.tmp.path.as_path());
-        let state_dir = tedge_config.agent.state.path.clone().into();
+        let config_dir = tedge_config.config_root();
+        let tmp_dir = Arc::from(tedge_config.tmp_root());
+        let state_dir = tedge_config.state_root();
 
         let mqtt_topic_root = cliopts
             .mqtt_topic_root
@@ -134,12 +134,13 @@ impl AgentConfig {
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
 
         // HTTP config
-        let data_dir: DataDir = tedge_config.data.path.as_path().to_owned().into();
+        let data_dir = tedge_config.data_root();
         let http_bind_address = tedge_config.http.bind.address;
         let http_port = tedge_config.http.bind.port;
 
         let http_config = HttpServerConfig {
             file_transfer_dir: data_dir.file_transfer_dir(),
+            data_dir: data_dir.clone(),
             cert_path: tedge_config.http.cert_path.clone().map(Utf8PathBuf::from),
             key_path: tedge_config.http.key_path.clone().map(Utf8PathBuf::from),
             ca_path: tedge_config.http.ca_path.clone().map(Utf8PathBuf::from),
@@ -163,13 +164,13 @@ impl AgentConfig {
         .await?;
 
         // For flockfile
-        let run_dir = tedge_config.run.path.clone().into();
+        let run_dir = tedge_config.run_root();
         let use_lock = tedge_config.run.lock_files;
 
         // For agent specific
-        let log_dir: Utf8PathBuf = tedge_config.logs.path.clone().into();
-        let agent_log_dir = log_dir.join("agent");
-        let operations_dir = config_dir.join("operations");
+        let log_dir = tedge_config.logs_root();
+        let agent_log_dir = log_dir.dir("agent")?;
+        let operations_dir = config_dir.dir("operations")?;
 
         let identity = tedge_config.http.client.auth.identity()?;
         let cloud_root_certs = tedge_config.cloud_root_certs().await?;
@@ -247,7 +248,8 @@ impl Agent {
     pub(crate) fn try_new(name: &str, config: AgentConfig) -> Result<Self, FlockfileError> {
         let mut flock = None;
         if config.use_lock {
-            flock = check_another_instance_is_not_running(name, config.run_dir.as_std_path())?;
+            flock =
+                check_another_instance_is_not_running(name, config.run_dir.root().as_std_path())?;
         }
         info!("{} starting", &name);
 
@@ -259,16 +261,20 @@ impl Agent {
 
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn init(&self) -> Result<(), anyhow::Error> {
-        // `config_dir` by default is `/etc/tedge` (or whatever the user sets with --config-dir)
-        create_directory_with_defaults(agent_default_state_dir(self.config.config_dir.clone()))
-            .await?;
-        // Create directory for device inventory.json
-        create_directory_with_defaults(self.config.config_dir.join("device")).await?;
-        create_directory_with_defaults(&self.config.agent_log_dir).await?;
-        create_directory_with_defaults(&self.config.data_dir).await?;
-        create_directory_with_defaults(&self.config.http_config.file_transfer_dir).await?;
-        create_directory_with_defaults(self.config.data_dir.cache_dir()).await?;
-        create_directory_with_defaults(self.config.operations_dir.clone()).await?;
+        // under config_dir (/etc/tedge)
+        self.config.config_dir.dir("device")?.ensure().await?;
+        self.config.operations_dir.ensure().await?;
+
+        // under data_dir (/var/tedge)
+        self.config.data_dir.cache_dir().ensure().await?;
+        self.config.http_config.file_transfer_dir.ensure().await?;
+
+        // under log_dir (/var/log/tedge)
+        self.config.agent_log_dir.ensure().await?;
+
+        // under state_dir (/data/tedge/agent)
+        let default_state_dir = agent_default_state_dir(&self.config.config_dir);
+        default_state_dir.ensure().await?;
 
         Ok(())
     }
@@ -284,7 +290,7 @@ impl Agent {
 
         // Load device profile manager before the workflow actor
         // as it will create the device_profile workflow if it does not already exist
-        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir).await?;
+        DeviceProfileManagerBuilder::try_new(self.config.operations_dir.path()).await?;
 
         // Inotify actor
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
@@ -334,7 +340,7 @@ impl Agent {
         let mqtt_schema = MqttSchema::with_root(self.config.mqtt_topic_root.to_string());
 
         let twin_manager_config = TwinManagerConfig::new(
-            self.config.config_dir.clone(),
+            self.config.config_dir.root().to_path_buf(),
             mqtt_schema.clone(),
             device_topic_id.clone(),
             service_topic_id.into(),
@@ -353,12 +359,12 @@ impl Agent {
         let config_actor_builder: Option<ConfigManagerBuilder> =
             if self.config.capabilities.config_snapshot || self.config.capabilities.config_update {
                 let manager_config = ConfigManagerConfig::from_options(ConfigManagerOptions {
-                    config_dir: self.config.config_dir.clone().into(),
+                    config_dir: self.config.config_dir.clone(),
                     mqtt_topic_root: mqtt_schema.clone(),
                     mqtt_device_topic_id: device_topic_id.clone(),
                     tedge_http_host: self.config.tedge_http_host,
                     tmp_path: self.config.tmp_dir.clone(),
-                    ops_dir: self.config.operations_dir.clone(),
+                    ops_dir: self.config.operations_dir.into(),
                     is_sudo_enabled: self.config.is_sudo_enabled,
                     config_snapshot_enabled: self.config.capabilities.config_snapshot,
                     config_update_enabled: self.config.capabilities.config_update,
@@ -391,9 +397,9 @@ impl Agent {
         // Instantiate log manager actor if the operation is enabled
         let log_actor_builder = if self.config.capabilities.log_upload {
             let log_manager_config = LogManagerConfig::from_options(LogManagerOptions {
-                config_dir: self.config.config_dir.clone().into(),
+                config_dir: self.config.config_dir.clone(),
                 tmp_dir: self.config.tmp_dir.clone(),
-                log_dir: self.config.log_dir,
+                log_dir: self.config.log_dir.clone(),
                 mqtt_schema: mqtt_schema.clone(),
                 mqtt_device_topic_id: device_topic_id.clone(),
                 plugin_dirs: self.config.log_plugin_dirs,
@@ -401,7 +407,8 @@ impl Agent {
             })?;
 
             let plugin_config =
-                PluginConfig::from_file(&log_manager_config.plugin_config_path).await;
+                PluginConfig::from_file(log_manager_config.plugin_config_path.path().as_ref())
+                    .await;
             let mut log_actor = LogManagerBuilder::try_new(
                 log_manager_config,
                 plugin_config,
@@ -421,7 +428,8 @@ impl Agent {
         if is_main_device {
             info!("Running as a main device, starting File Transfer Service");
 
-            let state_dir = agent_state_dir(self.config.state_dir, self.config.config_dir.clone());
+            let state_dir = agent_state_dir(&self.config.state_dir, &self.config.config_dir);
+            let state_dir = state_dir.path();
             let clean_start = self.config.entity_store_clean_start;
             let telemetry_cache_size = 0; // Agent need not cache any data messages, the mapper would
 
@@ -462,7 +470,7 @@ impl Agent {
             let operation_file_cache_builder = FileCacheActorBuilder::new(
                 mqtt_schema,
                 self.config.fts_url.clone(),
-                self.config.data_dir,
+                self.config.data_dir.clone(),
                 &mut downloader_actor_builder,
                 &mut mqtt_actor_builder,
             );

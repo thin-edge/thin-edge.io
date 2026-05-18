@@ -5,8 +5,6 @@ use crate::flows_config;
 use anyhow::Context;
 use async_trait::async_trait;
 use aws_mapper_ext::AwsConverter;
-use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
@@ -20,6 +18,8 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::AuthMethod;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
+use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::TedgePaths;
 use tedge_watch_ext::WatchActorBuilder;
 use tracing::warn;
 use yansi::Paint;
@@ -30,7 +30,7 @@ pub struct AwsMapper {
 
 impl AwsMapper {
     /// Returns the mapper directory path for this instance.
-    pub fn mapper_dir(&self, config_dir: &Utf8Path) -> Utf8PathBuf {
+    pub fn mapper_dir(&self, config_dir: &TedgePaths) -> ManagedDir {
         crate::mapper_dir(config_dir, "aws", self.profile.as_ref())
     }
 }
@@ -40,7 +40,7 @@ impl TEdgeComponent for AwsMapper {
     async fn start(
         &self,
         tedge_config: TEdgeConfig,
-        config_dir: &tedge_config::Path,
+        config_dir: &TedgePaths,
     ) -> Result<(), anyhow::Error> {
         let aws_config = tedge_config.mapper_config::<AwsMapperSpecificConfig>(&self.profile)?;
         let prefix = &aws_config.bridge.topic_prefix;
@@ -95,7 +95,7 @@ impl TEdgeComponent for AwsMapper {
             aws_config.topics.to_string(),
         );
         let mapper_dir = self.mapper_dir(config_dir);
-        let mut flows = crate::mapper_flow_registry(&tedge_config, mapper_dir).await?;
+        let mut flows = crate::mapper_flow_registry(&tedge_config, &mapper_dir).await?;
         aws_converter.persist_builtin_flow(&mut flows).await?;
         let service_config = flows_config(&tedge_config, &aws_mapper_name)?;
 

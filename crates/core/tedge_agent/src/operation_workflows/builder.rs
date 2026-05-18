@@ -7,6 +7,7 @@ use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
 use crate::state_repository::state::agent_state_dir;
 use crate::state_repository::state::AgentStateRepository;
+use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Output;
@@ -103,7 +104,7 @@ impl WorkflowActorBuilder {
 
         let downloader = ClientMessageBox::new(downloader);
 
-        fs_notify.connect_sink(config.operations_dir.clone().into(), &input_sender);
+        fs_notify.connect_sink(config.operations_dir.path().into(), &input_sender);
 
         Self {
             config,
@@ -195,9 +196,13 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
     fn build(self) -> WorkflowActor {
         let builtin_workflows = self.command_dispatcher.capabilities();
         let custom_workflows_dir = self.config.operations_dir;
-        let state_dir = agent_state_dir(self.config.state_dir, self.config.config_dir);
-        let workflow_repository =
-            WorkflowRepository::new(builtin_workflows, custom_workflows_dir, state_dir.clone());
+        let state_dir: Utf8PathBuf =
+            agent_state_dir(&self.config.state_dir, &self.config.config_dir).into();
+        let workflow_repository = WorkflowRepository::new(
+            builtin_workflows,
+            custom_workflows_dir.into(),
+            state_dir.clone(),
+        );
         let state_repository = AgentStateRepository::with_state_dir(state_dir, "workflows");
 
         WorkflowActor {
@@ -205,7 +210,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             device_topic_id: self.config.device_topic_id,
             workflow_repository,
             state_repository,
-            log_dir: self.config.log_dir,
+            log_dir: self.config.log_dir.into(),
             capabilities: self.config.capabilities,
             input_receiver: self.input_receiver,
             builtin_command_dispatcher: self.command_dispatcher,
@@ -215,7 +220,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             command_sender: self.command_sender,
             script_runner: self.script_runner,
             downloader: self.downloader,
-            tmp_dir: self.config.tmp_dir,
+            tmp_dir: self.config.tmp_dir.root().into(),
         }
     }
 }

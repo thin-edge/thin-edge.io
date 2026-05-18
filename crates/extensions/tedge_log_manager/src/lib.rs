@@ -32,7 +32,6 @@ use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
 use tedge_api::workflow::SyncOnCommand;
 use tedge_file_system_ext::FsWatchEvent;
-use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
@@ -79,18 +78,22 @@ impl LogManagerBuilder {
     }
 
     pub async fn init(config: &LogManagerConfig) -> Result<(), anyhow::Error> {
-        if config.plugin_config_path.exists() {
+        if config.plugin_config_path.path().exists() {
             return Ok(());
         }
 
         // creating plugin config parent dir
-        create_directory_with_defaults(&config.plugin_config_dir).await?;
+        config.plugin_config_dir.ensure().await?;
 
-        let legacy_plugin_config = config.config_dir.join("c8y").join("c8y-log-plugin.toml");
+        let legacy_plugin_config = config
+            .config_dir
+            .root()
+            .join("c8y")
+            .join("c8y-log-plugin.toml");
         if legacy_plugin_config.exists() {
             move_file(
                 legacy_plugin_config,
-                &config.plugin_config_path,
+                &config.plugin_config_path.path(),
                 PermissionEntry::default(),
             )
             .await?;
@@ -98,14 +101,14 @@ impl LogManagerBuilder {
         }
 
         // creating tedge-log-plugin.toml
-        let agent_logs_path = format!("{}/agent/workflow-software_*", config.log_dir);
+        let agent_logs_path = format!("{}/agent/workflow-software_*", config.log_dir.root());
         let example_config = toml! {
             [[files]]
             type = "software-management"
             path = agent_logs_path
         }
         .to_string();
-        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes())?;
+        atomically_write_file_sync(config.plugin_config_path.path(), example_config.as_bytes())?;
 
         Ok(())
     }
@@ -114,7 +117,7 @@ impl LogManagerBuilder {
     /// - for configuration changes
     /// - for plugin changes
     fn watched_directories(config: &LogManagerConfig) -> Vec<PathBuf> {
-        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        let mut watch_dirs = vec![config.plugin_config_dir.path().into()];
         for dir in &config.plugin_dirs {
             watch_dirs.push(dir.into());
         }
@@ -213,7 +216,7 @@ impl Builder<LogManagerActor> for LogManagerBuilder {
         let external_plugins = ExternalPlugins::new(
             self.config.plugin_dirs.clone(),
             self.config.sudo_enabled,
-            self.config.tmp_dir.clone(),
+            self.config.tmp_dir.root().into(),
         );
 
         Ok(LogManagerActor::new(

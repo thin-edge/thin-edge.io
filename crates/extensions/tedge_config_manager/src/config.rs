@@ -1,6 +1,4 @@
-use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
@@ -10,6 +8,9 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_config::tedge_toml::ReadError;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::ManagedFile;
+use tedge_utils::paths::TedgePaths;
 
 pub const DEFAULT_PLUGIN_CONFIG_FILE_NAME: &str = "tedge-configuration-plugin.toml";
 pub const DEFAULT_OPERATION_DIR_NAME: &str = "plugins/";
@@ -18,11 +19,11 @@ pub const DEFAULT_PLUGIN_CONFIG_TYPE: &str = "tedge-configuration-plugin";
 /// Configuration of the Configuration Manager
 #[derive(Clone, Debug)]
 pub struct ConfigManagerConfig {
-    pub config_dir: PathBuf,
+    pub config_dir: TedgePaths,
     pub plugin_dirs: Vec<Utf8PathBuf>,
-    pub plugin_config_dir: PathBuf,
-    pub plugin_config_path: PathBuf,
-    pub tmp_path: Arc<Utf8Path>,
+    pub plugin_config_dir: ManagedDir,
+    pub plugin_config_path: ManagedFile,
+    pub tmp_path: Arc<TedgePaths>,
     pub ops_dir: Utf8PathBuf,
     pub mqtt_schema: MqttSchema,
     pub config_snapshot_meta_topic: Topic,
@@ -36,11 +37,11 @@ pub struct ConfigManagerConfig {
 }
 
 pub struct ConfigManagerOptions {
-    pub config_dir: PathBuf,
+    pub config_dir: TedgePaths,
     pub mqtt_topic_root: MqttSchema,
     pub mqtt_device_topic_id: EntityTopicId,
     pub tedge_http_host: Arc<str>,
-    pub tmp_path: Arc<Utf8Path>,
+    pub tmp_path: Arc<TedgePaths>,
     pub ops_dir: Utf8PathBuf,
     pub is_sudo_enabled: bool,
     pub config_snapshot_enabled: bool,
@@ -54,8 +55,10 @@ impl ConfigManagerConfig {
         let mqtt_topic_root = cliopts.mqtt_topic_root;
         let mqtt_device_topic_id = cliopts.mqtt_device_topic_id;
 
-        let plugin_config_dir = config_dir.join(DEFAULT_OPERATION_DIR_NAME);
-        let plugin_config_path = plugin_config_dir.join(DEFAULT_PLUGIN_CONFIG_FILE_NAME);
+        let plugin_config_dir = config_dir.dir(DEFAULT_OPERATION_DIR_NAME).unwrap();
+        let plugin_config_path = plugin_config_dir
+            .file(DEFAULT_PLUGIN_CONFIG_FILE_NAME)
+            .unwrap();
 
         let config_snapshot_meta_topic = mqtt_topic_root
             .capability_topic_for(&mqtt_device_topic_id, OperationType::ConfigSnapshot);

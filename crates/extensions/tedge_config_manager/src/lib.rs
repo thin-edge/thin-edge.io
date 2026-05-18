@@ -46,7 +46,6 @@ use tedge_api::Jsonify;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::file::create_directory_with_defaults;
 use tedge_utils::file::move_file;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
@@ -114,21 +113,22 @@ impl ConfigManagerBuilder {
             .persist(workflow_definition)
             .await?;
 
-        if config.plugin_config_path.exists() {
+        if config.plugin_config_path.path().exists() {
             return Ok(());
         }
 
         // creating plugin config parent dir
-        create_directory_with_defaults(&config.plugin_config_dir).await?;
+        config.plugin_config_dir.ensure().await?;
 
         let legacy_plugin_config = config
             .config_dir
+            .root()
             .join("c8y")
             .join("c8y-configuration-plugin.toml");
         if legacy_plugin_config.exists() {
             move_file(
                 legacy_plugin_config,
-                &config.plugin_config_path,
+                &config.plugin_config_path.path(),
                 PermissionEntry::default(),
             )
             .await?;
@@ -136,11 +136,9 @@ impl ConfigManagerBuilder {
         }
 
         // create tedge-configuration-plugin.toml
-        let tedge_config_path = format!("{}/tedge.toml", config.config_dir.to_string_lossy());
-        let tedge_log_plugin_config_path = format!(
-            "{}/plugins/tedge-log-plugin.toml",
-            config.config_dir.to_string_lossy()
-        );
+        let tedge_config_path = format!("{}/tedge.toml", config.config_dir.root());
+        let tedge_log_plugin_config_path =
+            format!("{}/plugins/tedge-log-plugin.toml", config.config_dir.root());
         let example_config = toml! {
             [[files]]
             path = tedge_config_path
@@ -154,7 +152,7 @@ impl ConfigManagerBuilder {
             mode = 0o644
         }
         .to_string();
-        atomically_write_file_sync(&config.plugin_config_path, example_config.as_bytes())?;
+        atomically_write_file_sync(config.plugin_config_path.path(), example_config.as_bytes())?;
 
         Ok(())
     }
@@ -175,7 +173,7 @@ impl ConfigManagerBuilder {
     /// - for configuration changes
     /// - for plugin changes
     fn watched_directories(config: &ConfigManagerConfig) -> Vec<PathBuf> {
-        let mut watch_dirs = vec![config.plugin_config_dir.clone()];
+        let mut watch_dirs = vec![config.plugin_config_dir.path().into()];
         for dir in &config.plugin_dirs {
             watch_dirs.push(dir.into());
         }
@@ -213,7 +211,7 @@ impl Builder<ConfigManagerActor> for ConfigManagerBuilder {
         let external_plugins = ExternalPlugins::new(
             self.config.plugin_dirs.clone(),
             self.config.sudo_enabled,
-            self.config.tmp_path.clone(),
+            self.config.tmp_path.root().to_path_buf().into(),
         );
 
         Ok(ConfigManagerActor::new(

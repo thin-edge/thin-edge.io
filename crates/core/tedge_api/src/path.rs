@@ -1,96 +1,49 @@
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
-use std::path::Path;
+use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::PathsError;
+use tedge_utils::paths::TedgePaths;
 
-/// Representation of ThinEdge data directory.
-/// Default is /var/tedge.
-/// All directories under the root data directory must be listed here.
+/// Root directory for thin-edge persistent data (`data.path`, default `/var/tedge`).
+///
+/// Wraps [`TedgePaths`] and provides named accessors for the well-known
+/// subdirectories that live under the data root.
 #[derive(Debug, Clone)]
-pub struct DataDir(Utf8PathBuf);
+pub struct DataDir(TedgePaths);
 
-impl Default for DataDir {
-    fn default() -> Self {
-        DataDir("/var/tedge".into())
-    }
-}
-
-impl From<Utf8PathBuf> for DataDir {
-    fn from(path: Utf8PathBuf) -> Self {
-        DataDir(path)
-    }
-}
-
-impl From<DataDir> for Utf8PathBuf {
-    fn from(value: DataDir) -> Self {
-        value.0
-    }
-}
-
-impl AsRef<Path> for DataDir {
-    fn as_ref(&self) -> &Path {
-        self.0.as_std_path()
+impl From<TedgePaths> for DataDir {
+    fn from(paths: TedgePaths) -> Self {
+        DataDir(paths)
     }
 }
 
 impl DataDir {
-    /// Crete `DataDir` from `Utf8PathBuf`.
-    pub fn new(path: Utf8PathBuf) -> Self {
-        DataDir::from(path)
+    pub fn root(&self) -> &Utf8Path {
+        self.0.root()
     }
 
-    /// Creates an owned `Utf8PathBuf` with `path` adjoined to `self`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use camino::Utf8PathBuf;
-    /// use tedge_api::path::DataDir;
-    ///
-    /// assert_eq!(DataDir::default().join("foo"), Utf8PathBuf::from("/var/tedge/foo"));
-    /// ```
-    pub fn join(&self, path: impl AsRef<Utf8Path>) -> Utf8PathBuf {
-        self.0.join(path.as_ref().to_path_buf())
+    pub fn root_dir(&self) -> ManagedDir {
+        self.0.root_dir()
     }
 
-    /// Return `Utf8PathBuf` to ThinEdge file transfer repository.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use camino::Utf8PathBuf;
-    /// use tedge_api::path::DataDir;
-    ///
-    /// assert_eq!(DataDir::default().file_transfer_dir(), Utf8PathBuf::from("/var/tedge/file-transfer"));
-    /// ```
-    pub fn file_transfer_dir(&self) -> Utf8PathBuf {
-        self.0.join("file-transfer")
+    pub fn firmware_dir(&self) -> ManagedDir {
+        self.0
+            .dir("firmware")
+            .expect("'firmware' is a valid relative path")
     }
 
-    /// Return `Utf8PathBuf` to ThinEdge file cache repository.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use camino::Utf8PathBuf;
-    /// use tedge_api::path::DataDir;
-    ///
-    /// assert_eq!(DataDir::default().cache_dir(), Utf8PathBuf::from("/var/tedge/cache"));
-    /// ```
-    pub fn cache_dir(&self) -> Utf8PathBuf {
-        self.0.join("cache")
+    pub fn cache_dir(&self) -> ManagedDir {
+        self.0
+            .dir("cache")
+            .expect("'cache' is a valid relative path")
     }
 
-    /// Return `Utf8PathBuf` to ThinEdge file firmware repository.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use camino::Utf8PathBuf;
-    /// use tedge_api::path::DataDir;
-    ///
-    /// assert_eq!(DataDir::default().firmware_dir(), Utf8PathBuf::from("/var/tedge/firmware"));
-    /// ```
-    pub fn firmware_dir(&self) -> Utf8PathBuf {
-        self.0.join("firmware")
+    pub fn file_transfer_dir(&self) -> ManagedDir {
+        self.0
+            .dir("file-transfer")
+            .expect("'file-transfer' is a valid relative path")
+    }
+
+    pub fn dir(&self, path: impl AsRef<Utf8Path>) -> Result<ManagedDir, PathsError> {
+        self.0.dir(path)
     }
 }

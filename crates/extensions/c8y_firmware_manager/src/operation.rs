@@ -2,8 +2,8 @@ use crate::error::FirmwareManagementError;
 
 use std::fs;
 use std::path::Path;
-use tedge_utils::file::create_file_with_mode;
 use tedge_utils::file::overwrite_file;
+use tedge_utils::paths::ManagedDir;
 
 #[derive(Debug, Eq, PartialEq, Default, Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
@@ -21,13 +21,15 @@ pub struct FirmwareOperationEntry {
 impl FirmwareOperationEntry {
     pub async fn create_status_file(
         &self,
-        firmware_dir: impl AsRef<Path>,
+        firmware_dir: &ManagedDir,
     ) -> Result<(), FirmwareManagementError> {
-        let path = firmware_dir.as_ref().join(&self.operation_id);
         let content = serde_json::to_string(self)?;
-        create_file_with_mode(path, Some(content.as_str()), 0o644)
-            .await
-            .map_err(FirmwareManagementError::FromFileError)
+        firmware_dir
+            .file(&self.operation_id)?
+            .with_mode(0o644)
+            .create_if_missing(content)
+            .await?;
+        Ok(())
     }
 
     pub async fn overwrite_file(

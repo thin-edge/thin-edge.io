@@ -5,27 +5,31 @@ use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;
 use crate::http_server::error::HttpServerError;
 use axum::Router;
-use camino::Utf8PathBuf;
 use futures::future::FutureExt;
 use rustls::ServerConfig;
 use std::future::Future;
 use tedge_actors::ClientMessageBox;
+use tedge_api::path::DataDir;
+use tedge_utils::paths::ManagedDir;
 use tokio::io;
 use tokio::net::TcpListener;
 
 #[derive(Clone)]
 pub(crate) struct AgentState {
-    pub(crate) file_transfer_dir: Utf8PathBuf,
+    pub(crate) file_transfer_dir: ManagedDir,
+    pub(crate) data_dir: DataDir,
     pub(crate) entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
 }
 
 impl AgentState {
     pub fn new(
-        file_transfer_dir: Utf8PathBuf,
+        file_transfer_dir: ManagedDir,
+        data_dir: DataDir,
         entity_store_handle: ClientMessageBox<EntityStoreRequest, EntityStoreResponse>,
     ) -> Self {
         AgentState {
             file_transfer_dir,
+            data_dir,
             entity_store_handle,
         }
     }
@@ -52,8 +56,10 @@ pub(crate) fn http_server(
 }
 
 fn router(state: AgentState) -> Router {
-    let file_transfer_legacy_router = file_transfer_legacy_router(state.file_transfer_dir.clone());
-    let file_transfer_router = file_transfer_router(state.file_transfer_dir.clone());
+    let file_transfer_legacy_router =
+        file_transfer_legacy_router(state.file_transfer_dir.clone(), state.data_dir.clone());
+    let file_transfer_router =
+        file_transfer_router(state.file_transfer_dir.clone(), state.data_dir.clone());
     let entity_store_router = entity_store_router(state);
 
     Router::new()

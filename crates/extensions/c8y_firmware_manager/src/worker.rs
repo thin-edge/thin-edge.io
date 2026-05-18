@@ -268,8 +268,9 @@ impl FirmwareManagerWorker {
             attempt: 1,
         };
 
+        let data_dir = &self.config.data_dir;
         operation_entry
-            .create_status_file(self.config.data_dir.firmware_dir())
+            .create_status_file(&data_dir.firmware_dir())
             .await?;
 
         self.publish_firmware_update_request(operation_entry)
@@ -296,7 +297,12 @@ impl FirmwareManagerWorker {
 
         match received_status {
             OperationStatus::Successful => {
-                let status_file_path = self.config.data_dir.firmware_dir().join(operation_id);
+                let status_file_path = self
+                    .config
+                    .data_dir
+                    .firmware_dir()
+                    .path()
+                    .join(operation_id);
                 let operation_entry =
                     FirmwareOperationEntry::read_from_file(status_file_path.as_path())?;
 
