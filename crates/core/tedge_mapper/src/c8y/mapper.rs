@@ -84,7 +84,7 @@ impl TEdgeComponent for CumulocityMapper {
         let service_topic_id = EntityTopicId::default_main_service(&c8y_mapper_name)?;
 
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(
-            cfg_dir.root(),
+            cfg_dir,
             &tedge_config,
             &c8y_config,
             service_topic_id.clone(),

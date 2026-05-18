@@ -3270,7 +3270,8 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let mut topics =
         C8yMapperConfig::default_internal_topic_filter(&"c8y".try_into().unwrap()).unwrap();
     let custom_operation_topics =
-        C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.path(), &bridge_config).unwrap();
+        C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.utf8_path(), &bridge_config)
+            .unwrap();
     topics.add_all(custom_operation_topics);
     topics.add_unchecked("te/+/+/+/+/cmd/software_update");
     topics.add_unchecked("te/+/+/+/+/cmd/software_update/+");
@@ -3290,10 +3291,12 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
 
     topics.remove_overlapping_patterns();
 
+    let root_dir = TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "");
+
     C8yMapperConfig::new(
-        tmp_dir.utf8_path().into(),
-        tmp_dir.utf8_path().into(),
-        tmp_dir.utf8_path().into(),
+        root_dir.clone().into(),
+        root_dir.clone().into(),
+        root_dir.clone().into(),
         device_name,
         device_topic_id,
         service_topic_id,
