@@ -38,7 +38,6 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::log::warn;
 
-const STATE_DIR_NAME: &str = ".tedge-mapper-c8y";
 const C8Y_CLOUD: &str = "c8y";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 
@@ -71,7 +70,6 @@ pub struct C8yMapperConfig {
     pub config_dir: Arc<Utf8Path>,
     pub logs_path: Arc<Utf8Path>,
     pub ops_dir: Arc<Utf8Path>,
-    pub state_dir: Arc<Utf8Path>,
     pub tmp_dir: Arc<Utf8Path>,
 
     pub max_mqtt_payload_size: u32,
@@ -114,7 +112,6 @@ impl C8yMapperConfig {
             .join(SUPPORTED_OPERATIONS_DIRECTORY)
             .join(C8Y_CLOUD)
             .into();
-        let state_dir = config_dir.join(STATE_DIR_NAME).into();
 
         let bridge_service_name = if bridge_in_mapper {
             format!("tedge-mapper-bridge-{}", bridge_config.c8y_prefix)
@@ -153,7 +150,6 @@ impl C8yMapperConfig {
             config_dir,
             logs_path,
             ops_dir,
-            state_dir,
             tmp_dir,
 
             max_mqtt_payload_size,

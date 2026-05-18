@@ -264,6 +264,8 @@ impl Agent {
         // under config_dir (/etc/tedge)
         self.config.config_dir.dir("device")?.ensure().await?;
         self.config.operations_dir.ensure().await?;
+        let default_state_dir = agent_default_state_dir(&self.config.config_dir);
+        default_state_dir.ensure().await?;
 
         // under data_dir (/var/tedge)
         self.config.data_dir.cache_dir().ensure().await?;
@@ -271,10 +273,6 @@ impl Agent {
 
         // under log_dir (/var/log/tedge)
         self.config.agent_log_dir.ensure().await?;
-
-        // under state_dir (/data/tedge/agent)
-        let default_state_dir = agent_default_state_dir(&self.config.config_dir);
-        default_state_dir.ensure().await?;
 
         Ok(())
     }

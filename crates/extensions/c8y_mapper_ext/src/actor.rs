@@ -414,11 +414,6 @@ impl C8yMapperBuilder {
             .root_dir()
             .ensure()
             .await?;
-        // Create directory for persistent entity store
-        TedgePaths::from_root_with_defaults(&config.state_dir, "", "")
-            .root_dir()
-            .ensure()
-            .await?;
         Ok(())
     }
 }
