@@ -837,6 +837,7 @@ fn test_config(tempdir: &TempTedgeDir) -> ConfigManagerConfig {
         "",
         "",
     );
+    tempdir.dir("operations");
     ConfigManagerConfig {
         config_dir: config_root.clone(),
         plugin_dirs: vec![],
