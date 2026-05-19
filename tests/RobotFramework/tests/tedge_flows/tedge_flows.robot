@@ -34,7 +34,6 @@ Normalizes flows-dir path
     Should Not Contain    ${out3}    ${fail_due_to_invalid_path}
     Should Not Contain    ${out4}    ${fail_due_to_invalid_path}
 
-    Execute Command    rm -rf ${child_dir} ${symlink}
     [Teardown]    Execute Command    cmd=rm -rf ${child_dir} ${symlink}
 
 Add missing timestamps
