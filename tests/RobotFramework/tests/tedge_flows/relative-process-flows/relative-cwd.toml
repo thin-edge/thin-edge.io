@@ -1,0 +1,7 @@
+[input.process]
+command = "cat ./relative-cwd-data.json"
+interval = "1s"
+
+[[steps]]
+builtin = "set-topic"
+config.topic = "test/relative-cwd"
