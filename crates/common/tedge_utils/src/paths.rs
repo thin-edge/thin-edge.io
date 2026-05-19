@@ -128,10 +128,27 @@ impl TedgePaths {
         &self,
         path: impl AsRef<Utf8Path>,
     ) -> Result<ManagedTemplateFile, PathsError> {
-        let absolute = self.resolve(path)?;
-        // Safe: resolve() guarantees the path is inside self.root
-        let relative = absolute.strip_prefix(&self.root).unwrap();
-        self.root_dir().template_file(relative)
+        let path = self.resolve(path)?;
+        let parent = path.parent().map(|path| ManagedDir {
+            root: self.root.clone(),
+            path: path.to_owned(),
+            owner: self.default_owner.clone(),
+            mode: DEFAULT_DIR_MODE,
+            respect_existing: false,
+            warn_and_ignore_permission_errors: false,
+        });
+
+        Ok(ManagedTemplateFile {
+            active: ManagedFile {
+                root: self.root.clone(),
+                path,
+                owner: self.default_owner.clone(),
+                mode: DEFAULT_FILE_MODE,
+                warn_and_ignore_permission_errors: false,
+            },
+            parent,
+            warn_and_ignore_permission_errors: false,
+        })
     }
 
     fn resolve(&self, path: impl AsRef<Utf8Path>) -> Result<Utf8PathBuf, PathsError> {
@@ -235,28 +252,16 @@ impl ManagedDir {
         &self,
         path: impl AsRef<Utf8Path>,
     ) -> Result<ManagedTemplateFile, PathsError> {
-        let path = path.as_ref();
-        validate_managed_path(path)?;
-        let full_path = self.path.join(path);
-        let parent = full_path.parent().map(|parent| ManagedDir {
+        let relative_from_root = self
+            .path
+            .strip_prefix(&self.root)
+            .expect("managed dir path must be inside root")
+            .join(path);
+        TedgePaths {
             root: self.root.clone(),
-            path: parent.to_owned(),
-            owner: self.owner.clone(),
-            mode: DEFAULT_DIR_MODE,
-            respect_existing: false,
-            warn_and_ignore_permission_errors: self.warn_and_ignore_permission_errors,
-        });
-        Ok(ManagedTemplateFile {
-            active: ManagedFile {
-                root: self.root.clone(),
-                path: full_path,
-                owner: self.owner.clone(),
-                mode: DEFAULT_FILE_MODE,
-                warn_and_ignore_permission_errors: self.warn_and_ignore_permission_errors,
-            },
-            parent,
-            warn_and_ignore_permission_errors: self.warn_and_ignore_permission_errors,
-        })
+            default_owner: self.owner.clone(),
+        }
+        .template_file(relative_from_root)
     }
 
     pub async fn ensure(&self) -> Result<(), PathsError> {
