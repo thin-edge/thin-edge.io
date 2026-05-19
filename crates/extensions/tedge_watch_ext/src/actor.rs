@@ -54,9 +54,11 @@ impl Actor for Watcher {
                 WatchRequest::WatchFile { topic, file } => {
                     self.watch_file(client, topic, file).await
                 }
-                WatchRequest::WatchCommand { topic, command, cwd } => {
-                    self.watch_command(client, topic, command, cwd).await
-                }
+                WatchRequest::WatchCommand {
+                    topic,
+                    command,
+                    cwd,
+                } => self.watch_command(client, topic, command, cwd).await,
                 WatchRequest::UnWatch { topic } => self.unwatch(client, topic).await,
             };
             if let Err(error) = result {
@@ -91,7 +93,8 @@ impl Watcher {
     ) -> Result<(), WatchError> {
         let command = format!("tail -F {file}");
         // File paths are expected to be absolute; cwd has no effect on `tail -F` with an absolute path.
-        self.watch_command(client, topic, command, Utf8PathBuf::from(".")).await
+        self.watch_command(client, topic, command, Utf8PathBuf::from("."))
+            .await
     }
 
     pub async fn watch_command(
@@ -224,14 +227,13 @@ fn check_status(command: &str, status: ExitStatus) -> Result<(), WatchError> {
 }
 
 pub async fn command_output(command: &str, cwd: &Utf8Path) -> Result<String, WatchError> {
-    let output =
-        spawn(command, cwd)?
-            .wait_with_output()
-            .await
-            .map_err(|err| WatchError::ExecutionFailed {
-                command: command.to_string(),
-                error: err.to_string(),
-            })?;
+    let output = spawn(command, cwd)?
+        .wait_with_output()
+        .await
+        .map_err(|err| WatchError::ExecutionFailed {
+            command: command.to_string(),
+            error: err.to_string(),
+        })?;
     let () = check_status(command, output.status)?;
     Ok(String::from_utf8_lossy(output.stdout.as_slice()).to_string())
 }

@@ -474,7 +474,6 @@ impl InputConfig {
             }),
         }
     }
-
 }
 
 fn resolve_process_command(command: String, flow_dir: &Utf8Path) -> String {
@@ -533,7 +532,11 @@ impl InputConfig {
                         cwd,
                     },
                     Some(Err(e)) => return Err(e),
-                    _ => FlowInput::StreamCommand { topic, command, cwd },
+                    _ => FlowInput::StreamCommand {
+                        topic,
+                        command,
+                        cwd,
+                    },
                 }
             }
         })

@@ -17,9 +17,18 @@ mod tests;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WatchRequest {
-    WatchFile { topic: String, file: Utf8PathBuf },
-    WatchCommand { topic: String, command: String, cwd: Utf8PathBuf },
-    UnWatch { topic: String },
+    WatchFile {
+        topic: String,
+        file: Utf8PathBuf,
+    },
+    WatchCommand {
+        topic: String,
+        command: String,
+        cwd: Utf8PathBuf,
+    },
+    UnWatch {
+        topic: String,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

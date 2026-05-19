@@ -105,9 +105,13 @@ fn streaming_source(flow_name: String, input: FlowInput) -> Option<Box<dyn Strea
             Some(Box::new(FileStreamingSource::new(flow_name, path)))
         }
 
-        FlowInput::StreamCommand { topic: _, command, cwd } => {
-            Some(Box::new(CommandStreamingSource::new(flow_name, command, cwd)))
-        }
+        FlowInput::StreamCommand {
+            topic: _,
+            command,
+            cwd,
+        } => Some(Box::new(CommandStreamingSource::new(
+            flow_name, command, cwd,
+        ))),
 
         _ => None,
     }
