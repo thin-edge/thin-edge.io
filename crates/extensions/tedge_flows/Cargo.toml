@@ -24,6 +24,7 @@ rquickjs = { version = "0.11", default-features = false, features = [
 ] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+shell-words = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_file_system_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }

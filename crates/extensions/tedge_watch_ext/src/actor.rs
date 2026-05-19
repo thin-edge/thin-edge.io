@@ -1,6 +1,7 @@
 use crate::WatchError;
 use crate::WatchEvent;
 use crate::WatchRequest;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use std::os::unix::prelude::ExitStatusExt;
@@ -53,8 +54,8 @@ impl Actor for Watcher {
                 WatchRequest::WatchFile { topic, file } => {
                     self.watch_file(client, topic, file).await
                 }
-                WatchRequest::WatchCommand { topic, command } => {
-                    self.watch_command(client, topic, command).await
+                WatchRequest::WatchCommand { topic, command, cwd } => {
+                    self.watch_command(client, topic, command, cwd).await
                 }
                 WatchRequest::UnWatch { topic } => self.unwatch(client, topic).await,
             };
@@ -89,7 +90,8 @@ impl Watcher {
         file: Utf8PathBuf,
     ) -> Result<(), WatchError> {
         let command = format!("tail -F {file}");
-        self.watch_command(client, topic, command).await
+        // File paths are expected to be absolute; cwd has no effect on `tail -F` with an absolute path.
+        self.watch_command(client, topic, command, Utf8PathBuf::from(".")).await
     }
 
     pub async fn watch_command(
@@ -97,8 +99,9 @@ impl Watcher {
         client: u32,
         topic: Topic,
         command: String,
+        cwd: Utf8PathBuf,
     ) -> Result<(), WatchError> {
-        let mut child = spawn(&command)?;
+        let mut child = spawn(&command, &cwd)?;
 
         if let Some(stdout) = child.stdout.take() {
             self.spawn_stdout_reader(client, topic.clone(), stdout);
@@ -178,7 +181,7 @@ impl Watcher {
     }
 }
 
-fn spawn(command: &String) -> Result<Child, WatchError> {
+fn spawn(command: &str, cwd: &Utf8Path) -> Result<Child, WatchError> {
     let args = shell_words::split(command).map_err(|err| WatchError::InvalidCommand {
         command: command.to_string(),
         error: err.to_string(),
@@ -191,6 +194,7 @@ fn spawn(command: &String) -> Result<Child, WatchError> {
     }
     let child = Command::new(&args[0])
         .args(&args[1..])
+        .current_dir(cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -202,7 +206,7 @@ fn spawn(command: &String) -> Result<Child, WatchError> {
     Ok(child)
 }
 
-fn check_status(command: &String, status: ExitStatus) -> Result<(), WatchError> {
+fn check_status(command: &str, status: ExitStatus) -> Result<(), WatchError> {
     if status.success() {
         Ok(())
     } else {
@@ -219,9 +223,9 @@ fn check_status(command: &String, status: ExitStatus) -> Result<(), WatchError> 
     }
 }
 
-pub async fn command_output(command: &String) -> Result<String, WatchError> {
+pub async fn command_output(command: &str, cwd: &Utf8Path) -> Result<String, WatchError> {
     let output =
-        spawn(command)?
+        spawn(command, cwd)?
             .wait_with_output()
             .await
             .map_err(|err| WatchError::ExecutionFailed {

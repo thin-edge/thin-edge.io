@@ -1,6 +1,7 @@
 use crate::WatchActorBuilder;
 use crate::WatchEvent;
 use crate::WatchRequest;
+use camino::Utf8PathBuf;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
@@ -17,6 +18,7 @@ async fn reading_process_stdout() {
         .send(WatchRequest::WatchCommand {
             topic: "seq".to_string(),
             command,
+            cwd: Utf8PathBuf::from("."),
         })
         .await
         .unwrap();
@@ -47,6 +49,7 @@ async fn serving_independent_clients() {
         .send(WatchRequest::WatchCommand {
             topic: "seq".to_string(),
             command: command_1,
+            cwd: Utf8PathBuf::from("."),
         })
         .await
         .unwrap();
@@ -54,6 +57,7 @@ async fn serving_independent_clients() {
         .send(WatchRequest::WatchCommand {
             topic: "seq".to_string(),
             command: command_2,
+            cwd: Utf8PathBuf::from("."),
         })
         .await
         .unwrap();
