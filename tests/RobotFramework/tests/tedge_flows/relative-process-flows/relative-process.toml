@@ -1,0 +1,7 @@
+[input.process]
+command = "./relative-script.sh"
+interval = "1s"
+
+[[steps]]
+builtin = "set-topic"
+config.topic = "test/relative-process"
