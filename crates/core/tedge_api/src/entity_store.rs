@@ -16,8 +16,7 @@ use crate::mqtt_topics::default_topic_schema;
 use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
-use crate::store::message_log::MessageLogReader;
-use crate::store::message_log::MessageLogWriter;
+use crate::store::message_log::MessageLog;
 use crate::store::pending_entity_store::PendingEntityStore;
 use crate::store::pending_entity_store::RegisteredEntityData;
 use log::debug;
@@ -78,7 +77,7 @@ pub struct EntityStore {
     entities: EntityTree,
     pending_entity_store: PendingEntityStore,
     // The persistent message log to persist entity registrations and twin data messages
-    message_log: MessageLogWriter,
+    message_log: MessageLog,
 }
 
 impl EntityStore {
@@ -109,13 +108,13 @@ impl EntityStore {
         };
 
         let message_log = if clean_start {
-            MessageLogWriter::new_truncated(log_dir.as_ref()).map_err(|err| {
+            MessageLog::new_truncated(log_dir.as_ref()).map_err(|err| {
                 InitError::Custom(format!(
                     "Loading the entity store log for writes failed with {err}",
                 ))
             })?
         } else {
-            MessageLogWriter::new(log_dir.as_ref()).map_err(|err| {
+            MessageLog::new(log_dir.as_ref()).map_err(|err| {
                 InitError::Custom(format!(
                     "Loading the entity store log for writes failed with {err}",
                 ))
@@ -130,100 +129,63 @@ impl EntityStore {
             message_log,
         };
 
-        entity_store.load_from_message_log(log_dir.as_ref());
+        entity_store.load_from_message_log();
 
         Ok(entity_store)
     }
 
-    pub fn load_from_message_log<P>(&mut self, log_dir: P)
-    where
-        P: AsRef<Path>,
-    {
+    pub fn load_from_message_log(&mut self) {
         info!("Loading the entity store from the log");
-        match MessageLogReader::new(log_dir) {
-            Err(err) => {
-                error!(
-                    "Failed to read the entity store log due to {err}. Ignoring and proceeding..."
-                )
-            }
-            Ok(mut message_log_reader) => {
-                loop {
-                    match message_log_reader.next_message() {
-                        Err(err) => {
-                            error!("Parsing log entry failed with {err}");
-                            continue;
-                        }
-                        Ok(None) => {
-                            info!("Finished loading the entity store from the log");
-                            return;
-                        }
-                        Ok(Some(message)) => {
-                            if let Ok((source, channel)) =
-                                self.mqtt_schema.entity_channel_of(&message.topic)
-                            {
-                                match channel {
-                                    Channel::EntityMetadata => {
-                                        if let Ok(register_message) =
-                                            EntityRegistrationMessage::try_from(
-                                                source.clone(),
-                                                message.payload_bytes(),
-                                            )
-                                        {
-                                            if let Err(err) = self.register_entity(register_message)
-                                            {
-                                                error!("Failed to re-register {source} from the persistent entity store due to {err}");
-                                                continue;
-                                            }
-                                        }
-                                    }
-                                    Channel::EntityTwinData { fragment_key } => {
-                                        let fragment_value = if message.payload_bytes().is_empty() {
-                                            JsonValue::Null
-                                        } else {
-                                            match serde_json::from_slice::<JsonValue>(
-                                                message.payload_bytes(),
-                                            ) {
-                                                Ok(json_value) => json_value,
-                                                Err(err) => {
-                                                    error!("Failed to parse twin fragment value of {fragment_key} of {source} from the persistent entity store due to {err}");
-                                                    continue;
-                                                }
-                                            }
-                                        };
-
-                                        let twin_data = EntityTwinMessage::new(
-                                            source.clone(),
-                                            fragment_key,
-                                            fragment_value,
-                                        );
-                                        if let Err(err) =
-                                            self.register_twin_fragment(twin_data.clone())
-                                        {
-                                            error!("Failed to restore twin fragment: {twin_data:?} from the persistent entity store due to {err}");
-                                            continue;
-                                        }
-                                    }
-                                    Channel::CommandMetadata { .. } => {
-                                        // Do nothing for now as supported operations are not part of the entity store
-                                    }
-                                    channel => {
-                                        warn!(
-                                            "Restoring messages on channel: {:?} not supported",
-                                            channel
-                                        )
-                                    }
-                                }
-                            } else {
-                                warn!(
-                                    "Ignoring unsupported message retrieved from entity store: {:?}",
-                                    message
-                                );
+        let messages: Vec<_> = self.message_log.messages().collect();
+        for message in messages {
+            if let Ok((source, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
+                match channel {
+                    Channel::EntityMetadata => {
+                        if let Ok(register_message) = EntityRegistrationMessage::try_from(
+                            source.clone(),
+                            message.payload_bytes(),
+                        ) {
+                            if let Err(err) = self.register_entity(register_message) {
+                                error!("Failed to re-register {source} from the persistent entity store due to {err}");
+                                continue;
                             }
                         }
                     }
+                    Channel::EntityTwinData { fragment_key } => {
+                        let fragment_value = if message.payload_bytes().is_empty() {
+                            JsonValue::Null
+                        } else {
+                            match serde_json::from_slice::<JsonValue>(message.payload_bytes()) {
+                                Ok(json_value) => json_value,
+                                Err(err) => {
+                                    error!("Failed to parse twin fragment value of {fragment_key} of {source} from the persistent entity store due to {err}");
+                                    continue;
+                                }
+                            }
+                        };
+
+                        let twin_data =
+                            EntityTwinMessage::new(source.clone(), fragment_key, fragment_value);
+                        if let Err(err) = self.register_twin_fragment(twin_data.clone()) {
+                            error!("Failed to restore twin fragment: {twin_data:?} from the persistent entity store due to {err}");
+                            continue;
+                        }
+                    }
+                    Channel::CommandMetadata { .. } => {
+                        // Do nothing for now as supported operations are not part of the entity store
+                    }
+                    channel => {
+                        warn!("Restoring messages on channel: {:?} not supported", channel)
+                    }
                 }
+            } else {
+                warn!(
+                    "Ignoring unsupported message retrieved from entity store: {:?}",
+                    message
+                );
             }
         }
+        info!("Finished loading the entity store from the log");
     }
 
     /// Iterates over the entity topic ids
