@@ -175,10 +175,7 @@ impl EntityStore {
                         // Do nothing for now as supported operations are not part of the entity store
                     }
                     channel => {
-                        warn!(
-                            "Restoring messages on channel: {:?} not supported",
-                            channel
-                        )
+                        warn!("Restoring messages on channel: {:?} not supported", channel)
                     }
                 }
             } else {

@@ -440,10 +440,7 @@ mod tests {
         let read_messages: Vec<_> = log.messages().collect();
         assert_eq!(
             read_messages,
-            vec![
-                make_message("topic1", "v2"),
-                make_message("topic2", "v2"),
-            ]
+            vec![make_message("topic1", "v2"), make_message("topic2", "v2"),]
         );
     }
 
@@ -467,10 +464,7 @@ mod tests {
         let read_messages: Vec<_> = log.messages().collect();
         assert_eq!(
             read_messages,
-            vec![
-                make_message("topic1", "v3"),
-                make_message("topic2", "v4"),
-            ]
+            vec![make_message("topic1", "v3"), make_message("topic2", "v4"),]
         );
     }
 
