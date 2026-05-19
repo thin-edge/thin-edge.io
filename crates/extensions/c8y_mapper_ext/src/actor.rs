@@ -43,7 +43,6 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::FileError;
 use tedge_utils::paths::PathsError;
-use tedge_utils::paths::TedgePaths;
 
 pub(crate) type CmdId = String;
 pub(crate) type IdUploadRequest = (CmdId, UploadRequest);
@@ -311,12 +310,9 @@ impl C8yMapperActor {
             | FsWatchEvent::Modified(path) => {
                 // Process inotify events only for the main device at the root operations directory
                 // directly under /etc/tedge/operations/c8y
-                if path.parent() == Some(self.converter.config.ops_dir.as_std_path()) {
-                    match process_inotify_events(
-                        self.converter.config.ops_dir.as_std_path(),
-                        &path,
-                        file_event,
-                    ) {
+                let ops_dir = self.converter.config.ops_dir.path().as_std_path();
+                if path.parent() == Some(ops_dir) {
+                    match process_inotify_events(ops_dir, &path, file_event) {
                         Ok(Some(discovered_ops)) => {
                             if let Some(update_message) = self
                                 .converter
@@ -376,7 +372,7 @@ impl C8yMapperBuilder {
         let uploader = ClientMessageBox::new(uploader);
 
         fs_watcher.connect_sink(
-            config.ops_dir.as_std_path().to_path_buf(),
+            config.ops_dir.path().as_std_path().to_path_buf(),
             &box_builder.get_sender(),
         );
 
@@ -410,15 +406,7 @@ impl C8yMapperBuilder {
 
     pub async fn init(config: &C8yMapperConfig) -> Result<(), PathsError> {
         // Create c8y operations directory
-        TedgePaths::from_root_with_defaults(&config.ops_dir, "", "")
-            .root_dir()
-            .ensure()
-            .await?;
-        // Create directory for persistent entity store
-        TedgePaths::from_root_with_defaults(&config.state_dir, "", "")
-            .root_dir()
-            .ensure()
-            .await?;
+        config.ops_dir.ensure().await?;
         Ok(())
     }
 }
