@@ -16,7 +16,6 @@ use std::sync::Arc;
 use agent::AgentConfig;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
-use tracing::log::warn;
 
 mod agent;
 mod device_profile_manager;
@@ -36,10 +35,6 @@ version = clap::crate_version!(),
 about = clap::crate_description!()
 )]
 pub struct AgentOpt {
-    /// Start the agent with clean session off, subscribe to the topics, so that no messages are lost
-    #[clap(short, long)]
-    pub init: bool,
-
     #[command(flatten)]
     pub common: CommonArgs,
 
@@ -62,19 +57,13 @@ pub async fn run(
         &agent_opt.common.config_dir,
     )?;
 
-    let init = agent_opt.init;
-
     let agent = agent::Agent::try_new(
         "tedge-agent",
         AgentConfig::from_config_and_cliopts(tedge_config, agent_opt).await?,
     )?;
 
-    if init {
-        warn!("This --init option has been deprecated and will be removed in a future release");
-        return Ok(());
-    } else {
-        agent.start().await?;
-    }
+    agent.start().await?;
+
     Ok(())
 }
 
