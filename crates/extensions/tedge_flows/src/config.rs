@@ -9,6 +9,7 @@ use crate::params::Params;
 use crate::steps::FlowStep;
 use crate::transformers::BuiltinTransformers;
 use crate::LoadError;
+use camino::Utf8Component;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use glob::glob;
@@ -306,7 +307,8 @@ impl FlowConfig {
         flows_dir: &Utf8Path,
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
-        let input = self.input.try_into()?;
+        let source_dir = source.parent().unwrap_or(flows_dir);
+        let input = self.input.into_flow_input(source_dir)?;
         let output = self.output.try_into()?;
         let errors = self.errors.try_into()?;
         let mut steps = vec![];
@@ -474,10 +476,27 @@ impl InputConfig {
     }
 }
 
-impl TryFrom<InputConfig> for FlowInput {
-    type Error = ConfigError;
-    fn try_from(input: InputConfig) -> Result<Self, Self::Error> {
-        Ok(match input {
+fn resolve_process_command(command: String, flow_dir: &Utf8Path) -> String {
+    let Ok(split) = shell_words::split(&command) else {
+        return command;
+    };
+    let Some((process, args)) = split.split_first() else {
+        return command;
+    };
+    match Utf8Path::new(process).components().next() {
+        Some(Utf8Component::CurDir | Utf8Component::ParentDir) => {
+            let resolved = path_clean::clean(flow_dir.join(process))
+                .to_string_lossy()
+                .into_owned();
+            shell_words::join(std::iter::once(resolved).chain(args.iter().cloned()))
+        }
+        _ => command,
+    }
+}
+
+impl InputConfig {
+    fn into_flow_input(self, source_dir: &Utf8Path) -> Result<FlowInput, ConfigError> {
+        Ok(match self {
             InputConfig::Mqtt { topics } => FlowInput::Mqtt {
                 topics: topic_filters(topics)?,
             },
@@ -502,15 +521,22 @@ impl TryFrom<InputConfig> for FlowInput {
                 command,
                 interval,
             } => {
+                let command = resolve_process_command(command, source_dir);
                 let topic = topic.unwrap_or_else(|| command.clone());
+                let cwd = source_dir.to_path_buf();
                 match interval.map(|i| i.duration()) {
                     Some(Ok(interval)) if !interval.is_zero() => FlowInput::PollCommand {
                         topic,
                         command,
                         interval,
+                        cwd,
                     },
                     Some(Err(e)) => return Err(e),
-                    _ => FlowInput::StreamCommand { topic, command },
+                    _ => FlowInput::StreamCommand {
+                        topic,
+                        command,
+                        cwd,
+                    },
                 }
             }
         })
@@ -910,5 +936,228 @@ topic = "te/device/main///e/"
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
 
         assert_eq!(expected_flow, flow.substitute_params(&params).unwrap());
+    }
+
+    #[tokio::test]
+    async fn relative_command_in_subdirectory_resolves_to_flow_parent() {
+        let flow_toml = r#"
+        [input.process]
+        command = "./monitor.sh"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let rs_transformers = BuiltinTransformers::default();
+        let mut js_runtime = JsRuntime::with_default().await.unwrap();
+        let flows_dir = Utf8Path::new("/flows");
+        let source = Utf8PathBuf::from("/flows/sub/flow.toml");
+        let compiled = flow
+            .compile(&rs_transformers, &mut js_runtime, flows_dir, source)
+            .await
+            .unwrap();
+        assert_eq!(
+            compiled.input,
+            FlowInput::PollCommand {
+                topic: "/flows/sub/monitor.sh".into(),
+                command: "/flows/sub/monitor.sh".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows/sub"),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn flows_accept_relative_paths_to_input_processes() {
+        let flow_toml = r#"
+        [input.process]
+        command = "./test.sh"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let rs_transformers = BuiltinTransformers::default();
+        let mut js_runtime = JsRuntime::with_default().await.unwrap();
+        let flows_dir = Utf8Path::new("/flows");
+        let source = Utf8PathBuf::from("/flows/my_flow.toml");
+        let compiled = flow
+            .compile(&rs_transformers, &mut js_runtime, flows_dir, source)
+            .await
+            .unwrap();
+        assert_eq!(
+            compiled.input,
+            FlowInput::PollCommand {
+                topic: "/flows/test.sh".into(),
+                command: "/flows/test.sh".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows"),
+            }
+        )
+    }
+
+    #[test]
+    fn stream_command_sets_cwd_from_flow_directory() {
+        let flow_toml = r#"
+        [input.process]
+        command = "./monitor.sh"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        assert_eq!(
+            input,
+            FlowInput::StreamCommand {
+                topic: "/flows/monitor.sh".into(),
+                command: "/flows/monitor.sh".into(),
+                cwd: Utf8PathBuf::from("/flows"),
+            }
+        )
+    }
+
+    #[test]
+    fn relative_process_paths_are_cleaned_up() {
+        let flow_toml = r#"
+        [input.process]
+        command = "./../flows/./my_flow/../test.sh"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        assert_eq!(
+            input,
+            FlowInput::PollCommand {
+                topic: "/flows/test.sh".into(),
+                command: "/flows/test.sh".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows"),
+            }
+        )
+    }
+
+    #[test]
+    fn relative_commands_with_args_are_cleaned_up() {
+        let flow_toml = r#"
+        [input.process]
+        command = "./../flows/./my_flow/../test.sh foo /../bar"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        assert_eq!(
+            input,
+            FlowInput::PollCommand {
+                topic: "/flows/test.sh foo /../bar".into(),
+                command: "/flows/test.sh foo /../bar".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows"),
+            }
+        )
+    }
+
+    #[test]
+    fn unqualified_command_names_are_not_path_resolved() {
+        let flow_toml = r#"
+        [input.process]
+        command = "sudo journalctl -u tedge-agent"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        assert_eq!(
+            input,
+            FlowInput::PollCommand {
+                topic: "sudo journalctl -u tedge-agent".into(),
+                command: "sudo journalctl -u tedge-agent".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows"),
+            }
+        )
+    }
+
+    #[test]
+    fn bare_filename_without_dot_prefix_is_not_resolved() {
+        let flow_toml = r#"
+        [input.process]
+        command = "test.sh"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        assert_eq!(
+            input,
+            FlowInput::PollCommand {
+                topic: "test.sh".into(),
+                command: "test.sh".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows"),
+            }
+        )
+    }
+
+    #[test]
+    fn parent_relative_command_is_resolved() {
+        let flow_toml = r#"
+        [input.process]
+        command = "../test.sh"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        assert_eq!(
+            input,
+            FlowInput::PollCommand {
+                topic: "/test.sh".into(),
+                command: "/test.sh".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows"),
+            }
+        )
+    }
+
+    #[test]
+    fn absolute_command_is_not_modified() {
+        let flow_toml = r#"
+        [input.process]
+        command = "/usr/bin/script.sh foo bar"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        assert_eq!(
+            input,
+            FlowInput::PollCommand {
+                topic: "/usr/bin/script.sh foo bar".into(),
+                command: "/usr/bin/script.sh foo bar".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows"),
+            }
+        )
+    }
+
+    #[test]
+    fn explicit_topic_is_preserved_when_resolving_relative_command() {
+        let flow_toml = r#"
+        [input.process]
+        command = "./test.sh"
+        topic = "my/custom/topic"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        assert_eq!(
+            input,
+            FlowInput::PollCommand {
+                topic: "my/custom/topic".into(),
+                command: "/flows/test.sh".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows"),
+            }
+        )
     }
 }

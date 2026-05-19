@@ -68,6 +68,7 @@ pub enum SourceTag {
 }
 
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub enum FlowInput {
     Mqtt {
         topics: TopicFilter,
@@ -81,6 +82,7 @@ pub enum FlowInput {
         topic: String,
         command: String,
         interval: Duration,
+        cwd: Utf8PathBuf,
     },
     StreamFile {
         topic: String,
@@ -89,6 +91,7 @@ pub enum FlowInput {
     StreamCommand {
         topic: String,
         command: String,
+        cwd: Utf8PathBuf,
     },
 }
 

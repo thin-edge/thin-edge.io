@@ -38,14 +38,16 @@ pub enum PollingSourceError {
 pub struct CommandPollingSource {
     topic: String,
     command: String,
+    cwd: Utf8PathBuf,
     poll: PollInterval,
 }
 
 impl CommandPollingSource {
-    pub fn new(topic: String, command: String, interval: Duration) -> Self {
+    pub fn new(topic: String, command: String, cwd: Utf8PathBuf, interval: Duration) -> Self {
         CommandPollingSource {
             topic,
             command,
+            cwd,
             poll: PollInterval::new(interval),
         }
     }
@@ -54,7 +56,7 @@ impl CommandPollingSource {
 #[async_trait]
 impl PollingSource for CommandPollingSource {
     async fn poll(&mut self, timestamp: SystemTime) -> Result<Vec<Message>, PollingSourceError> {
-        let output = tedge_watch_ext::command_output(&self.command)
+        let output = tedge_watch_ext::command_output(&self.command, &self.cwd)
             .await
             .map_err(|err| PollingSourceError::CannotPoll {
                 resource: self.command.clone(),
@@ -84,11 +86,12 @@ impl PollingSource for CommandPollingSource {
 pub struct CommandStreamingSource {
     flow: String,
     command: String,
+    cwd: Utf8PathBuf,
 }
 
 impl CommandStreamingSource {
-    pub fn new(flow: String, command: String) -> Self {
-        CommandStreamingSource { flow, command }
+    pub fn new(flow: String, command: String, cwd: Utf8PathBuf) -> Self {
+        CommandStreamingSource { flow, command, cwd }
     }
 }
 
@@ -97,6 +100,7 @@ impl StreamingSource for CommandStreamingSource {
         Some(WatchRequest::WatchCommand {
             topic: self.flow.clone(),
             command: self.command.clone(),
+            cwd: self.cwd.clone(),
         })
     }
 }
