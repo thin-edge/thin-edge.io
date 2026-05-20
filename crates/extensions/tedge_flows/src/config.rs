@@ -37,6 +37,7 @@ pub struct FlowConfig {
     #[serde(default)]
     config: Map<String, Value>,
 
+    #[serde(default)]
     input: InputConfig,
     #[serde(default)]
     steps: Vec<StepConfig>,
@@ -74,35 +75,49 @@ pub enum StepSpec {
     JavaScript(Utf8PathBuf),
 }
 
+#[derive(Clone, Deserialize, Default)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub struct InputConfig {
+    #[serde(default, deserialize_with = "deserialize_one_or_many")]
+    mqtt: Vec<MqttInputConfig>,
+
+    #[serde(default, deserialize_with = "deserialize_one_or_many")]
+    file: Vec<FileInputConfig>,
+
+    #[serde(default, deserialize_with = "deserialize_one_or_many")]
+    process: Vec<ProcessInputConfig>,
+}
+
 #[derive(Clone, Deserialize)]
 #[cfg_attr(test, derive(Debug, Eq, PartialEq))]
-pub enum InputConfig {
-    #[serde(rename = "mqtt")]
-    Mqtt { topics: Vec<String> },
+pub struct MqttInputConfig {
+    topics: Vec<String>,
+}
 
-    #[serde(rename = "file")]
-    File {
-        path: Utf8PathBuf,
+#[derive(Clone, Deserialize)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub struct FileInputConfig {
+    path: Utf8PathBuf,
 
-        /// Default to path
-        topic: Option<String>,
+    /// Default to path
+    topic: Option<String>,
 
-        #[serde(default)]
-        #[serde(deserialize_with = "parse_human_interval")]
-        interval: Option<IntervalConfig>,
-    },
+    #[serde(default)]
+    #[serde(deserialize_with = "parse_human_interval")]
+    interval: Option<IntervalConfig>,
+}
 
-    #[serde(rename = "process")]
-    Process {
-        command: String,
+#[derive(Clone, Deserialize)]
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub struct ProcessInputConfig {
+    command: String,
 
-        /// Default to command
-        topic: Option<String>,
+    /// Default to command
+    topic: Option<String>,
 
-        #[serde(default)]
-        #[serde(deserialize_with = "parse_human_interval")]
-        interval: Option<IntervalConfig>,
-    },
+    #[serde(default)]
+    #[serde(deserialize_with = "parse_human_interval")]
+    interval: Option<IntervalConfig>,
 }
 
 #[derive(Deserialize)]
@@ -151,6 +166,9 @@ pub enum ConfigError {
 
     #[error("Flow '{name}' defines an infinite loop: the output file '{path}' is the same as the input file")]
     FileInfiniteLoop { name: String, path: String },
+
+    #[error("Flow '{name}' must define at least one input")]
+    NoInput { name: String },
 }
 
 /// ```
@@ -291,8 +309,11 @@ impl FlowConfig {
             config: Map::new(),
             // Expect a loop when wrapping a single script as a flow, as there is no way to statically identify input and output topics
             expect_loop: true,
-            input: InputConfig::Mqtt {
-                topics: vec![input_topic],
+            input: InputConfig {
+                mqtt: vec![MqttInputConfig {
+                    topics: vec![input_topic],
+                }],
+                ..Default::default()
             },
             steps: vec![step],
             output: default_output(),
@@ -308,7 +329,7 @@ impl FlowConfig {
         source: Utf8PathBuf,
     ) -> Result<Flow, ConfigError> {
         let source_dir = source.parent().unwrap_or(flows_dir);
-        let input = self.input.into_flow_input(source_dir)?;
+        let input = self.input.into_flow_inputs(source_dir)?;
         let output = self.output.try_into()?;
         let errors = self.errors.try_into()?;
         let mut steps = vec![];
@@ -327,6 +348,10 @@ impl FlowConfig {
                 path: source.to_owned(),
             });
         };
+
+        if input.is_empty() {
+            return Err(ConfigError::NoInput { name });
+        }
 
         detect_loop(&name, &input, &output, self.expect_loop)?;
 
@@ -447,32 +472,65 @@ impl StepConfig {
 
 impl InputConfig {
     fn substitute_params(self, params: &Params<&dyn MapperParams>) -> Result<Self, ConfigError> {
-        match self {
-            InputConfig::Mqtt { topics } => Ok(InputConfig::Mqtt {
-                topics: topics
-                    .into_iter()
-                    .map(|t| params.substitute_inner_paths(&t))
-                    .collect(),
-            }),
-            InputConfig::File {
-                path,
-                topic,
-                interval,
-            } => Ok(InputConfig::File {
-                path: params.substitute_inner_paths(path.as_str()).into(),
-                topic: topic.map(|t| params.substitute_inner_paths(&t)),
-                interval: interval.map(|i| i.substitute_params(params)).transpose()?,
-            }),
-            InputConfig::Process {
-                command,
-                topic,
-                interval,
-            } => Ok(InputConfig::Process {
-                command: params.substitute_inner_paths(&command),
-                topic: topic.map(|t| params.substitute_inner_paths(&t)),
-                interval: interval.map(|i| i.substitute_params(params)).transpose()?,
-            }),
-        }
+        Ok(InputConfig {
+            mqtt: self
+                .mqtt
+                .into_iter()
+                .map(|input| MqttInputConfig {
+                    topics: input
+                        .topics
+                        .into_iter()
+                        .map(|t| params.substitute_inner_paths(&t))
+                        .collect(),
+                })
+                .collect(),
+            file: self
+                .file
+                .into_iter()
+                .map(|input| {
+                    Ok(FileInputConfig {
+                        path: params.substitute_inner_paths(input.path.as_str()).into(),
+                        topic: input.topic.map(|t| params.substitute_inner_paths(&t)),
+                        interval: input
+                            .interval
+                            .map(|i| i.substitute_params(params))
+                            .transpose()?,
+                    })
+                })
+                .collect::<Result<_, ConfigError>>()?,
+            process: self
+                .process
+                .into_iter()
+                .map(|input| {
+                    Ok(ProcessInputConfig {
+                        command: params.substitute_inner_paths(&input.command),
+                        topic: input.topic.map(|t| params.substitute_inner_paths(&t)),
+                        interval: input
+                            .interval
+                            .map(|i| i.substitute_params(params))
+                            .transpose()?,
+                    })
+                })
+                .collect::<Result<_, ConfigError>>()?,
+        })
+    }
+}
+
+fn deserialize_one_or_many<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany<T> {
+        One(T),
+        Many(Vec<T>),
+    }
+
+    match OneOrMany::deserialize(deserializer)? {
+        OneOrMany::One(value) => Ok(vec![value]),
+        OneOrMany::Many(values) => Ok(values),
     }
 }
 
@@ -495,51 +553,61 @@ fn resolve_process_command(command: String, flow_dir: &Utf8Path) -> String {
 }
 
 impl InputConfig {
-    fn into_flow_input(self, source_dir: &Utf8Path) -> Result<FlowInput, ConfigError> {
-        Ok(match self {
-            InputConfig::Mqtt { topics } => FlowInput::Mqtt {
+    fn into_flow_inputs(self, source_dir: &Utf8Path) -> Result<Vec<FlowInput>, ConfigError> {
+        let mut inputs = Vec::new();
+
+        for MqttInputConfig { topics } in self.mqtt {
+            inputs.push(FlowInput::Mqtt {
                 topics: topic_filters(topics)?,
-            },
-            InputConfig::File {
-                topic,
-                path,
-                interval,
-            } => {
-                let topic = topic.unwrap_or_else(|| path.clone().to_string());
-                match interval.map(|i| i.duration()) {
-                    Some(Ok(interval)) if !interval.is_zero() => FlowInput::PollFile {
-                        topic,
-                        path,
-                        interval,
-                    },
-                    Some(Err(e)) => return Err(e),
-                    _ => FlowInput::StreamFile { topic, path },
-                }
-            }
-            InputConfig::Process {
-                topic,
-                command,
-                interval,
-            } => {
-                let command = resolve_process_command(command, source_dir);
-                let topic = topic.unwrap_or_else(|| command.clone());
-                let cwd = source_dir.to_path_buf();
-                match interval.map(|i| i.duration()) {
-                    Some(Ok(interval)) if !interval.is_zero() => FlowInput::PollCommand {
-                        topic,
-                        command,
-                        interval,
-                        cwd,
-                    },
-                    Some(Err(e)) => return Err(e),
-                    _ => FlowInput::StreamCommand {
-                        topic,
-                        command,
-                        cwd,
-                    },
-                }
-            }
-        })
+            });
+        }
+
+        for FileInputConfig {
+            topic,
+            path,
+            interval,
+        } in self.file
+        {
+            let topic = topic.unwrap_or_else(|| path.clone().to_string());
+            let input = match interval.map(|i| i.duration()) {
+                Some(Ok(interval)) if !interval.is_zero() => FlowInput::PollFile {
+                    topic,
+                    path,
+                    interval,
+                },
+                Some(Err(e)) => return Err(e),
+                _ => FlowInput::StreamFile { topic, path },
+            };
+            inputs.push(input);
+        }
+
+        for ProcessInputConfig {
+            topic,
+            command,
+            interval,
+        } in self.process
+        {
+            let command = resolve_process_command(command, source_dir);
+            let topic = topic.unwrap_or_else(|| command.clone());
+            let cwd = source_dir.to_path_buf();
+            let input = match interval.map(|i| i.duration()) {
+                Some(Ok(interval)) if !interval.is_zero() => FlowInput::PollCommand {
+                    topic,
+                    command,
+                    interval,
+                    cwd,
+                },
+                Some(Err(e)) => return Err(e),
+                _ => FlowInput::StreamCommand {
+                    topic,
+                    command,
+                    cwd,
+                },
+            };
+            inputs.push(input);
+        }
+
+        Ok(inputs)
     }
 }
 
@@ -635,32 +703,38 @@ fn default_errors() -> OutputConfig {
 /// When `expect_loop` is true, the check is skipped.
 fn detect_loop(
     name: &str,
-    input: &FlowInput,
+    inputs: &[FlowInput],
     output: &FlowOutput,
     expect_loop: bool,
 ) -> Result<(), ConfigError> {
     if expect_loop {
         return Ok(());
     }
-    match (input, output) {
-        (FlowInput::Mqtt { topics }, FlowOutput::Mqtt { topic: Some(out) })
-            if topics.accept_topic_name(&out.name) =>
-        {
-            Err(ConfigError::MqttInfiniteLoop {
-                name: name.to_string(),
-                input_filter: format!("{topics:?}"),
-                output_topic: out.name.clone(),
-            })
+    for input in inputs {
+        match (input, output) {
+            (FlowInput::Mqtt { topics }, FlowOutput::Mqtt { topic: Some(out) })
+                if topics.accept_topic_name(&out.name) =>
+            {
+                return Err(ConfigError::MqttInfiniteLoop {
+                    name: name.to_string(),
+                    input_filter: format!("{topics:?}"),
+                    output_topic: out.name.clone(),
+                });
+            }
+            (
+                FlowInput::PollFile { path: in_path, .. }
+                | FlowInput::StreamFile { path: in_path, .. },
+                FlowOutput::File { path: out_path },
+            ) if in_path == out_path => {
+                return Err(ConfigError::FileInfiniteLoop {
+                    name: name.to_string(),
+                    path: in_path.to_string(),
+                });
+            }
+            _ => {}
         }
-        (
-            FlowInput::PollFile { path: in_path, .. } | FlowInput::StreamFile { path: in_path, .. },
-            FlowOutput::File { path: out_path },
-        ) if in_path == out_path => Err(ConfigError::FileInfiniteLoop {
-            name: name.to_string(),
-            path: in_path.to_string(),
-        }),
-        _ => Ok(()),
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -751,7 +825,7 @@ mod tests {
             topic: Some(Topic::new("te/loop/test").unwrap()),
         };
         assert!(matches!(
-            detect_loop("my-flow", &input, &output, false),
+            detect_loop("my-flow", &[input], &output, false),
             Err(ConfigError::MqttInfiniteLoop { .. })
         ));
     }
@@ -767,7 +841,7 @@ mod tests {
             path: Utf8PathBuf::from("/tmp/data.txt"),
         };
         assert!(matches!(
-            detect_loop("my-flow", &input, &output, false),
+            detect_loop("my-flow", &[input], &output, false),
             Err(ConfigError::FileInfiniteLoop { .. })
         ));
     }
@@ -782,7 +856,7 @@ mod tests {
             path: Utf8PathBuf::from("/tmp/data.txt"),
         };
         assert!(matches!(
-            detect_loop("my-flow", &input, &output, false),
+            detect_loop("my-flow", &[input], &output, false),
             Err(ConfigError::FileInfiniteLoop { .. })
         ));
     }
@@ -796,7 +870,7 @@ mod tests {
             topic: Some(Topic::new("te/loop/test").unwrap()),
         };
         // Would normally be an error, but expect_loop = true bypasses the check
-        assert!(detect_loop("my-flow", &input, &output, true).is_ok());
+        assert!(detect_loop("my-flow", &[input], &output, true).is_ok());
     }
 
     #[test_case(FlowOutput::Mqtt { topic: Some(Topic::new("te/another/test").unwrap()) }; "mqtt output different topic"
@@ -806,7 +880,7 @@ mod tests {
         let input = FlowInput::Mqtt {
             topics: TopicFilter::new_unchecked("te/loop/+"),
         };
-        assert!(detect_loop("my-flow", &input, &output, false).is_ok());
+        assert!(detect_loop("my-flow", &[input], &output, false).is_ok());
     }
 
     #[test]
@@ -957,12 +1031,12 @@ topic = "te/device/main///e/"
             .unwrap();
         assert_eq!(
             compiled.input,
-            FlowInput::PollCommand {
+            vec![FlowInput::PollCommand {
                 topic: "/flows/sub/monitor.sh".into(),
                 command: "/flows/sub/monitor.sh".into(),
                 interval: Duration::from_secs(1),
                 cwd: Utf8PathBuf::from("/flows/sub"),
-            }
+            }]
         );
     }
 
@@ -985,12 +1059,12 @@ topic = "te/device/main///e/"
             .unwrap();
         assert_eq!(
             compiled.input,
-            FlowInput::PollCommand {
+            vec![FlowInput::PollCommand {
                 topic: "/flows/test.sh".into(),
                 command: "/flows/test.sh".into(),
                 interval: Duration::from_secs(1),
                 cwd: Utf8PathBuf::from("/flows"),
-            }
+            }]
         )
     }
 
@@ -1002,14 +1076,17 @@ topic = "te/device/main///e/"
         "#;
 
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
-        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
         assert_eq!(
             input,
-            FlowInput::StreamCommand {
+            vec![FlowInput::StreamCommand {
                 topic: "/flows/monitor.sh".into(),
                 command: "/flows/monitor.sh".into(),
                 cwd: Utf8PathBuf::from("/flows"),
-            }
+            }]
         )
     }
 
@@ -1022,15 +1099,18 @@ topic = "te/device/main///e/"
         "#;
 
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
-        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
         assert_eq!(
             input,
-            FlowInput::PollCommand {
+            vec![FlowInput::PollCommand {
                 topic: "/flows/test.sh".into(),
                 command: "/flows/test.sh".into(),
                 interval: Duration::from_secs(1),
                 cwd: Utf8PathBuf::from("/flows"),
-            }
+            }]
         )
     }
 
@@ -1043,15 +1123,18 @@ topic = "te/device/main///e/"
         "#;
 
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
-        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
         assert_eq!(
             input,
-            FlowInput::PollCommand {
+            vec![FlowInput::PollCommand {
                 topic: "/flows/test.sh foo /../bar".into(),
                 command: "/flows/test.sh foo /../bar".into(),
                 interval: Duration::from_secs(1),
                 cwd: Utf8PathBuf::from("/flows"),
-            }
+            }]
         )
     }
 
@@ -1064,15 +1147,18 @@ topic = "te/device/main///e/"
         "#;
 
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
-        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
         assert_eq!(
             input,
-            FlowInput::PollCommand {
+            vec![FlowInput::PollCommand {
                 topic: "sudo journalctl -u tedge-agent".into(),
                 command: "sudo journalctl -u tedge-agent".into(),
                 interval: Duration::from_secs(1),
                 cwd: Utf8PathBuf::from("/flows"),
-            }
+            }]
         )
     }
 
@@ -1085,15 +1171,18 @@ topic = "te/device/main///e/"
         "#;
 
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
-        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
         assert_eq!(
             input,
-            FlowInput::PollCommand {
+            vec![FlowInput::PollCommand {
                 topic: "test.sh".into(),
                 command: "test.sh".into(),
                 interval: Duration::from_secs(1),
                 cwd: Utf8PathBuf::from("/flows"),
-            }
+            }]
         )
     }
 
@@ -1106,15 +1195,18 @@ topic = "te/device/main///e/"
         "#;
 
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
-        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
         assert_eq!(
             input,
-            FlowInput::PollCommand {
+            vec![FlowInput::PollCommand {
                 topic: "/test.sh".into(),
                 command: "/test.sh".into(),
                 interval: Duration::from_secs(1),
                 cwd: Utf8PathBuf::from("/flows"),
-            }
+            }]
         )
     }
 
@@ -1127,15 +1219,18 @@ topic = "te/device/main///e/"
         "#;
 
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
-        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
         assert_eq!(
             input,
-            FlowInput::PollCommand {
+            vec![FlowInput::PollCommand {
                 topic: "/usr/bin/script.sh foo bar".into(),
                 command: "/usr/bin/script.sh foo bar".into(),
                 interval: Duration::from_secs(1),
                 cwd: Utf8PathBuf::from("/flows"),
-            }
+            }]
         )
     }
 
@@ -1149,15 +1244,158 @@ topic = "te/device/main///e/"
         "#;
 
         let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
-        let input = flow.input.into_flow_input(Utf8Path::new("/flows")).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
         assert_eq!(
             input,
-            FlowInput::PollCommand {
+            vec![FlowInput::PollCommand {
                 topic: "my/custom/topic".into(),
                 command: "/flows/test.sh".into(),
                 interval: Duration::from_secs(1),
                 cwd: Utf8PathBuf::from("/flows"),
-            }
+            }]
+        )
+    }
+
+    #[test]
+    fn multiple_process_inputs_can_be_deserialized_from_array_of_tables() {
+        let flow_toml = r#"
+        [[input.process]]
+        command = "./first.sh"
+        topic = "first"
+        interval = "1s"
+
+        [[input.process]]
+        command = "./second.sh"
+        topic = "second"
+        interval = "2s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
+        assert_eq!(
+            input,
+            vec![
+                FlowInput::PollCommand {
+                    topic: "first".into(),
+                    command: "/flows/first.sh".into(),
+                    interval: Duration::from_secs(1),
+                    cwd: Utf8PathBuf::from("/flows"),
+                },
+                FlowInput::PollCommand {
+                    topic: "second".into(),
+                    command: "/flows/second.sh".into(),
+                    interval: Duration::from_secs(2),
+                    cwd: Utf8PathBuf::from("/flows"),
+                },
+            ]
+        )
+    }
+
+    #[test]
+    fn multiple_input_types_can_be_deserialized_from_array_of_tables() {
+        let flow_toml = r#"
+        [[input.mqtt]]
+        topics = ["te/input/+"]
+
+        [[input.file]]
+        path = "/var/log/example.log"
+        topic = "log"
+
+        [[input.process]]
+        command = "./collect.sh"
+        topic = "collect"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
+        assert_eq!(
+            input,
+            vec![
+                FlowInput::Mqtt {
+                    topics: TopicFilter::new_unchecked("te/input/+"),
+                },
+                FlowInput::StreamFile {
+                    topic: "log".into(),
+                    path: Utf8PathBuf::from("/var/log/example.log"),
+                },
+                FlowInput::PollCommand {
+                    topic: "collect".into(),
+                    command: "/flows/collect.sh".into(),
+                    interval: Duration::from_secs(1),
+                    cwd: Utf8PathBuf::from("/flows"),
+                },
+            ]
+        )
+    }
+
+    #[tokio::test]
+    async fn flow_missing_input_section_entirely_returns_no_input_error() {
+        let flow_toml = r#"
+        [output.mqtt]
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let rs_transformers = BuiltinTransformers::default();
+        let mut js_runtime = JsRuntime::with_default().await.unwrap();
+        let flows_dir = Utf8Path::new("/flows");
+        let source = Utf8PathBuf::from("/flows/empty.toml");
+        let result = flow
+            .compile(&rs_transformers, &mut js_runtime, flows_dir, source)
+            .await;
+        assert!(matches!(result, Err(ConfigError::NoInput { .. })));
+    }
+
+    #[tokio::test]
+    async fn flow_with_empty_input_section_returns_no_input_error() {
+        // [input] present but all sub-fields empty
+        let flow_toml = r#"
+        [input]
+        [output.mqtt]
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let rs_transformers = BuiltinTransformers::default();
+        let mut js_runtime = JsRuntime::with_default().await.unwrap();
+        let flows_dir = Utf8Path::new("/flows");
+        let source = Utf8PathBuf::from("/flows/empty.toml");
+        let result = flow
+            .compile(&rs_transformers, &mut js_runtime, flows_dir, source)
+            .await;
+        assert!(matches!(result, Err(ConfigError::NoInput { .. })));
+    }
+
+    #[test]
+    fn existing_single_table_input_syntax_is_still_supported() {
+        let flow_toml = r#"
+        [input.process]
+        command = "./collect.sh"
+        topic = "collect"
+        interval = "1s"
+        "#;
+
+        let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+        let input = flow
+            .input
+            .into_flow_inputs(Utf8Path::new("/flows"))
+            .unwrap();
+        assert_eq!(
+            input,
+            vec![FlowInput::PollCommand {
+                topic: "collect".into(),
+                command: "/flows/collect.sh".into(),
+                interval: Duration::from_secs(1),
+                cwd: Utf8PathBuf::from("/flows"),
+            }]
         )
     }
 }

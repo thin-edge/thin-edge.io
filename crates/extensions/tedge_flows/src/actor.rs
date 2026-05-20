@@ -1,3 +1,4 @@
+use crate::connected_flow::watch_request_topic;
 use crate::connected_flow::ConnectedFlowRegistry;
 use crate::flow::FlowError;
 use crate::flow::FlowOutput;
@@ -46,7 +47,7 @@ pub struct FlowsMapper {
     mqtt_sender: DynSender<MqttMessage>,
     watch_request_sender: DynSender<WatchRequest>,
     subscriptions: TopicFilter,
-    watched_commands: HashSet<Utf8PathBuf>,
+    watched_commands: HashSet<String>,
     processor: MessageProcessor<ConnectedFlowRegistry>,
     next_dump: Instant,
     deferred_tick: bool,
@@ -153,25 +154,29 @@ impl FlowsMapper {
         let mut watch_requests = Vec::new();
         let mut new_watched_commands = HashSet::new();
         for flow in self.processor.registry.flows() {
-            let flow_path = flow.source_path();
-            let Some(request) = flow.watch_request() else {
-                continue;
-            };
-            if !self.watched_commands.contains(flow_path) {
-                info!(target: "flows", "Adding input: {}", flow.as_ref().input);
-                watch_requests.push(request);
+            for request in flow.watch_requests() {
+                let watch_topic = watch_request_topic(&request).to_string();
+                if !self.watched_commands.contains(&watch_topic) {
+                    info!(target: "flows", "Adding input: {}", flow.as_ref().input_description());
+                    watch_requests.push(request);
+                }
+                self.watched_commands.remove(&watch_topic);
+                new_watched_commands.insert(watch_topic);
             }
-            self.watched_commands.remove(flow_path);
-            new_watched_commands.insert(flow_path.to_owned());
         }
         for old_command in self.watched_commands.drain() {
             info!(target: "flows", "Removing input: {}", old_command);
-            watch_requests.push(WatchRequest::UnWatch {
-                topic: old_command.to_string(),
-            });
+            watch_requests.push(WatchRequest::UnWatch { topic: old_command });
         }
         self.watched_commands = new_watched_commands;
         watch_requests
+    }
+
+    fn flow_watch_request(&self, flow_path: &Utf8Path, watch_topic: &str) -> Option<WatchRequest> {
+        self.processor
+            .registry
+            .flow(flow_path)
+            .and_then(|flow| flow.watch_request(watch_topic))
     }
 
     async fn notify_flows_status(&mut self) -> Result<(), RuntimeError> {
@@ -311,19 +316,23 @@ impl FlowsMapper {
     async fn on_input_event(&mut self, event: WatchEvent) -> Result<(), RuntimeError> {
         match event {
             WatchEvent::StdoutLine { topic, line } => {
-                self.on_input_message(Utf8Path::new(&topic), line).await?;
+                let flow_path = flow_path_from_watch_topic(&topic);
+                self.on_input_message(&topic, Utf8Path::new(flow_path), line)
+                    .await?;
             }
             WatchEvent::StderrLine { topic, line } => {
                 warn!(target: "flows", "Input command {topic}: {line}");
             }
             WatchEvent::Error { topic, error } => {
                 error!(target: "flows", "Cannot monitor command: {error}");
-                self.on_input_error(Utf8Path::new(&topic), error.into())
+                let flow_path = flow_path_from_watch_topic(&topic);
+                self.on_input_error(&topic, Utf8Path::new(flow_path), error.into())
                     .await?;
             }
             WatchEvent::EndOfStream { topic } => {
                 error!(target: "flows", "End of input stream: {topic}");
-                self.on_input_eos(Utf8Path::new(&topic)).await?
+                let flow_path = flow_path_from_watch_topic(&topic);
+                self.on_input_eos(&topic, Utf8Path::new(flow_path)).await?
             }
         }
         Ok(())
@@ -331,11 +340,12 @@ impl FlowsMapper {
 
     async fn on_input_message(
         &mut self,
+        watch_topic: &str,
         flow_path: &Utf8Path,
         line: String,
     ) -> Result<(), RuntimeError> {
         if let Some(flow) = self.processor.registry.flow(flow_path) {
-            let topic = flow.input_topic().to_string();
+            let topic = flow.input_topic_for_watch(watch_topic).to_string();
             let timestamp = SystemTime::now();
             let message = Message::new(topic, line);
             if let Some(result) = self
@@ -352,12 +362,16 @@ impl FlowsMapper {
 
     async fn on_input_error(
         &mut self,
+        watch_topic: &str,
         flow_path: &Utf8Path,
         error: FlowError,
     ) -> Result<(), RuntimeError> {
         let Some((info, flow_error)) = self.processor.registry.flow(flow_path).map(|flow| {
             (
-                format!("Reconnecting input: {flow_path}: {}", flow.as_ref().input),
+                format!(
+                    "Reconnecting input: {flow_path}: {}",
+                    flow.as_ref().input_description()
+                ),
                 flow.on_error(error),
             )
         }) else {
@@ -365,12 +379,7 @@ impl FlowsMapper {
         };
         self.publish_result(flow_error).await?;
 
-        let Some(request) = self
-            .processor
-            .registry
-            .flow(flow_path)
-            .and_then(|flow| flow.watch_request())
-        else {
+        let Some(request) = self.flow_watch_request(flow_path, watch_topic) else {
             return Ok(());
         };
         let mut watch_request_sender = self.watch_request_sender.sender_clone();
@@ -383,13 +392,22 @@ impl FlowsMapper {
         Ok(())
     }
 
-    async fn on_input_eos(&mut self, flow_path: &Utf8Path) -> Result<(), RuntimeError> {
+    async fn on_input_eos(
+        &mut self,
+        watch_topic: &str,
+        flow_path: &Utf8Path,
+    ) -> Result<(), RuntimeError> {
+        let Some(request) = self.flow_watch_request(flow_path, watch_topic) else {
+            return Ok(());
+        };
         if let Some(flow) = self.processor.registry.flow(flow_path) {
-            if let Some(request) = flow.watch_request() {
-                info!(target: "flows", "Reconnecting input: {flow_path}: {}", flow.as_ref().input);
-                self.watch_request_sender.send(request).await?
-            };
+            info!(
+                target: "flows",
+                "Reconnecting input: {flow_path}: {}",
+                flow.as_ref().input_description()
+            );
         }
+        self.watch_request_sender.send(request).await?;
         Ok(())
     }
 
@@ -599,5 +617,34 @@ impl FlowsMapper {
             return Ok(());
         };
         self.on_directory_updated(directory).await
+    }
+}
+
+pub(crate) fn flow_path_from_watch_topic(topic: &str) -> &str {
+    topic.split_once("#input-").map_or(topic, |(flow, _)| flow)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plain_watch_topic_returned_unchanged() {
+        assert_eq!(
+            flow_path_from_watch_topic("/flows/test.toml"),
+            "/flows/test.toml"
+        );
+    }
+
+    #[test]
+    fn input_index_suffix_is_stripped_to_yield_flow_path() {
+        assert_eq!(
+            flow_path_from_watch_topic("/flows/test.toml#input-0"),
+            "/flows/test.toml"
+        );
+        assert_eq!(
+            flow_path_from_watch_topic("/flows/test.toml#input-2"),
+            "/flows/test.toml"
+        );
     }
 }
