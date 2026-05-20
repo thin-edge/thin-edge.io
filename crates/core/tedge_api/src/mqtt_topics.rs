@@ -721,6 +721,17 @@ impl Channel {
     pub fn is_health(&self) -> bool {
         matches!(self, Channel::Health)
     }
+
+    pub fn is_entity_twin_data(&self) -> bool {
+        matches!(self, Channel::EntityTwinData { .. })
+    }
+}
+
+/// Returns true if the given topic carries entity twin data
+pub fn is_entity_twin_topic(topic: &str) -> bool {
+    MqttSchema::default()
+        .entity_channel_of(topic)
+        .is_ok_and(|(_, channel)| channel.is_entity_twin_data())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
