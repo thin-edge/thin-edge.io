@@ -206,6 +206,64 @@ Consuming messages from the tail of file
     Should Have MQTT Messages    topic=log/events    message_contains=hello    minimum=1    date_from=${start}
     [Teardown]    Uninstall Flow    tail-named-pipe.toml
 
+Consuming messages from multiple MQTT inputs
+    Install Nested Flow    multiple-mqtt-inputs
+    MQTT Input Should Be Routed    test/multiple-mqtt-inputs/a    from-mqtt-a    test/multiple-mqtt-inputs/out
+    MQTT Input Should Be Routed    test/multiple-mqtt-inputs/b    from-mqtt-b    test/multiple-mqtt-inputs/out
+    [Teardown]    Uninstall Nested Flow    multiple-mqtt-inputs
+
+Consuming messages from multiple file inputs
+    Create Test Pipes    /tmp/multiple-file-inputs-a /tmp/multiple-file-inputs-b
+    Install Nested Flow    multiple-file-inputs
+    Write To Pipe And Assert MQTT Output
+    ...    path=/tmp/multiple-file-inputs-a
+    ...    input_topic=test/multiple-file-inputs/a
+    ...    payload=from-file-a
+    ...    output_topic=test/multiple-file-inputs/out
+    Write To Pipe And Assert MQTT Output
+    ...    path=/tmp/multiple-file-inputs-b
+    ...    input_topic=test/multiple-file-inputs/b
+    ...    payload=from-file-b
+    ...    output_topic=test/multiple-file-inputs/out
+    [Teardown]    Run Keywords
+    ...    Uninstall Nested Flow    multiple-file-inputs
+    ...    AND    Remove Test Pipes    /tmp/multiple-file-inputs-a /tmp/multiple-file-inputs-b
+
+Consuming messages from multiple process inputs
+    Create Test Pipes    /tmp/multiple-process-inputs-a /tmp/multiple-process-inputs-b
+    Install Nested Flow    multiple-process-inputs
+    Write To Pipe And Assert MQTT Output
+    ...    path=/tmp/multiple-process-inputs-a
+    ...    input_topic=test/multiple-process-inputs/a
+    ...    payload=from-process-a
+    ...    output_topic=test/multiple-process-inputs/out
+    Write To Pipe And Assert MQTT Output
+    ...    path=/tmp/multiple-process-inputs-b
+    ...    input_topic=test/multiple-process-inputs/b
+    ...    payload=from-process-b
+    ...    output_topic=test/multiple-process-inputs/out
+    [Teardown]    Run Keywords
+    ...    Uninstall Nested Flow    multiple-process-inputs
+    ...    AND    Remove Test Pipes    /tmp/multiple-process-inputs-a /tmp/multiple-process-inputs-b
+
+Consuming messages from mixed input types
+    Create Test Pipes    /tmp/mixed-inputs-file /tmp/mixed-inputs-process
+    Install Nested Flow    mixed-inputs
+    MQTT Input Should Be Routed    test/mixed-inputs/mqtt    from-mqtt    test/mixed-inputs/out
+    Write To Pipe And Assert MQTT Output
+    ...    path=/tmp/mixed-inputs-file
+    ...    input_topic=test/mixed-inputs/file
+    ...    payload=from-file
+    ...    output_topic=test/mixed-inputs/out
+    Write To Pipe And Assert MQTT Output
+    ...    path=/tmp/mixed-inputs-process
+    ...    input_topic=test/mixed-inputs/process
+    ...    payload=from-process
+    ...    output_topic=test/mixed-inputs/out
+    [Teardown]    Run Keywords
+    ...    Uninstall Nested Flow    mixed-inputs
+    ...    AND    Remove Test Pipes    /tmp/mixed-inputs-file /tmp/mixed-inputs-process
+
 Consuming messages from a file, periodically
     Install Flow    input-flows    read-file-periodically.toml
     Execute Command    echo hello >/tmp/file.input
@@ -655,11 +713,11 @@ Uninstall Flow
 
 Install Nested Flow
     [Arguments]    ${directory}
+    Remove Nested Flow Directories    ${directory}
     ${start}    Get Unix Timestamp
-    # transfer to parent dir + move to minimize reloads of flows and scripts
+    # Transfer to parent dir + move to minimize reloads of flows and scripts.
     ThinEdgeIO.Transfer To Device    ${CURDIR}/${directory}/*    /etc/tedge/mappers/local/${directory}/
     Execute Command    mv /etc/tedge/mappers/local/${directory} /etc/tedge/mappers/local/flows/${directory}
-    Execute Command    ls -lh /etc/tedge/mappers/local/flows/${directory}
     Should Have MQTT Messages
     ...    topic=te/device/main/service/tedge-mapper-local/status/flows
     ...    date_from=${start}
@@ -667,7 +725,42 @@ Install Nested Flow
 
 Uninstall Nested Flow
     [Arguments]    ${directory}
-    Execute Command    cmd=rm -fr /etc/tedge/mappers/local/flows/${directory}
+    Remove Nested Flow Directories    ${directory}
+
+Remove Nested Flow Directories
+    [Arguments]    ${directory}
+    Execute Command
+    ...    cmd=rm -fr /etc/tedge/mappers/local/${directory} /etc/tedge/mappers/local/flows/${directory}
+
+Create Test Pipes
+    [Arguments]    ${paths}
+    Remove Test Pipes    ${paths}
+    Execute Command    cmd=mkfifo ${paths}
+    Execute Command    cmd=chmod a+rw ${paths}
+
+Remove Test Pipes
+    [Arguments]    ${paths}
+    Execute Command    cmd=rm -f ${paths}
+
+MQTT Input Should Be Routed
+    [Arguments]    ${input_topic}    ${payload}    ${output_topic}
+    ${start}    Get Unix Timestamp
+    Execute Command    tedge mqtt pub ${input_topic} ${payload}
+    Should Have MQTT Messages
+    ...    topic=${output_topic}
+    ...    minimum=1
+    ...    message_contains=${input_topic}:${payload}
+    ...    date_from=${start}
+
+Write To Pipe And Assert MQTT Output
+    [Arguments]    ${path}    ${input_topic}    ${payload}    ${output_topic}
+    ${start}    Get Unix Timestamp
+    Execute Command    cmd=timeout 5 sh -c 'printf "%s\n" "${payload}" > ${path}'
+    Should Have MQTT Messages
+    ...    topic=${output_topic}
+    ...    minimum=1
+    ...    message_contains=${input_topic}:${payload}
+    ...    date_from=${start}
 
 Configure flows
     # Required by tail-named-pipe.toml

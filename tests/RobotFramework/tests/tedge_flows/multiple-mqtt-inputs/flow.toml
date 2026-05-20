@@ -1,0 +1,14 @@
+[[input.mqtt]]
+topics = ["test/multiple-mqtt-inputs/a"]
+
+[[input.mqtt]]
+topics = ["test/multiple-mqtt-inputs/b"]
+
+[[steps]]
+script = "route-with-topic.js"
+
+[output.mqtt]
+topic = "test/multiple-mqtt-inputs/out"
+
+[errors.mqtt]
+topic = "test/multiple-mqtt-inputs/errors"
