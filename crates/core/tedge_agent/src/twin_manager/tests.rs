@@ -5,6 +5,7 @@ use serde_json::Value;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
+use tedge_actors::MessageReceiver;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
@@ -12,6 +13,27 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_test_utils::fs::TempTedgeDir;
+
+#[tokio::test]
+async fn agent_twin_fragment_published_on_startup() {
+    let handle = setup(json!({}));
+    let mut mqtt_box = handle.mqtt_box;
+    mqtt_box
+        .send(
+            MqttMessage::from(("te/device/main/service/tedge-agent/status/health", "1"))
+                .with_retain(),
+        )
+        .await
+        .unwrap();
+
+    // The agent twin fragment must be published with the thin-edge.io name, url, and version
+    let msg: MqttMessage = mqtt_box.recv().await.unwrap();
+    assert_eq!(msg.topic.as_ref(), "te/device/main///twin/agent");
+    let payload: serde_json::Value = serde_json::from_slice(msg.payload.as_bytes()).unwrap();
+    assert_eq!(payload["name"], "thin-edge.io");
+    assert_eq!(payload["url"], "https://thin-edge.io");
+    assert!(payload["version"].is_string());
+}
 
 #[tokio::test]
 async fn process_inventory_json_content_on_init() {
@@ -28,7 +50,10 @@ async fn process_inventory_json_content_on_init() {
                 .with_retain(),
         )
         .await
-        .unwrap(); // Skip the above twin update
+        .unwrap();
+
+    // Skip the agent twin fragment published on startup
+    mqtt_box.skip(1).await;
 
     mqtt_box
         .assert_received([
@@ -52,7 +77,10 @@ async fn inventory_json_value_ignored_if_twin_data_present() {
     mqtt_box
         .send(MqttMessage::from(("te/device/main///twin/y", "5")).with_retain())
         .await
-        .unwrap(); // Skip the above twin update
+        .unwrap();
+
+    // Skip the agent twin fragment published on startup
+    mqtt_box.skip(1).await;
 
     mqtt_box
         .assert_received([

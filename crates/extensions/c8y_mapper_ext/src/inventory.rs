@@ -1,7 +1,6 @@
 //! This module provides converter functions to update Cumulocity inventory with entity twin data.
 use crate::converter::CumulocityConverter;
 use crate::error::ConversionError;
-use crate::fragments::C8yAgentFragment;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 use tedge_api::entity::EntityType;
@@ -14,15 +13,6 @@ use tedge_mqtt_ext::Topic;
 const INVENTORY_MANAGED_OBJECTS_TOPIC: &str = "inventory/managedObjects/update";
 
 impl CumulocityConverter {
-    /// Creates the inventory update message with c8y_Agent fragment
-    pub(crate) fn c8y_agent_inventory_fragment(&mut self) -> Result<MqttMessage, ConversionError> {
-        let agent_fragment = C8yAgentFragment::new()?;
-        let json_fragment = agent_fragment.to_json()?;
-        let message = self.inventory_update_message(&self.config.device_topic_id, json_fragment)?;
-
-        Ok(message)
-    }
-
     /// Convert a twin metadata message into Cumulocity inventory update messages.
     /// Updating the `name` and `type` fragments are not supported.
     /// Empty payload is mapped to a clear inventory fragment message in Cumulocity.
@@ -70,6 +60,10 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         if fragment_key == "firmware" {
             fragment_key = "c8y_Firmware";
+        }
+
+        if fragment_key == "agent" {
+            fragment_key = "c8y_Agent";
         }
 
         // All services in C8Y must have a fixed `type` fragment called `c8y_Service`.
