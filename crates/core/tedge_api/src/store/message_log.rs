@@ -1,6 +1,7 @@
 //! The message log is a persistent append-only log of MQTT messages.
 //! Each line is the JSON representation of that MQTT message.
 //! The underlying file is a JSON lines file.
+use crate::mqtt_topics::is_entity_twin_topic;
 use indexmap::IndexMap;
 use log::warn;
 use mqtt_channel::MqttMessage;
@@ -134,6 +135,9 @@ impl MessageLog {
                 Ok(_) => match serde_json::from_str::<MqttMessage>(&buffer) {
                     Ok(message) => {
                         let topic = message.topic.name.clone();
+                        if is_entity_twin_topic(&topic) {
+                            continue;
+                        }
                         let payload = String::from_utf8_lossy(message.payload_bytes()).into_owned();
                         entries.push((topic, payload));
                     }
@@ -154,6 +158,10 @@ impl MessageLog {
 
     /// Persists the message to the log
     pub fn append_message(&mut self, message: &MqttMessage) -> Result<(), std::io::Error> {
+        if is_entity_twin_topic(&message.topic.name) {
+            return Ok(());
+        }
+
         let json_line = serde_json::to_string(message)?;
         writeln!(self.writer, "{}", json_line)?;
         self.writer.flush()?;
@@ -218,6 +226,7 @@ mod tests {
     use super::MessageLog;
     use mqtt_channel::MqttMessage;
     use mqtt_channel::Topic;
+    use serde_json::json;
     use std::io::Write;
     use tempfile::tempdir;
 
@@ -350,6 +359,34 @@ mod tests {
 
         let read_messages: Vec<_> = log.messages().collect();
         assert_eq!(read_messages, vec![make_message("topic2", "v2")]);
+    }
+
+    #[test]
+    fn compaction_removes_twin_messages_from_existing_log_files() {
+        let temp_dir = tempdir().unwrap();
+        let log_path = temp_dir.path().join("entity_store.jsonl");
+        let mut file = std::fs::File::create(&log_path).unwrap();
+        let entity_v1 = make_message(
+            "te/device/child//",
+            r#"{"@type":"child-device","name":"v1"}"#,
+        );
+        let twin = make_message("te/device/child///twin/name", r#""legacy-twin""#);
+        writeln!(file, "{}", json!({ "version": "1.0" })).unwrap();
+        writeln!(file, "{}", serde_json::to_string(&entity_v1).unwrap()).unwrap();
+        writeln!(file, "{}", serde_json::to_string(&twin).unwrap()).unwrap();
+
+        let mut log = MessageLog::new_with_redundancy_threshold(&temp_dir, 1).unwrap();
+        log.append_message(&make_message(
+            "te/device/child//",
+            r#"{"@type":"child-device","name":"v2"}"#,
+        ))
+        .unwrap();
+
+        let compacted_log = std::fs::read_to_string(log_path).unwrap();
+        assert!(compacted_log.contains("te/device/child//"));
+        assert!(compacted_log.contains(r#""name\":\"v2"#));
+        assert!(!compacted_log.contains("te/device/child///twin/name"));
+        assert!(!compacted_log.contains("legacy-twin"));
     }
 
     #[test]

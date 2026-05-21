@@ -151,25 +151,8 @@ impl EntityStore {
                             }
                         }
                     }
-                    Channel::EntityTwinData { fragment_key } => {
-                        let fragment_value = if message.payload_bytes().is_empty() {
-                            JsonValue::Null
-                        } else {
-                            match serde_json::from_slice::<JsonValue>(message.payload_bytes()) {
-                                Ok(json_value) => json_value,
-                                Err(err) => {
-                                    error!("Failed to parse twin fragment value of {fragment_key} of {source} from the persistent entity store due to {err}");
-                                    continue;
-                                }
-                            }
-                        };
-
-                        let twin_data =
-                            EntityTwinMessage::new(source.clone(), fragment_key, fragment_value);
-                        if let Err(err) = self.register_twin_fragment(twin_data.clone()) {
-                            error!("Failed to restore twin fragment: {twin_data:?} from the persistent entity store due to {err}");
-                            continue;
-                        }
+                    Channel::EntityTwinData { .. } => {
+                        // Twin fragments are intentionally not restored from the entity store log.
                     }
                     Channel::CommandMetadata { .. } => {
                         // Do nothing for now as supported operations are not part of the entity store
@@ -444,7 +427,7 @@ impl EntityStore {
         &mut self,
         twin_message: EntityTwinMessage,
     ) -> Result<bool, entity_store::Error> {
-        self.register_and_persist_twin_fragment(twin_message.clone())
+        self.register_twin_fragment(twin_message)
     }
 
     pub fn register_twin_fragment(
@@ -474,19 +457,6 @@ impl EntityStore {
         }
 
         Ok(true)
-    }
-
-    pub fn register_and_persist_twin_fragment(
-        &mut self,
-        twin_message: EntityTwinMessage,
-    ) -> Result<bool, entity_store::Error> {
-        let updated = self.register_twin_fragment(twin_message.clone())?;
-        if updated {
-            self.message_log
-                .append_message(&twin_message.to_mqtt_message(&self.mqtt_schema))?;
-        }
-
-        Ok(updated)
     }
 
     pub fn get_twin_fragments(
@@ -1093,6 +1063,7 @@ mod tests {
     use assert_matches::assert_matches;
     use serde_json::json;
     use std::collections::BTreeSet;
+    use std::io::Write;
     use std::str::FromStr;
     use tempfile::TempDir;
     use test_case::test_case;
@@ -1911,6 +1882,50 @@ mod tests {
     }
 
     #[test]
+    fn twin_fragment_updates_are_not_persisted() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, false);
+        let topic_id = EntityTopicId::default_main_device();
+
+        store
+            .update_twin_fragment(EntityTwinMessage::new(
+                topic_id.clone(),
+                "foo".into(),
+                json!("bar"),
+            ))
+            .unwrap();
+
+        assert_eq!(
+            store.get_twin_fragment(&topic_id, "foo"),
+            Some(&json!("bar"))
+        );
+
+        let log = std::fs::read_to_string(temp_dir.path().join("entity_store.jsonl")).unwrap();
+        assert!(!log.contains("twin/foo"));
+        assert!(!log.contains("bar"));
+    }
+
+    #[test]
+    fn twin_fragment_updates_from_old_logs_are_ignored() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let topic_id = EntityTopicId::default_main_device();
+        let topic = MqttSchema::default().topic_for(
+            &topic_id,
+            &Channel::EntityTwinData {
+                fragment_key: "foo".into(),
+            },
+        );
+        let message = MqttMessage::new(&topic, r#""bar""#);
+        let mut file = std::fs::File::create(temp_dir.path().join("entity_store.jsonl")).unwrap();
+        writeln!(file, "{}", json!({ "version": "1.0" })).unwrap();
+        writeln!(file, "{}", serde_json::to_string(&message).unwrap()).unwrap();
+
+        let store = new_entity_store(&temp_dir, false);
+
+        assert_eq!(store.get_twin_fragment(&topic_id, "foo"), None);
+    }
+
+    #[test]
     fn early_child_device_registrations_processed_only_after_parent_registration() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut store = new_entity_store(&temp_dir, true);
@@ -1964,7 +1979,6 @@ mod tests {
         let child2_topic_id = EntityTopicId::default_child_device("child2").unwrap();
 
         let twin_fragment_key = "foo".to_string();
-        let twin_fragment_value = json!("bar");
 
         {
             let mut store = new_entity_store(&temp_dir, false);
@@ -1981,7 +1995,7 @@ mod tests {
                 .update_twin_fragment(EntityTwinMessage::new(
                     child1_topic_id.clone(),
                     twin_fragment_key.clone(),
-                    twin_fragment_value.clone(),
+                    json!("bar"),
                 ))
                 .unwrap();
 
@@ -1999,18 +2013,13 @@ mod tests {
         {
             // Reload the entity store using the same persistent file
             let store = new_entity_store(&temp_dir, false);
-            let mut expected_entity_metadata =
-                EntityMetadata::child_device("child1".into()).unwrap();
-            expected_entity_metadata
-                .twin_data
-                .insert(twin_fragment_key.clone(), twin_fragment_value.clone());
 
             let entity_metadata = store.get(&child1_topic_id).unwrap();
-            assert_eq!(entity_metadata, &expected_entity_metadata);
             assert_eq!(
-                entity_metadata.twin_data.get(&twin_fragment_key).unwrap(),
-                &twin_fragment_value
+                entity_metadata,
+                &EntityMetadata::child_device("child1".into()).unwrap()
             );
+            assert_eq!(entity_metadata.twin_data.get(&twin_fragment_key), None);
 
             assert_eq!(
                 store.get(&child2_topic_id).unwrap(),
