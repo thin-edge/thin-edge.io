@@ -1,4 +1,5 @@
 use crate::*;
+use futures::channel::mpsc::TryRecvError;
 use mqtt_channel::Topic;
 use std::future::Future;
 use std::time::Duration;
@@ -523,8 +524,9 @@ async fn retrieve_retain_does_not_forward_last_will() {
         tokio::time::timeout(Duration::from_secs(5), rx.next()).await,
         Ok(None)
     );
-    assert!(
-        last_will_topic.try_next().is_err(),
+    assert_eq!(
+        last_will_topic.try_recv().unwrap_err(),
+        TryRecvError::Empty,
         "Last will should not be published by retrieve retain"
     );
 }
