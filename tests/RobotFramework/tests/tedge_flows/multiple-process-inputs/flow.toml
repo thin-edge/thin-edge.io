@@ -1,0 +1,16 @@
+[[input.process]]
+command = "cat /tmp/multiple-process-inputs-a"
+topic = "test/multiple-process-inputs/a"
+
+[[input.process]]
+command = "cat /tmp/multiple-process-inputs-b"
+topic = "test/multiple-process-inputs/b"
+
+[[steps]]
+script = "route-with-topic.js"
+
+[output.mqtt]
+topic = "test/multiple-process-inputs/out"
+
+[errors.mqtt]
+topic = "test/multiple-process-inputs/errors"

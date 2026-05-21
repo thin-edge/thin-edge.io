@@ -586,6 +586,7 @@ A flow package is a gzip-compressed tar archive (`*.tar.gz`) containing the file
 A few practical points to keep in mind when building packages:
 
 - **Include version metadata.** Adding a version string and description to `flow.toml` makes it easy to identify which release is deployed on a device.
+- **Use multiple inputs when one processing pipeline should handle several sources.** A flow can define repeated `[[input.mqtt]]`, `[[input.file]]`, and `[[input.process]]` sections, and can mix those input types in a single `flow.toml`. All matching messages are passed through the same steps.
 - **Keep flows self-contained.** A flow can reference files from a sibling flow using relative paths such as `../other-flow/main.js`, but there is no dependency manager to enforce this — you are responsible for ensuring both flows are installed together. Self-contained packages are simpler to reason about and easier to update independently.
 - **Naming conventions** The name of a flow is derived from its file path. To keep names short, the path prefix corresponding to the mapper flows directory is removed as well as the `.toml` extension. For the typical case of `flow.toml`, the uninformative `flow` suffix is also removed.
   - For instance, the name derived for the flow `/etc/tedge/mappers/c8y/flows/high-temp-alert/flow.toml` is simply `high-temp-alert`.

@@ -1,0 +1,19 @@
+[[input.mqtt]]
+topics = ["test/mixed-inputs/mqtt"]
+
+[[input.file]]
+path = "/tmp/mixed-inputs-file"
+topic = "test/mixed-inputs/file"
+
+[[input.process]]
+command = "cat /tmp/mixed-inputs-process"
+topic = "test/mixed-inputs/process"
+
+[[steps]]
+script = "route-with-topic.js"
+
+[output.mqtt]
+topic = "test/mixed-inputs/out"
+
+[errors.mqtt]
+topic = "test/mixed-inputs/errors"

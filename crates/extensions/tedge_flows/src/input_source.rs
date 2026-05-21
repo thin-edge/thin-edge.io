@@ -11,6 +11,9 @@ use tokio::time::Instant;
 pub trait StreamingSource: Send + Sync {
     /// Process watched by this source
     fn watch_request(&self) -> Option<WatchRequest>;
+
+    /// Topic assigned to messages emitted by this source
+    fn input_topic(&self) -> &str;
 }
 
 /// Trait for input sources that can be polled for messages
@@ -85,13 +88,19 @@ impl PollingSource for CommandPollingSource {
 
 pub struct CommandStreamingSource {
     flow: String,
+    topic: String,
     command: String,
     cwd: Utf8PathBuf,
 }
 
 impl CommandStreamingSource {
-    pub fn new(flow: String, command: String, cwd: Utf8PathBuf) -> Self {
-        CommandStreamingSource { flow, command, cwd }
+    pub fn new(flow: String, topic: String, command: String, cwd: Utf8PathBuf) -> Self {
+        CommandStreamingSource {
+            flow,
+            topic,
+            command,
+            cwd,
+        }
     }
 }
 
@@ -102,6 +111,10 @@ impl StreamingSource for CommandStreamingSource {
             command: self.command.clone(),
             cwd: self.cwd.clone(),
         })
+    }
+
+    fn input_topic(&self) -> &str {
+        &self.topic
     }
 }
 
@@ -152,12 +165,13 @@ impl PollingSource for FilePollingSource {
 
 pub struct FileStreamingSource {
     flow: String,
+    topic: String,
     path: Utf8PathBuf,
 }
 
 impl FileStreamingSource {
-    pub fn new(flow: String, path: Utf8PathBuf) -> Self {
-        FileStreamingSource { flow, path }
+    pub fn new(flow: String, topic: String, path: Utf8PathBuf) -> Self {
+        FileStreamingSource { flow, topic, path }
     }
 }
 
@@ -167,6 +181,10 @@ impl StreamingSource for FileStreamingSource {
             topic: self.flow.clone(),
             file: self.path.clone(),
         })
+    }
+
+    fn input_topic(&self) -> &str {
+        &self.topic
     }
 }
 

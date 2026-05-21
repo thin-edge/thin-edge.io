@@ -361,6 +361,7 @@ The transformation applied by a step is defined either by
 ### Input connectors
 
 Messages can be consumed from MQTT, files and background processes.
+A flow can define one or more input connectors, and the connectors can be of different types.
 
 An MQTT connector is simply defined by a list of MQTT topics
 
@@ -420,6 +421,37 @@ interval = "30s"
 
 If this flow definition is stored at `/etc/tedge/mappers/local/flows/my-sensor/flow.toml`,
 then `read-sensor.sh` is expected at `/etc/tedge/mappers/local/flows/my-sensor/read-sensor.sh`.
+
+#### Multiple input connectors
+
+Use TOML arrays of tables to define several connectors of the same type, or to mix MQTT, file and process inputs in the same flow.
+All matching input messages are passed through the same transformation steps.
+
+```toml
+[[input.mqtt]]
+topics = ["sensors/temperature/+"]
+
+[[input.mqtt]]
+topics = ["sensors/humidity/+"]
+
+[[input.file]]
+path = "/var/log/some-app.log"
+topic = "logs/some-app"
+
+[[input.process]]
+command = "./read-sensor.sh"
+topic = "sensor/readings"
+interval = "30s"
+```
+
+The single-connector forms remain valid:
+
+```toml
+input.mqtt.topics = ["sensors/#"]
+
+[input.file]
+path = "/var/log/some-app.log"
+```
 
 ### Output connectors
 

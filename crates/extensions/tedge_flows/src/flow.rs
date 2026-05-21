@@ -37,8 +37,8 @@ pub struct Flow {
     /// User-defined tags
     pub tags: Option<Vec<String>>,
 
-    /// The message source
-    pub input: FlowInput,
+    /// The message sources
+    pub input: Vec<FlowInput>,
 
     /// Transformation steps to apply in order to the messages
     pub steps: Vec<FlowStep>,
@@ -187,11 +187,15 @@ impl Flow {
     }
 
     pub fn topics(&self) -> TopicFilter {
-        self.input.topics()
+        let mut topics = TopicFilter::empty();
+        for input in &self.input {
+            topics.add_all(input.topics());
+        }
+        topics
     }
 
     pub fn accept_message(&self, _source: &SourceTag, message: &Message) -> bool {
-        self.input.accept_message(message)
+        self.input.iter().any(|input| input.accept_message(message))
     }
 
     pub async fn on_message(
@@ -455,15 +459,11 @@ impl Flow {
         if self.expect_loop {
             return;
         }
-        if let (
-            FlowInput::Mqtt {
-                topics: input_topics,
-            },
-            FlowOutput::Mqtt { topic: None },
-        ) = (&self.input, &self.output)
-        {
+        if let FlowOutput::Mqtt { topic: None } = &self.output {
             messages.retain(|msg| {
-                if input_topics.accept_topic_name(&msg.topic) {
+                if self.input.iter().any(|input| {
+                    matches!(input, FlowInput::Mqtt { .. }) && input.accept_message(msg)
+                }) {
                     error!(
                         target: "flows",
                         "Flow '{}' is dropping output message to '{}' to prevent an infinite loop",
@@ -476,6 +476,14 @@ impl Flow {
                 }
             });
         }
+    }
+
+    pub fn input_description(&self) -> String {
+        self.input
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
 
@@ -517,6 +525,13 @@ impl FlowInput {
             | FlowInput::StreamFile { topic, .. }
             | FlowInput::StreamCommand { topic, .. } => Some(topic),
         }
+    }
+
+    pub fn is_streaming(&self) -> bool {
+        matches!(
+            self,
+            FlowInput::StreamFile { .. } | FlowInput::StreamCommand { .. }
+        )
     }
 
     pub fn accept_message(&self, message: &Message) -> bool {
@@ -698,7 +713,7 @@ mod tests {
             version: None,
             description: None,
             tags: None,
-            input,
+            input: vec![input],
             steps: vec![],
             output,
             errors: FlowOutput::Mqtt { topic: None },

@@ -1,0 +1,16 @@
+[[input.file]]
+path = "/tmp/multiple-file-inputs-a"
+topic = "test/multiple-file-inputs/a"
+
+[[input.file]]
+path = "/tmp/multiple-file-inputs-b"
+topic = "test/multiple-file-inputs/b"
+
+[[steps]]
+script = "route-with-topic.js"
+
+[output.mqtt]
+topic = "test/multiple-file-inputs/out"
+
+[errors.mqtt]
+topic = "test/multiple-file-inputs/errors"
