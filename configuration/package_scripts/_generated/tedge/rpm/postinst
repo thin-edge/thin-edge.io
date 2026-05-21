@@ -36,6 +36,26 @@ if [ -f /etc/mosquitto/mosquitto.conf ]; then
     fi
 fi
 
+### Add tedge rules to mosquitto AppArmor local profile
+# /etc/apparmor.d/local/mosquitto is the standard file for local mosquitto AppArmor
+# customizations. We always replace the guarded block so upgrades pick up any rule changes.
+APPARMOR_LOCAL_MOSQUITTO=/etc/apparmor.d/local/mosquitto
+if [ -d /etc/apparmor.d/local ]; then
+    # Remove any previously installed block before (re-)adding the current one
+    if [ -f "$APPARMOR_LOCAL_MOSQUITTO" ]; then
+        sed -i '/# BEGIN tedge/,/# END tedge/d' "$APPARMOR_LOCAL_MOSQUITTO"
+    fi
+    printf '# BEGIN tedge\n/etc/tedge/mosquitto-conf/ r,\n/etc/tedge/mosquitto-conf/** r,\n# END tedge\n' >> "$APPARMOR_LOCAL_MOSQUITTO"
+fi
+
+# Check if AppArmor is active before attempting to reload
+if [ -x /usr/sbin/apparmor_parser ] && [ -d /sys/kernel/security/apparmor ]; then
+    if [ -f /etc/apparmor.d/mosquitto ]; then
+        echo "Reloading AppArmor profile for Mosquitto..."
+        apparmor_parser -r /etc/apparmor.d/mosquitto || true
+    fi
+fi
+
 # Initialize the tedge
 tedge init
 

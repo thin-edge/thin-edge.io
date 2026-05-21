@@ -75,6 +75,22 @@ remove_mosquitto_edit() {
     fi
 }
 
+remove_apparmor_edit() {
+    APPARMOR_LOCAL_MOSQUITTO=/etc/apparmor.d/local/mosquitto
+    if [ -f "$APPARMOR_LOCAL_MOSQUITTO" ]; then
+        sed -i '/# BEGIN tedge/,/# END tedge/d' "$APPARMOR_LOCAL_MOSQUITTO"
+        # Remove the file entirely if nothing else was in it
+        if ! grep -qv '^[[:space:]]*$' "$APPARMOR_LOCAL_MOSQUITTO" 2>/dev/null; then
+            rm -f "$APPARMOR_LOCAL_MOSQUITTO"
+        fi
+        if [ -x /usr/sbin/apparmor_parser ] && [ -d /sys/kernel/security/apparmor ]; then
+            if [ -f /etc/apparmor.d/mosquitto ]; then
+                apparmor_parser -r /etc/apparmor.d/mosquitto || true
+            fi
+        fi
+    fi
+}
+
 purge_var_log() {
     if [ -d "/var/log/tedge" ]; then
         rm -rf /var/log/tedge
@@ -92,6 +108,7 @@ case "$1" in
         remove_user_tedge
         remove_tedge_group
         remove_mosquitto_edit
+        remove_apparmor_edit
         remove_sudoers_file
         purge_configs
         purge_var_log
