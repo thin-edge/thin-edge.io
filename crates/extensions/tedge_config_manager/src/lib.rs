@@ -49,7 +49,6 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::file::move_file;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
-use tedge_utils::paths::TedgePaths;
 use toml::toml;
 
 /// An instance of the config manager
@@ -108,7 +107,8 @@ impl ConfigManagerBuilder {
         // - Only update config_update.toml if it doesn't exist or hasn't been customized by the user
         let workflow_definition = include_str!("resources/config_update.toml");
 
-        TedgePaths::from_root_with_defaults(&config.ops_dir, "", "")
+        config
+            .ops_dir
             .template_file("config_update.toml")?
             .persist(workflow_definition)
             .await?;

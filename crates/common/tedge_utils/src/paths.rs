@@ -220,6 +220,12 @@ impl ManagedDir {
         self
     }
 
+    pub fn relative_path_from_root(&self) -> &Utf8Path {
+        self.path
+            .strip_prefix(&self.root)
+            .expect("managed dir path must be inside root")
+    }
+
     pub fn dir(&self, path: impl AsRef<Utf8Path>) -> Result<ManagedDir, PathsError> {
         let path = path.as_ref();
         validate_managed_path(path)?;
@@ -243,6 +249,21 @@ impl ManagedDir {
             mode: DEFAULT_FILE_MODE,
             warn_and_ignore_permission_errors: false,
         })
+    }
+
+    /// Creates a builder for a file managed using the template pattern.
+    ///
+    /// See [`TedgePaths::template_file`] for details.
+    pub fn template_file(
+        &self,
+        path: impl AsRef<Utf8Path>,
+    ) -> Result<ManagedTemplateFile, PathsError> {
+        let relative_from_root = self.relative_path_from_root().join(path);
+        TedgePaths {
+            root: self.root.clone(),
+            default_owner: self.owner.clone(),
+        }
+        .template_file(relative_from_root)
     }
 
     pub async fn ensure(&self) -> Result<(), PathsError> {

@@ -11,7 +11,6 @@ use c8y_http_proxy::C8YHttpConfig;
 use camino::Utf8Path;
 use serde_json::Value;
 use std::ops::Add;
-use std::path::Path;
 use std::sync::Arc;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommandMetadata;
@@ -36,9 +35,10 @@ use tedge_config::tedge_toml::TEdgeConfigReaderService;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_utils::paths::ManagedDir;
+use tedge_utils::paths::TedgePaths;
 use tracing::log::warn;
 
-const STATE_DIR_NAME: &str = ".tedge-mapper-c8y";
 const C8Y_CLOUD: &str = "c8y";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 
@@ -68,11 +68,10 @@ pub struct C8yMapperConfig {
     pub smartrest_use_operation_id: bool,
     pub smartrest_child_device_create_with_device_marker: bool,
 
-    pub config_dir: Arc<Utf8Path>,
-    pub logs_path: Arc<Utf8Path>,
-    pub ops_dir: Arc<Utf8Path>,
-    pub state_dir: Arc<Utf8Path>,
-    pub tmp_dir: Arc<Utf8Path>,
+    pub config_dir: Arc<TedgePaths>,
+    pub logs_path: Arc<TedgePaths>,
+    pub ops_dir: Arc<ManagedDir>,
+    pub tmp_dir: Arc<TedgePaths>,
 
     pub max_mqtt_payload_size: u32,
     pub alarm_sync_interval: &'static str,
@@ -81,9 +80,9 @@ pub struct C8yMapperConfig {
 impl C8yMapperConfig {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        config_dir: Arc<Utf8Path>,
-        logs_path: Arc<Utf8Path>,
-        tmp_dir: Arc<Utf8Path>,
+        config_dir: Arc<TedgePaths>,
+        logs_path: Arc<TedgePaths>,
+        tmp_dir: Arc<TedgePaths>,
 
         device_id: String,
         device_topic_id: EntityTopicId,
@@ -111,10 +110,11 @@ impl C8yMapperConfig {
         alarm_interval: &'static str,
     ) -> Self {
         let ops_dir = config_dir
-            .join(SUPPORTED_OPERATIONS_DIRECTORY)
-            .join(C8Y_CLOUD)
+            .dir(SUPPORTED_OPERATIONS_DIRECTORY)
+            .expect("infallible")
+            .dir(C8Y_CLOUD)
+            .expect("infallible")
             .into();
-        let state_dir = config_dir.join(STATE_DIR_NAME).into();
 
         let bridge_service_name = if bridge_in_mapper {
             format!("tedge-mapper-bridge-{}", bridge_config.c8y_prefix)
@@ -153,7 +153,6 @@ impl C8yMapperConfig {
             config_dir,
             logs_path,
             ops_dir,
-            state_dir,
             tmp_dir,
 
             max_mqtt_payload_size,
@@ -162,15 +161,15 @@ impl C8yMapperConfig {
     }
 
     pub fn from_tedge_config(
-        config_dir: impl AsRef<Utf8Path>,
+        config_dir: &TedgePaths,
         tedge_config: &TEdgeConfig,
         c8y_config: &mapper_config::C8yMapperConfig,
         service_topic_id: EntityTopicId,
     ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
-        let config_dir: Arc<Utf8Path> = config_dir.as_ref().into();
+        let config_dir: Arc<TedgePaths> = config_dir.clone().into();
 
-        let logs_path = tedge_config.logs.path.as_path().into();
-        let tmp_dir = tedge_config.tmp.path.as_path().into();
+        let logs_path = Arc::new(tedge_config.logs_root());
+        let tmp_dir = Arc::new(tedge_config.tmp_root());
 
         let device_id = c8y_config.device.id()?.to_string();
         let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
@@ -248,7 +247,7 @@ impl C8yMapperConfig {
 
         // Add custom operation topics
         let custom_operation_topics =
-            Self::get_topics_from_custom_operations(config_dir.as_std_path(), &bridge_config)?;
+            Self::get_topics_from_custom_operations(config_dir.root(), &bridge_config)?;
 
         topics.add_all(custom_operation_topics);
 
@@ -302,7 +301,7 @@ impl C8yMapperConfig {
     }
 
     pub fn get_topics_from_custom_operations(
-        config_dir: &Path,
+        config_dir: &Utf8Path,
         bridge_config: &BridgeConfig,
     ) -> Result<TopicFilter, C8yMapperConfigError> {
         let mut topic_filter = TopicFilter::empty();

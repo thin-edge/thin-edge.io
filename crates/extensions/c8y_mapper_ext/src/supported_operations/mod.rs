@@ -30,7 +30,6 @@ use tedge_utils::file;
 
 use anyhow::ensure;
 use anyhow::Context;
-use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -38,7 +37,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tedge_utils::paths::TedgePaths;
+use tedge_utils::paths::ManagedDir;
 use tracing::warn;
 
 type ExternalId = String;
@@ -60,7 +59,7 @@ pub struct SupportedOperations {
     ///
     /// By default `/etc/tedge/operations/c8y`. Contains operation files for the main device, operation templates, and
     /// directories with operation files for child devices.
-    pub base_ops_dir: Arc<Utf8Path>,
+    pub base_ops_dir: Arc<ManagedDir>,
 
     /// Currently loaded set of supported operations for all registered devices by its external id.
     pub operations_by_xid: HashMap<String, Operations>,
@@ -76,14 +75,15 @@ impl SupportedOperations {
         c8y_operation_name: &OperationNameRef,
     ) -> Result<(), anyhow::Error> {
         let ops_file = if device_xid == self.device_id {
-            self.base_ops_dir.join(c8y_operation_name)
+            self.base_ops_dir.file(c8y_operation_name)?
         } else {
-            self.base_ops_dir.join(device_xid).join(c8y_operation_name)
+            self.base_ops_dir
+                .dir(device_xid)?
+                .file(c8y_operation_name)?
         };
 
         // Create directory for a device if it doesn't exist yet
-        let parent_dir = TedgePaths::from_root_with_defaults(ops_file.parent().unwrap(), "", "");
-        parent_dir.root_dir().ensure().await?;
+        ops_file.parent().ensure().await?;
 
         // if a template for such operation already exists on the main device, that means we should symlink to it,
         // because it should contain properties required for custom operation
@@ -95,10 +95,10 @@ impl SupportedOperations {
         if let Some(template_name) =
             operations.get_template_name_by_operation_name(c8y_operation_name)
         {
-            let template_path = self.base_ops_dir.join(template_name);
-            file::create_symlink(template_path, &ops_file).await?;
+            let template_path = self.base_ops_dir.path().join(template_name);
+            file::create_symlink(template_path, ops_file.path()).await?;
         } else {
-            parent_dir.file(&ops_file)?.create_if_missing("").await?;
+            ops_file.create_if_missing("").await?;
         };
 
         Ok(())
@@ -197,7 +197,7 @@ impl SupportedOperations {
     /// If a given directory is a c8y operations directory of a device, return that device's external id.
     pub fn xid_from_path(&self, ops_dir: &Path) -> Result<ExternalId, anyhow::Error> {
         ensure!(
-            ops_dir.starts_with(self.base_ops_dir.as_std_path()),
+            ops_dir.starts_with(self.base_ops_dir.path()),
             format!(
                 "given path '{}' is not the same as or inside the base operations directory '{}'",
                 ops_dir.to_string_lossy(),
@@ -213,7 +213,7 @@ impl SupportedOperations {
             )
         );
 
-        let suffix = ops_dir.strip_prefix(self.base_ops_dir.as_std_path())?;
+        let suffix = ops_dir.strip_prefix(self.base_ops_dir.path())?;
 
         // /etc/tedge/operations/c8y -> main device
         // /etc/tedge/operations/c8y/directory -> child device
@@ -231,9 +231,9 @@ impl SupportedOperations {
     /// Returns a directory path for c8y operations for the given device.
     fn base_ops_dir_for_device(&self, device_xid: &ExternalIdRef) -> Utf8PathBuf {
         if device_xid == self.device_id {
-            self.base_ops_dir.to_path_buf()
+            self.base_ops_dir.path().to_path_buf()
         } else {
-            self.base_ops_dir.join(device_xid)
+            self.base_ops_dir.path().join(device_xid)
         }
     }
 
@@ -244,9 +244,15 @@ impl SupportedOperations {
         c8y_operation_name: &OperationNameRef,
     ) -> Utf8PathBuf {
         if device_xid == self.device_id {
-            self.base_ops_dir.join(c8y_operation_name).to_path_buf()
+            self.base_ops_dir
+                .path()
+                .join(c8y_operation_name)
+                .to_path_buf()
         } else {
-            self.base_ops_dir.join(device_xid).join(c8y_operation_name)
+            self.base_ops_dir
+                .path()
+                .join(device_xid)
+                .join(c8y_operation_name)
         }
     }
 

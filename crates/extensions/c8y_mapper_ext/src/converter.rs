@@ -202,11 +202,12 @@ impl CumulocityConverter {
             config.service.ty.clone()
         };
 
+        let ops_dir = config.ops_dir.path();
         let operations_by_xid = {
-            let mut operations = get_child_ops(&*config.ops_dir, &config.bridge_config)?;
+            let mut operations = get_child_ops(ops_dir, &config.bridge_config)?;
             operations.insert(
                 config.device_id.clone(),
-                Operations::try_new(&*config.ops_dir, &config.bridge_config)?,
+                Operations::try_new(ops_dir, &config.bridge_config)?,
             );
             operations
         };
@@ -218,8 +219,11 @@ impl CumulocityConverter {
             operations_by_xid,
         };
 
-        let log_dir = config.logs_path.join(TEDGE_AGENT_LOG_DIR);
-        let operation_logs = OperationLogs::try_new(log_dir)?;
+        let log_dir = config
+            .logs_path
+            .dir(TEDGE_AGENT_LOG_DIR)
+            .expect("infallible");
+        let operation_logs = OperationLogs::try_new(log_dir.path().into())?;
 
         let mqtt_schema = config.mqtt_schema.clone();
         let http_event_topic =
@@ -888,7 +892,7 @@ impl CumulocityConverter {
         let command = script.command.as_str();
         let cmd_id = self.command_id.new_id();
 
-        let tmp_dir = self.config.tmp_dir.as_ref();
+        let tmp_dir = self.config.tmp_dir.root();
         if !tmp_dir.exists() {
             return Err(CumulocityMapperError::ExecuteFailed {
                 error_message: format!("the configured tmp.path '{}' does not exist", tmp_dir),
@@ -1523,6 +1527,7 @@ pub(crate) mod tests {
     use tedge_mqtt_ext::QoS;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_utils::paths::TedgePaths;
     use test_case::test_case;
 
     #[tokio::test]
@@ -3116,15 +3121,17 @@ pub(crate) mod tests {
         let mut topics =
             C8yMapperConfig::default_internal_topic_filter(&"c8y".try_into().unwrap()).unwrap();
         let custom_operation_topics =
-            C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.path(), &bridge_config)
+            C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.utf8_path(), &bridge_config)
                 .unwrap();
         topics.add_all(custom_operation_topics);
         topics.remove_overlapping_patterns();
 
+        let root_dir = TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "");
+
         C8yMapperConfig::new(
-            tmp_dir.utf8_path().into(),
-            tmp_dir.utf8_path().into(),
-            tmp_dir.utf8_path().into(),
+            root_dir.clone().into(),
+            root_dir.clone().into(),
+            root_dir.clone().into(),
             device_id,
             device_topic_id,
             service_topic_id,

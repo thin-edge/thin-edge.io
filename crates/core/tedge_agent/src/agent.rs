@@ -264,6 +264,8 @@ impl Agent {
         // under config_dir (/etc/tedge)
         self.config.config_dir.dir("device")?.ensure().await?;
         self.config.operations_dir.ensure().await?;
+        let default_state_dir = agent_default_state_dir(&self.config.config_dir);
+        default_state_dir.ensure().await?;
 
         // under data_dir (/var/tedge)
         self.config.data_dir.cache_dir().ensure().await?;
@@ -271,10 +273,6 @@ impl Agent {
 
         // under log_dir (/var/log/tedge)
         self.config.agent_log_dir.ensure().await?;
-
-        // under state_dir (/data/tedge/agent)
-        let default_state_dir = agent_default_state_dir(&self.config.config_dir);
-        default_state_dir.ensure().await?;
 
         Ok(())
     }
@@ -290,7 +288,7 @@ impl Agent {
 
         // Load device profile manager before the workflow actor
         // as it will create the device_profile workflow if it does not already exist
-        DeviceProfileManagerBuilder::try_new(self.config.operations_dir.path()).await?;
+        DeviceProfileManagerBuilder::try_new(&self.config.operations_dir).await?;
 
         // Inotify actor
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
@@ -364,7 +362,7 @@ impl Agent {
                     mqtt_device_topic_id: device_topic_id.clone(),
                     tedge_http_host: self.config.tedge_http_host,
                     tmp_path: self.config.tmp_dir.clone(),
-                    ops_dir: self.config.operations_dir.into(),
+                    ops_dir: self.config.operations_dir.clone(),
                     is_sudo_enabled: self.config.is_sudo_enabled,
                     config_snapshot_enabled: self.config.capabilities.config_snapshot,
                     config_update_enabled: self.config.capabilities.config_update,
