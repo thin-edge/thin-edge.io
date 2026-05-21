@@ -253,6 +253,11 @@ impl WorkflowActor {
             Err(WorkflowExecutionError::UnknownOperation { operation }) => {
                 info!("Ignoring {operation} operation which is not registered");
             }
+            Err(WorkflowExecutionError::DuplicatedRequest { topic }) => {
+                error!(
+                    "{operation} operation request cannot be processed: Two concurrent requests are under execution on the same topic: {topic}"
+                );
+            }
             Err(err) => {
                 error!("{operation} operation request cannot be processed: {err}");
                 log_file.log_step(&step, &format!("Error: {err}\n")).await;

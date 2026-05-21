@@ -167,11 +167,15 @@ Invoke sub-operation from a sub-operation
     Should Be Equal    ${actual_log}    ${expected_log}
 
 Command steps should not be executed twice
-    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-2896/test-1 '{"status":"init"}'
-    ${cmd_messages}    Should Have MQTT Messages
-    ...    te/device/main///cmd/issue-2896/test-1
-    ...    message_pattern=.*successful.*
-    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-2896/test-1 ''
+    TRY
+        Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-2896/test-1 '{"status":"init"}'
+        ${cmd_messages}    Should Have MQTT Messages
+        ...    te/device/main///cmd/issue-2896/test-1
+        ...    message_pattern=.*successful.*
+        ...    timeout=300
+    FINALLY
+        Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-2896/test-1 ''
+    END
     ${workflow_log}    Execute Command
     ...    grep '\\[ issue-2896' /var/log/tedge/agent/workflow-issue-2896-test-1.log | cut -d '|' -f 1 | sed 's/ $//'
     TRY

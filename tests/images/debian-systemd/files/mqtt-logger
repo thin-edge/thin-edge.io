@@ -8,6 +8,7 @@ MQTT_CERT_FILE=${MQTT_CERT_FILE:-}
 MQTT_KEY_FILE=${MQTT_KEY_FILE:-}
 OUTPUT_LOG=${OUTPUT_LOG:-}
 WAIT=${WAIT:-1}
+STOPPING=false
 
 usage() {
     echo "
@@ -104,6 +105,12 @@ log() {
     echo "$*" >&2
 }
 
+stop() {
+    STOPPING=true
+}
+
+trap stop INT TERM
+
 subscribe() {
     if [ -n "$MQTT_CA_FILE" ] && [ -n "$MQTT_KEY_FILE" ] && [ -n "$MQTT_CERT_FILE" ]; then
         log "Connecting to broker using certificate"
@@ -139,12 +146,15 @@ if command -v pgrep >/dev/null 2>&1; then
 fi
 
 # Keep trying forever
-while true; do
+while [ "$STOPPING" = false ]; do
     log "Starting mqtt-logger to ${MQTT_HOST}:${MQTT_PORT}"
     if [ -n "$OUTPUT_LOG" ]; then
         subscribe | tee -a "$OUTPUT_LOG" || true
     else
         subscribe || true
+    fi
+    if [ "$STOPPING" = true ]; then
+        break
     fi
     log "mqtt-logger stopped, waiting ${WAIT} second/s and trying again"
     sleep "$WAIT"
