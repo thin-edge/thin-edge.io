@@ -383,9 +383,13 @@ mod tests {
         ttd.dir("operations").dir("c8y");
         let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
-        declare_supported_operation(&config, &whoami::username(), &whoami::username())
-            .await
-            .unwrap();
+        declare_supported_operation(
+            &config,
+            &tedge_test_utils::user::current_username(),
+            &tedge_test_utils::user::current_groupname(),
+        )
+        .await
+        .unwrap();
 
         let path = ttd.path().join("operations/c8y/c8y_RemoteAccessConnect");
         assert!(path.exists());
@@ -401,9 +405,13 @@ mod tests {
         ttd.file("tedge.toml").with_raw_content("");
         let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
-        declare_supported_operation(&config, &whoami::username(), &whoami::username())
-            .await
-            .unwrap();
+        declare_supported_operation(
+            &config,
+            &tedge_test_utils::user::current_username(),
+            &tedge_test_utils::user::current_groupname(),
+        )
+        .await
+        .unwrap();
 
         assert!(ttd.path().join("operations").is_dir());
         assert!(ttd.path().join("operations/c8y").is_dir());
@@ -421,9 +429,13 @@ mod tests {
         std::fs::set_permissions(ops_dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
         let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
-        declare_supported_operation(&config, &whoami::username(), &whoami::username())
-            .await
-            .unwrap();
+        declare_supported_operation(
+            &config,
+            &tedge_test_utils::user::current_username(),
+            &tedge_test_utils::user::current_groupname(),
+        )
+        .await
+        .unwrap();
 
         let mode = std::fs::metadata(ops_dir.path())
             .unwrap()
@@ -440,9 +452,13 @@ mod tests {
         std::fs::set_permissions(ops_dir.path(), std::fs::Permissions::from_mode(0o701)).unwrap();
         let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
-        declare_supported_operation(&config, &whoami::username(), &whoami::username())
-            .await
-            .unwrap();
+        declare_supported_operation(
+            &config,
+            &tedge_test_utils::user::current_username(),
+            &tedge_test_utils::user::current_groupname(),
+        )
+        .await
+        .unwrap();
 
         let mode = std::fs::metadata(ops_dir.path())
             .unwrap()

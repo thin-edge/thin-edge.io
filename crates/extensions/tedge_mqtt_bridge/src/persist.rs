@@ -175,16 +175,10 @@ mod tests {
         use super::*;
 
         fn current_owner() -> Owner {
-            let user = whoami::username();
-            let group = std::process::Command::new("id")
-                .arg("-gn")
-                .output()
-                .ok()
-                .and_then(|output| String::from_utf8(output.stdout).ok())
-                .map(|group| group.trim().to_owned())
-                .filter(|group| !group.is_empty())
-                .expect("group must exist");
-            Owner::user_group(user, group)
+            Owner::user_group(
+                tedge_test_utils::user::current_username(),
+                tedge_test_utils::user::current_groupname(),
+            )
         }
 
         async fn load_config_with_owner(ttd: &TempTedgeDir, owner: &Owner) -> TEdgeConfig {
@@ -229,7 +223,14 @@ mod tests {
         async fn creates_directory_using_the_system_toml_user() {
             let ttd = TempTedgeDir::new();
             let dir = ttd.utf8_path().join("bridge");
-            let config = load_config_with_owner(&ttd, &Owner::user_group("root", "root")).await;
+
+            #[cfg(target_os = "linux")]
+            let target_group = "root";
+            #[cfg(target_os = "macos")]
+            let target_group = "wheel";
+
+            let config =
+                load_config_with_owner(&ttd, &Owner::user_group("root", target_group)).await;
 
             let err = persist_bridge_config_file(&dir, "test", "test content", &config)
                 .await

@@ -390,18 +390,12 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         use tedge_config::TEdgeConfig;
         use tedge_test_utils::fs::TempTedgeDir;
-        use uzers::get_group_by_gid;
 
         fn current_user_and_group() -> (String, String) {
-            let user = whoami::username();
-            let gid = nix::unistd::getgid().as_raw();
-            let group = get_group_by_gid(gid)
-                .expect("group must exist")
-                .name()
-                .to_string_lossy()
-                .into_owned();
-
-            (user, group)
+            (
+                tedge_test_utils::user::current_username(),
+                tedge_test_utils::user::current_groupname(),
+            )
         }
 
         async fn mode_bits(path: impl AsRef<std::path::Path>) -> u32 {

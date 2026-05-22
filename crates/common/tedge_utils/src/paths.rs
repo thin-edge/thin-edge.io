@@ -604,17 +604,23 @@ mod tests {
     use nix::unistd::Uid;
     use std::os::unix::fs::PermissionsExt;
     use tedge_test_utils::fs::TempTedgeDir;
-    use uzers::get_group_by_gid;
 
     fn current_owner() -> Owner {
-        let user = whoami::username();
-        let gid = nix::unistd::getgid().as_raw();
-        let group = get_group_by_gid(gid)
-            .expect("group must exist")
-            .name()
-            .to_string_lossy()
-            .into_owned();
-        Owner::user_group(user, group)
+        Owner::user_group(
+            tedge_test_utils::user::current_username(),
+            tedge_test_utils::user::current_groupname(),
+        )
+    }
+
+    fn root_group() -> &'static str {
+        #[cfg(target_os = "linux")]
+        {
+            "root"
+        }
+        #[cfg(target_os = "macos")]
+        {
+            "wheel"
+        }
     }
 
     #[test]
@@ -902,7 +908,9 @@ mod tests {
         }
 
         let ttd = TempTedgeDir::new();
-        let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "root", "root");
+
+        let config_root =
+            TedgePaths::from_root_with_defaults(ttd.utf8_path(), "root", root_group());
         let failing_ancestor = ttd.path().join("operations");
         let requested = ttd.path().join("operations").join("c8y");
 
@@ -922,7 +930,8 @@ mod tests {
     async fn ensure_creates_directories_above_the_root_but_does_not_take_ownership() {
         let ttd = TempTedgeDir::new();
         let root = ttd.utf8_path().join("missing-parent").join("managed-root");
-        let config_root = TedgePaths::from_root_with_defaults(&root, "root", "root");
+
+        let config_root = TedgePaths::from_root_with_defaults(&root, "root", root_group());
 
         let err = config_root
             .dir("log")
@@ -1121,7 +1130,7 @@ mod tests {
         let err = config_root
             .template_file("bridge/rules.toml")
             .unwrap()
-            .with_owner(Owner::user_group("root", "root"))
+            .with_owner(Owner::user_group("root", root_group()))
             .persist("test content")
             .await
             .unwrap_err();
@@ -1136,7 +1145,7 @@ mod tests {
         config_root
             .template_file("bridge/rules.toml")
             .unwrap()
-            .with_owner(Owner::user_group("root", "root"))
+            .with_owner(Owner::user_group("root", root_group()))
             .warn_and_ignore_permission_errors()
             .persist("test content")
             .await
