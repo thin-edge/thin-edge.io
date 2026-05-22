@@ -28,6 +28,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
+use tedge_utils::http::Protocol;
 use tedge_utils::paths::TedgePaths;
 use toml::from_str;
 use toml::Table;
@@ -131,6 +132,7 @@ async fn new_config_manager_builder(
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
         tedge_http_host: "127.0.0.1:3000".into(),
+        tedge_http_protocol: Protocol::Http,
         config_snapshot_enabled: true,
         config_update_enabled: true,
         sudo_enabled: false,
@@ -855,6 +857,7 @@ fn test_config(tempdir: &TempTedgeDir) -> ConfigManagerConfig {
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         tedge_http_host: Arc::from("localhost"),
+        tedge_http_protocol: Protocol::Http,
         config_snapshot_enabled: false,
         config_update_enabled: false,
         sudo_enabled: false,

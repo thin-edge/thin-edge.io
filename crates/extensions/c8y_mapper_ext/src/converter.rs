@@ -3139,6 +3139,7 @@ pub(crate) mod tests {
             c8y_host.clone(),
             c8y_host,
             tedge_http_host,
+            Protocol::Http,
             topics,
             Capabilities::default(),
             auth_proxy_addr,

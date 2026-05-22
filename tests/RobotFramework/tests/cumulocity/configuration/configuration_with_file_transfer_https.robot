@@ -89,9 +89,17 @@ Configuration update succeeds despite mapper not supplying client certificate
 *** Keywords ***
 Get Configuration Should Succeed
     [Arguments]    ${device}    ${external_id}
+    ${start_time}=    Get Unix Timestamp
+
     Cumulocity.Set Device    ${external_id}
     ${operation}=    Cumulocity.Get Configuration    CONFIG1
-    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    # Issue \#4187: deleting a log file from the file transfer service should not print warning
+    ${journal_log}=    Execute Command
+    ...    journalctl -u tedge-mapper-c8y --since "@${start_time}" --no-pager
+    ...    ignore_exit_code=${True}
+    Should Not Contain    ${journal_log}    Failed to delete log file from file transfer service
 
     ThinEdgeIO.Set Device Context    ${device}
     ${expected_checksum}=    Execute Command    md5sum '/etc/config1.json' | cut -d' ' -f1    strip=${True}

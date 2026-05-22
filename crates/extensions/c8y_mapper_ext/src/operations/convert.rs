@@ -88,7 +88,8 @@ impl CumulocityConverter {
 
         // Replace '/' with ':' to avoid creating unexpected directories in file transfer repo
         let tedge_url = format!(
-            "http://{}/te/v1/files/{}/config_snapshot/{}-{}",
+            "{}://{}/te/v1/files/{}/config_snapshot/{}-{}",
+            self.config.tedge_http_protocol.as_str(),
             &self.config.tedge_http_host,
             target.external_id.as_ref(),
             config_upload_request.config_type.replace('/', ":"),
@@ -127,7 +128,8 @@ impl CumulocityConverter {
         let topic = self.mqtt_schema.topic_for(target.topic_id(), &channel);
 
         let tedge_url = format!(
-            "http://{}/te/v1/files/{}/log_upload/{}-{}",
+            "{}://{}/te/v1/files/{}/log_upload/{}-{}",
+            self.config.tedge_http_protocol.as_str(),
             &self.config.tedge_http_host,
             target.external_id.as_ref(),
             log_request.log_file,

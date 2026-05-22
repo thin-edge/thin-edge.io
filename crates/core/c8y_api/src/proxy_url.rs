@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+pub use tedge_utils::http::Protocol;
+
 #[derive(Clone, Debug)]
 pub struct ProxyUrlGenerator {
     host: Arc<str>,
@@ -10,21 +12,6 @@ pub struct ProxyUrlGenerator {
 impl Default for ProxyUrlGenerator {
     fn default() -> Self {
         ProxyUrlGenerator::new("localhost".into(), 8001, Protocol::Http)
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Protocol {
-    Http,
-    Https,
-}
-
-impl Protocol {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Http => "http",
-            Self::Https => "https",
-        }
     }
 }
 

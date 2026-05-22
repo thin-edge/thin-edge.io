@@ -50,6 +50,7 @@ pub struct C8yMapperConfig {
     pub c8y_host: String,
     pub c8y_mqtt: String,
     pub tedge_http_host: Arc<str>,
+    pub tedge_http_protocol: Protocol,
     pub topics: TopicFilter,
     pub capabilities: Capabilities,
     pub auth_proxy_addr: Arc<str>,
@@ -91,6 +92,7 @@ impl C8yMapperConfig {
         c8y_host: String,
         c8y_mqtt: String,
         tedge_http_host: Arc<str>,
+        tedge_http_protocol: Protocol,
         topics: TopicFilter,
         capabilities: Capabilities,
         auth_proxy_addr: Arc<str>,
@@ -132,6 +134,7 @@ impl C8yMapperConfig {
             c8y_host,
             c8y_mqtt,
             tedge_http_host,
+            tedge_http_protocol,
             topics,
             capabilities,
             auth_proxy_addr,
@@ -197,6 +200,13 @@ impl C8yMapperConfig {
             .map_or(Protocol::Http, |_| Protocol::Https);
 
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
+        let tedge_http_protocol = if tedge_config.http.cert_path.or_none().is_some()
+            && tedge_config.http.key_path.or_none().is_some()
+        {
+            Protocol::Https
+        } else {
+            Protocol::Http
+        };
 
         let capabilities = Capabilities {
             log_upload: c8y_config.cloud_specific.enable.log_upload,
@@ -266,6 +276,7 @@ impl C8yMapperConfig {
             c8y_host,
             c8y_mqtt,
             tedge_http_host,
+            tedge_http_protocol,
             topics,
             capabilities,
             auth_proxy_addr,

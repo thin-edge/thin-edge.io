@@ -872,6 +872,7 @@ dependencies = [
  "serde_json",
  "tedge_api",
  "tedge_config",
+ "tedge_utils",
  "test-case",
  "thiserror 2.0.12",
  "time",

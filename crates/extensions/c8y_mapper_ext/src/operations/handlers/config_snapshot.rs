@@ -95,7 +95,8 @@ impl OperationContext {
             Some(ref tedge_file_url) => Cow::Borrowed(tedge_file_url),
             None => {
                 let tedge_file_url = format!(
-                    "http://{}/te/v1/files/{external_id}/config_snapshot/{config_filename}",
+                    "{}://{}/te/v1/files/{external_id}/config_snapshot/{config_filename}",
+                    self.tedge_http_protocol.as_str(),
                     &self.tedge_http_host,
                     external_id = target.external_id.as_ref()
                 );
