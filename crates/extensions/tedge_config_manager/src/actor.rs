@@ -409,7 +409,8 @@ impl ConfigManagerWorker {
             };
 
         Ok(format!(
-            "http://{}/te/v1/files/{}/{}/{}-{}",
+            "{}://{}/te/v1/files/{}/{}/{}-{}",
+            self.config.tedge_http_protocol.as_str(),
             &self.config.tedge_http_host,
             device_name,
             operation_type,

@@ -61,6 +61,7 @@ use tedge_mqtt_ext::MqttConfig;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
+use tedge_utils::http::Protocol;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
 use tracing::info;
@@ -88,6 +89,7 @@ pub(crate) struct AgentConfig {
     pub service_topic_id: ServiceTopicId,
     pub mqtt_topic_root: Arc<str>,
     pub tedge_http_host: Arc<str>,
+    pub tedge_http_protocol: Protocol,
     pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
     pub cloud_root_certs: CloudHttpConfig,
@@ -132,6 +134,13 @@ impl AgentConfig {
         let tedge_http_address = tedge_config.http.client.host.clone();
         let tedge_http_port = tedge_config.http.client.port;
         let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
+        let tedge_http_protocol = if tedge_config.http.cert_path.or_none().is_some()
+            && tedge_config.http.key_path.or_none().is_some()
+        {
+            Protocol::Https
+        } else {
+            Protocol::Http
+        };
 
         // HTTP config
         let data_dir = tedge_config.data_root();
@@ -224,6 +233,7 @@ impl AgentConfig {
             mqtt_device_topic_id,
             service_topic_id,
             tedge_http_host,
+            tedge_http_protocol,
             identity,
             cloud_root_certs,
             fts_url,
@@ -361,6 +371,7 @@ impl Agent {
                     mqtt_topic_root: mqtt_schema.clone(),
                     mqtt_device_topic_id: device_topic_id.clone(),
                     tedge_http_host: self.config.tedge_http_host,
+                    tedge_http_protocol: self.config.tedge_http_protocol,
                     tmp_path: self.config.tmp_dir.clone(),
                     ops_dir: self.config.operations_dir.clone(),
                     is_sudo_enabled: self.config.is_sudo_enabled,

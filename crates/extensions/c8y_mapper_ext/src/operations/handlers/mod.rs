@@ -17,6 +17,7 @@ use crate::actor::IdDownloadResult;
 use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::Capabilities;
+use c8y_api::proxy_url::Protocol;
 use c8y_api::smartrest::payload::SmartrestPayload;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
@@ -59,6 +60,7 @@ pub(super) struct OperationContext {
     pub(super) capabilities: Capabilities,
     pub(super) auto_log_upload: AutoLogUpload,
     pub(super) tedge_http_host: Arc<str>,
+    pub(super) tedge_http_protocol: Protocol,
     pub(super) tmp_dir: Arc<Utf8Path>,
     pub(super) mqtt_schema: MqttSchema,
     pub(super) software_management_api: SoftwareManagementApiFlag,

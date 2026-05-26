@@ -3324,6 +3324,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         c8y_host.clone(),
         c8y_host,
         tedge_http_host,
+        Protocol::Http,
         topics,
         capabilities,
         auth_proxy_addr,
