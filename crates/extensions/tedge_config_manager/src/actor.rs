@@ -14,7 +14,7 @@ use tedge_actors::ChannelError;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingReceiver;
 use tedge_actors::LoggingSender;
-use tedge_actors::MessageReceiver;
+use tedge_actors::MessageReceiverNoblock;
 use tedge_actors::RequestEnvelope;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
@@ -147,35 +147,44 @@ impl Actor for ConfigManagerActor {
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         let mut worker = ConfigManagerWorker {
-            config: Arc::from(self.config),
-            output_sender: self.output_sender,
-            downloader: self.downloader,
-            uploader: self.uploader,
-            external_plugins: self.external_plugins,
+            config: Arc::from(self.config.clone()),
+            output_sender: self.output_sender.clone(),
+            downloader: self.downloader.clone(),
+            uploader: self.uploader.clone(),
+            external_plugins: self.external_plugins.clone(),
         };
 
         worker.reload_supported_config_types().await?;
 
-        while let Some(event) = self.input_receiver.recv().await {
-            let result = match event {
-                ConfigInput::ConfigOperation(request) => {
-                    let mut worker = worker.clone();
-                    tokio::spawn(async move { worker.process_operation_request(request).await });
-                    Ok(())
-                }
-                ConfigInput::FsWatchEvent(event) => worker.process_file_watch_events(event).await,
-                ConfigInput::CmdMetaSyncSignal(_) => worker.reload_supported_config_types().await,
-                ConfigInput::OperationStepRequestEnvelope(request) => {
-                    let mut worker = worker.clone();
-                    tokio::spawn(async move {
-                        worker.process_operation_step_request(request).await;
-                    });
-                    Ok(())
-                }
-            };
+        while let Some(mut events) = self.input_receiver.recv_many().await {
+            deduplicate_messages(&mut events);
+            for event in events {
+                let result = match event {
+                    ConfigInput::ConfigOperation(request) => {
+                        let mut worker = worker.clone();
+                        tokio::spawn(
+                            async move { worker.process_operation_request(request).await },
+                        );
+                        Ok(())
+                    }
+                    ConfigInput::FsWatchEvent(event) => {
+                        worker.process_file_watch_events(event).await
+                    }
+                    ConfigInput::CmdMetaSyncSignal(_) => {
+                        worker.reload_supported_config_types().await
+                    }
+                    ConfigInput::OperationStepRequestEnvelope(request) => {
+                        let mut worker = worker.clone();
+                        tokio::spawn(async move {
+                            worker.process_operation_step_request(request).await;
+                        });
+                        Ok(())
+                    }
+                };
 
-            if let Err(err) = result {
-                error!("Error processing event: {err:?}");
+                if let Err(err) = result {
+                    error!("Error processing event: {err:?}");
+                }
             }
         }
 
@@ -913,6 +922,16 @@ fn build_cloud_config_type(config_type: &str, plugin_name: &str) -> String {
     format!("{}::{}", config_type, plugin_name)
 }
 
+fn deduplicate_messages(messages: &mut Vec<ConfigInput>) {
+    // remove duplicate sync messages because processing them takes a long time and we really only
+    // want to process the most recent one(#4169); but preserve their order so state updated after sync
+    // message is not synced, as expected by the sender
+    messages.dedup_by(|a, b| {
+        matches!(a, ConfigInput::CmdMetaSyncSignal(_))
+            && matches!(b, ConfigInput::CmdMetaSyncSignal(_))
+    });
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ConfigOperation {
     Snapshot(Topic, ConfigSnapshotCmdPayload),
@@ -970,5 +989,37 @@ impl From<ConfigOperationData> for MqttMessage {
                     .with_qos(QoS::AtLeastOnce)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::path::PathBuf;
+
+    #[test]
+    fn sync_messages_are_deduplicated() {
+        let mut messages = vec![
+            ConfigInput::CmdMetaSyncSignal(()),
+            ConfigInput::CmdMetaSyncSignal(()),
+            ConfigInput::CmdMetaSyncSignal(()),
+            ConfigInput::CmdMetaSyncSignal(()),
+            ConfigInput::CmdMetaSyncSignal(()),
+            ConfigInput::FsWatchEvent(FsWatchEvent::Modified(PathBuf::new())),
+            ConfigInput::CmdMetaSyncSignal(()),
+            ConfigInput::CmdMetaSyncSignal(()),
+            ConfigInput::CmdMetaSyncSignal(()),
+            ConfigInput::CmdMetaSyncSignal(()),
+        ];
+        deduplicate_messages(&mut messages);
+        assert!(matches!(
+            messages[..],
+            [
+                ConfigInput::CmdMetaSyncSignal(()),
+                ConfigInput::FsWatchEvent(FsWatchEvent::Modified(_)),
+                ConfigInput::CmdMetaSyncSignal(()),
+            ]
+        ))
     }
 }

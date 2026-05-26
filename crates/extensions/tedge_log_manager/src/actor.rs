@@ -9,7 +9,7 @@ use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
-use tedge_actors::MessageReceiver;
+use tedge_actors::MessageReceiverNoblock;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
@@ -71,20 +71,22 @@ impl Actor for LogManagerActor {
 
     async fn run(mut self) -> Result<(), RuntimeError> {
         self.reload_supported_log_types().await?;
-
-        while let Some(event) = self.messages.recv().await {
-            match event {
-                LogInput::LogUploadCmd(request) => {
-                    self.process_logfile_request(request).await?;
-                }
-                LogInput::FsWatchEvent(event) => {
-                    self.process_file_watch_events(event).await?;
-                }
-                LogInput::LogUploadResult((topic, result)) => {
-                    self.process_uploaded_log(&topic, result).await?;
-                }
-                LogInput::CmdMetaSyncSignal(_) => {
-                    self.reload_supported_log_types().await?;
+        while let Some(mut messages) = self.messages.recv_many().await {
+            deduplicate_messages(&mut messages);
+            for event in messages {
+                match event {
+                    LogInput::LogUploadCmd(request) => {
+                        self.process_logfile_request(request).await?;
+                    }
+                    LogInput::FsWatchEvent(event) => {
+                        self.process_file_watch_events(event).await?;
+                    }
+                    LogInput::LogUploadResult((topic, result)) => {
+                        self.process_uploaded_log(&topic, result).await?;
+                    }
+                    LogInput::CmdMetaSyncSignal(_) => {
+                        self.reload_supported_log_types().await?;
+                    }
                 }
             }
         }
@@ -357,5 +359,46 @@ impl LogManagerActor {
 
     async fn publish_command_status(&mut self, request: LogUploadCmd) -> Result<(), ChannelError> {
         self.messages.send(LogOutput::LogUploadCmd(request)).await
+    }
+}
+
+fn deduplicate_messages(messages: &mut Vec<LogInput>) {
+    // remove duplicate sync messages because processing them takes a long time and we really only
+    // want to process the most recent one(#4169); but preserve their order so state updated after sync
+    // message is not synced, as expected by the sender
+    messages.dedup_by(|a, b| {
+        matches!(a, LogInput::CmdMetaSyncSignal(_)) && matches!(b, LogInput::CmdMetaSyncSignal(_))
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::path::PathBuf;
+
+    #[test]
+    fn sync_messages_are_deduplicated() {
+        let mut messages = vec![
+            LogInput::CmdMetaSyncSignal(()),
+            LogInput::CmdMetaSyncSignal(()),
+            LogInput::CmdMetaSyncSignal(()),
+            LogInput::CmdMetaSyncSignal(()),
+            LogInput::CmdMetaSyncSignal(()),
+            LogInput::FsWatchEvent(FsWatchEvent::Modified(PathBuf::new())),
+            LogInput::CmdMetaSyncSignal(()),
+            LogInput::CmdMetaSyncSignal(()),
+            LogInput::CmdMetaSyncSignal(()),
+            LogInput::CmdMetaSyncSignal(()),
+        ];
+        deduplicate_messages(&mut messages);
+        assert!(matches!(
+            messages[..],
+            [
+                LogInput::CmdMetaSyncSignal(()),
+                LogInput::FsWatchEvent(FsWatchEvent::Modified(_)),
+                LogInput::CmdMetaSyncSignal(()),
+            ]
+        ))
     }
 }

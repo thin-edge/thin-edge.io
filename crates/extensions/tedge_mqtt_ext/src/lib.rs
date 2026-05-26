@@ -752,6 +752,7 @@ mod unit_tests {
 
     use super::*;
     use async_trait::async_trait;
+    use futures::channel::mpsc::TryRecvError;
 
     macro_rules! subscription_request {
         (sub: $($sub:literal),*; unsub: $($unsub:literal),*; id: $id:literal $(;)?) => {
@@ -855,12 +856,15 @@ mod unit_tests {
             actor.next_message_for(1).await,
             MqttMessage::new(&Topic::new("b/c").unwrap(), "test message")
         );
-        assert!(actor
-            .sent_to_clients
-            .get_mut(&0)
-            .unwrap()
-            .try_next()
-            .is_err());
+        assert_eq!(
+            actor
+                .sent_to_clients
+                .get_mut(&0)
+                .unwrap()
+                .try_recv()
+                .unwrap_err(),
+            TryRecvError::Empty
+        );
 
         actor.close().await;
     }
@@ -944,12 +948,15 @@ mod unit_tests {
             actor.next_message_for(client_id_2).await,
             MqttMessage::new(&Topic::new("b/c").unwrap(), "test message")
         );
-        assert!(actor
-            .sent_to_clients
-            .get_mut(&client_id)
-            .unwrap()
-            .try_next()
-            .is_err());
+        assert_eq!(
+            actor
+                .sent_to_clients
+                .get_mut(&client_id)
+                .unwrap()
+                .try_recv()
+                .unwrap_err(),
+            TryRecvError::Empty
+        );
 
         actor.close().await;
     }

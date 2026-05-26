@@ -281,7 +281,7 @@ mod tests {
 
     impl<C> Drop for TestFileTransferService<C> {
         fn drop(&mut self) {
-            if let Ok(Some(value)) = self.server_err.try_next() {
+            if let Ok(value) = self.server_err.try_recv() {
                 if std::thread::panicking() {
                     println!("Error running server: {value}")
                 } else {

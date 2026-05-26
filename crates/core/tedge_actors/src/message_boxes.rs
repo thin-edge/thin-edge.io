@@ -92,6 +92,7 @@ use crate::Message;
 use crate::RuntimeRequest;
 use async_trait::async_trait;
 use futures::channel::mpsc;
+use futures::channel::mpsc::TryRecvError;
 use futures::StreamExt;
 use log::debug;
 use std::fmt::Debug;
@@ -396,5 +397,75 @@ impl<Input: Send> MessageReceiver<Input> for CombinedReceiver<Input> {
 
     async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
         self.signal_receiver.next().await
+    }
+}
+
+pub trait MessageReceiverNoblock<T>: MessageReceiver<T> {
+    /// Tries to receive a message from the channel without blocking.
+    /// If the channel is empty, or empty and closed, this method returns an error.
+    fn recv_noblock(&mut self) -> Result<T, RecvNoblockError>;
+
+    /// Returns all the currently received messages in the message box.
+    ///
+    /// Returns `None` if input channel is closed or RuntimeRequest is recieved. Returns
+    /// `Some(messages)` if there is at least 1 message. If there are currently no messages, we
+    /// await until one is received.
+    ///
+    /// If there are many messages currently ready, it can be useful to collect them all for
+    /// inspection/filtering/deduplication/reordering instead of strictly processing them in order 1
+    /// at a time.
+    ///
+    /// https://matklad.github.io/2025/05/14/scalar-select-aniti-pattern
+    #[expect(async_fn_in_trait)]
+    async fn recv_many(&mut self) -> Option<Vec<T>> {
+        // don't return until we have at least 1 message
+        let message = self.recv().await?;
+        // instead of always allocating and returning a vec from this function we could consider
+        // taking one as an &mut argument
+        let mut messages = vec![message];
+        while let Ok(message) = self.recv_noblock() {
+            messages.push(message);
+        }
+        Some(messages)
+    }
+}
+
+pub enum RecvNoblockError {
+    Empty,
+    Closed,
+}
+
+impl From<TryRecvError> for RecvNoblockError {
+    fn from(value: TryRecvError) -> Self {
+        match value {
+            TryRecvError::Closed => Self::Closed,
+            TryRecvError::Empty => Self::Empty,
+        }
+    }
+}
+
+impl<T: Send> MessageReceiverNoblock<T> for CombinedReceiver<T> {
+    /// Tries to receive a message from the channel without blocking.
+    /// If the channel is empty, or empty and closed, this method returns an error.
+    fn recv_noblock(&mut self) -> Result<T, RecvNoblockError> {
+        self.input_receiver
+            .try_recv()
+            .map_err(RecvNoblockError::from)
+    }
+}
+
+impl<T: Send + Debug> MessageReceiverNoblock<T> for LoggingReceiver<T> {
+    fn recv_noblock(&mut self) -> Result<T, RecvNoblockError> {
+        self.receiver.recv_noblock()
+    }
+}
+
+impl<I, O> MessageReceiverNoblock<I> for SimpleMessageBox<I, O>
+where
+    I: Send + Debug + 'static,
+    O: Send + Debug + 'static,
+{
+    fn recv_noblock(&mut self) -> Result<I, RecvNoblockError> {
+        self.input_receiver.recv_noblock()
     }
 }
