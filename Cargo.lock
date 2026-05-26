@@ -674,17 +674,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
-name = "batcher"
-version = "2.0.1"
-dependencies = [
- "async-trait",
- "serde_json",
- "tedge_flows",
- "time",
- "tokio",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5025,7 +5014,6 @@ dependencies = [
  "async-trait",
  "aws_mapper_ext",
  "az_mapper_ext",
- "batcher",
  "c8y_api",
  "c8y_auth_proxy",
  "c8y_mapper_ext",
