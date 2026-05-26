@@ -607,6 +607,20 @@ Add a timestamp to JSON messages
   This can be changed with the `reformat` config so any timestamp is reformated to the requested format. 
 - `{ builtin = "add-timestamp", config = { format = "rfc3339", reformat = true }}`
 
+### `group-measurements`
+
+Group [%%te%% measurements](../../../understand/thin-edge-json/#measurements) observed during a time-window.
+
+- `{ builtin = "group-measurements", config = { time_window = "500ms" }, interval = "1s"}`
+
+```toml
+[[steps]]
+builtin = "group-measurements
+interval = "1s"
+config.time_window = "500ms"
+```
+
+
 ### `ignore-topics`
 
 Filter out messages with specific topics
