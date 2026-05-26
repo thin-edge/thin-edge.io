@@ -196,10 +196,18 @@ impl TEdgeTomlVersion {
                     value: Self::Two.into(),
                 },
             ],
-            Self::Two => vec![TomlMigrationStep::MoveKey {
-                original: "apt.dpk",
-                target: "apt.dpkg".into(),
-            }],
+            Self::Two => vec![
+                TomlMigrationStep::MoveKey {
+                    original: "apt.dpk",
+                    target: "apt.dpkg".into(),
+                },
+                mv(
+                    "c8y.entity_store.auto_register",
+                    AgentEntityStoreAutoRegister,
+                ),
+                mv("c8y.entity_store.clean_start", AgentEntityStoreCleanStart),
+                rm("c8y.entity_store"),
+            ],
         }
     }
 
@@ -368,5 +376,42 @@ mod tests {
             Some("keepold")
         );
         assert!(migrated["apt"].as_table().unwrap().get("dpk").is_none());
+    }
+
+    #[test]
+    fn v2_migration_moves_c8y_entity_store_to_agent_entity_store() {
+        let input = toml::toml!(
+            [config]
+            version = "2"
+
+            [c8y.entity_store]
+            auto_register = false
+            clean_start = false
+        );
+        let (migrated, any_keys_migrated) = TEdgeTomlVersion::Two
+            .migrations()
+            .try_fold(
+                (toml::Value::Table(input), false),
+                |(toml, any_migrated), step| {
+                    let (toml, step_migrated) = step.apply_to(toml)?;
+                    Ok::<_, String>((toml, any_migrated || step_migrated))
+                },
+            )
+            .unwrap();
+
+        assert!(any_keys_migrated);
+        assert_eq!(
+            migrated["agent"]["entity_store"]["auto_register"].as_bool(),
+            Some(false)
+        );
+        assert_eq!(
+            migrated["agent"]["entity_store"]["clean_start"].as_bool(),
+            Some(false)
+        );
+        assert!(migrated["c8y"]
+            .as_table()
+            .unwrap()
+            .get("entity_store")
+            .is_none());
     }
 }

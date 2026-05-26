@@ -107,10 +107,6 @@ impl FromCloudConfig for C8yMapperSpecificConfig {
                 key_path: c8y.proxy.key_path.clone(),
                 ca_path: c8y.proxy.ca_path.clone(),
             },
-            entity_store: EntityStoreConfig {
-                auto_register: c8y.entity_store.auto_register,
-                clean_start: c8y.entity_store.clean_start,
-            },
             software_management: SoftwareManagementConfig {
                 api: c8y.software_management.api,
                 with_types: c8y.software_management.with_types,
@@ -488,8 +484,6 @@ mod tests {
         let config: C8yMapperConfig = load_cloud_mapper_config(None, &tedge_config).unwrap();
 
         assert_eq!(config.cloud_specific.auth_method, AuthMethod::Certificate);
-        assert!(config.cloud_specific.entity_store.auto_register);
-        assert!(config.cloud_specific.entity_store.clean_start);
 
         assert_eq!(
             config.http().or_none().unwrap().to_string(),
@@ -633,7 +627,6 @@ mod tests {
 
         assert_eq!(config.cloud_specific.auth_method, AuthMethod::Basic);
         assert!(!config.cloud_specific.smartrest.use_operation_id);
-        assert!(!config.cloud_specific.entity_store.auto_register);
         assert!(!config.cloud_specific.enable.log_upload);
     }
 

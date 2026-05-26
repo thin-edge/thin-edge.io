@@ -783,16 +783,6 @@ define_tedge_config! {
 
         },
 
-        entity_store: {
-            /// Enable auto registration feature
-            #[tedge_config(example = "true", default(value = true))]
-            auto_register: bool,
-
-            /// On a clean start, the whole state of the device, services and child-devices is resent to the cloud
-            #[tedge_config(example = "true", default(value = true))]
-            clean_start: bool,
-        },
-
         software_management: {
             /// Switch legacy or advanced software management API to use. Value: legacy or advanced
             #[tedge_config(example = "advanced", default(variable = "SoftwareManagementApiFlag::Legacy"))]
@@ -1875,6 +1865,12 @@ mod tests {
     #[test_case::test_case("apt.name")]
     #[test_case::test_case("apt.maintainer")]
     fn all_0_10_keys_can_be_deserialised(key: &str) {
+        key.parse::<ReadableKey>().unwrap();
+    }
+
+    #[test_case::test_case("c8y.entity_store.auto_register")]
+    #[test_case::test_case("c8y.entity_store.clean_start")]
+    fn deprecated_keys_can_be_parsed(key: &str) {
         key.parse::<ReadableKey>().unwrap();
     }
 

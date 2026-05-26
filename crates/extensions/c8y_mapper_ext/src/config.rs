@@ -57,8 +57,6 @@ pub struct C8yMapperConfig {
     pub auth_proxy_port: u16,
     pub auth_proxy_protocol: Protocol,
     pub mqtt_schema: MqttSchema,
-    pub enable_auto_register: bool,
-    pub clean_start: bool,
     pub bridge_config: BridgeConfig,
     pub bridge_in_mapper: bool,
     pub software_management_api: SoftwareManagementApiFlag,
@@ -99,8 +97,6 @@ impl C8yMapperConfig {
         auth_proxy_port: u16,
         auth_proxy_protocol: Protocol,
         mqtt_schema: MqttSchema,
-        enable_auto_register: bool,
-        clean_start: bool,
         bridge_config: BridgeConfig,
         bridge_in_mapper: bool,
         software_management_api: SoftwareManagementApiFlag,
@@ -141,8 +137,6 @@ impl C8yMapperConfig {
             auth_proxy_port,
             auth_proxy_protocol,
             mqtt_schema,
-            enable_auto_register,
-            clean_start,
             bridge_config,
             bridge_in_mapper,
             software_management_api,
@@ -223,9 +217,6 @@ impl C8yMapperConfig {
 
         let mut topics = Self::default_internal_topic_filter(&bridge_config.c8y_prefix)?;
 
-        let enable_auto_register = c8y_config.cloud_specific.entity_store.auto_register;
-        let clean_start = c8y_config.cloud_specific.entity_store.clean_start;
-
         let software_management_api = c8y_config.cloud_specific.software_management.api;
         let software_management_with_types =
             c8y_config.cloud_specific.software_management.with_types;
@@ -283,8 +274,6 @@ impl C8yMapperConfig {
             auth_proxy_port,
             auth_proxy_protocol,
             mqtt_schema,
-            enable_auto_register,
-            clean_start,
             bridge_config,
             bridge_in_mapper,
             software_management_api,

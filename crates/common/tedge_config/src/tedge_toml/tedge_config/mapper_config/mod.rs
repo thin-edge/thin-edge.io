@@ -464,9 +464,6 @@ pub struct C8yMapperSpecificConfig {
     /// HTTP proxy configuration
     pub proxy: ProxyConfig,
 
-    /// Entity store configuration
-    pub entity_store: EntityStoreConfig,
-
     /// Software management configuration
     pub software_management: SoftwareManagementConfig,
 
