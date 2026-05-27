@@ -2,8 +2,8 @@
 Resource            ../../resources/common.resource
 Library             ThinEdgeIO
 
-Test Setup         Custom Setup
-Test Teardown      Get Logs
+Test Setup          Custom Setup
+Test Teardown       Get Logs
 
 Test Tags           theme:cli    theme:configuration
 
@@ -41,7 +41,7 @@ Migrate c8y.entity_store.* keys to agent.entity_store.* keys 1.4->1.5->2.0.0->la
     # The values from agent.entity_store.* keys should be effective, not the values from c8y.entity_store.* keys
     ${auto_register}=    Execute Command    tedge config get agent.entity_store.auto_register    strip=True
     Should Be Equal    ${auto_register}    true
-    ${clean_start}=    Execute Command    tedge config get agent.entity_store.clean_start   strip=True
+    ${clean_start}=    Execute Command    tedge config get agent.entity_store.clean_start    strip=True
     Should Be Equal    ${clean_start}    true
 
     # Update to the test version
