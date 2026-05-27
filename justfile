@@ -188,6 +188,35 @@ build-integration-test: build
 integration-test *ARGS: build-integration-test
     invoke tests {{ARGS}}
 
+# All arguments are forwarded as-is to the `invoke flake-finder` task.
+# See `invoke --help flake-finder` (from tests/RobotFramework) for the full list of options.
+#
+# Common options:
+#   --iterations N                 Number of test iterations to run (default: 2)
+#   --suite TEXT                   Only run suites matching the given text
+#   --test-name TEXT               Only run tests matching the given text
+#   --adapter {docker,ssh,local}   Device adapter to use (default: docker)
+#   --retries N                    Max global retries on failed tests (default: 0)
+#   --outputdir PATH               Output directory for reports (default: output_flake_finder)
+#   --processes N                  Number of processes to use when running tests
+#   --include TAG                  Only run tests matching the given tag
+#   --exclude TAG                  Don't run tests matching the given tag
+#   --clean                        Remove the output folder if it already exists
+#
+# Examples:
+#   just flake-finder --iterations 100 --outputdir output_flake_finder_100 --clean
+#   just flake-finder --suite service_monitoring
+#   just flake-finder --test-name "MyTest" --iterations 10 --clean
+#
+# Run integration tests multiple times to find flaky tests
+[positional-arguments]
+flake-finder *ARGS:
+    #!/usr/bin/env bash
+    set -e
+    cd tests/RobotFramework
+    source .venv/bin/activate
+    invoke flake-finder "$@"
+
 # Generate linux package scripts from templates
 generate-linux-package-scripts:
     ./configuration/package_scripts/generate.py
