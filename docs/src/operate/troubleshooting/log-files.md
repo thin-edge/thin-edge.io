@@ -77,7 +77,7 @@ Run `tedge-agent --debug` to log more debug messages
 :::
 
 ## Third-party component logs {#thirdparty}
-%%te%% uses the third-party components `Mosquitto` as the mqtt broker and `Collectd` for monitoring purpose.
+%%te%% uses the third-party components `Mosquitto` as the mqtt broker.
 The logs that are created by these components can be accessed on a %%te%% device as below.
 
 ### Mosquitto logs {#mosquitto}
@@ -88,15 +88,6 @@ The `Mosquitto` logs can be found in `/var/log/mosquitto/mosquitto.log`.
 :::note
 Set `log_type debug` or `log_type all` on `/etc/mosquitto/mosquitto.conf`, to capture more debug information.
 :::
-
-### Collectd logs {#collectd}
-`Collectd` is used for monitoring the resource status of a %%te%% device.
-Collectd logs all the messages at `/var/log/syslog`.
-So, the collectd specific logs can be accessed using the `journalctl` as below
-
-```sh
-journalctl -u collectd
-```
 
 ## Configuring log levels in %%te%% {#configure-log-levels}
 
