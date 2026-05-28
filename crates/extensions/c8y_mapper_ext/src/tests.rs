@@ -3331,8 +3331,6 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         auth_proxy_port,
         Protocol::Http,
         MqttSchema::default(),
-        true,
-        true,
         bridge_config,
         false,
         SoftwareManagementApiFlag::Advanced,
