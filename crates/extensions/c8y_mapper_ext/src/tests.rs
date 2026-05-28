@@ -3250,15 +3250,6 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     )
 }
 
-pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessage>) {
-    //Skip all the init messages by still doing loose assertions
-    tedge_mqtt_ext::test_helpers::assert_received_contains_str(
-        mqtt,
-        [("c8y/s/us", "114"), ("c8y/s/us", "500")],
-    )
-    .await;
-}
-
 pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, HttpResult>) {
     tokio::spawn(async move {
         while let Some(request) = http.recv().await {

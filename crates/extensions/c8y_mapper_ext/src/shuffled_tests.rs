@@ -1,4 +1,5 @@
-use crate::tests::skip_init_messages;
+use crate::tests::helpers::assert_received_contains_str;
+use crate::tests::mock_mqtt_box::MockMqttBox;
 use crate::tests::spawn_c8y_mapper_actor;
 use crate::tests::spawn_dummy_c8y_http_proxy;
 use crate::tests::MockMqttBoxUnbuffered;
@@ -15,7 +16,6 @@ use std::time::Duration;
 use tedge_actors::ChannelError;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeRequest;
-use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::Topic;
@@ -218,7 +218,8 @@ async fn birth_message_with_shuffled_entity_registration_impl(seed: u64) {
     // The mapper should produce init messages + all registrations,
     // regardless of the order the messages arrived.
     // tokio::time::sleep(Duration::from_millis(100)).await;
-    skip_init_messages(&mut mqtt).await;
+
+    let mut mqtt = MockMqttBox::new(mqtt);
 
     // Registration responses and measurement conversions arrive in whatever
     // order the mapper processed the shuffled inputs.
@@ -275,7 +276,7 @@ async fn nested_child_registration_with_shuffled_ordering_impl(seed: u64) {
         r#"{"@type":"child-device","@id":"child3","@parent":"device/child2//"}"#,
     ));
 
-    skip_init_messages(&mut mqtt).await;
+    let mut mqtt = MockMqttBox::new(mqtt);
 
     // The mapper must register parents before children, regardless of input order.
     assert_received_contains_str(
@@ -333,7 +334,7 @@ async fn child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
         .to_string(),
     ));
 
-    skip_init_messages(&mut mqtt).await;
+    let mut mqtt = MockMqttBox::new(mqtt);
 
     // The mapper must output: device registration → service registration → alarm.
     assert_received_contains_str(
@@ -384,7 +385,7 @@ async fn child_alarm_with_shuffled_entity_registration_impl(seed: u64) {
         json!({ "severity": "minor", "text": "Still high" }).to_string(),
     ));
 
-    skip_init_messages(&mut mqtt).await;
+    let mut mqtt = MockMqttBox::new(mqtt);
 
     // Registration must come first, then both alarms in topic order.
     assert_received_contains_str(
@@ -429,7 +430,7 @@ async fn child_event_with_shuffled_entity_registration_impl(seed: u64) {
         r#"{"@type":"child-device"}"#,
     ));
 
-    skip_init_messages(&mut mqtt).await;
+    let mut mqtt = MockMqttBox::new(mqtt);
 
     // Registration must come before the event.
     assert_received_contains_str(
@@ -487,7 +488,7 @@ async fn nested_child_alarm_with_shuffled_ordering_impl(seed: u64) {
         .to_string(),
     ));
 
-    skip_init_messages(&mut mqtt).await;
+    let mut mqtt = MockMqttBox::new(mqtt);
 
     // Parent → child → alarm, in strict dependency order.
     assert_received_contains_str(
@@ -568,7 +569,7 @@ async fn nested_child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
     // All the messages queued above are released from the broker
     mqtt.send_all().await.unwrap();
 
-    skip_init_messages(&mut mqtt).await;
+    let mut mqtt = MockMqttBox::new(mqtt);
 
     // Full dependency chain must be respected: parent → child → service → alarm.
     assert_received_contains_str(
@@ -622,32 +623,27 @@ async fn assert_received_unordered_contains_str<'a>(
     expected: impl IntoIterator<Item = (&'a str, &'a str)>,
 ) {
     let mut remaining: Vec<(&str, &str)> = expected.into_iter().collect();
-    let count = remaining.len();
 
-    for _ in 0..count {
+    while !remaining.is_empty() {
         let message = receiver.recv().await;
-        assert!(
-            message.is_some(),
-            "Channel closed while still expecting {remaining:?}",
-        );
-        let message = message.unwrap();
+        let message = match message {
+            Some(message) => message,
+            None => panic!("Channel closed while still expecting {remaining:?}"),
+        };
+
+        if remaining
+            .iter()
+            .all(|(topic, _)| *topic != message.topic.name)
+        {
+            continue;
+        }
+
         let payload = message.payload_str().expect("non UTF-8 payload");
 
-        let matched = remaining.iter().position(|(topic, substr)| {
+        if let Some(idx) = remaining.iter().position(|(topic, substr)| {
             TopicFilter::new_unchecked(topic).accept(&message) && payload.contains(substr)
-        });
-
-        match matched {
-            Some(idx) => {
-                remaining.swap_remove(idx);
-            }
-            None => {
-                panic!(
-                    "Received unexpected message: topic={}, payload={payload}\n\
-                     Still expecting: {remaining:?}",
-                    message.topic.name,
-                );
-            }
+        }) {
+            remaining.swap_remove(idx);
         }
     }
 }
