@@ -2810,7 +2810,6 @@ pub(crate) mod tests {
     async fn early_messages_cached_and_processed_only_after_registration() {
         let tmp_dir = TempTedgeDir::new();
         let mut config = c8y_converter_config(&tmp_dir);
-        config.enable_auto_register = false;
         config.bridge_config.c8y_prefix = "custom-c8y-prefix".try_into().unwrap();
 
         let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
@@ -2888,8 +2887,7 @@ pub(crate) mod tests {
     #[tokio::test]
     async fn early_child_device_registrations_processed_only_after_parent_registration() {
         let tmp_dir = TempTedgeDir::new();
-        let mut config = c8y_converter_config(&tmp_dir);
-        config.enable_auto_register = false;
+        let config = c8y_converter_config(&tmp_dir);
 
         let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
@@ -3002,8 +3000,7 @@ pub(crate) mod tests {
             "#,
             );
 
-        let mut config = c8y_converter_config(&tmp_dir);
-        config.enable_auto_register = false;
+        let config = c8y_converter_config(&tmp_dir);
 
         let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
@@ -3146,8 +3143,6 @@ pub(crate) mod tests {
             auth_proxy_port,
             auth_proxy_protocol,
             MqttSchema::default(),
-            true,
-            true,
             bridge_config,
             false,
             SoftwareManagementApiFlag::Advanced,
