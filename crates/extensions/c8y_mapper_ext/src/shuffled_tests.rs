@@ -1,7 +1,7 @@
 use crate::tests::skip_init_messages;
 use crate::tests::spawn_c8y_mapper_actor;
 use crate::tests::spawn_dummy_c8y_http_proxy;
-use crate::tests::MockMqttBox;
+use crate::tests::MockMqttBoxUnbuffered;
 use crate::tests::TestHandle;
 use proptest::test_runner::Config as ProptestConfig;
 use rand::seq::SliceRandom;
@@ -55,14 +55,14 @@ fn proptest_config() -> ProptestConfig {
 /// actor has even received the original message — creating realistic
 /// interleaving without any timing hacks.
 pub struct ShuffledMqttBox<'a, R> {
-    inner: &'a mut MockMqttBox,
+    inner: &'a mut MockMqttBoxUnbuffered,
     pending: HashMap<String, VecDeque<MqttMessage>>,
     rng: &'a mut R,
     timeout: Duration,
 }
 
 impl<'a, R: Rng> ShuffledMqttBox<'a, R> {
-    pub fn new(inner: &'a mut MockMqttBox, rng: &'a mut R, timeout: Duration) -> Self {
+    pub fn new(inner: &'a mut MockMqttBoxUnbuffered, rng: &'a mut R, timeout: Duration) -> Self {
         ShuffledMqttBox {
             inner,
             pending: HashMap::new(),
@@ -595,7 +595,7 @@ async fn nested_child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
 /// Returns `(MockMqttBox, KeepAlive)` — the second value must be kept alive
 /// (bound to a `_variable`) for the duration of the test so that actor
 /// channels and the temp directory are not dropped.
-async fn setup_mapper() -> (MockMqttBox, Box<dyn std::any::Any>) {
+async fn setup_mapper() -> (MockMqttBoxUnbuffered, Box<dyn std::any::Any>) {
     let ttd = TempTedgeDir::new();
     let TestHandle {
         mqtt,
@@ -608,7 +608,7 @@ async fn setup_mapper() -> (MockMqttBox, Box<dyn std::any::Any>) {
 
     spawn_dummy_c8y_http_proxy(http);
 
-    (mqtt, Box::new((ttd, fs, ul, dl, avail)))
+    (mqtt.into_unbuffered(), Box::new((ttd, fs, ul, dl, avail)))
 }
 
 /// Assert that the expected messages are all received, in any order.

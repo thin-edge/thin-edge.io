@@ -28,9 +28,8 @@ impl<Box> TestMqttBox for Box where Box: MessageReceiverExt<MqttMessage> + Send 
 /// all received messages to a buffer and then choosing to drop selected
 /// messages only once they're asserted.
 pub struct MockMqttBox<Box> {
-    pub(crate) mqtt: Box,
-    // TODO: immutable accessor
-    pub messages: Arc<Mutex<VecDeque<MqttMessage>>>,
+    mqtt: Box,
+    pub(super) messages: Arc<Mutex<VecDeque<MqttMessage>>>,
 
     // hack: some tests use different timeout and assertions need to know about it and proper
     // handling isn't done yet, so expose just duration here, will need to fix
@@ -70,6 +69,16 @@ impl<M: TestMqttBox> MockMqttBox<M> {
         {}
     }
 
+    /// Ignore already received messages.
+    ///
+    /// Can be used before performing an operation that produces a message of a certain type, to ignore other possibly
+    /// received messages of the same type, to next assert that the next message happened due to the operation we
+    /// expect.
+    pub async fn ignore_received(&mut self, expected: (&str, &str)) -> bool {
+        let filter = TopicFilter::new_unchecked(expected.0);
+        self.any(|m| filter.accept(m))
+    }
+
     #[track_caller]
     pub fn any<P>(&mut self, predicate: P) -> bool
     where
@@ -89,7 +98,7 @@ impl<M: TestMqttBox> MockMqttBox<M> {
         P: Fn(&MqttMessage) -> bool,
     {
         let messages = self.messages.lock().unwrap();
-        messages.iter().position(predicate).is_none()
+        !messages.iter().any(predicate)
     }
 
     #[track_caller]
