@@ -68,6 +68,12 @@ use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::paths::TedgePaths;
 
+pub mod mock_mqtt_box;
+use mock_mqtt_box::*;
+
+pub mod helpers;
+use helpers::*;
+
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
 #[tokio::test]
