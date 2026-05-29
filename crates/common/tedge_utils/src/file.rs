@@ -242,6 +242,9 @@ impl PermissionEntry {
         dir: &Path,
         root: Option<&Path>,
     ) -> Result<(), FileError> {
+        if let Some(root_dir) = root {
+            ensure_parents_exist(root_dir).await?;
+        }
         match dir.parent() {
             None => return Ok(()),
             Some(_parent) if Some(dir) == root => {}
@@ -278,6 +281,24 @@ impl PermissionEntry {
             }),
         }
     }
+}
+
+async fn ensure_parents_exist(dir: &Path) -> Result<(), FileError> {
+    if let Some(parent) = dir.parent() {
+        if !path_exists(parent).await {
+            Box::pin(ensure_parents_exist(parent)).await?;
+
+            if let Err(e) = fs::create_dir(&parent).await {
+                if e.kind() != io::ErrorKind::AlreadyExists {
+                    return Err(FileError::DirectoryCreateFailed {
+                        dir: parent.display().to_string(),
+                        from: e,
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Overwrite the content of existing file. The file permissions will be kept.

@@ -601,7 +601,6 @@ pub fn ok_if_not_found(err: std::io::Error) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::file::FileError;
     use nix::unistd::Uid;
     use std::os::unix::fs::PermissionsExt;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -920,25 +919,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ensure_does_not_create_directories_above_the_root() {
+    async fn ensure_creates_directories_above_the_root_but_does_not_take_ownership() {
         let ttd = TempTedgeDir::new();
         let root = ttd.utf8_path().join("missing-parent").join("managed-root");
-        let config_root = TedgePaths::from_root_with_defaults(&root, "", "");
+        let config_root = TedgePaths::from_root_with_defaults(&root, "root", "root");
 
         let err = config_root
-            .dir("operations/c8y")
+            .dir("log")
             .unwrap()
             .ensure()
             .await
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
 
-        assert!(matches!(
-            err,
-            PathsError::FileError(FileError::DirectoryCreateFailed { .. })
-        ));
-        assert!(err.to_string().contains(&root.to_string()));
-        assert!(!root.exists());
-        assert!(!ttd.path().join("missing-parent").exists());
+        assert!(err.contains("Failed to change owner"));
+        assert!(err.contains("missing-parent/managed-root"));
+        assert!(ttd.utf8_path().join("missing-parent").is_dir());
     }
 
     #[tokio::test]
