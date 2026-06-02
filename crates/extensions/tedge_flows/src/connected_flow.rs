@@ -17,7 +17,7 @@ use crate::transformers::BuiltinTransformers;
 use crate::UpdateFlowRegistryError;
 use camino::Utf8Path;
 use std::time::SystemTime;
-use tedge_utils::paths::TedgePaths;
+use tedge_utils::paths::ManagedDir;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 
@@ -147,6 +147,7 @@ impl ConnectedFlow {
 }
 
 pub struct ConnectedFlowRegistry {
+    flows_dir: ManagedDir,
     flows: FlowStore<ConnectedFlow>,
     builtins: BuiltinTransformers,
     mapper_params: Box<dyn MapperParams>,
@@ -155,10 +156,12 @@ pub struct ConnectedFlowRegistry {
 impl ConnectedFlowRegistry {
     pub fn new(
         mapper_params: impl MapperParams,
-        flows_dir: impl AsRef<Utf8Path>,
+        flows_dir: ManagedDir,
     ) -> Result<Self, std::io::Error> {
+        let flows = FlowStore::new(&flows_dir)?;
         Ok(ConnectedFlowRegistry {
-            flows: FlowStore::new(flows_dir)?,
+            flows_dir,
+            flows,
             builtins: BuiltinTransformers::default(),
             mapper_params: Box::new(mapper_params),
         })
@@ -181,8 +184,7 @@ impl ConnectedFlowRegistry {
         name: &str,
         content: &str,
     ) -> Result<(), UpdateFlowRegistryError> {
-        let dir = self.store().config_dir();
-        TedgePaths::from_root_with_defaults(dir, "", "")
+        self.flows_dir
             .template_file(format!("{}.toml", name))?
             .persist(content)
             .await?;

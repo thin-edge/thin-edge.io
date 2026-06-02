@@ -3231,12 +3231,9 @@ pub(crate) async fn c8y_mapper_builder(
     c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
     let mapper_dir = tmp_dir.utf8_path().join("mappers").join("c8y");
-    let flows_dir = tedge_flows::flows_dir(&mapper_dir);
-    TedgePaths::from_root_with_defaults(&flows_dir, "", "")
-        .root_dir()
-        .ensure()
-        .await
-        .unwrap();
+    let managed_dir = TedgePaths::from_root_with_defaults(&mapper_dir, "", "").root_dir();
+    let flows_dir = tedge_flows::managed_flows_dir(&managed_dir);
+    flows_dir.ensure().await.unwrap();
     let mapper_config = HashMap::new();
     let mut flows = ConnectedFlowRegistry::new(mapper_config, flows_dir).unwrap();
     crate::load_builtin_transformers(&mut flows);
