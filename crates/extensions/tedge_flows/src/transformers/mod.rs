@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::time::SystemTime;
 
 mod add_timestamp;
+mod group_measurements;
 mod ignore_topics;
 mod limit_payload_size;
 mod set_topic;
@@ -81,6 +82,7 @@ impl Default for BuiltinTransformers {
             transformers: HashMap::default(),
         };
         transformers.register(add_timestamp::AddTimestamp::default());
+        transformers.register(group_measurements::GroupMeasurements::default());
         transformers.register(limit_payload_size::LimitPayloadSize::default());
         transformers.register(ignore_topics::IgnoreTopics::default());
         transformers.register(set_topic::SetTopic::default());
