@@ -5,8 +5,7 @@ sidebar_position: 6
 description: Configuring %%te%% to work with Linux init systems
 ---
 
-To support multiple init systems and service managers, `tedge` requires the `/etc/tedge/system.toml` file.
-The file contains configurations about the init system and the supported actions.
+To run %%te%% on a non-Systemd device, the file `/etc/tedge/system.toml` must be configured for the device init system.
 
 The format of the file is:
 

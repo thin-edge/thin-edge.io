@@ -158,7 +158,7 @@ fn replace_with_service_name<'a>(
     config_path: impl Into<Utf8PathBuf>,
     service: SystemService<'a>,
 ) -> Result<Vec<String>, SystemServiceError> {
-    if !input_args.iter().any(|s| s == "{}") {
+    if !input_args.iter().any(|s| s.contains("{}")) {
         return Err(SystemServiceError::SystemConfigInvalidSyntax {
             reason: "A placeholder '{}' is missing.".to_string(),
             cmd: service_cmd.to_string(),
@@ -168,9 +168,7 @@ fn replace_with_service_name<'a>(
 
     let mut args = input_args.to_owned();
     for item in args.iter_mut() {
-        if item == "{}" {
-            *item = service.to_string();
-        }
+        *item = item.replace("{}", &service.to_string());
     }
 
     Ok(args)
