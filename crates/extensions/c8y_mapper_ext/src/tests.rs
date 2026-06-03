@@ -57,8 +57,7 @@ use tedge_flows::FlowsMapperConfig;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
-use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
-use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
+use tedge_mqtt_ext::test_helpers::TestMqttBox;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
@@ -67,6 +66,10 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::paths::TedgePaths;
+
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_not_contains_str;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
@@ -89,8 +92,6 @@ async fn mapper_converts_agent_twin_to_c8y_agent_fragment() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     let version = env!("CARGO_PKG_VERSION");
 
@@ -133,8 +134,6 @@ async fn child_device_registration_mapping() {
     let mut avail = test_handle.avail.with_timeout(TEST_TIMEOUT_MS);
     let mut mqtt = test_handle.mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/child1//"),
         r#"{ "@type": "child-device", "type": "RaspberryPi", "name": "Child1" }"#,
@@ -151,7 +150,7 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
-    assert_received_contains_str(
+    tedge_mqtt_ext::test_helpers::assert_received_contains_str(
         &mut avail,
         [(
             "te/device/child1//",
@@ -176,7 +175,7 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
-    assert_received_contains_str(
+    tedge_mqtt_ext::test_helpers::assert_received_contains_str(
         &mut avail,
         [(
             "te/device/child2//",
@@ -201,7 +200,7 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
-    assert_received_contains_str(
+    tedge_mqtt_ext::test_helpers::assert_received_contains_str(
         &mut avail,
         [(
             "te/device/child3//",
@@ -217,7 +216,6 @@ async fn custom_topic_scheme_registration_mapping() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Child device with custom scheme
     mqtt.send(MqttMessage::new(
@@ -276,7 +274,6 @@ async fn service_registration_mapping() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Create a direct child device: child1 and a nested child device: child2
     mqtt.send(MqttMessage::new(
@@ -291,8 +288,6 @@ async fn service_registration_mapping() {
     ))
     .await
     .unwrap();
-
-    mqtt.skip(2).await; // Skip mappings of above child device creation messages and republished messages with @id
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/collectd"),
@@ -352,8 +347,6 @@ async fn mapper_publishes_supported_software_types() {
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     // Simulate software_list capability message
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main///cmd/software_list"),
@@ -379,7 +372,6 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main///a/temperature_alarm"),
@@ -402,7 +394,6 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
     mqtt.send(MqttMessage::new(
@@ -411,7 +402,6 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/external_sensor///a/temperature_high"),
@@ -438,7 +428,6 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
         &"te/device/main///a/custom_temperature_alarm"
@@ -486,7 +475,6 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
     mqtt.send(MqttMessage::new(
@@ -495,7 +483,6 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///a/custom_temperature_alarm"
@@ -548,7 +535,6 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
         &"te/device/main///a/custom_msg_pressure_alarm"
@@ -588,7 +574,6 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
     mqtt.send(MqttMessage::new(
@@ -597,7 +582,6 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///a/child_custom_msg_pressure_alarm"
@@ -641,7 +625,6 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
     mqtt.send(MqttMessage::new(
@@ -650,7 +633,6 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///a/child_msg_to_text_pressure_alarm"
@@ -694,7 +676,6 @@ async fn c8y_mapper_alarm_with_custom_message() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
         &"te/device/main///a/msg_to_text_pressure_alarm"
@@ -733,7 +714,6 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
     mqtt.send(MqttMessage::new(
@@ -742,7 +722,6 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/external_sensor///a/empty_temperature_alarm"),
@@ -769,7 +748,6 @@ async fn c8y_mapper_alarm_empty_payload() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main///a/empty_temperature_alarm"),
@@ -789,7 +767,6 @@ async fn c8y_mapper_alarm_empty_json_payload() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main///a/empty_temperature_alarm"),
@@ -799,13 +776,14 @@ async fn c8y_mapper_alarm_empty_json_payload() {
     .unwrap();
 
     // Expect converted alarm SmartREST message
-    let smartrest = mqtt.recv().await.unwrap();
-    assert_eq!(smartrest.topic.name, "c8y/s/us");
-    assert!(smartrest
-        .payload
-        .as_str()
-        .unwrap()
-        .starts_with("303,empty_temperature_alarm,empty_temperature_alarm"));
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "303,empty_temperature_alarm,empty_temperature_alarm",
+        )],
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -814,7 +792,6 @@ async fn c8y_mapper_child_event() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
     mqtt.send(MqttMessage::new(
@@ -823,7 +800,6 @@ async fn c8y_mapper_child_event() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor///e/custom_event"
@@ -863,7 +839,6 @@ async fn c8y_mapper_child_service_event() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
     mqtt.send(MqttMessage::new(
@@ -879,7 +854,6 @@ async fn c8y_mapper_child_service_event() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(2).await; // Skip the mapped registration messages
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor/service/service_child/e/custom_event"
@@ -919,7 +893,6 @@ async fn c8y_mapper_main_service_event() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the service upfront
     mqtt.send(MqttMessage::new(
@@ -928,7 +901,6 @@ async fn c8y_mapper_main_service_event() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration messages
 
     mqtt.send(MqttMessage::new(
         &"te/device/main/service/service_main/e/custom_event"
@@ -968,7 +940,6 @@ async fn c8y_mapper_child_service_alarm() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device and service upfront
     mqtt.send(MqttMessage::new(
@@ -983,7 +954,6 @@ async fn c8y_mapper_child_service_alarm() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(2).await; // Skip the mapped registration messages
 
     mqtt.send(MqttMessage::new(
         &"te/device/external_sensor/service/service_child/a/custom_alarm"
@@ -1016,7 +986,6 @@ async fn c8y_mapper_main_service_alarm() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the service upfront
     mqtt.send(MqttMessage::new(
@@ -1025,7 +994,6 @@ async fn c8y_mapper_main_service_alarm() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration messages
 
     mqtt.send(MqttMessage::new(
         &"te/device/main/service/service_main/a/custom_alarm"
@@ -1059,7 +1027,6 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main///a/complex_text_alarm"),
@@ -1092,7 +1059,6 @@ async fn mapper_handles_multiple_modules_in_update_list_sm_requests() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Publish multiple modules software update via JSON over MQTT.
     mqtt.send(MqttMessage::new(
@@ -1180,7 +1146,6 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, mut fs, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
     mqtt.send(MqttMessage::new(
@@ -1189,7 +1154,6 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
 
     // Simulate tedge-agent health status message
     mqtt.send(
@@ -1201,9 +1165,6 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     )
     .await
     .expect("Send failed");
-
-    // Skip tedge-agent health status mapping
-    mqtt.skip(1).await;
 
     // Simulate FsEvent for the creation of a new operation file
     fs.send(FsWatchEvent::FileCreated(
@@ -1272,7 +1233,6 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, mut fs, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register the device upfront
     mqtt.send(MqttMessage::new(
@@ -1281,9 +1241,14 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
 
-    // Add a new operation for the child device
+    // Assert that the creation of the operation file alone doesn't trigger the supported operations update
+
+    // first, if any 114 messages have been sent up until now, ignore them
+    mqtt.ignore_received(("c8y/s/us/test-device:device:child1", "114"))
+        .await;
+
+    // Then add a new operation for the child device
     // Simulate FsEvent for the creation of a new operation file
     fs.send(FsWatchEvent::FileCreated(
         ttd.dir("operations")
@@ -1295,11 +1260,9 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     .await
     .expect("Send failed");
 
-    // Assert that the creation of the operation file alone doesn't trigger the supported operations update
-    assert!(
-        mqtt.recv().await.is_none(),
-        "No messages expected on operation file creation event"
-    );
+    // Finally assert that creating the file did not trigger the update
+    assert_received_not_contains_str(&mut mqtt, [("c8y/s/us/test-device:device:child1", "114")])
+        .await;
 
     // Send any command metadata message to trigger the supported operations update
     mqtt.send(
@@ -1338,7 +1301,6 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, mut fs, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // Register nested child device
     mqtt.send(
@@ -1449,8 +1411,6 @@ async fn custom_operation_without_timeout_successful() {
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
         &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
@@ -1458,6 +1418,13 @@ async fn custom_operation_without_timeout_successful() {
     ))
     .await
     .expect("Send failed");
+
+    let _ = tokio::time::timeout(TEST_TIMEOUT_MS, async {
+        loop {
+            mqtt.recv().await;
+        }
+    })
+    .await;
 
     // Expect `501` smartrest message on `c8y/s/us`.
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
@@ -1510,8 +1477,6 @@ async fn custom_operation_with_timeout_successful() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
@@ -1571,8 +1536,6 @@ async fn custom_operation_timeout_sigterm() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
@@ -1640,8 +1603,6 @@ async fn custom_operation_timeout_sigkill() {
 
     let mut mqtt = mqtt.with_timeout(Duration::from_secs(5));
 
-    skip_init_messages(&mut mqtt).await;
-
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
         &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
@@ -1704,8 +1665,6 @@ async fn json_custom_operation_status_update_with_operation_id() {
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     // Simulate c8y_Command SmartREST request
     let input_message = MqttMessage::new(
         &Topic::new_unchecked("c8y/devicecontrol/notifications"),
@@ -1750,8 +1709,6 @@ async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() 
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     // Simulate c8y_Command SmartREST request
     let operation_1 = json!({
@@ -1801,33 +1758,26 @@ async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() 
     for _ in 0..6 {
         messages.push(mqtt.recv().await.unwrap());
     }
-    let (mut requests, mut responses): (Vec<_>, Vec<_>) = messages
-        .iter()
-        .map(|msg| (msg.topic.name.as_str(), msg.payload.as_str().unwrap()))
-        .partition(|(_topic, payload)| payload.starts_with("504,"));
 
-    // The messages might get processed out of order, we don't care about the ordering of the messages
-    requests.sort();
-    responses.sort();
-
-    assert_eq!(
-        requests,
+    assert_received_contains_str(
+        &mut mqtt,
         [
             ("c8y/s/us", "504,111"),
             ("c8y/s/us", "504,222"),
             ("c8y/s/us", "504,333"),
-        ]
-    );
-    // escapes: we input JSON over MQTT, but emit Smartrest, thus initial: `do something "1"` becomes `"do something
-    // ""1""\n"` (outer "" for the Smartrest record field, and then inside double quotes escape a single quote)
-    assert_eq!(
-        responses,
+        ],
+    )
+    .await;
+
+    assert_received_contains_str(
+        &mut mqtt,
         [
             ("c8y/s/us", "506,111,\"do something \"\"1\"\"\n\""),
             ("c8y/s/us", "506,222,\"do something \"\"2\"\"\n\""),
             ("c8y/s/us", "506,333,\"do something \"\"3\"\"\n\""),
-        ]
-    );
+        ],
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -1852,8 +1802,6 @@ async fn json_custom_operation_status_update_with_operation_name() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     // Simulate c8y_Command SmartREST request
     let input_message = MqttMessage::new(
@@ -1905,8 +1853,6 @@ async fn json_custom_operation_skip_status_update() {
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     // Simulate c8y_Command SmartREST request
     let input_message = MqttMessage::new(
         &Topic::new_unchecked("c8y/devicecontrol/notifications"),
@@ -1925,9 +1871,8 @@ async fn json_custom_operation_skip_status_update() {
     );
     mqtt.send(input_message).await.expect("Send failed");
 
-    // No MQTT message should be sent
-    let recv = mqtt.recv().await;
-    assert!(recv.is_none());
+    // No MQTT message should be sent related to the operation
+    assert_received_not_contains_str(&mut mqtt, [("c8y/s/us", "1234")]).await;
 }
 
 #[tokio::test]
@@ -1953,8 +1898,6 @@ async fn json_custom_operation_status_update_with_custom_topic() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     // Simulate c8y_Command SmartREST request
     let input_message = MqttMessage::new(
@@ -2007,8 +1950,6 @@ async fn mapper_converts_custom_operation_for_main_device() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     // indicate that main device supports the operation
     let capability_message =
@@ -2080,8 +2021,6 @@ async fn mapper_converts_custom_operation_with_combined_input() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     // indicate that main device supports the operation
     let capability_message =
@@ -2162,8 +2101,6 @@ async fn mapper_converts_custom_operation_for_main_device_without_workflow_input
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     // indicate that main device supports the operation
     let capability_message =
         MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/command"), "{}");
@@ -2231,8 +2168,6 @@ async fn mapper_converts_custom_operation_for_main_device_with_invalid_workflow_
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     // indicate that main device supports the operation
     let capability_message =
         MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/command"), "{}");
@@ -2289,8 +2224,6 @@ async fn mapper_converts_custom_operation_for_child_device() {
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     //register child device
     let reg_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/child1//"),
@@ -2302,8 +2235,6 @@ async fn mapper_converts_custom_operation_for_child_device() {
         .to_string(),
     );
     mqtt.send(reg_message).await.unwrap();
-
-    mqtt.skip(1).await;
 
     // indicate that child device supports the operation
     let capability_message = MqttMessage::new(
@@ -2359,7 +2290,6 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     let reg_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/immediate_child//"),
@@ -2417,7 +2347,6 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     let reg_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/immediate_child//"),
@@ -2484,7 +2413,6 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     let reg_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/immediate_child//"),
@@ -2527,8 +2455,6 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
         .await
         .unwrap();
 
-    mqtt.skip(3).await;
-
     // Expect child device service creating minor temperature alarm messages
     assert_received_contains_str(
         &mut mqtt,
@@ -2546,7 +2472,6 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     let reg_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/immediate_child//"),
@@ -2588,8 +2513,6 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     ))
     .await
     .unwrap();
-
-    mqtt.skip(3).await;
 
     // Expect nested child device service creating the event messages
     assert_received_includes_json(
@@ -2634,7 +2557,6 @@ async fn mapper_processes_operations_concurrently() {
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // simulate many successful operations that needs to be handled by the mapper
     for i in 0..num_operations {
@@ -2685,7 +2607,6 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
     spawn_dummy_c8y_http_proxy(http);
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // simulate many successful operations that needs to be handled by the mapper
     mqtt.send(MqttMessage::new(
@@ -2773,7 +2694,6 @@ async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     // should hold for any operation type
     mqtt.send(MqttMessage::new(
@@ -2795,7 +2715,6 @@ async fn mapper_doesnt_send_duplicate_operation_status() {
     let TestHandle { mqtt, .. } = test_handle;
 
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    skip_init_messages(&mut mqtt).await;
 
     for _ in 0..3 {
         mqtt.send(
@@ -2809,14 +2728,10 @@ async fn mapper_doesnt_send_duplicate_operation_status() {
         .unwrap();
     }
 
-    assert_eq!(
-        mqtt.recv().await.unwrap().payload_str().unwrap(),
-        "501,c8y_UploadConfigFile"
-    );
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_UploadConfigFile")]).await;
 
-    while let Some(msg) = mqtt.recv().await {
-        assert_ne!(msg.payload_str().unwrap(), "501,c8y_UploadConfigFile");
-    }
+    // there's no duplicate after the 1st message was removed by the assert above
+    assert_received_not_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_UploadConfigFile")]).await;
 }
 
 #[tokio::test]
@@ -2825,8 +2740,6 @@ async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_devi
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    skip_init_messages(&mut mqtt).await;
 
     // Simulate config_snapshot cmd metadata message
     mqtt.send(MqttMessage::new(
@@ -2887,8 +2800,6 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     // Register the device upfront
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/child1//"),
@@ -2896,7 +2807,6 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip the mapped registration message
 
     // Simulate config_snapshot cmd metadata message
     mqtt.send(MqttMessage::new(
@@ -3019,8 +2929,6 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     let TestHandle { mqtt, .. } = test_handle;
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    skip_init_messages(&mut mqtt).await;
-
     // Register the tedge-mapper-c8y service upfront
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y"),
@@ -3028,7 +2936,6 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(1).await; // Skip 102 message
 
     // Also register other entities
     mqtt.send(MqttMessage::new(
@@ -3049,7 +2956,6 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     ))
     .await
     .expect("Send failed");
-    mqtt.skip(3).await; // Skip registration messages
 
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y/signal/sync"),
@@ -3141,7 +3047,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(tmp_dir: &TempTedgeDir, init: bool) -
 }
 
 pub(crate) struct TestHandle {
-    pub mqtt: MockMqttBox,
+    pub mqtt: TestMqttBox<MockMqttBoxUnbuffered>,
     pub http: FakeServerBox<HttpRequest, HttpResult>,
     pub fs: SimpleMessageBox<NoMessage, FsWatchEvent>,
     pub ul: FakeServerBox<IdUploadRequest, IdUploadResult>,
@@ -3180,7 +3086,7 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 pub(crate) struct TestHandleBuilder {
     pub c8y: C8yMapperBuilder,
     pub flows: FlowsMapperBuilder,
-    pub mqtt: MockMqtt,
+    pub mqtt: MockMqttBoxBuilder,
     pub http: FakeServerBoxBuilder<HttpRequest, HttpResult>,
     pub fs: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent>,
     pub ul: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult>,
@@ -3200,7 +3106,7 @@ pub(crate) async fn c8y_mapper_builder(
         tmp_dir.dir(".tedge-mapper-c8y");
     }
 
-    let mut mqtt_builder = MockMqtt::new();
+    let mut mqtt_builder = MockMqttBoxBuilder::new();
     let mut http_builder: FakeServerBoxBuilder<HttpRequest, HttpResult> =
         FakeServerBoxBuilder::default();
     let mut fs_watcher_builder: SimpleMessageBoxBuilder<NoMessage, FsWatchEvent> =
@@ -3340,11 +3246,6 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     )
 }
 
-pub(crate) async fn skip_init_messages(mqtt: &mut impl MessageReceiver<MqttMessage>) {
-    //Skip all the init messages by still doing loose assertions
-    assert_received_contains_str(mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
-}
-
 pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, HttpResult>) {
     tokio::spawn(async move {
         while let Some(request) = http.recv().await {
@@ -3385,14 +3286,14 @@ pub(crate) fn spawn_dummy_c8y_http_proxy(mut http: FakeServerBox<HttpRequest, Ht
     });
 }
 
-pub(crate) struct MockMqtt {
+pub(crate) struct MockMqttBoxBuilder {
     input_sender: mpsc::Sender<MqttRequest>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     output_sender: Vec<(TopicFilter, DynSender<MqttMessage>)>,
     input_receiver: LoggingReceiver<MqttRequest>,
 }
 
-impl MockMqtt {
+impl MockMqttBoxBuilder {
     pub fn new() -> Self {
         let (input_sender, input_receiver) = mpsc::channel(16);
         let (signal_sender, signal_receiver) = mpsc::channel(4);
@@ -3400,7 +3301,7 @@ impl MockMqtt {
         let input_receiver =
             LoggingReceiver::new("MockMQTT".to_string(), input_receiver, signal_receiver);
 
-        MockMqtt {
+        MockMqttBoxBuilder {
             input_sender,
             signal_sender,
             output_sender,
@@ -3408,31 +3309,31 @@ impl MockMqtt {
         }
     }
 
-    pub fn build(self) -> MockMqttBox {
+    pub fn build(self) -> TestMqttBox<MockMqttBoxUnbuffered> {
         let mut ignore_topics = TopicFilter::empty();
         ignore_topics.add_unchecked("te/+/+/+/+/status/flows");
 
-        MockMqttBox {
+        TestMqttBox::new(MockMqttBoxUnbuffered {
             ignore_topics,
             receiver: self.input_receiver,
             senders: self.output_sender,
-        }
+        })
     }
 }
 
-impl MessageSource<MqttMessage, TopicFilter> for MockMqtt {
+impl MessageSource<MqttMessage, TopicFilter> for MockMqttBoxBuilder {
     fn connect_sink(&mut self, config: TopicFilter, peer: &impl MessageSink<MqttMessage>) {
         self.output_sender.push((config, peer.get_sender()));
     }
 }
 
-impl MessageSink<MqttMessage> for MockMqtt {
+impl MessageSink<MqttMessage> for MockMqttBoxBuilder {
     fn get_sender(&self) -> DynSender<MqttMessage> {
         self.input_sender.sender_clone()
     }
 }
 
-impl MessageSource<MqttMessage, &mut DynSubscriptions> for MockMqtt {
+impl MessageSource<MqttMessage, &mut DynSubscriptions> for MockMqttBoxBuilder {
     fn connect_sink(
         &mut self,
         config: &mut DynSubscriptions,
@@ -3445,26 +3346,26 @@ impl MessageSource<MqttMessage, &mut DynSubscriptions> for MockMqtt {
     }
 }
 
-impl MessageSink<MqttRequest> for MockMqtt {
+impl MessageSink<MqttRequest> for MockMqttBoxBuilder {
     fn get_sender(&self) -> DynSender<MqttRequest> {
         self.input_sender.sender_clone()
     }
 }
 
-impl RuntimeRequestSink for MockMqtt {
+impl RuntimeRequestSink for MockMqttBoxBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
         self.signal_sender.sender_clone()
     }
 }
 
-pub struct MockMqttBox {
+pub struct MockMqttBoxUnbuffered {
     pub(crate) ignore_topics: TopicFilter,
     pub(crate) receiver: LoggingReceiver<MqttRequest>,
     pub(crate) senders: Vec<(TopicFilter, DynSender<MqttMessage>)>,
 }
 
 #[async_trait::async_trait]
-impl MessageReceiver<MqttMessage> for MockMqttBox {
+impl MessageReceiver<MqttMessage> for MockMqttBoxUnbuffered {
     async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
         loop {
             let message = self.receiver.try_recv().await;
@@ -3504,7 +3405,7 @@ impl MessageReceiver<MqttMessage> for MockMqttBox {
 }
 
 #[async_trait::async_trait]
-impl Sender<MqttMessage> for MockMqttBox {
+impl Sender<MqttMessage> for MockMqttBoxUnbuffered {
     async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
         for (topic, sender) in self.senders.iter_mut() {
             if topic.accept(&message) {

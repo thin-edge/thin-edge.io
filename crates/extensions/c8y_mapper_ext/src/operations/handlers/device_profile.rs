@@ -124,20 +124,18 @@ impl OperationContext {
 #[cfg(test)]
 mod tests {
     use crate::config::C8yMapperConfig;
-    use crate::tests::skip_init_messages;
     use crate::tests::spawn_c8y_mapper_actor;
     use crate::tests::spawn_c8y_mapper_actor_with_config;
     use crate::tests::test_mapper_config;
     use crate::tests::TestHandle;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
 
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
     use std::time::Duration;
-    use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
-    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
-    use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -150,8 +148,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate device_profile cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -174,8 +170,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Register the device upfront
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1//"),
@@ -183,7 +177,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
 
         // Simulate device_profile cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -226,8 +219,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -338,8 +329,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // The child device must be registered first
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1//"),
@@ -347,8 +336,6 @@ mod tests {
         ))
         .await
         .expect("fail to register the child-device");
-
-        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -459,8 +446,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
             &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
@@ -567,8 +552,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -680,8 +663,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
             &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
@@ -789,8 +770,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
             &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
@@ -886,8 +865,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
             &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
@@ -957,8 +934,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate c8y_DeviceProfile operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -1052,8 +1027,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -1197,8 +1170,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // The child device must be registered first
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1//"),
@@ -1206,8 +1177,6 @@ mod tests {
         ))
         .await
         .expect("fail to register the child-device");
-
-        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -1359,8 +1328,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Simulate config_snapshot command with "executing" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/device_profile/c8y-mapper-123456"),
@@ -1500,8 +1467,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Simulate config_update command with "successful" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/device_profile/c8y-mapper-123456"),
@@ -1602,8 +1567,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // The child device must be registered first
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1//"),
@@ -1611,8 +1574,6 @@ mod tests {
         ))
         .await
         .expect("fail to register the child-device");
-
-        mqtt.skip(1).await; // Skip child device registration messages
 
         // Simulate config_update command with "successful" state
         mqtt.send(MqttMessage::new(
@@ -1719,8 +1680,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Simulate config_update command with "successful" state
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/main///cmd/device_profile/c8y-mapper-123456"),
@@ -1820,8 +1779,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate config_update command with "successful" state
         mqtt.send(MqttMessage::new(

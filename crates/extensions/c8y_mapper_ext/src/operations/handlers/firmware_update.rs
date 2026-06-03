@@ -93,11 +93,10 @@ mod tests {
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
     use std::time::Duration;
-    use tedge_actors::test_helpers::MessageReceiverExt;
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
-    use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
-    use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
@@ -110,8 +109,6 @@ mod tests {
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate firmware_update cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -134,8 +131,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Register the device upfront
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1//"),
@@ -143,7 +138,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
 
         // Simulate firmware_update cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -184,8 +178,6 @@ mod tests {
 
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate c8y_Firmware operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -231,8 +223,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Simulate c8y_Firmware operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
             &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
@@ -277,8 +267,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-        skip_init_messages(&mut mqtt).await;
-
         // Register the device upfront
         mqtt.send(MqttMessage::new(
             &Topic::new_unchecked("te/device/child1//"),
@@ -286,7 +274,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
 
         // Simulate firmware_update cmd metadata message
         mqtt.send(MqttMessage::new(
@@ -295,8 +282,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-
-        mqtt.skip(1).await; // Skip the installed firmware message
 
         // Simulate c8y_Firmware operation delivered via JSON over MQTT
         mqtt.send(MqttMessage::new(
@@ -342,7 +327,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate firmware_update command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -392,7 +376,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Register the device upfront
         mqtt.send(MqttMessage::new(
@@ -401,7 +384,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
 
         // Simulate log_upload command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -462,7 +444,6 @@ mod tests {
         let TestHandle { mqtt, .. } = test_handle;
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate firmware_update command with "executing" state
         mqtt.send(MqttMessage::new(
@@ -509,7 +490,6 @@ mod tests {
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate firmware_update command with "successful" state
         mqtt.send(MqttMessage::new(
@@ -549,7 +529,6 @@ mod tests {
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Register the device upfront
         mqtt.send(MqttMessage::new(
@@ -558,7 +537,6 @@ mod tests {
         ))
         .await
         .expect("Send failed");
-        mqtt.skip(1).await; // Skip the mapped registration message
 
         // Simulate log_upload command with "successful" state
         mqtt.send(MqttMessage::new(
@@ -602,7 +580,6 @@ mod tests {
         spawn_dummy_c8y_http_proxy(http);
 
         let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-        skip_init_messages(&mut mqtt).await;
 
         // Simulate firmware_update command with "successful" state
         mqtt.send(MqttMessage::new(

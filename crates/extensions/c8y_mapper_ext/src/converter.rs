@@ -1523,6 +1523,7 @@ pub(crate) mod tests {
     use tedge_http_ext::HttpRequest;
     use tedge_http_ext::HttpResult;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
+    use tedge_mqtt_ext::test_helpers::assert_messages_present;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::QoS;
     use tedge_mqtt_ext::Topic;
@@ -1664,7 +1665,7 @@ pub(crate) mod tests {
 
         let messages = converter.convert(&in_message).await;
 
-        assert_messages_matching(
+        assert_messages_present(
             &messages,
             [(
                 "c8y/s/us",
@@ -1700,7 +1701,7 @@ pub(crate) mod tests {
 
         let messages = converter.convert(&in_message).await;
 
-        assert_messages_matching(
+        assert_messages_present(
             &messages,
             [(
                 "c8y/s/us",

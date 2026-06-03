@@ -4,6 +4,9 @@ use mqtt_channel::TopicFilter;
 use std::fmt::Debug;
 use tedge_actors::MessageReceiver;
 
+pub mod test_mqtt_box;
+pub use test_mqtt_box::TestMqttBox;
+
 pub async fn assert_received_contains_str<'a, M, I>(
     messages: &mut dyn MessageReceiver<M>,
     expected: I,
@@ -102,36 +105,7 @@ where
     loop {
         match (messages_iter.next(), expected_iter.next()) {
             (Some(message), Some(expected_msg)) => {
-                let message_topic = &message.topic.name;
-                let expected_topic = expected_msg.0;
-                match expected_msg.1 {
-                    MessagePayloadMatcher::StringMessage(str_payload) => {
-                        assert_message_contains_str(message, (expected_topic, str_payload))
-                    }
-                    MessagePayloadMatcher::JsonMessage(json_payload) => {
-                        assert_message_includes_json(message, (expected_topic, json_payload))
-                    }
-                    MessagePayloadMatcher::Empty => {
-                        assert_eq!(
-                            message_topic, expected_topic,
-                            "Received message on topic: {} instead of {}",
-                            message_topic, expected_topic
-                        );
-                        assert!(
-                            message.payload_bytes().is_empty(),
-                            "Received non-empty payload while expecting empty payload on {}",
-                            message_topic
-                        )
-                    }
-                    MessagePayloadMatcher::Skip => {
-                        assert_eq!(
-                            message_topic, expected_topic,
-                            "Received message on topic: {} instead of {}",
-                            message_topic, expected_topic
-                        );
-                        // Skipping payload validation
-                    }
-                }
+                match_message_payloads(message, expected_msg);
             }
             (None, Some(expected_msg)) => {
                 panic!(
@@ -146,6 +120,75 @@ where
                 )
             }
             _ => return,
+        }
+    }
+}
+
+/// Assert that all `expected` messages are present in `messages`, with possible gaps in-between, filled with other
+/// unrelated messages.
+///
+/// This should be used instead of [`assert_messages_matching`] if we don't want to strictly assert that no other
+/// messages should be published, except the ones we're asserting.
+pub fn assert_messages_present<'a, M, I>(messages: M, expected: I)
+where
+    M: IntoIterator<Item = &'a MqttMessage>,
+    I: IntoIterator<Item = (&'static str, MessagePayloadMatcher)>,
+{
+    let mut messages_iter = messages.into_iter();
+    let expected_iter = expected.into_iter();
+
+    for expected_msg in expected_iter {
+        let expected_topic = expected_msg.0;
+
+        // Consume messages until we find one matching the expected topic.
+        let mut found = false;
+        for message in messages_iter.by_ref() {
+            if message.topic.name == expected_topic {
+                match_message_payloads(message, expected_msg);
+                found = true;
+                break;
+            }
+            // otherwise skip unrelated message
+        }
+
+        if !found {
+            panic!(
+                "Input messages exhausted while expecting message on topic: {:?}",
+                expected_topic
+            );
+        }
+    }
+}
+
+fn match_message_payloads(message: &MqttMessage, expected_msg: (&str, MessagePayloadMatcher)) {
+    let message_topic = &message.topic.name;
+    let expected_topic = expected_msg.0;
+    match expected_msg.1 {
+        MessagePayloadMatcher::StringMessage(str_payload) => {
+            assert_message_contains_str(message, (expected_topic, str_payload))
+        }
+        MessagePayloadMatcher::JsonMessage(json_payload) => {
+            assert_message_includes_json(message, (expected_topic, json_payload))
+        }
+        MessagePayloadMatcher::Empty => {
+            assert_eq!(
+                message_topic, expected_topic,
+                "Received message on topic: {} instead of {}",
+                message_topic, expected_topic
+            );
+            assert!(
+                message.payload_bytes().is_empty(),
+                "Received non-empty payload while expecting empty payload on {}",
+                message_topic
+            )
+        }
+        MessagePayloadMatcher::Skip => {
+            assert_eq!(
+                message_topic, expected_topic,
+                "Received message on topic: {} instead of {}",
+                message_topic, expected_topic
+            );
+            // Skipping payload validation
         }
     }
 }

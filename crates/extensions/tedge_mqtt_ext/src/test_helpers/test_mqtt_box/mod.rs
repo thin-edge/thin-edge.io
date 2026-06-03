@@ -1,0 +1,175 @@
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
+
+use anyhow::Context as _;
+use assert_json_diff::assert_json_matches_no_panic;
+
+use tedge_actors::test_helpers::MessageReceiverExt;
+use tedge_actors::test_helpers::TimedMessageBox;
+use tedge_actors::ChannelError;
+use tedge_actors::MessageReceiver;
+use tedge_actors::RuntimeRequest;
+use tedge_actors::Sender;
+
+use crate::MqttMessage;
+use crate::TopicFilter;
+
+mod asserts;
+pub use asserts::*;
+
+/// An MQTT message box that stores received messages in a buffer and supports
+/// assertions for stored messages.
+///
+/// To enable maximum flexibility in test assertions, where most tests don't
+/// care about the all the messages, only ones they're directly testing, we want
+/// to allow these tests to ignore these messages without losing them (in case
+/// something else asserts them later). This is most easily done by gathering
+/// all received messages to a buffer and then choosing to drop selected
+/// messages only once they're asserted.
+pub struct TestMqttBox<M> {
+    mqtt: M,
+    messages: Arc<Mutex<VecDeque<MqttMessage>>>,
+}
+
+impl<M> TestMqttBox<M>
+where
+    M: MessageReceiver<MqttMessage> + Send,
+{
+    pub fn new(mqtt: M) -> Self {
+        Self {
+            mqtt,
+            messages: Default::default(),
+        }
+    }
+
+    pub fn into_unbuffered(self) -> M {
+        self.mqtt
+    }
+
+    pub fn with_timeout(self, duration: Duration) -> TestMqttBox<TimedMessageBox<M>> {
+        // instead of putting timeout wrapper on top, put it on box
+        TestMqttBox {
+            mqtt: self.mqtt.with_timeout(duration),
+            messages: self.messages,
+        }
+    }
+
+    /// Receives messages with a short timeout.
+    ///
+    /// The short timeout is for emulating receiving messages which are "immediately ready". If wanted
+    /// message is not immediately ready, use normal recv which waits for configured timeout.
+    pub async fn recv_short(&mut self) {
+        while tokio::time::timeout(Duration::from_millis(10), self.recv())
+            .await
+            .is_ok()
+        {}
+    }
+
+    /// Ignore already received messages.
+    ///
+    /// Can be used before performing an operation that produces a message of a certain type, to ignore other possibly
+    /// received messages of the same type, to next assert that the next message happened due to the operation we
+    /// expect.
+    pub async fn ignore_received(&mut self, expected: (&str, &str)) -> bool {
+        let filter = TopicFilter::new_unchecked(expected.0);
+        self.any(|m| filter.accept(m))
+    }
+
+    #[track_caller]
+    pub fn any<P>(&mut self, predicate: P) -> bool
+    where
+        P: Fn(&MqttMessage) -> bool,
+    {
+        let mut messages = self.messages.lock().unwrap();
+        let Some(pos) = messages.iter().position(predicate) else {
+            return false;
+        };
+        messages.remove(pos);
+        true
+    }
+
+    #[track_caller]
+    pub fn none<P>(&mut self, predicate: P) -> bool
+    where
+        P: Fn(&MqttMessage) -> bool,
+    {
+        let messages = self.messages.lock().unwrap();
+        !messages.iter().any(predicate)
+    }
+
+    #[track_caller]
+    pub fn contains_message(&mut self, topic_filter: &str, payload: &str) -> bool {
+        self.any(|m| {
+            TopicFilter::new_unchecked(topic_filter).accept(m)
+                && m.payload_str().unwrap().contains(payload)
+        })
+    }
+
+    #[track_caller]
+    pub fn contains_json<S>(&mut self, expected: &(S, serde_json::Value)) -> bool
+    where
+        S: AsRef<str>,
+    {
+        self.any(|m| message_includes_json(m, expected).is_ok())
+    }
+}
+
+pub fn message_includes_json<S>(
+    message: &MqttMessage,
+    expected: &(S, serde_json::Value),
+) -> anyhow::Result<()>
+where
+    S: AsRef<str>,
+{
+    anyhow::ensure!(
+        TopicFilter::new_unchecked(expected.0.as_ref()).accept(message),
+        "\nReceived unexpected message: {:?}",
+        message
+    );
+
+    let payload = serde_json::from_str::<serde_json::Value>(
+        message.payload_str().context("non UTF-8 payload")?,
+    )
+    .expect("non JSON payload");
+
+    assert_json_matches_no_panic(
+        &payload,
+        &expected.1,
+        assert_json_diff::Config::new(assert_json_diff::CompareMode::Inclusive),
+    )
+    .map_err(|e| anyhow::anyhow!(e))
+}
+
+#[async_trait::async_trait]
+impl<M> MessageReceiver<MqttMessage> for TestMqttBox<M>
+where
+    M: MessageReceiver<MqttMessage> + Send,
+{
+    async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
+        let message = self.mqtt.try_recv().await?;
+        if let Some(message) = &message {
+            self.messages.lock().unwrap().push_back(message.clone());
+        }
+        Ok(message)
+    }
+
+    async fn recv(&mut self) -> Option<MqttMessage> {
+        self.try_recv().await.unwrap_or_default()
+    }
+
+    async fn recv_signal(&mut self) -> Option<RuntimeRequest> {
+        self.mqtt.recv_signal().await
+    }
+}
+
+#[async_trait::async_trait]
+impl<M> Sender<MqttMessage> for TestMqttBox<M>
+where
+    M: Sender<MqttMessage>,
+{
+    async fn send(&mut self, message: MqttMessage) -> Result<(), ChannelError> {
+        self.mqtt.send(message).await
+    }
+}

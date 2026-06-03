@@ -7,7 +7,6 @@ use serde_json::json;
 use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::FakeServerBoxBuilder;
-use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::WithTimeout;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -17,8 +16,9 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
-use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
-use tedge_mqtt_ext::test_helpers::assert_received_includes_json;
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
+use tedge_mqtt_ext::test_helpers::TestMqttBox;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::Timeout;
@@ -53,7 +53,7 @@ async fn main_device_sends_heartbeat() {
     let mut mqtt = handlers.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
     let mut timer = handlers.timer_box;
 
-    mqtt.skip(1).await; // SmartREST 117
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "117")]).await;
     timer_recv(&mut timer).await; // First timer request for main device
 
     // tedge-agent service is up
@@ -97,7 +97,7 @@ async fn main_device_does_not_send_heartbeat_when_service_status_is_not_up() {
     let mut mqtt = handlers.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
     let mut timer = handlers.timer_box;
 
-    mqtt.skip(1).await; // SmartREST 117
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "117")]).await;
     timer_recv(&mut timer).await; // First timer request for main device
 
     // tedge-agent service is DOWN
@@ -137,7 +137,7 @@ async fn main_device_sends_heartbeat_based_on_custom_endpoint() {
     let mut mqtt = handlers.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
     let mut timer = handlers.timer_box;
 
-    mqtt.skip(1).await; // SmartREST 117
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "117")]).await;
     timer_recv(&mut timer).await; // First timer request for main device
 
     // registration message
@@ -179,7 +179,7 @@ async fn only_one_timer_created_when_registration_message_indicates_same_health_
     let mut mqtt = handlers.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
     let mut timer = handlers.timer_box;
 
-    mqtt.skip(1).await; // SmartREST 117
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "117")]).await;
 
     // Send the registration messages with the same health endpoint
     let registration_message = MqttMessage::new(
@@ -212,7 +212,7 @@ async fn child_device_sends_heartbeat() {
     let mut mqtt = handlers.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
     let mut timer = handlers.timer_box;
 
-    mqtt.skip(1).await; // SmartREST 117 for the main device
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "117")]).await;
     timer_recv(&mut timer).await; // First timer request for the main device
 
     // registration message
@@ -273,7 +273,7 @@ async fn child_device_does_not_send_heartbeat_when_service_status_is_not_up() {
     let mut mqtt = handlers.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
     let mut timer = handlers.timer_box;
 
-    mqtt.skip(1).await; // SmartREST 117 for the main device
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "117")]).await;
     timer_recv(&mut timer).await; // First timer request for the main device
 
     // registration message
@@ -283,7 +283,7 @@ async fn child_device_does_not_send_heartbeat_when_service_status_is_not_up() {
     );
     mqtt.send(registration_message).await.unwrap();
 
-    mqtt.skip(1).await; // SmartREST 117 for the child device
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us/test-device:device:child1", "117")]).await;
 
     // tedge-agent of the child device is UNKNOWN
     let health_message = MqttMessage::new(
@@ -322,7 +322,7 @@ async fn child_device_sends_heartbeat_based_on_custom_endpoint() {
     let mut mqtt = handlers.mqtt_box.with_timeout(TEST_TIMEOUT_MS);
     let mut timer = handlers.timer_box;
 
-    mqtt.skip(1).await; // SmartREST 117 for the main device
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "117")]).await;
     timer_recv(&mut timer).await; // First timer request for the main device
 
     // registration message
@@ -413,7 +413,7 @@ async fn timer_send(timer: &mut FakeServerBox<TimerStart, TimerComplete>, event:
 }
 
 struct TestHandler {
-    pub mqtt_box: SimpleMessageBox<MqttMessage, MqttMessage>,
+    pub mqtt_box: TestMqttBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     pub timer_box: FakeServerBox<TimerStart, TimerComplete>,
 }
 
@@ -426,11 +426,13 @@ async fn spawn_availability_actor(config: AvailabilityConfig) -> TestHandler {
     let availability_builder =
         AvailabilityBuilder::new(config, &mut mqtt_builder, &mut timer_builder);
 
+    let mqtt_box = TestMqttBox::new(mqtt_builder.build());
+
     let actor = availability_builder.build();
     tokio::spawn(async move { actor.run().await });
 
     TestHandler {
-        mqtt_box: mqtt_builder.build(),
+        mqtt_box,
         timer_box: timer_builder.build(),
     }
 }
