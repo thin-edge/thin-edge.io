@@ -1,0 +1,15 @@
+user = "tedge"
+group = "tedge"
+
+[init]
+name = "sh-c-systemd"
+is_available = ["/bin/sh", "-c", "systemctl", "--version"]
+restart = ["/bin/sh", "-c", "systemctl restart {}"]
+stop =  ["/bin/sh", "-c", "systemctl stop {}"]
+start =  ["/bin/sh", "-c", "systemctl start {}"]
+enable =  ["/bin/sh", "-c", "systemctl enable {}"]
+disable =  ["/bin/sh", "-c", "systemctl disable {}"]
+is_active = ["/bin/sh", "-c", "systemctl is-active {}"]
+
+[system]
+reboot = ["/usr/bin/echo", "no-op"]
