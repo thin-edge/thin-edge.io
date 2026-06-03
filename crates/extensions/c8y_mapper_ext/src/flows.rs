@@ -1,6 +1,5 @@
 use crate::actor::C8yMapperBuilder;
 use tedge_flows::ConnectedFlowRegistry;
-use tedge_flows::FlowRegistryExt;
 use tedge_flows::UpdateFlowRegistryError;
 use tedge_mqtt_ext::TopicFilter;
 

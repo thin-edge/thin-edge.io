@@ -21,6 +21,7 @@ use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
+use tedge_utils::paths::TedgePaths;
 use tempfile::TempDir;
 use tracing::Subscriber;
 use tracing_subscriber::layer::SubscriberExt;
@@ -230,8 +231,9 @@ async fn stats_not_dumped_before_300_seconds() {
 
 async fn flows_builder(config_dir: &Path) -> FlowsMapperBuilder {
     let mapper_config = HashMap::new();
-    let flows = ConnectedFlowRegistry::new(mapper_config, Utf8Path::from_path(config_dir).unwrap())
-        .unwrap();
+    let flows_path = Utf8Path::from_path(config_dir).unwrap();
+    let flows_dir = TedgePaths::from_root_with_defaults(flows_path, "", "").root_dir();
+    let flows = ConnectedFlowRegistry::new(mapper_config, flows_dir).unwrap();
     let config = FlowsMapperConfig::default();
     FlowsMapperBuilder::try_new(flows, config)
         .await

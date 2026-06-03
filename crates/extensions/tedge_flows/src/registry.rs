@@ -13,7 +13,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use tedge_utils::file;
 use tedge_utils::paths::PathsError;
-use tedge_utils::paths::TedgePaths;
 use tracing::error;
 use tracing::info;
 
@@ -124,24 +123,6 @@ pub trait FlowRegistryExt: FlowRegistry {
         path: &Utf8Path,
         config: FlowConfig,
     );
-
-    /// Create a builtin flow definition in the flow configuration directory.
-    ///
-    /// This flow definition is persisted as a file
-    /// with the given name, a `.toml` extension and the given content.
-    ///
-    /// A copy of the flow is also persisted with the name and a `.toml.template` extension.
-    /// This template can be used by used to derive and tune custom flows.
-    /// This template is also used by `tedge flows` as a witness for user updates:
-    /// if a flow definition differs with its template, then the flow as updated by the user is kept unchanged.
-    ///
-    /// Also, if a file exists with the same name and a `.toml.disabled` extension,
-    /// then the file for the builtin flow is not created: this is how a user can disable a builtin flow.
-    async fn persist_builtin_flow(
-        &mut self,
-        name: &str,
-        content: &str,
-    ) -> Result<(), UpdateFlowRegistryError>;
 
     /// Register a transformer that can be used as a builtin in flow steps
     fn register_builtin(&mut self, transformer: impl TransformerBuilder + Transformer);
@@ -310,19 +291,6 @@ impl<T: FlowRegistry + Send> FlowRegistryExt for T {
                 self.store_mut().add_unloaded(path.to_owned());
             }
         }
-    }
-
-    async fn persist_builtin_flow(
-        &mut self,
-        name: &str,
-        content: &str,
-    ) -> Result<(), UpdateFlowRegistryError> {
-        let dir = self.store().config_dir();
-        TedgePaths::from_root_with_defaults(dir, "", "")
-            .template_file(format!("{}.toml", name))?
-            .persist(content)
-            .await?;
-        Ok(())
     }
 
     fn register_builtin(&mut self, transformer: impl TransformerBuilder + Transformer) {

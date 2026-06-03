@@ -14,8 +14,10 @@ use crate::params::MapperParams;
 use crate::registry::FlowRegistry;
 use crate::registry::FlowStore;
 use crate::transformers::BuiltinTransformers;
+use crate::UpdateFlowRegistryError;
 use camino::Utf8Path;
 use std::time::SystemTime;
+use tedge_utils::paths::ManagedDir;
 use tedge_watch_ext::WatchRequest;
 use tokio::time::Instant;
 
@@ -145,6 +147,7 @@ impl ConnectedFlow {
 }
 
 pub struct ConnectedFlowRegistry {
+    flows_dir: ManagedDir,
     flows: FlowStore<ConnectedFlow>,
     builtins: BuiltinTransformers,
     mapper_params: Box<dyn MapperParams>,
@@ -153,13 +156,39 @@ pub struct ConnectedFlowRegistry {
 impl ConnectedFlowRegistry {
     pub fn new(
         mapper_params: impl MapperParams,
-        flows_dir: impl AsRef<Utf8Path>,
+        flows_dir: ManagedDir,
     ) -> Result<Self, std::io::Error> {
+        let flows = FlowStore::new(&flows_dir)?;
         Ok(ConnectedFlowRegistry {
-            flows: FlowStore::new(flows_dir)?,
+            flows_dir,
+            flows,
             builtins: BuiltinTransformers::default(),
             mapper_params: Box::new(mapper_params),
         })
+    }
+
+    /// Create a builtin flow definition in the flow configuration directory.
+    ///
+    /// This flow definition is persisted as a file
+    /// with the given name, a `.toml` extension and the given content.
+    ///
+    /// A copy of the flow is also persisted with the name and a `.toml.template` extension.
+    /// This template can be used by used to derive and tune custom flows.
+    /// This template is also used by `tedge flows` as a witness for user updates:
+    /// if a flow definition differs with its template, then the flow as updated by the user is kept unchanged.
+    ///
+    /// Also, if a file exists with the same name and a `.toml.disabled` extension,
+    /// then the file for the builtin flow is not created: this is how a user can disable a builtin flow.
+    pub async fn persist_builtin_flow(
+        &mut self,
+        name: &str,
+        content: &str,
+    ) -> Result<(), UpdateFlowRegistryError> {
+        self.flows_dir
+            .template_file(format!("{}.toml", name))?
+            .persist(content)
+            .await?;
+        Ok(())
     }
 }
 

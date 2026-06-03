@@ -290,7 +290,7 @@ pub(crate) async fn mapper_flow_registry(
 ) -> anyhow::Result<ConnectedFlowRegistry> {
     let flows_dir = tedge_flows::managed_flows_dir(mapper_dir);
     let mapper_config = effective_mapper_config(tedge_config, mapper_dir).await?;
-    let flows = flow_registry(mapper_config, &flows_dir).await?;
+    let flows = flow_registry(mapper_config, flows_dir).await?;
     Ok(flows)
 }
 
@@ -310,7 +310,7 @@ pub async fn test_cli_flow_registry(
 
 async fn flow_registry(
     mapper_config: Option<EffectiveMapperConfig>,
-    flows_dir: &ManagedDir,
+    flows_dir: ManagedDir,
 ) -> Result<ConnectedFlowRegistry, UpdateFlowRegistryError> {
     if let Err(err) = flows_dir.ensure().await {
         error!(
