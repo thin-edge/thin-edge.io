@@ -138,8 +138,6 @@ impl OperationContext {
 mod tests {
     use super::*;
     use crate::config::C8yMapperConfig;
-    use crate::tests::helpers::assert_received_contains_str;
-    use crate::tests::helpers::assert_received_includes_json;
     use crate::tests::*;
     use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
     use serde_json::json;
@@ -148,6 +146,8 @@ mod tests {
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
     use tedge_downloader_ext::DownloadResponse;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_uploader_ext::UploadResponse;

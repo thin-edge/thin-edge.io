@@ -1,5 +1,3 @@
-use crate::tests::helpers::assert_received_contains_str;
-use crate::tests::mock_mqtt_box::MockMqttBox;
 use crate::tests::spawn_c8y_mapper_actor;
 use crate::tests::spawn_dummy_c8y_http_proxy;
 use crate::tests::MockMqttBoxUnbuffered;
@@ -21,6 +19,9 @@ use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
+
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+use tedge_mqtt_ext::test_helpers::TestMqttBox;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 fn proptest_config() -> ProptestConfig {
@@ -219,7 +220,7 @@ async fn birth_message_with_shuffled_entity_registration_impl(seed: u64) {
     // regardless of the order the messages arrived.
     // tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let mut mqtt = MockMqttBox::new(mqtt);
+    let mut mqtt = TestMqttBox::new(mqtt);
 
     // Registration responses and measurement conversions arrive in whatever
     // order the mapper processed the shuffled inputs.
@@ -276,7 +277,7 @@ async fn nested_child_registration_with_shuffled_ordering_impl(seed: u64) {
         r#"{"@type":"child-device","@id":"child3","@parent":"device/child2//"}"#,
     ));
 
-    let mut mqtt = MockMqttBox::new(mqtt);
+    let mut mqtt = TestMqttBox::new(mqtt);
 
     // The mapper must register parents before children, regardless of input order.
     assert_received_contains_str(
@@ -334,7 +335,7 @@ async fn child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
         .to_string(),
     ));
 
-    let mut mqtt = MockMqttBox::new(mqtt);
+    let mut mqtt = TestMqttBox::new(mqtt);
 
     // The mapper must output: device registration → service registration → alarm.
     assert_received_contains_str(
@@ -385,7 +386,7 @@ async fn child_alarm_with_shuffled_entity_registration_impl(seed: u64) {
         json!({ "severity": "minor", "text": "Still high" }).to_string(),
     ));
 
-    let mut mqtt = MockMqttBox::new(mqtt);
+    let mut mqtt = TestMqttBox::new(mqtt);
 
     // Registration must come first, then both alarms in topic order.
     assert_received_contains_str(
@@ -430,7 +431,7 @@ async fn child_event_with_shuffled_entity_registration_impl(seed: u64) {
         r#"{"@type":"child-device"}"#,
     ));
 
-    let mut mqtt = MockMqttBox::new(mqtt);
+    let mut mqtt = TestMqttBox::new(mqtt);
 
     // Registration must come before the event.
     assert_received_contains_str(
@@ -488,7 +489,7 @@ async fn nested_child_alarm_with_shuffled_ordering_impl(seed: u64) {
         .to_string(),
     ));
 
-    let mut mqtt = MockMqttBox::new(mqtt);
+    let mut mqtt = TestMqttBox::new(mqtt);
 
     // Parent → child → alarm, in strict dependency order.
     assert_received_contains_str(
@@ -569,7 +570,7 @@ async fn nested_child_service_alarm_with_shuffled_ordering_impl(seed: u64) {
     // All the messages queued above are released from the broker
     mqtt.send_all().await.unwrap();
 
-    let mut mqtt = MockMqttBox::new(mqtt);
+    let mut mqtt = TestMqttBox::new(mqtt);
 
     // Full dependency chain must be respected: parent → child → service → alarm.
     assert_received_contains_str(

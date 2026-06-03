@@ -93,13 +93,13 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
     use crate::config::C8yMapperConfig;
-    use crate::tests::helpers::assert_received_contains_str;
-    use crate::tests::helpers::assert_received_includes_json;
     use crate::tests::spawn_c8y_mapper_actor;
     use crate::tests::spawn_c8y_mapper_actor_with_config;
     use crate::tests::spawn_dummy_c8y_http_proxy;
     use crate::tests::test_mapper_config;
     use crate::tests::TestHandle;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
 
     const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 

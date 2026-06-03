@@ -12,11 +12,12 @@ use tedge_actors::ChannelError;
 use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::Sender;
-use tedge_mqtt_ext::MqttMessage;
-use tedge_mqtt_ext::TopicFilter;
 
-pub trait TestMqttBox: MessageReceiverExt<MqttMessage> + Send {}
-impl<Box> TestMqttBox for Box where Box: MessageReceiverExt<MqttMessage> + Send {}
+use crate::MqttMessage;
+use crate::TopicFilter;
+
+mod asserts;
+pub use asserts::*;
 
 /// An MQTT message box that stores received messages in a buffer and supports
 /// assertions for stored messages.
@@ -27,21 +28,19 @@ impl<Box> TestMqttBox for Box where Box: MessageReceiverExt<MqttMessage> + Send 
 /// something else asserts them later). This is most easily done by gathering
 /// all received messages to a buffer and then choosing to drop selected
 /// messages only once they're asserted.
-pub struct MockMqttBox<Box> {
-    mqtt: Box,
-    pub(super) messages: Arc<Mutex<VecDeque<MqttMessage>>>,
-
-    // hack: some tests use different timeout and assertions need to know about it and proper
-    // handling isn't done yet, so expose just duration here, will need to fix
-    pub timeout: Option<Duration>,
+pub struct TestMqttBox<M> {
+    mqtt: M,
+    messages: Arc<Mutex<VecDeque<MqttMessage>>>,
 }
 
-impl<M: TestMqttBox> MockMqttBox<M> {
+impl<M> TestMqttBox<M>
+where
+    M: MessageReceiver<MqttMessage> + Send,
+{
     pub fn new(mqtt: M) -> Self {
         Self {
             mqtt,
             messages: Default::default(),
-            timeout: Default::default(),
         }
     }
 
@@ -49,12 +48,11 @@ impl<M: TestMqttBox> MockMqttBox<M> {
         self.mqtt
     }
 
-    pub fn with_timeout(self, duration: Duration) -> MockMqttBox<TimedMessageBox<M>> {
+    pub fn with_timeout(self, duration: Duration) -> TestMqttBox<TimedMessageBox<M>> {
         // instead of putting timeout wrapper on top, put it on box
-        MockMqttBox {
+        TestMqttBox {
             mqtt: self.mqtt.with_timeout(duration),
             messages: self.messages,
-            timeout: self.timeout,
         }
     }
 
@@ -145,7 +143,10 @@ where
 }
 
 #[async_trait::async_trait]
-impl<M: TestMqttBox> MessageReceiver<MqttMessage> for MockMqttBox<M> {
+impl<M> MessageReceiver<MqttMessage> for TestMqttBox<M>
+where
+    M: MessageReceiver<MqttMessage> + Send,
+{
     async fn try_recv(&mut self) -> Result<Option<MqttMessage>, RuntimeRequest> {
         let message = self.mqtt.try_recv().await?;
         if let Some(message) = &message {
@@ -164,7 +165,7 @@ impl<M: TestMqttBox> MessageReceiver<MqttMessage> for MockMqttBox<M> {
 }
 
 #[async_trait::async_trait]
-impl<M> Sender<MqttMessage> for MockMqttBox<M>
+impl<M> Sender<MqttMessage> for TestMqttBox<M>
 where
     M: Sender<MqttMessage>,
 {

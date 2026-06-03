@@ -78,8 +78,6 @@ impl OperationContext {
 #[cfg(test)]
 mod tests {
     use crate::config::C8yMapperConfig;
-    use crate::tests::helpers::assert_received_contains_str;
-    use crate::tests::helpers::assert_received_includes_json;
     use crate::tests::spawn_c8y_mapper_actor;
     use crate::tests::spawn_c8y_mapper_actor_with_config;
     use crate::tests::test_mapper_config;
@@ -88,6 +86,8 @@ mod tests {
     use serde_json::json;
     use std::time::Duration;
     use tedge_actors::Sender;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;

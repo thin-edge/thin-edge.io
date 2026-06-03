@@ -4,6 +4,9 @@ use mqtt_channel::TopicFilter;
 use std::fmt::Debug;
 use tedge_actors::MessageReceiver;
 
+pub mod test_mqtt_box;
+pub use test_mqtt_box::TestMqttBox;
+
 pub async fn assert_received_contains_str<'a, M, I>(
     messages: &mut dyn MessageReceiver<M>,
     expected: I,

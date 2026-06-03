@@ -1,14 +1,16 @@
+//! Asserts to be used with [`super::TestMqttBox`], which skip unrelated messages automatically.
+
 use std::time::Duration;
 
+use mqtt_channel::MqttMessage;
 use tedge_actors::MessageReceiver;
 
-use crate::tests::mock_mqtt_box::MockMqttBox;
-use crate::tests::mock_mqtt_box::TestMqttBox;
+use super::TestMqttBox;
 
-pub async fn assert_received_contains_str<'a, I, Box>(messages: &mut MockMqttBox<Box>, expected: I)
+pub async fn assert_received_contains_str<'a, I, M>(messages: &mut TestMqttBox<M>, expected: I)
 where
     I: IntoIterator<Item = (&'a str, &'a str)>,
-    Box: super::mock_mqtt_box::TestMqttBox,
+    M: MessageReceiver<MqttMessage> + Send,
 {
     'outer: for expected_msg in expected.into_iter() {
         // this always waits for a message even if we don't assert any more messages
@@ -24,11 +26,7 @@ where
             if messages.contains_message(expected_msg.0, expected_msg.1) {
                 continue 'outer;
             }
-            let message = tokio::time::timeout(
-                messages.timeout.unwrap_or(Duration::from_secs(15)),
-                messages.recv(),
-            )
-            .await;
+            let message = tokio::time::timeout(Duration::from_secs(15), messages.recv()).await;
             match message {
                 Err(_) | Ok(None) => {
                     panic!(
@@ -44,11 +42,11 @@ where
     }
 }
 
-pub async fn assert_received_includes_json<I, S, Box>(messages: &mut MockMqttBox<Box>, expected: I)
+pub async fn assert_received_includes_json<I, S, M>(messages: &mut TestMqttBox<M>, expected: I)
 where
     I: IntoIterator<Item = (S, serde_json::Value)>,
     S: AsRef<str>,
-    Box: TestMqttBox,
+    M: MessageReceiver<MqttMessage> + Send,
 {
     'outer: for expected_msg in expected.into_iter() {
         // this always waits for a message even if we don't assert any more messages
@@ -64,12 +62,9 @@ where
             if messages.contains_json(&expected_msg) {
                 continue 'outer;
             }
-            if tokio::time::timeout(
-                messages.timeout.unwrap_or(Duration::from_secs(15)),
-                messages.recv(),
-            )
-            .await
-            .is_err()
+            if tokio::time::timeout(Duration::from_secs(15), messages.recv())
+                .await
+                .is_err()
             {
                 panic!(
                     "Message doesn't include json: [{}] {}\nmessage buffer: {:#?}",
@@ -82,12 +77,10 @@ where
     }
 }
 
-pub async fn assert_received_not_contains_str<'a, I, Box>(
-    messages: &mut MockMqttBox<Box>,
-    expected: I,
-) where
+pub async fn assert_received_not_contains_str<'a, I, M>(messages: &mut TestMqttBox<M>, expected: I)
+where
     I: IntoIterator<Item = (&'a str, &'a str)>,
-    Box: TestMqttBox,
+    M: MessageReceiver<MqttMessage> + Send,
 {
     for expected_msg in expected.into_iter() {
         messages.recv_short().await;

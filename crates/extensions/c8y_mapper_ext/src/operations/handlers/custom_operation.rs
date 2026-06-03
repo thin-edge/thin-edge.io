@@ -123,10 +123,10 @@ fn get_c8y_operation(
 #[cfg(test)]
 mod tests {
     use crate::config::C8yMapperConfig;
-    use crate::tests::helpers::assert_received_contains_str;
     use crate::tests::spawn_c8y_mapper_actor_with_config;
     use crate::tests::test_mapper_config;
     use crate::tests::TestHandle;
+    use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
 
     use serde_json::json;
     use std::time::Duration;

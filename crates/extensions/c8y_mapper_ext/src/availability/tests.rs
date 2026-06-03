@@ -3,9 +3,6 @@ use crate::availability::AvailabilityBuilder;
 use crate::availability::AvailabilityConfig;
 use crate::availability::TimerComplete;
 use crate::availability::TimerStart;
-use crate::tests::helpers::assert_received_contains_str;
-use crate::tests::helpers::assert_received_includes_json;
-use crate::tests::mock_mqtt_box::MockMqttBox;
 use serde_json::json;
 use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
@@ -19,6 +16,9 @@ use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
+use tedge_mqtt_ext::test_helpers::TestMqttBox;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_timer_ext::Timeout;
@@ -413,7 +413,7 @@ async fn timer_send(timer: &mut FakeServerBox<TimerStart, TimerComplete>, event:
 }
 
 struct TestHandler {
-    pub mqtt_box: MockMqttBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
+    pub mqtt_box: TestMqttBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     pub timer_box: FakeServerBox<TimerStart, TimerComplete>,
 }
 
@@ -426,7 +426,7 @@ async fn spawn_availability_actor(config: AvailabilityConfig) -> TestHandler {
     let availability_builder =
         AvailabilityBuilder::new(config, &mut mqtt_builder, &mut timer_builder);
 
-    let mqtt_box = MockMqttBox::new(mqtt_builder.build());
+    let mqtt_box = TestMqttBox::new(mqtt_builder.build());
 
     let actor = availability_builder.build();
     tokio::spawn(async move { actor.run().await });

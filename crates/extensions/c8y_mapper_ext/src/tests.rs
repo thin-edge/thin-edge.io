@@ -57,6 +57,7 @@ use tedge_flows::FlowsMapperConfig;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpResult;
+use tedge_mqtt_ext::test_helpers::TestMqttBox;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
@@ -66,11 +67,9 @@ use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::paths::TedgePaths;
 
-pub mod mock_mqtt_box;
-use mock_mqtt_box::*;
-
-pub mod helpers;
-use helpers::*;
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
+use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_not_contains_str;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
 
@@ -3048,7 +3047,7 @@ pub(crate) async fn spawn_c8y_mapper_actor(tmp_dir: &TempTedgeDir, init: bool) -
 }
 
 pub(crate) struct TestHandle {
-    pub mqtt: MockMqttBox<MockMqttBoxUnbuffered>,
+    pub mqtt: TestMqttBox<MockMqttBoxUnbuffered>,
     pub http: FakeServerBox<HttpRequest, HttpResult>,
     pub fs: SimpleMessageBox<NoMessage, FsWatchEvent>,
     pub ul: FakeServerBox<IdUploadRequest, IdUploadResult>,
@@ -3313,11 +3312,11 @@ impl MockMqttBoxBuilder {
         }
     }
 
-    pub fn build(self) -> MockMqttBox<MockMqttBoxUnbuffered> {
+    pub fn build(self) -> TestMqttBox<MockMqttBoxUnbuffered> {
         let mut ignore_topics = TopicFilter::empty();
         ignore_topics.add_unchecked("te/+/+/+/+/status/flows");
 
-        MockMqttBox::new(MockMqttBoxUnbuffered {
+        TestMqttBox::new(MockMqttBoxUnbuffered {
             ignore_topics,
             receiver: self.input_receiver,
             senders: self.output_sender,
