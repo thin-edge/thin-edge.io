@@ -6,7 +6,7 @@ use std::path::Path;
 use time::format_description;
 use time::OffsetDateTime;
 
-use super::log_file::LogFile;
+use crate::CommandLog;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OperationLogsError {
@@ -25,10 +25,6 @@ pub struct OperationLogs {
     pub log_dir: Utf8PathBuf,
 }
 
-pub enum LogKind {
-    Operation(String),
-}
-
 impl OperationLogs {
     pub fn try_new(log_dir: Utf8PathBuf) -> Result<OperationLogs, OperationLogsError> {
         std::fs::create_dir_all(log_dir.clone())?; // FIXME-DIDIER should be removed or replaced by ManagedDir::ensure()
@@ -43,7 +39,11 @@ impl OperationLogs {
         Ok(operation_logs)
     }
 
-    pub async fn new_log_file(&self, kind: LogKind) -> Result<LogFile, OperationLogsError> {
+    pub async fn new_log_file(
+        &self,
+        operation_name: String,
+        cmd_id: String,
+    ) -> Result<CommandLog, OperationLogsError> {
         if let Err(err) = self.remove_outdated_logs() {
             // In no case a log-cleaning error should prevent the agent to run.
             // Hence the error is logged but not returned.
@@ -51,23 +51,15 @@ impl OperationLogs {
         }
 
         let now = OffsetDateTime::now_utc();
-
-        let file_prefix = match kind {
-            LogKind::Operation(ref operation_name) => operation_name.as_str(),
-        };
-
         let file_name = format!(
             "{}-{}.log",
-            file_prefix,
+            operation_name,
             now.format(&format_description::well_known::Rfc3339)?
         );
+        let file_path = self.log_dir.join(file_name);
+        tokio::fs::File::create(&file_path).await?;
 
-        let mut log_file_path = self.log_dir.clone();
-        log_file_path.push(file_name);
-
-        LogFile::try_new(log_file_path)
-            .await
-            .map_err(OperationLogsError::FromIo)
+        Ok(CommandLog::from_log_path(file_path, operation_name, cmd_id))
     }
 
     pub fn remove_outdated_logs(&self) -> Result<(), OperationLogsError> {
@@ -189,12 +181,11 @@ mod tests {
 
         // Create a new log file
         let new_log = operation_logs
-            .new_log_file(LogKind::Operation("software-update".to_string()))
+            .new_log_file("software-update".to_string(), "".to_string())
             .await?;
 
         // The new log has been created
-        let new_path = Path::new(new_log.path());
-        assert!(new_path.exists());
+        assert!(new_log.path.exists());
 
         // Outdated logs are removed
         assert!(!update_log_1.exists());
