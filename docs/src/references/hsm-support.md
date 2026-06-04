@@ -395,8 +395,10 @@ Options:
     ```sh
     tedge config get device.key_uri
     ```
-    pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=a30ed1ca6244fc5f;token=test-token;id=%51%05%87%75%6F%B7%28%EC%5E%5D%1F%B8%EB%CF%FD%96%B7%E4%28%B6;object=my-key
+
     ```sh title="Output"
+    pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=a30ed1ca6244fc5f;token=test-token;id=%51%05%87%75%6F%B7%28%EC%5E%5D%1F%B8%EB%CF%FD%96%B7%E4%28%B6;object=my-key
+    ```
 
 Now you're free to use the new key to either request a signed certificate using a CSR or to create a
 self-signed certificate.
