@@ -5,9 +5,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use time::format_description;
 use time::OffsetDateTime;
-use tracing::log;
 
-use crate::log_file::LogFile;
+use super::log_file::LogFile;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OperationLogsError {

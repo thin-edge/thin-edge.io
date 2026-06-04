@@ -46,8 +46,6 @@ use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
-use plugin_sm::operation_logs::OperationLogs;
-use plugin_sm::operation_logs::OperationLogsError;
 use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -72,6 +70,9 @@ use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::script::ShellScript;
+use tedge_api::workflow::log::log_dir::LogKind;
+use tedge_api::workflow::log::log_dir::OperationLogs;
+use tedge_api::workflow::log::log_dir::OperationLogsError;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandLog;
 use tedge_api::DownloadInfo;
@@ -923,9 +924,7 @@ impl CumulocityConverter {
 
         let log_file = self
             .operation_logs
-            .new_log_file(plugin_sm::operation_logs::LogKind::Operation(
-                operation_name.to_string(),
-            ))
+            .new_log_file(LogKind::Operation(operation_name.to_string()))
             .await?;
         let mut command_log =
             CommandLog::from_log_path(log_file.path(), operation_name.clone(), cmd_id);
