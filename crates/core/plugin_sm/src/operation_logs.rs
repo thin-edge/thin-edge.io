@@ -27,17 +27,12 @@ pub struct OperationLogs {
 }
 
 pub enum LogKind {
-    SoftwareUpdate,
-    SoftwareList,
     Operation(String),
 }
 
-const UPDATE_PREFIX: &str = "software-update";
-const LIST_PREFIX: &str = "software-list";
-
 impl OperationLogs {
     pub fn try_new(log_dir: Utf8PathBuf) -> Result<OperationLogs, OperationLogsError> {
-        std::fs::create_dir_all(log_dir.clone())?;
+        std::fs::create_dir_all(log_dir.clone())?; // FIXME-DIDIER should be removed or replaced by ManagedDir::ensure()
         let operation_logs = OperationLogs { log_dir };
 
         if let Err(err) = operation_logs.remove_outdated_logs() {
@@ -59,8 +54,6 @@ impl OperationLogs {
         let now = OffsetDateTime::now_utc();
 
         let file_prefix = match kind {
-            LogKind::SoftwareUpdate => UPDATE_PREFIX,
-            LogKind::SoftwareList => LIST_PREFIX,
             LogKind::Operation(ref operation_name) => operation_name.as_str(),
         };
 
@@ -79,6 +72,7 @@ impl OperationLogs {
     }
 
     pub fn remove_outdated_logs(&self) -> Result<(), OperationLogsError> {
+        // FIXME-DIDIER use file modification timestamp and not filenames assuming a creation date as a suffix
         let mut log_tracker: HashMap<String, BinaryHeap<Reverse<String>>> = HashMap::new();
         let re = regex::Regex::new("[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}")
             .expect("Regex matching a date");
@@ -195,7 +189,9 @@ mod tests {
         let update_log_7 = create_file(log_dir.path(), "software-update-1996-12-25T16:39:57z");
 
         // Create a new log file
-        let new_log = operation_logs.new_log_file(LogKind::SoftwareUpdate).await?;
+        let new_log = operation_logs
+            .new_log_file(LogKind::Operation("software-update".to_string()))
+            .await?;
 
         // The new log has been created
         let new_path = Path::new(new_log.path());

@@ -222,7 +222,7 @@ impl CumulocityConverter {
 
         let log_dir = config
             .logs_path
-            .dir(TEDGE_AGENT_LOG_DIR)
+            .dir(TEDGE_AGENT_LOG_DIR) // FIXME-DIDIER Why is the agent logs dir created by the C8Y mapper?
             .expect("infallible");
         let operation_logs = OperationLogs::try_new(log_dir.path().into())?;
 
@@ -3001,7 +3001,7 @@ pub(crate) mod tests {
             .with_raw_content(
                 r#"[exec]
             on_fragment = "c8y_Operation"
-            
+
             [exec.workflow]
             operation = "my_operation"
             "#,
