@@ -36,7 +36,7 @@ pub struct CommandLog {
 
 impl CommandLog {
     pub fn new(
-        log_dir: Utf8PathBuf,
+        log_dir: &Utf8Path,
         operation: OperationName,
         cmd_id: CommandId,
         invoking_operations: Vec<OperationName>,

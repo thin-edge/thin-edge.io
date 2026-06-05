@@ -28,6 +28,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::SignalType;
 use tedge_api::workflow::extract_json_output;
+use tedge_api::workflow::log::log_dir::OperationLogs;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::CommandId;
 use tedge_api::workflow::GenericCommandData;
@@ -64,7 +65,7 @@ pub struct WorkflowActor {
     pub(crate) device_topic_id: EntityTopicId,
     pub(crate) workflow_repository: WorkflowRepository,
     pub(crate) state_repository: AgentStateRepository<CommandBoard>,
-    pub(crate) log_dir: Utf8PathBuf,
+    pub(crate) log_dir: OperationLogs,
     pub(crate) capabilities: Capabilities,
     pub(crate) input_receiver: UnboundedLoggingReceiver<AgentInput>,
     pub(crate) builtin_command_dispatcher: CommandDispatcher,
@@ -686,8 +687,7 @@ impl WorkflowActor {
             Some((op, id)) => (Some(op.to_string()), Some(id)),
         };
 
-        CommandLog::new(
-            self.log_dir.clone(),
+        self.log_dir.new_command_log(
             operation.to_string(),
             cmd_id.to_string(),
             state.invoking_operation_names(),

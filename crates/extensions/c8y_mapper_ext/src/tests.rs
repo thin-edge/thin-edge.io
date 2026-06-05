@@ -3226,6 +3226,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     topics.remove_overlapping_patterns();
 
     let root_dir = TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "");
+    let _agent_log_dir = tmp_dir.dir("agent");
 
     C8yMapperConfig::new(
         root_dir.clone().into(),

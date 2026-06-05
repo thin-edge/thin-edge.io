@@ -1,12 +1,13 @@
-use camino::Utf8PathBuf;
+use crate::workflow::CommandId;
+use crate::workflow::OperationName;
+use crate::CommandLog;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::path::Path;
+use tedge_utils::paths::ManagedDir;
 use time::format_description;
 use time::OffsetDateTime;
-
-use crate::CommandLog;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OperationLogsError {
@@ -22,12 +23,11 @@ pub enum OperationLogsError {
 
 #[derive(Debug)]
 pub struct OperationLogs {
-    pub log_dir: Utf8PathBuf,
+    pub log_dir: ManagedDir,
 }
 
 impl OperationLogs {
-    pub fn try_new(log_dir: Utf8PathBuf) -> Result<OperationLogs, OperationLogsError> {
-        std::fs::create_dir_all(log_dir.clone())?; // FIXME-DIDIER should be removed or replaced by ManagedDir::ensure()
+    pub fn new(log_dir: ManagedDir) -> OperationLogs {
         let operation_logs = OperationLogs { log_dir };
 
         if let Err(err) = operation_logs.remove_outdated_logs() {
@@ -36,7 +36,31 @@ impl OperationLogs {
             log::warn!("Fail to remove the out-dated log files: {}", err);
         }
 
-        Ok(operation_logs)
+        operation_logs
+    }
+
+    pub fn new_command_log(
+        &self,
+        operation: String,
+        cmd_id: String,
+        invoking_operations: Vec<OperationName>,
+        root_operation: Option<OperationName>,
+        root_cmd_id: Option<CommandId>,
+    ) -> CommandLog {
+        if let Err(err) = self.remove_outdated_logs() {
+            // In no case a log-cleaning error should prevent the agent to run.
+            // Hence the error is logged but not returned.
+            log::warn!("Fail to remove the out-dated log files: {}", err);
+        }
+
+        CommandLog::new(
+            self.log_dir.path(),
+            operation,
+            cmd_id,
+            invoking_operations,
+            root_operation,
+            root_cmd_id,
+        )
     }
 
     pub async fn new_log_file(
@@ -56,7 +80,7 @@ impl OperationLogs {
             operation_name,
             now.format(&format_description::well_known::Rfc3339)?
         );
-        let file_path = self.log_dir.join(file_name);
+        let file_path = self.log_dir.path().join(file_name);
         tokio::fs::File::create(&file_path).await?;
 
         Ok(CommandLog::from_log_path(file_path, operation_name, cmd_id))
@@ -68,7 +92,7 @@ impl OperationLogs {
         let re = regex::Regex::new("[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}")
             .expect("Regex matching a date");
 
-        for file in (self.log_dir.read_dir()?).flatten() {
+        for file in (self.log_dir.path().read_dir()?).flatten() {
             if let Some(path) = file.path().file_name().and_then(|name| name.to_str()) {
                 if let Some(date_match) = re.find(path) {
                     let (prefix, _) = path.split_at(date_match.start());
@@ -83,10 +107,10 @@ impl OperationLogs {
         for (key, value) in log_tracker.iter_mut() {
             if key.starts_with("software-list") {
                 // only allow one update list file in logs
-                remove_old_logs(value, &self.log_dir, 1)?;
+                remove_old_logs(value, self.log_dir.path(), 1)?;
             } else {
                 // allow most recent five
-                remove_old_logs(value, &self.log_dir, 5)?;
+                remove_old_logs(value, self.log_dir.path(), 5)?;
             }
         }
 
@@ -114,10 +138,17 @@ fn remove_old_logs(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8Path;
     use std::fs::File;
     use std::path::Path;
     use std::path::PathBuf;
+    use tedge_utils::paths::TedgePaths;
     use tempfile::TempDir;
+
+    fn managed_dir(path: &Path) -> ManagedDir {
+        let path = Utf8Path::from_path(path).unwrap();
+        TedgePaths::from_root_with_defaults(path, "", "").root_dir()
+    }
 
     #[tokio::test]
     async fn on_start_keeps_only_the_latest_logs() -> Result<(), anyhow::Error> {
@@ -137,7 +168,7 @@ mod tests {
         let unrelated_2 = create_file(log_dir.path(), "bar");
 
         // Open the log dir
-        let _operation_logs = OperationLogs::try_new(log_dir.keep().try_into().unwrap())?;
+        let _operation_logs = OperationLogs::new(managed_dir(log_dir.path()));
 
         // Outdated logs are removed
         assert!(!update_log_1.exists());
@@ -165,8 +196,7 @@ mod tests {
     async fn on_new_log_keep_the_latest_logs_plus_the_new_one() -> Result<(), anyhow::Error> {
         // Create a log dir
         let log_dir = TempDir::new()?;
-        let operation_logs =
-            OperationLogs::try_new(log_dir.path().to_path_buf().try_into().unwrap())?;
+        let operation_logs = OperationLogs::new(managed_dir(log_dir.path()));
 
         // Add a bunch of fake log files
         let swlist_log_1 = create_file(log_dir.path(), "software-list-1996-02-22T16:39:57z");

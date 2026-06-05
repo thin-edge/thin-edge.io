@@ -221,9 +221,9 @@ impl CumulocityConverter {
 
         let log_dir = config
             .logs_path
-            .dir(TEDGE_AGENT_LOG_DIR) // FIXME-DIDIER Why is the agent logs dir created by the C8Y mapper?
+            .dir(TEDGE_AGENT_LOG_DIR)
             .expect("infallible");
-        let operation_logs = OperationLogs::try_new(log_dir.path().into())?;
+        let operation_logs = OperationLogs::new(log_dir);
 
         let mqtt_schema = config.mqtt_schema.clone();
         let http_event_topic =
@@ -3103,6 +3103,7 @@ pub(crate) mod tests {
         tmp_dir.dir("operations").dir("c8y");
         tmp_dir.dir("tedge").dir("agent");
         tmp_dir.dir(".tedge-mapper-c8y");
+        tmp_dir.dir("agent");
 
         let device_id = "test-device".into();
         let device_topic_id = EntityTopicId::default_main_device();
