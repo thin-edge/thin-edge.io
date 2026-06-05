@@ -35,7 +35,7 @@ pub struct CommandLog {
 }
 
 impl CommandLog {
-    pub fn new(
+    pub(crate) fn new(
         log_dir: &Utf8Path,
         operation: OperationName,
         cmd_id: CommandId,

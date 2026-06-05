@@ -1,10 +1,10 @@
 use crate::workflow::CommandId;
 use crate::workflow::OperationName;
 use crate::CommandLog;
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::PathBuf;
+use std::time::SystemTime;
+use std::vec;
 use tedge_utils::paths::ManagedDir;
 use time::format_description;
 use time::OffsetDateTime;
@@ -16,30 +16,29 @@ pub enum OperationLogsError {
 
     #[error(transparent)]
     FromTimeFormat(#[from] time::error::Format),
-
-    #[error("Incorrect file format. Expected: `operation_name`-`timestamp`.log")]
-    FileFormatError,
 }
 
 #[derive(Debug)]
 pub struct OperationLogs {
     pub log_dir: ManagedDir,
+    keep_default: u32,
+    keep_per_operation: HashMap<String, u32>,
 }
 
 impl OperationLogs {
     pub fn new(log_dir: ManagedDir) -> OperationLogs {
-        let operation_logs = OperationLogs { log_dir };
-
-        if let Err(err) = operation_logs.remove_outdated_logs() {
-            // In no case a log-cleaning error should prevent the agent to run.
-            // Hence the error is logged but not returned.
-            log::warn!("Fail to remove the out-dated log files: {}", err);
+        OperationLogs {
+            log_dir,
+            keep_default: 5,
+            keep_per_operation: HashMap::new(),
         }
-
-        operation_logs
     }
 
-    pub fn new_command_log(
+    pub fn keep_count(&mut self, operation: &str, count: u32) {
+        self.keep_per_operation.insert(operation.to_string(), count);
+    }
+
+    pub async fn new_command_log(
         &self,
         operation: String,
         cmd_id: String,
@@ -47,20 +46,17 @@ impl OperationLogs {
         root_operation: Option<OperationName>,
         root_cmd_id: Option<CommandId>,
     ) -> CommandLog {
-        if let Err(err) = self.remove_outdated_logs() {
-            // In no case a log-cleaning error should prevent the agent to run.
-            // Hence the error is logged but not returned.
-            log::warn!("Fail to remove the out-dated log files: {}", err);
-        }
-
-        CommandLog::new(
+        let mut command_log = CommandLog::new(
             self.log_dir.path(),
             operation,
             cmd_id,
             invoking_operations,
             root_operation,
             root_cmd_id,
-        )
+        );
+
+        self.ensure_file_exists(&mut command_log).await;
+        command_log
     }
 
     pub async fn new_log_file(
@@ -68,12 +64,6 @@ impl OperationLogs {
         operation_name: String,
         cmd_id: String,
     ) -> Result<CommandLog, OperationLogsError> {
-        if let Err(err) = self.remove_outdated_logs() {
-            // In no case a log-cleaning error should prevent the agent to run.
-            // Hence the error is logged but not returned.
-            log::warn!("Fail to remove the out-dated log files: {}", err);
-        }
-
         let now = OffsetDateTime::now_utc();
         let file_name = format!(
             "{}-{}.log",
@@ -81,58 +71,93 @@ impl OperationLogs {
             now.format(&format_description::well_known::Rfc3339)?
         );
         let file_path = self.log_dir.path().join(file_name);
-        tokio::fs::File::create(&file_path).await?;
 
-        Ok(CommandLog::from_log_path(file_path, operation_name, cmd_id))
+        let mut command_log = CommandLog::from_log_path(file_path, operation_name, cmd_id);
+        self.ensure_file_exists(&mut command_log).await;
+        Ok(command_log)
     }
 
-    pub fn remove_outdated_logs(&self) -> Result<(), OperationLogsError> {
-        // FIXME-DIDIER use file modification timestamp and not filenames assuming a creation date as a suffix
-        let mut log_tracker: HashMap<String, BinaryHeap<Reverse<String>>> = HashMap::new();
-        let re = regex::Regex::new("[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}")
-            .expect("Regex matching a date");
+    pub async fn remove_all_outdated_logs(&self) {
+        for (operation, keep) in self.keep_per_operation.iter() {
+            if let Err(err) = self.remove_outdated_logs(operation, *keep).await {
+                log::warn!("Fail to remove out-dated log files: {}", err);
+            }
+        }
+    }
 
+    /// Ensure the log file exists
+    ///
+    /// possibly cleaning first old logs for the same operation type
+    async fn ensure_file_exists(&self, log: &mut CommandLog) {
+        if tokio::fs::try_exists(&log.path).await.unwrap_or(false) {
+            return;
+        }
+
+        let keep_at_most = *self
+            .keep_per_operation
+            .get(&log.operation)
+            .unwrap_or(&self.keep_default);
+        let keep = if keep_at_most > 0 {
+            // Make room for the new log
+            keep_at_most - 1
+        } else {
+            0
+        };
+        if let Err(err) = self.remove_outdated_logs(&log.operation, keep).await {
+            // In no case a log-cleaning error should prevent the agent to run.
+            // Hence the error is logged but not returned.
+            log::warn!("Fail to remove out-dated log files: {}", err);
+        }
+
+        let _ = log.open().await;
+    }
+
+    async fn remove_outdated_logs(
+        &self,
+        operation: &str,
+        keep: u32,
+    ) -> Result<(), OperationLogsError> {
+        // Collect logs for that operation
+        let mut operation_logs: Vec<(PathBuf, SystemTime)> = vec![];
         for file in (self.log_dir.path().read_dir()?).flatten() {
-            if let Some(path) = file.path().file_name().and_then(|name| name.to_str()) {
-                if let Some(date_match) = re.find(path) {
-                    let (prefix, _) = path.split_at(date_match.start());
-                    log_tracker
-                        .entry(prefix.to_string())
-                        .or_default()
-                        .push(Reverse(path.to_string()));
+            if file
+                .path()
+                .file_name()
+                .and_then(|name| name.to_str())
+                .filter(|name| name.contains(operation))
+                .is_some()
+            {
+                if let Ok(creation_date) = tokio::fs::metadata(file.path())
+                    .await
+                    .and_then(|metadata| metadata.created())
+                {
+                    operation_logs.push((file.path(), creation_date))
                 }
             }
         }
 
-        for (key, value) in log_tracker.iter_mut() {
-            if key.starts_with("software-list") {
-                // only allow one update list file in logs
-                remove_old_logs(value, self.log_dir.path(), 1)?;
-            } else {
-                // allow most recent five
-                remove_old_logs(value, self.log_dir.path(), 5)?;
+        // Sort the logs by ascending creation date
+        operation_logs.sort_by_key(|(_, creation_date)| *creation_date);
+
+        // Remove the 5 most recent files
+
+        for _ in 0..keep {
+            operation_logs.pop();
+        }
+
+        // Delete the others
+        for (path, _) in operation_logs {
+            if let Err(err) = tokio::fs::remove_file(&path).await {
+                log::warn!(
+                    "Fail to remove out-dated log file {} : {}",
+                    path.display(),
+                    err
+                );
             }
         }
 
         Ok(())
     }
-}
-
-fn remove_old_logs(
-    log_tracker: &mut BinaryHeap<Reverse<String>>,
-    dir_path: impl AsRef<Path>,
-    n: usize,
-) -> Result<(), OperationLogsError> {
-    while log_tracker.len() > n {
-        if let Some(rname) = log_tracker.pop() {
-            let name = rname.0;
-            let path = dir_path.as_ref().join(name.clone());
-            if let Err(err) = std::fs::remove_file(path) {
-                log::warn!("Fail to remove out-dated log file {} : {}", name, err);
-            }
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -142,6 +167,7 @@ mod tests {
     use std::fs::File;
     use std::path::Path;
     use std::path::PathBuf;
+    use std::time::Duration;
     use tedge_utils::paths::TedgePaths;
     use tempfile::TempDir;
 
@@ -155,20 +181,23 @@ mod tests {
         // Create a log dir with a bunch of fake log files
         let log_dir = TempDir::new()?;
 
-        let swlist_log_1 = create_file(log_dir.path(), "software-list-1996-02-22T16:39:57z");
-        let update_log_1 = create_file(log_dir.path(), "software-update-1996-12-19T16:39:57z");
-        let update_log_2 = create_file(log_dir.path(), "software-update-1996-12-20T16:39:57z");
-        let update_log_3 = create_file(log_dir.path(), "software-update-1996-12-21T16:39:57z");
-        let update_log_4 = create_file(log_dir.path(), "software-update-1996-12-22T16:39:57z");
-        let swlist_log_2 = create_file(log_dir.path(), "software-list-1996-12-22T16:39:57z");
-        let update_log_5 = create_file(log_dir.path(), "software-update-1996-12-23T16:39:57z");
-        let update_log_6 = create_file(log_dir.path(), "software-update-1996-12-24T16:39:57z");
-        let update_log_7 = create_file(log_dir.path(), "software-update-1996-12-25T16:39:57z");
-        let unrelated_1 = create_file(log_dir.path(), "foo");
-        let unrelated_2 = create_file(log_dir.path(), "bar");
+        let swlist_log_1 = create_file(log_dir.path(), "software-list-cmd001").await;
+        let update_log_1 = create_file(log_dir.path(), "software-update-cmd002").await;
+        let update_log_2 = create_file(log_dir.path(), "software-update-cmd003").await;
+        let update_log_3 = create_file(log_dir.path(), "software-update-cmd004").await;
+        let update_log_4 = create_file(log_dir.path(), "software-update-cmd005").await;
+        let swlist_log_2 = create_file(log_dir.path(), "software-list-cmd006").await;
+        let update_log_5 = create_file(log_dir.path(), "software-update-1996-cmd007").await;
+        let update_log_6 = create_file(log_dir.path(), "software-update-1996-cmd008").await;
+        let update_log_7 = create_file(log_dir.path(), "software-update-1996-cmd009").await;
+        let unrelated_1 = create_file(log_dir.path(), "foo").await;
+        let unrelated_2 = create_file(log_dir.path(), "bar").await;
 
         // Open the log dir
-        let _operation_logs = OperationLogs::new(managed_dir(log_dir.path()));
+        let mut operation_logs = OperationLogs::new(managed_dir(log_dir.path()));
+        operation_logs.keep_count("software-list", 1);
+        operation_logs.keep_count("software-update", 5);
+        operation_logs.remove_all_outdated_logs().await;
 
         // Outdated logs are removed
         assert!(!update_log_1.exists());
@@ -199,19 +228,19 @@ mod tests {
         let operation_logs = OperationLogs::new(managed_dir(log_dir.path()));
 
         // Add a bunch of fake log files
-        let swlist_log_1 = create_file(log_dir.path(), "software-list-1996-02-22T16:39:57z");
-        let update_log_1 = create_file(log_dir.path(), "software-update-1996-12-19T16:39:57z");
-        let update_log_2 = create_file(log_dir.path(), "software-update-1996-12-20T16:39:57z");
-        let update_log_3 = create_file(log_dir.path(), "software-update-1996-12-21T16:39:57z");
-        let update_log_4 = create_file(log_dir.path(), "software-update-1996-12-22T16:39:57z");
-        let swlist_log_2 = create_file(log_dir.path(), "software-list-1996-12-22T16:39:57z");
-        let update_log_5 = create_file(log_dir.path(), "software-update-1996-12-23T16:39:57z");
-        let update_log_6 = create_file(log_dir.path(), "software-update-1996-12-24T16:39:57z");
-        let update_log_7 = create_file(log_dir.path(), "software-update-1996-12-25T16:39:57z");
+        let swlist_log_1 = create_file(log_dir.path(), "software-list-cmd001").await;
+        let update_log_1 = create_file(log_dir.path(), "software-update-cmd002").await;
+        let update_log_2 = create_file(log_dir.path(), "software-update-cmd003").await;
+        let update_log_3 = create_file(log_dir.path(), "software-update-cmd004").await;
+        let update_log_4 = create_file(log_dir.path(), "software-update-cmd005").await;
+        let swlist_log_2 = create_file(log_dir.path(), "software-list-cmd001").await;
+        let update_log_5 = create_file(log_dir.path(), "software-update-cmd006").await;
+        let update_log_6 = create_file(log_dir.path(), "software-update-cmd007").await;
+        let update_log_7 = create_file(log_dir.path(), "software-update-cmd008").await;
 
         // Create a new log file
         let new_log = operation_logs
-            .new_log_file("software-update".to_string(), "".to_string())
+            .new_log_file("software-update".to_string(), "42".to_string())
             .await?;
 
         // The new log has been created
@@ -220,24 +249,25 @@ mod tests {
         // Outdated logs are removed
         assert!(!update_log_1.exists());
         assert!(!update_log_2.exists());
-        assert!(!swlist_log_1.exists());
+        assert!(!update_log_3.exists());
 
         // The 5 latest update logs are kept
-        assert!(update_log_3.exists());
         assert!(update_log_4.exists());
         assert!(update_log_5.exists());
         assert!(update_log_6.exists());
         assert!(update_log_7.exists());
 
-        // The latest software list is kept
+        // Unrelated logs are kept
+        assert!(swlist_log_1.exists());
         assert!(swlist_log_2.exists());
 
         Ok(())
     }
 
-    fn create_file(dir: &Path, name: &str) -> PathBuf {
+    async fn create_file(dir: &Path, name: &str) -> PathBuf {
         let file_path = dir.join(name);
         let _log_file = File::create(file_path.clone()).expect("fail to create a test file");
+        tokio::time::sleep(Duration::from_millis(5)).await;
         file_path
     }
 }

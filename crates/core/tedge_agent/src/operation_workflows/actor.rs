@@ -236,7 +236,7 @@ impl WorkflowActor {
         };
         let step = state.status.clone();
 
-        let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
+        let mut log_file = self.open_command_log(&state, &operation, &cmd_id).await;
 
         match self
             .workflow_repository
@@ -286,7 +286,7 @@ impl WorkflowActor {
             info!("Ignoring {operation} operation because it is disabled in agent capabilities");
             return Ok(());
         }
-        let mut log_file = self.open_command_log(&state, &operation, &cmd_id);
+        let mut log_file = self.open_command_log(&state, &operation, &cmd_id).await;
 
         let action = match self.workflow_repository.get_action(&state) {
             Ok(action) => action,
@@ -671,7 +671,7 @@ impl WorkflowActor {
         Ok(())
     }
 
-    fn open_command_log(
+    async fn open_command_log(
         &mut self,
         state: &GenericCommandState,
         operation: &OperationType,
@@ -687,13 +687,15 @@ impl WorkflowActor {
             Some((op, id)) => (Some(op.to_string()), Some(id)),
         };
 
-        self.log_dir.new_command_log(
-            operation.to_string(),
-            cmd_id.to_string(),
-            state.invoking_operation_names(),
-            root_operation,
-            root_cmd_id,
-        )
+        self.log_dir
+            .new_command_log(
+                operation.to_string(),
+                cmd_id.to_string(),
+                state.invoking_operation_names(),
+                root_operation,
+                root_cmd_id,
+            )
+            .await
     }
 
     async fn publish_command_state(
