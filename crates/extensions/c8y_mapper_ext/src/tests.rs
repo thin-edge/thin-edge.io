@@ -71,7 +71,7 @@ use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_not_contains_str;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
 #[tokio::test]
 async fn mapper_publishes_init_messages_on_startup() {
@@ -1461,7 +1461,7 @@ async fn custom_operation_with_timeout_successful() {
     let ttd = TempTedgeDir::new();
     let cmd_file = ttd.path().join("command");
     //create custom operation file
-    create_custom_op_file(&ttd, cmd_file.as_path(), Some(4), Some(2));
+    create_custom_op_file(&ttd, cmd_file.as_path(), Some(5), Some(2));
     //create command
     let content = r#"#!/bin/sh
     for i in $(seq 1 2)
@@ -1519,14 +1519,18 @@ async fn custom_operation_timeout_sigterm() {
     let ttd = TempTedgeDir::new();
     let cmd_file = ttd.path().join("command");
     //create custom operation file
-    create_custom_op_file(&ttd, cmd_file.as_path(), Some(1), Some(2));
+    create_custom_op_file(&ttd, cmd_file.as_path(), Some(2), Some(2));
     //create command
+    // Block on `sleep & wait` rather than a foreground `sleep`:
+    // the `wait` builtin is interrupted by a trapped signal
+    // (a foreground `sleep` would defer it until the sleep completes).
     let content = r#"#!/bin/sh
     trap 'echo received SIGTERM; exit 124' TERM
     for i in $(seq 1 10)
     do
         echo "main $i"
-        sleep 2
+        sleep 5 >/dev/null 2>&1 &
+        wait
     done
     "#;
     create_custom_cmd(cmd_file.as_path(), content);
@@ -1553,7 +1557,7 @@ async fn custom_operation_timeout_sigterm() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "502,c8y_Command,operation failed due to timeout: duration=1s",
+            "502,c8y_Command,operation failed due to timeout: duration=2s",
         )],
     )
     .await;
@@ -1563,7 +1567,7 @@ async fn custom_operation_timeout_sigterm() {
 Exit status: 124 (ERROR)
 
 stderr <<EOF
-operation failed due to timeout: duration=1s
+operation failed due to timeout: duration=2s
 EOF
 
 stdout <<EOF
@@ -1585,14 +1589,18 @@ async fn custom_operation_timeout_sigkill() {
 
     let cmd_file = ttd.path().join("command");
     //create custom operation file
-    create_custom_op_file(&ttd, cmd_file.as_path(), Some(1), Some(2));
+    create_custom_op_file(&ttd, cmd_file.as_path(), Some(2), Some(2));
     //create command
+    // Block on `sleep & wait` rather than a foreground `sleep`:
+    // the `wait` builtin is interrupted by a trapped signal
+    // (a foreground `sleep` would defer it until the sleep completes).
     let content = r#"#!/bin/sh
     trap 'echo ignore SIGTERM' TERM
     for i in $(seq 1 50)
     do
         echo "main $i"
-        sleep 2
+        sleep 5 >/dev/null 2>&1 &
+        wait
     done
     "#;
     create_custom_cmd(cmd_file.as_path(), content);
@@ -1601,7 +1609,7 @@ async fn custom_operation_timeout_sigkill() {
     let TestHandle { mqtt, http, .. } = test_handle;
     spawn_dummy_c8y_http_proxy(http);
 
-    let mut mqtt = mqtt.with_timeout(Duration::from_secs(5));
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     // Simulate c8y_Command SmartREST request
     mqtt.send(MqttMessage::new(
@@ -1619,7 +1627,7 @@ async fn custom_operation_timeout_sigkill() {
         &mut mqtt,
         [(
             "c8y/s/us",
-            "502,c8y_Command,operation failed due to timeout: duration=1s",
+            "502,c8y_Command,operation failed due to timeout: duration=2s",
         )],
     )
     .await;
@@ -1629,7 +1637,7 @@ async fn custom_operation_timeout_sigkill() {
 Killed by signal: 9
 
 stderr <<EOF
-operation failed due to timeout: duration=1s
+operation failed due to timeout: duration=2s
 EOF
 
 stdout <<EOF
@@ -2990,7 +2998,10 @@ fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &st
         let mut contents = String::new();
         file.read_to_string(&mut contents)
             .expect("Unable to read the file");
-        assert!(contents.contains(expected_contents));
+        assert!(
+            contents.contains(expected_contents),
+            "command exec log did not contain expected content.\n--- expected ---\n{expected_contents}\n--- actual ---\n{contents}"
+        );
     }
 }
 

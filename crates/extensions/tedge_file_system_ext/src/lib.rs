@@ -200,6 +200,10 @@ mod tests {
         // FIXME One has to wait for the actor actually launched before updating the file system.
         //       - Do we need some message sent by the actors to say that are ready?
         //       - Do we need a more sophisticated actor that list the existing files on start?
+        // On macOS, FSEvents requires a longer initialization window, especially under load.
+        #[cfg(target_os = "macos")]
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        #[cfg(not(target_os = "macos"))]
         tokio::time::sleep(Duration::from_millis(100)).await;
         ttd.file("file_a");
         let dir = ttd.dir("dir_b");

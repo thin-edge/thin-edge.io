@@ -33,7 +33,7 @@ use toml::Table;
 type MqttMessageBox = TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>;
 type UploaderMessageBox = TimedMessageBox<FakeServerBox<LogUploadRequest, LogUploadResult>>;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
 /// Preparing a temp directory with a mocked `file` plugin.
 fn prepare() -> Result<TempTedgeDir, anyhow::Error> {

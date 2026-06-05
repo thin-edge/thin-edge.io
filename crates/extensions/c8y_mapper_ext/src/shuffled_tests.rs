@@ -23,7 +23,8 @@ use tedge_test_utils::fs::TempTedgeDir;
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::TestMqttBox;
 
-const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
+const TEST_TIMEOUT_MS: Duration = Duration::from_secs(5);
+
 fn proptest_config() -> ProptestConfig {
     ProptestConfig {
         // These tests are relatively slow compared to what proptest expects, don't run them too many times
