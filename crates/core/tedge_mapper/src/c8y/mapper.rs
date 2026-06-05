@@ -12,6 +12,7 @@ use c8y_mapper_ext::availability::AvailabilityConfig;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
+use tedge_actors::Runtime;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::models::MQTT_CORE_TLS_PORT;
@@ -71,11 +72,11 @@ impl CumulocityMapper {
 
 #[async_trait]
 impl TEdgeComponent for CumulocityMapper {
-    async fn start(
+    async fn build(
         &self,
         tedge_config: TEdgeConfig,
         cfg_dir: &TedgePaths,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<Runtime, anyhow::Error> {
         let c8y_config = tedge_config.mapper_config(&self.profile)?;
         let prefix = &c8y_config.bridge.topic_prefix;
         let c8y_mapper_name = format!("tedge-mapper-{prefix}");
@@ -187,9 +188,8 @@ impl TEdgeComponent for CumulocityMapper {
         if let Some(availability_actor) = availability_actor {
             runtime.spawn(availability_actor).await?;
         }
-        runtime.run_to_completion().await?;
 
-        Ok(())
+        Ok(runtime)
     }
 }
 

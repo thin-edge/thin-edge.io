@@ -2953,6 +2953,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
  "zeroize",
 ]
 
@@ -4837,6 +4838,8 @@ dependencies = [
  "clap_complete",
  "doku",
  "flate2",
+ "flockfile",
+ "futures",
  "glob",
  "humantime",
  "hyper 1.6.0",
@@ -4871,6 +4874,7 @@ dependencies = [
  "tedge-p11",
  "tedge-watchdog",
  "tedge-write",
+ "tedge_actors",
  "tedge_api",
  "tedge_config",
  "tedge_flows",
@@ -5158,6 +5162,7 @@ dependencies = [
  "log",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

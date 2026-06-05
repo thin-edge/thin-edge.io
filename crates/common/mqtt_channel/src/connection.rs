@@ -27,6 +27,7 @@ use std::time::Duration;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
+use tracing::Instrument;
 
 /// A connection to some MQTT server
 pub struct Connection {
@@ -176,25 +177,31 @@ impl Connection {
         let permits = Arc::new(Semaphore::new(1));
         let permit = permits.clone().acquire_owned().await.unwrap();
         let pub_count = Arc::new(AtomicUsize::new(0));
-        tokio::spawn(Connection::receiver_loop(
-            mqtt_client.clone(),
-            config.clone(),
-            event_loop,
-            received_sender,
-            error_sender.clone(),
-            pub_done_sender,
-            permits,
-            pub_count.clone(),
-            subscriptions.clone(),
-        ));
-        tokio::spawn(Connection::sender_loop(
-            mqtt_client.clone(),
-            published_receiver,
-            error_sender,
-            config.last_will_message.clone(),
-            permit,
-            pub_count,
-        ));
+        tokio::spawn(
+            Connection::receiver_loop(
+                mqtt_client.clone(),
+                config.clone(),
+                event_loop,
+                received_sender,
+                error_sender.clone(),
+                pub_done_sender,
+                permits,
+                pub_count.clone(),
+                subscriptions.clone(),
+            )
+            .instrument(tracing::Span::current()),
+        );
+        tokio::spawn(
+            Connection::sender_loop(
+                mqtt_client.clone(),
+                published_receiver,
+                error_sender,
+                config.last_will_message.clone(),
+                permit,
+                pub_count,
+            )
+            .instrument(tracing::Span::current()),
+        );
 
         Ok(Connection {
             received: received_receiver,
@@ -318,7 +325,9 @@ impl Connection {
                 // `sender_loop` is not running and we have no remaining
                 // publishes to process
                 let client = mqtt_client.clone();
-                tokio::spawn(async move { client.disconnect().await });
+                tokio::spawn(
+                    async move { client.disconnect().await }.instrument(tracing::Span::current()),
+                );
                 triggered_disconnect = true;
             }
 

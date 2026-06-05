@@ -40,6 +40,7 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
+use tracing::Instrument;
 use trie::MqtTrie;
 use trie::RankTopicFilter;
 pub use trie::SubscriptionDiff;
@@ -498,16 +499,19 @@ impl FromPeers {
                         })
                         .collect::<Vec<_>>();
                     let client = client.clone();
-                    tokio::spawn(async move {
-                        // We're running outside the main task, so we can't return an error
-                        // In practice, this should never fail
-                        if !diff.subscribe.is_empty() {
-                            client.subscribe_many(diff.subscribe).await.unwrap();
+                    tokio::spawn(
+                        async move {
+                            // We're running outside the main task, so we can't return an error
+                            // In practice, this should never fail
+                            if !diff.subscribe.is_empty() {
+                                client.subscribe_many(diff.subscribe).await.unwrap();
+                            }
+                            if !diff.unsubscribe.is_empty() {
+                                client.unsubscribe_many(diff.unsubscribe).await.unwrap();
+                            }
                         }
-                        if !diff.unsubscribe.is_empty() {
-                            client.unsubscribe_many(diff.unsubscribe).await.unwrap();
-                        }
-                    });
+                        .instrument(tracing::Span::current()),
+                    );
                     let mut tf = TopicFilter::empty();
                     for sub in overlapping_subscriptions {
                         tf.add_unchecked(sub);
@@ -553,30 +557,33 @@ impl FromPeers {
         prepare_msg: impl (Fn(MqttMessage) -> Packet) + Send + 'static,
     ) {
         let dynamic_connection_config = self.base_config.clone().with_subscriptions(topics);
-        tokio::spawn(async move {
-            let mut conn = mqtt_channel::Connection::new(&dynamic_connection_config)
-                .await
-                .unwrap();
-            let mut last_retain_message = Instant::now();
-            while let Ok(msg) =
-                tokio::time::timeout(Duration::from_secs(1), conn.received.next()).await
-            {
-                if let Some(msg) = msg {
-                    if msg.retain {
-                        SinkExt::send(&mut sender, prepare_msg(msg)).await.unwrap();
-                        last_retain_message = Instant::now();
+        tokio::spawn(
+            async move {
+                let mut conn = mqtt_channel::Connection::new(&dynamic_connection_config)
+                    .await
+                    .unwrap();
+                let mut last_retain_message = Instant::now();
+                while let Ok(msg) =
+                    tokio::time::timeout(Duration::from_secs(1), conn.received.next()).await
+                {
+                    if let Some(msg) = msg {
+                        if msg.retain {
+                            SinkExt::send(&mut sender, prepare_msg(msg)).await.unwrap();
+                            last_retain_message = Instant::now();
+                        }
+                    } else {
+                        break;
                     }
-                } else {
-                    break;
+                    // Ensure we break out of the loop even if one of the topics
+                    // sees a lot of non-retain messages
+                    if last_retain_message.elapsed() > Duration::from_secs(1) {
+                        break;
+                    }
                 }
-                // Ensure we break out of the loop even if one of the topics
-                // sees a lot of non-retain messages
-                if last_retain_message.elapsed() > Duration::from_secs(1) {
-                    break;
-                }
+                conn.close().await;
             }
-            conn.close().await;
-        });
+            .instrument(tracing::Span::current()),
+        );
     }
 }
 
@@ -722,7 +729,9 @@ impl Actor for MqttActor {
         let (mut to_peer, mut from_peer) = mpsc::unbounded();
         let (mut to_from_peer, mut from_to_peer) = mpsc::unbounded();
 
-        tokio::spawn(async move { self.trie_service.run().await });
+        tokio::spawn(
+            async move { self.trie_service.run().await }.instrument(tracing::Span::current()),
+        );
 
         tedge_utils::futures::select(
             self.from_peers.relay_messages_to(

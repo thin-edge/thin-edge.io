@@ -14,6 +14,7 @@ use futures::StreamExt;
 use log::error;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
+use tracing::Instrument;
 
 /// Wrap a request with a [Sender] to send the response to
 ///
@@ -137,10 +138,13 @@ impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
         {
             // Spawn the request
             let mut server = self.server.clone();
-            let pending_result = tokio::spawn(async move {
-                let result = server.handle(request).await;
-                let _ = reply_to.send(result).await;
-            });
+            let pending_result = tokio::spawn(
+                async move {
+                    let result = server.handle(request).await;
+                    let _ = reply_to.send(result).await;
+                }
+                .instrument(tracing::Span::current()),
+            );
 
             // Send the response back to the client
             self.messages.send_response_once_done(pending_result)

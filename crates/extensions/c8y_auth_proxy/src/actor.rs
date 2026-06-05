@@ -104,6 +104,7 @@ impl Actor for C8yAuthProxy {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        self.app_data.token_manager = self.app_data.token_manager.with_current_span();
         let server = Server::try_init(
             self.app_data,
             self.bind_address,

@@ -40,6 +40,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tokio::sync::mpsc;
+use tracing::Instrument;
 
 pub type MqttConfig = mqtt_channel::Config;
 
@@ -162,33 +163,44 @@ impl MqttBridgeActorBuilder {
             BridgeHealthMonitor::new(health_topic.name.clone(), &local_target);
         let cloud_tx = cloud_target.clone_sender();
         let local_tx = local_target.clone_sender();
-        tokio::spawn(monitor.monitor());
-        tokio::spawn(half_bridge(
-            local_event_loop,
-            local_client,
-            cloud_target,
-            convert_local,
-            bidir_local,
-            tx_status.clone(),
-            "local",
-            local_topics,
-            reconnect_policy.clone(),
-            None,
-            local_tx,
-        ));
-        tokio::spawn(half_bridge(
-            cloud_event_loop,
-            cloud_client,
-            local_target,
-            convert_cloud,
-            bidir_cloud,
-            tx_status.clone(),
-            "cloud",
-            cloud_topics,
-            reconnect_policy,
-            on_cloud_reconnect,
-            cloud_tx,
-        ));
+        tokio::spawn(
+            async move {
+                monitor.monitor().await;
+            }
+            .instrument(tracing::Span::current()),
+        );
+        tokio::spawn(
+            half_bridge(
+                local_event_loop,
+                local_client,
+                cloud_target,
+                convert_local,
+                bidir_local,
+                tx_status.clone(),
+                "local",
+                local_topics,
+                reconnect_policy.clone(),
+                None,
+                local_tx,
+            )
+            .instrument(tracing::Span::current()),
+        );
+        tokio::spawn(
+            half_bridge(
+                cloud_event_loop,
+                cloud_client,
+                local_target,
+                convert_cloud,
+                bidir_cloud,
+                tx_status.clone(),
+                "cloud",
+                cloud_topics,
+                reconnect_policy,
+                on_cloud_reconnect,
+                cloud_tx,
+            )
+            .instrument(tracing::Span::current()),
+        );
 
         Self {}
     }
@@ -303,35 +315,43 @@ impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
         let target = self.target.clone();
         let published = self.published.clone();
         let acknowledged = self.acknowledged.clone();
-        tokio::spawn(async move {
-            while let Some(message) = unbounded_rx.recv().await {
-                match message {
-                    BridgeMessage::BridgePub {
-                        target_topic,
-                        publish,
-                    } => {
-                        let duplicate = (target_topic.clone(), publish.clone());
-                        tx.send(Some(duplicate)).await.unwrap();
-                        target
-                            .publish(target_topic, publish.qos, publish.retain, publish.payload)
-                            .await
-                            .unwrap();
-                        published.fetch_add(1, Ordering::Relaxed);
-                    }
-                    BridgeMessage::Pub { publish } => {
-                        tx.send(None).await.unwrap();
-                        target
-                            .publish(publish.topic, publish.qos, publish.retain, publish.payload)
-                            .await
-                            .unwrap();
-                    }
-                    BridgeMessage::BridgeAck { publish } => {
-                        target.ack(&publish).await.unwrap();
-                        acknowledged.fetch_add(1, Ordering::Relaxed);
+        tokio::spawn(
+            async move {
+                while let Some(message) = unbounded_rx.recv().await {
+                    match message {
+                        BridgeMessage::BridgePub {
+                            target_topic,
+                            publish,
+                        } => {
+                            let duplicate = (target_topic.clone(), publish.clone());
+                            tx.send(Some(duplicate)).await.unwrap();
+                            target
+                                .publish(target_topic, publish.qos, publish.retain, publish.payload)
+                                .await
+                                .unwrap();
+                            published.fetch_add(1, Ordering::Relaxed);
+                        }
+                        BridgeMessage::Pub { publish } => {
+                            tx.send(None).await.unwrap();
+                            target
+                                .publish(
+                                    publish.topic,
+                                    publish.qos,
+                                    publish.retain,
+                                    publish.payload,
+                                )
+                                .await
+                                .unwrap();
+                        }
+                        BridgeMessage::BridgeAck { publish } => {
+                            target.ack(&publish).await.unwrap();
+                            acknowledged.fetch_add(1, Ordering::Relaxed);
+                        }
                     }
                 }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
     }
 }
 
@@ -556,11 +576,14 @@ async fn half_bridge(
                 let topics = topics.clone();
                 // We have to subscribe to this asynchronously (i.e. in a task) since we might at
                 // this point have filled our cloud event loop with outgoing messages
-                tokio::spawn(async move {
-                    for topic in topics {
-                        recv_client.subscribe(topic).await.unwrap()
+                tokio::spawn(
+                    async move {
+                        for topic in topics {
+                            recv_client.subscribe(topic).await.unwrap()
+                        }
                     }
-                });
+                    .instrument(tracing::Span::current()),
+                );
 
                 session_present = Some(conn_ack.session_present);
 

@@ -44,6 +44,7 @@ use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::WebSocketStream;
 use tracing::error;
 use tracing::info;
+use tracing::Instrument;
 
 pub struct Server {
     fut: BoxFuture<'static, std::io::Result<()>>,
@@ -298,7 +299,8 @@ async fn proxy_ws(
     let (mut to_client, mut from_client) = ws.split();
 
     let (tx_c_to_c8y, mut rx_c_to_c8y) = mpsc::channel::<()>(1);
-    let mut client_to_c8y = tokio::spawn(async move {
+    let mut client_to_c8y = tokio::spawn(
+        async move {
         use tungstenite::protocol::frame::CloseFrame;
         use tungstenite::Message;
         let extract_close_frame = |msg| match msg {
@@ -320,11 +322,14 @@ async fn proxy_ws(
         };
         let _ = to_c8y.send(Message::Close(close_frame)).await;
         info!("Closed websocket proxy from client to Cumulocity");
-        res
-    });
+            res
+        }
+        .instrument(tracing::Span::current()),
+    );
 
     let (tx_c8y_to_c, mut rx_c8y_to_c) = mpsc::channel::<()>(1);
-    let mut c8y_to_client = tokio::spawn(async move {
+    let mut c8y_to_client = tokio::spawn(
+        async move {
         use axum::extract::ws::Message;
         let extract_close_frame = |msg| match msg {
             Message::Close(cf) => Ok(cf),
@@ -345,8 +350,10 @@ async fn proxy_ws(
         };
         let _ = to_client.send(Message::Close(close_frame)).await;
         info!("Closed websocket proxy from Cumulocity to client");
-        res
-    });
+            res
+        }
+        .instrument(tracing::Span::current()),
+    );
 
     tokio::select! {
         res = (&mut client_to_c8y) => {
@@ -523,7 +530,6 @@ mod tests {
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWriteExt;
     use tokio::net::TcpStream;
-    use tokio::sync::Mutex;
     use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
     use tokio_tungstenite::tungstenite::protocol::CloseFrame;
     use tokio_tungstenite::tungstenite::Message;
@@ -1253,7 +1259,7 @@ mod tests {
         }
 
         pub fn shared(self) -> SharedTokenManager {
-            SharedTokenManager(Arc::new(Mutex::new(self)))
+            SharedTokenManager::new(self)
         }
     }
 }

@@ -21,9 +21,6 @@ use crate::Capabilities;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::CloudHttpConfig;
-use flockfile::check_another_instance_is_not_running;
-use flockfile::Flockfile;
-use flockfile::FlockfileError;
 use reqwest::Identity;
 use std::fmt::Debug;
 use std::net::SocketAddr;
@@ -78,8 +75,6 @@ pub(crate) struct AgentConfig {
     pub operation_config: OperationConfig,
     pub config_dir: TedgePaths,
     pub tmp_dir: Arc<TedgePaths>,
-    pub run_dir: TedgePaths,
-    pub use_lock: bool,
     pub log_dir: TedgePaths,
     pub agent_log_dir: ManagedDir,
     pub data_dir: DataDir,
@@ -172,10 +167,6 @@ impl AgentConfig {
         )
         .await?;
 
-        // For flockfile
-        let run_dir = tedge_config.run_root();
-        let use_lock = tedge_config.run.lock_files;
-
         // For agent specific
         let log_dir = tedge_config.logs_root();
         let agent_log_dir = log_dir.dir("agent")?;
@@ -221,9 +212,7 @@ impl AgentConfig {
             sw_update_config,
             operation_config,
             config_dir,
-            run_dir,
             tmp_dir,
-            use_lock,
             data_dir,
             log_dir,
             agent_log_dir,
@@ -251,22 +240,11 @@ impl AgentConfig {
 #[derive(Debug)]
 pub struct Agent {
     config: AgentConfig,
-    _flock: Option<Flockfile>,
 }
 
 impl Agent {
-    pub(crate) fn try_new(name: &str, config: AgentConfig) -> Result<Self, FlockfileError> {
-        let mut flock = None;
-        if config.use_lock {
-            flock =
-                check_another_instance_is_not_running(name, config.run_dir.root().as_std_path())?;
-        }
-        info!("{} starting", &name);
-
-        Ok(Self {
-            config,
-            _flock: flock,
-        })
+    pub(crate) fn new(config: AgentConfig) -> Self {
+        Self { config }
     }
 
     #[instrument(skip(self), name = "sm-agent")]
@@ -287,8 +265,28 @@ impl Agent {
         Ok(())
     }
 
-    #[instrument(skip(self), name = "sm-agent")]
+    /// Standalone entry point over [`Agent::build`]: adds the agent's own signal
+    /// handling and runs to completion, exiting the process on a runtime error. The
+    /// supervisor bypasses this wrapper and drives [`Agent::build`] directly.
     pub async fn start(self) -> Result<(), anyhow::Error> {
+        let mut runtime = self.build().await?;
+
+        // Shutdown on SIGINT/SIGTERM/SIGQUIT — owned by the standalone runner only.
+        // Under the supervisor a single process-wide handler owns signals instead,
+        // so the per-component SignalActor is deliberately not part of `build()`.
+        let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
+        runtime.spawn(signal_actor_builder).await?;
+
+        runtime.run_to_completion().await?;
+
+        Ok(())
+    }
+
+    /// Runs init, wires every actor, and spawns the runtime — without the signal
+    /// handling, single-instance lock, or run-to-completion that [`Agent::start`] and
+    /// the supervisor layer on top. Safe to call repeatedly for a fresh incarnation.
+    #[instrument(skip(self), name = "sm-agent")]
+    pub async fn build(self) -> Result<Runtime, anyhow::Error> {
         let version = env!("CARGO_PKG_VERSION");
         info!("Starting tedge-agent v{}", version);
         self.init().await?;
@@ -333,9 +331,6 @@ impl Agent {
         );
         workflow_actor_builder.register_builtin_operation(&mut restart_actor_builder);
         workflow_actor_builder.register_builtin_operation(&mut software_update_builder);
-
-        // Shutdown on SIGINT
-        let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
 
         // Health actor
         // TODO: take a user-configurable service topic id
@@ -492,7 +487,6 @@ impl Agent {
         }
 
         // Spawn all
-        runtime.spawn(signal_actor_builder).await?;
         runtime.spawn(mqtt_actor_builder).await?;
         runtime.spawn(fs_watch_actor_builder).await?;
         runtime.spawn(twin_manager_builder).await?;
@@ -510,8 +504,6 @@ impl Agent {
         runtime.spawn(workflow_actor_builder).await?;
         runtime.spawn(health_actor).await?;
 
-        runtime.run_to_completion().await?;
-
-        Ok(())
+        Ok(runtime)
     }
 }

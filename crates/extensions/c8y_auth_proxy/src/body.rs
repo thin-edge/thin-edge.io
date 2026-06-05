@@ -12,6 +12,7 @@ use hyper::body::Bytes;
 use hyper::Request;
 use hyper::StatusCode;
 use tokio::sync::mpsc;
+use tracing::Instrument;
 
 pub enum PossiblySmallBody {
     Small(Bytes),
@@ -35,13 +36,16 @@ where
 {
     pub fn new(b: impl http_body::Body<Data = D, Error = E> + Send + 'static) -> Self {
         let (tx, rx) = mpsc::channel(10);
-        tokio::spawn(async move {
-            tokio::pin!(b);
-            while let Some(frame) = b.frame().await {
-                // unwrap because we should abort this loop if the receiver is dropped
-                tx.send(frame).await.unwrap();
+        tokio::spawn(
+            async move {
+                tokio::pin!(b);
+                while let Some(frame) = b.frame().await {
+                    // unwrap because we should abort this loop if the receiver is dropped
+                    tx.send(frame).await.unwrap();
+                }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
         Self(rx)
     }
 }

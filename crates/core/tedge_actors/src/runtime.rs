@@ -19,6 +19,8 @@ use std::panic;
 use std::time::Duration;
 use tokio::task::JoinError;
 use tokio::task::JoinHandle;
+use tracing::Instrument;
+use tracing::Span;
 
 /// Actions sent by actors to the runtime
 #[derive(Debug)]
@@ -64,10 +66,19 @@ impl Runtime {
 
     fn with_events_sender(events_sender: Option<DynSender<RuntimeEvent>>) -> Runtime {
         let (actions_sender, actions_receiver) = mpsc::channel(16);
-        let runtime_actor =
-            RuntimeActor::new(actions_receiver, events_sender, Duration::from_secs(60));
+        // Capture the ambient span at construction so every actor this runtime spawns
+        // is attributed to it. The supervisor builds each component inside a
+        // `component` span, giving per-component attribution in the shared log stream;
+        // standalone components build with no ambient span, so this is a no-op.
+        let span = Span::current();
+        let runtime_actor = RuntimeActor::new(
+            actions_receiver,
+            events_sender,
+            Duration::from_secs(60),
+            span.clone(),
+        );
 
-        let runtime_task = tokio::spawn(runtime_actor.run());
+        let runtime_task = tokio::spawn(runtime_actor.run().instrument(span));
         Runtime {
             handle: RuntimeHandle { actions_sender },
             bg_task: runtime_task,
@@ -93,6 +104,11 @@ impl Runtime {
     /// - Either, a `Shutdown` action is sent to the runtime
     /// - Or, all the runtime handler clones have been dropped
     ///   and all the running tasks have reach completion (successfully or not).
+    ///
+    /// The *standalone* completion path: on a runtime error it logs and calls
+    /// [`std::process::exit`]. Under the single-process supervisor use
+    /// [`Runtime::run_to_completion_supervised`] instead, which returns the error
+    /// rather than taking down every co-hosted component.
     pub async fn run_to_completion(self) -> Result<(), RuntimeError> {
         if let Err(err) = Runtime::wait_for_completion(self.bg_task).await {
             error!("Aborted due to {err}");
@@ -100,6 +116,13 @@ impl Runtime {
         }
 
         Ok(())
+    }
+
+    /// Like [`Runtime::run_to_completion`] but never calls [`std::process::exit`]: the
+    /// error is returned so the supervisor can apply its restart policy. This is what
+    /// keeps a crashing component from taking down its co-hosted peers.
+    pub async fn run_to_completion_supervised(self) -> Result<(), RuntimeError> {
+        Runtime::wait_for_completion(self.bg_task).await
     }
 
     async fn wait_for_completion(
@@ -157,6 +180,9 @@ struct RuntimeActor {
     cleanup_duration: Duration,
     futures: FuturesUnordered<JoinHandle<Result<String, (String, RuntimeError)>>>,
     running_actors: HashMap<String, DynSender<RuntimeRequest>>,
+    /// Span attributing this runtime's actor tasks to their component (see
+    /// [`Runtime::with_events_sender`]).
+    span: Span,
 }
 
 impl RuntimeActor {
@@ -164,6 +190,7 @@ impl RuntimeActor {
         actions: mpsc::Receiver<RuntimeAction>,
         events: Option<DynSender<RuntimeEvent>>,
         cleanup_duration: Duration,
+        span: Span,
     ) -> Self {
         Self {
             actions,
@@ -171,6 +198,7 @@ impl RuntimeActor {
             cleanup_duration,
             futures: FuturesUnordered::new(),
             running_actors: HashMap::default(),
+            span,
         }
     }
 
@@ -192,7 +220,7 @@ impl RuntimeActor {
                                     })
                                     .await;
                                     self.running_actors.insert(running_name.clone(), actor.get_signal_sender());
-                                    self.futures.push(tokio::spawn(run_task(actor, running_name)));
+                                    self.futures.push(tokio::spawn(run_task(actor, running_name, self.span.clone())));
                                     actors_count += 1;
                                }
                                RuntimeAction::Shutdown => {
@@ -295,8 +323,12 @@ where
     }
 }
 
-async fn run_task(task: RunActor, running_name: String) -> Result<String, (String, RuntimeError)> {
-    match tokio::spawn(task.run()).await {
+async fn run_task(
+    task: RunActor,
+    running_name: String,
+    span: Span,
+) -> Result<String, (String, RuntimeError)> {
+    match tokio::spawn(task.run().instrument(span)).await {
         Ok(r) => r
             .map(|_| running_name.clone())
             .map_err(|e| (running_name, e)),
@@ -432,6 +464,7 @@ mod tests {
             actions_receiver,
             Some(Box::new(events_sender)),
             Duration::from_millis(1),
+            Span::none(),
         );
         (actions_sender, events_receiver, ra)
     }

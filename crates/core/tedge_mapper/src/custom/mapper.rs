@@ -19,6 +19,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use tedge_actors::MessageSink;
+use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::MqttAuthClientConfigCloudBroker;
@@ -321,11 +322,11 @@ fn bridge_health_clear_message(
 
 #[async_trait]
 impl TEdgeComponent for CustomMapper {
-    async fn start(
+    async fn build(
         &self,
         tedge_config: TEdgeConfig,
         config_dir: &TedgePaths,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Runtime> {
         let mapper_dir = self.mapper_dir(config_dir);
         let service_name = self.service_name();
 
@@ -390,8 +391,8 @@ impl TEdgeComponent for CustomMapper {
         runtime.spawn(cmd_watcher_actor).await?;
 
         runtime.spawn(mqtt_actor).await?;
-        runtime.run_to_completion().await?;
-        Ok(())
+
+        Ok(runtime)
     }
 }
 

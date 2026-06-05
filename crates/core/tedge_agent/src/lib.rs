@@ -14,8 +14,14 @@
 use std::sync::Arc;
 
 use agent::AgentConfig;
+use flockfile::check_another_instance_is_not_running;
+use flockfile::Flockfile;
+use flockfile::FlockfileError;
+use tedge_actors::Runtime;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
+use tedge_config::TEdgeConfig;
+use tracing::info;
 
 mod agent;
 mod device_profile_manager;
@@ -57,14 +63,42 @@ pub async fn run(
         &agent_opt.common.config_dir,
     )?;
 
-    let agent = agent::Agent::try_new(
-        "tedge-agent",
-        AgentConfig::from_config_and_cliopts(tedge_config, agent_opt).await?,
-    )?;
+    // Single-instance lock held for the lifetime of the standalone agent.
+    let _flock = acquire_lock(&tedge_config)?;
+    info!("{AGENT_NAME} starting");
 
+    let config = AgentConfig::from_config_and_cliopts(tedge_config, agent_opt).await?;
+    let agent = agent::Agent::new(config);
     agent.start().await?;
 
     Ok(())
+}
+
+/// Name under which the agent registers its single-instance lock and service.
+pub const AGENT_NAME: &str = "tedge-agent";
+
+/// Rebuildable factory the single-process supervisor calls (on each restart) for the
+/// agent unit. Builds the runtime with no signal handling, lock, or run-to-completion
+/// — the supervisor owns those.
+pub async fn build(
+    agent_opt: AgentOpt,
+    tedge_config: TEdgeConfig,
+) -> Result<Runtime, anyhow::Error> {
+    let config = AgentConfig::from_config_and_cliopts(tedge_config, agent_opt).await?;
+    agent::Agent::new(config).build().await
+}
+
+/// Acquires the agent's single-instance lock, if locking is enabled.
+///
+/// Held for the agent's whole lifetime. The supervisor takes it once and retains it
+/// across restarts, so it guards only against an external duplicate (e.g. a
+/// systemd-managed agent left running).
+pub fn acquire_lock(tedge_config: &TEdgeConfig) -> Result<Option<Flockfile>, FlockfileError> {
+    if tedge_config.run.lock_files {
+        check_another_instance_is_not_running(AGENT_NAME, tedge_config.run.path.as_std_path())
+    } else {
+        Ok(None)
+    }
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
