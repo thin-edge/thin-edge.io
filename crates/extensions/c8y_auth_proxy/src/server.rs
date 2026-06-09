@@ -555,11 +555,11 @@ mod tests {
                 })
             }),
         );
-        (
-            test_app,
-            tokio::time::timeout(Duration::from_secs(5), async move { rx.next().await })
-                .map(|e| e.context("Waiting for ConnectionClosed from server")),
-        )
+        (test_app, async move {
+            tokio::time::timeout(Duration::from_secs(5), rx.next())
+                .await
+                .context("Waiting for ConnectionClosed from server")
+        })
     }
 
     async fn receive_all_messages(mut ws: impl Stream + Unpin) {
