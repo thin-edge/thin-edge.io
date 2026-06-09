@@ -31,7 +31,6 @@ use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::workflow::log::log_dir::OperationLogs;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
@@ -205,7 +204,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             state_dir.clone(),
         );
         let state_repository = AgentStateRepository::with_state_dir(state_dir, "workflows");
-        let log_dir = OperationLogs::new(self.config.log_dir);
+        let log_dir = self.config.log_dir;
 
         WorkflowActor {
             mqtt_schema: self.config.mqtt_schema,

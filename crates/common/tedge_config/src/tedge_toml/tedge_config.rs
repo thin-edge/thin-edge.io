@@ -9,6 +9,7 @@ pub use append_remove::AppendRemoveItem;
 pub mod mapper_config;
 
 use super::models::auth_method::AuthMethod;
+use super::models::count_per_group::CountPerGroup;
 use super::models::proxy_url::ProxyUrl;
 use super::models::timestamp::TimeFormat;
 use super::models::AptConfig;
@@ -1289,6 +1290,12 @@ define_tedge_config! {
         /// The directory used to store logs
         #[tedge_config(example = "/var/log/tedge", default(from_str = "/var/log/tedge"))]
         path: AbsolutePath,
+
+        /// The maximum count of log files per operation
+        #[tedge_config(default(from_str = "*:5, software_list:1"))]
+        #[tedge_config(example = "*:5, software_list:1")]
+        #[tedge_config(note = "Expect a list of <operation-name>:<max-count> pairs, using *:<max-count> for a default maximum")]
+        max_per_operation: CountPerGroup,
     },
 
     tmp: {

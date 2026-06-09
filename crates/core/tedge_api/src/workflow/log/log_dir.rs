@@ -18,7 +18,7 @@ pub enum OperationLogsError {
     FromTimeFormat(#[from] time::error::Format),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct OperationLogs {
     pub log_dir: ManagedDir,
     keep_default: u32,
@@ -32,6 +32,10 @@ impl OperationLogs {
             keep_default: 5,
             keep_per_operation: HashMap::new(),
         }
+    }
+
+    pub fn keep_default(&mut self, count: u32) {
+        self.keep_default = count;
     }
 
     pub fn keep_count(&mut self, operation: &str, count: u32) {

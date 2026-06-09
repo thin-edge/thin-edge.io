@@ -1,6 +1,7 @@
 use crate::Capabilities;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::workflow::log::log_dir::OperationLogs;
 use tedge_config::TEdgeConfig;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
@@ -10,7 +11,7 @@ pub struct OperationConfig {
     pub mqtt_schema: MqttSchema,
     pub device_topic_id: EntityTopicId,
     pub service_topic_id: EntityTopicId,
-    pub log_dir: ManagedDir,
+    pub log_dir: OperationLogs,
     pub config_dir: TedgePaths,
     pub state_dir: TedgePaths,
     pub operations_dir: ManagedDir,
@@ -31,12 +32,13 @@ impl OperationConfig {
             config_snapshot: tedge_config.agent.enable.config_snapshot,
             log_upload: tedge_config.agent.enable.log_upload,
         };
+        let log_dir = tedge_config.operation_logs();
 
         Ok(OperationConfig {
             mqtt_schema: MqttSchema::with_root(topic_root),
             device_topic_id: device_topic_id.clone(),
             service_topic_id,
-            log_dir: tedge_config.logs_root().dir("agent")?,
+            log_dir,
             config_dir: tedge_config.config_root(),
             state_dir: tedge_config.state_root(),
             operations_dir: config_dir.dir("operations")?,

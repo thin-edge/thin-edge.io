@@ -4,6 +4,7 @@ pub mod auto;
 pub mod c8y;
 pub mod c8y_software_management;
 pub mod connect_url;
+pub mod count_per_group;
 pub mod cryptoki;
 pub mod flag;
 pub mod host_port;
