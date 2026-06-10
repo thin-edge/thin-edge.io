@@ -133,7 +133,7 @@ impl OperationLogs {
             {
                 if let Ok(creation_date) = tokio::fs::metadata(file.path())
                     .await
-                    .and_then(|metadata| metadata.created())
+                    .and_then(|metadata| metadata.created().or_else(|_| metadata.modified()))
                 {
                     operation_logs.push((file.path(), creation_date))
                 }
