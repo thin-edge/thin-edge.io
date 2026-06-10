@@ -254,6 +254,7 @@ impl RuntimeActor {
                 for still_running in self.running_actors.keys() {
                      error!(target: "Runtime", "Failed to shutdown: {still_running}")
                 }
+                self.abort_running_actors().await;
             }
             _ = self.wait_for_actors_to_finish() => info!(target: "Runtime", "All actors have finished")
         }
@@ -268,6 +269,18 @@ impl RuntimeActor {
         while let Some(finished_actor) = self.futures.next().await {
             let _ = self.handle_actor_finishing(finished_actor).await;
         }
+    }
+
+    async fn abort_running_actors(&mut self) {
+        for actor in self.futures.iter() {
+            actor.abort();
+        }
+
+        while let Some(finished_actor) = self.futures.next().await {
+            let _ = self.handle_actor_finishing(finished_actor).await;
+        }
+
+        self.running_actors.clear();
     }
 
     async fn handle_actor_finishing(
@@ -328,11 +341,31 @@ async fn run_task(
     running_name: String,
     span: Span,
 ) -> Result<String, (String, RuntimeError)> {
-    match tokio::spawn(task.run().instrument(span)).await {
-        Ok(r) => r
+    match panic::AssertUnwindSafe(task.run().instrument(span))
+        .catch_unwind()
+        .await
+    {
+        Ok(result) => result
             .map(|_| running_name.clone())
             .map_err(|e| (running_name, e)),
-        Err(e) => Err((running_name.clone(), e.into())),
+        Err(payload) => Err((
+            running_name.clone(),
+            RuntimeError::ActorError(
+                std::io::Error::other(panic_error_message(&running_name, payload)).into(),
+            ),
+        )),
+    }
+}
+
+fn panic_error_message(actor_name: &str, payload: Box<dyn std::any::Any + Send>) -> String {
+    let panic_message = payload
+        .downcast_ref::<&str>()
+        .map(|message| (*message).to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned());
+
+    match panic_message {
+        Some(message) => format!("actor {actor_name} panicked with message \"{message}\""),
+        None => format!("actor {actor_name} panicked"),
     }
 }
 
@@ -621,8 +654,8 @@ mod tests {
             .await
             .expect("Actor to panic in time");
         assert_eq!(
-            error.map(|s| s.replace(char::is_numeric, "")), // ignore the task id
-            Some("task  panicked with message \"Oh dear\"".to_string())
+            error,
+            Some("actor Panic-0 panicked with message \"Oh dear\"".to_string())
         );
 
         // No more message can be sent to the actors: they have been shutdown

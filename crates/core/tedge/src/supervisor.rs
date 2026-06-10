@@ -738,6 +738,63 @@ mod tests {
             .unwrap();
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn rapid_mapper_restart_requests_do_not_overlap_live_actors() {
+        let mapper_builds = Arc::new(AtomicUsize::new(0));
+        let live_actors = Arc::new(AtomicUsize::new(0));
+        let max_live_actors = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![make_unit(
+            "mapper",
+            UnitKind::Mapper,
+            leaky_shutdown_factory(
+                mapper_builds.clone(),
+                live_actors.clone(),
+                max_live_actors.clone(),
+            ),
+            policy,
+        )];
+        let mut supervisor = Supervisor::new(units);
+        supervisor.drain_timeout = Duration::from_millis(100);
+        let commands = supervisor.commands();
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        wait_until(
+            || mapper_builds.load(Ordering::SeqCst) == 1,
+            "the mapper to start",
+        )
+        .await;
+
+        commands.send(Command::RestartMappers).await.unwrap();
+        commands.send(Command::RestartMappers).await.unwrap();
+
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(61)).await;
+        tokio::task::yield_now().await;
+        tokio::task::yield_now().await;
+        wait_until(
+            || mapper_builds.load(Ordering::SeqCst) >= 2,
+            "the mapper to be restarted",
+        )
+        .await;
+
+        assert_eq!(
+            max_live_actors.load(Ordering::SeqCst),
+            1,
+            "a mapper restart must not start a replacement while the previous actor is still alive"
+        );
+
+        commands.send(Command::ShutdownAll).await.unwrap();
+        commands.send(Command::ShutdownAll).await.unwrap();
+        timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("supervisor should exit after shutdown")
+            .unwrap()
+            .unwrap();
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn shutdown_drains_all_units_and_exits() {
         let agent_builds = Arc::new(AtomicUsize::new(0));
@@ -1053,6 +1110,32 @@ mod tests {
         })
     }
 
+    /// A factory whose actor stays alive after shutdown is requested. This models an
+    /// actor that has not actually released its external resource (e.g. an MQTT
+    /// client id) by the time the runtime gives up waiting for cleanup.
+    fn leaky_shutdown_factory(
+        builds: Arc<AtomicUsize>,
+        live_actors: Arc<AtomicUsize>,
+        max_live_actors: Arc<AtomicUsize>,
+    ) -> RuntimeFactory {
+        Box::new(move || {
+            builds.fetch_add(1, Ordering::SeqCst);
+            let live_actors = live_actors.clone();
+            let max_live_actors = max_live_actors.clone();
+            async move {
+                let mut runtime = Runtime::new();
+                runtime
+                    .spawn(LeakyShutdownActorBuilder {
+                        live_actors,
+                        max_live_actors,
+                    })
+                    .await?;
+                Ok(runtime)
+            }
+            .boxed()
+        })
+    }
+
     /// Polls `cond` until it holds, failing the test if it does not within 5s.
     async fn wait_until(mut cond: impl FnMut() -> bool, what: &str) {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
@@ -1130,6 +1213,61 @@ mod tests {
     }
 
     impl RuntimeRequestSink for StubbornActorBuilder {
+        fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+            NullSender.into()
+        }
+    }
+
+    struct LeakyShutdownActor {
+        live_actors: Arc<AtomicUsize>,
+        max_live_actors: Arc<AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl Actor for LeakyShutdownActor {
+        fn name(&self) -> &str {
+            "leaky-shutdown"
+        }
+
+        async fn run(self) -> Result<(), RuntimeError> {
+            let live = self.live_actors.fetch_add(1, Ordering::SeqCst) + 1;
+            self.max_live_actors.fetch_max(live, Ordering::SeqCst);
+            let _guard = LiveActorGuard(self.live_actors.clone());
+            std::future::pending::<()>().await;
+            #[allow(unreachable_code)]
+            Ok(())
+        }
+    }
+
+    struct LiveActorGuard(Arc<AtomicUsize>);
+
+    impl Drop for LiveActorGuard {
+        fn drop(&mut self) {
+            self.0.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+
+    struct LeakyShutdownActorBuilder {
+        live_actors: Arc<AtomicUsize>,
+        max_live_actors: Arc<AtomicUsize>,
+    }
+
+    impl Builder<LeakyShutdownActor> for LeakyShutdownActorBuilder {
+        type Error = std::convert::Infallible;
+
+        fn try_build(self) -> Result<LeakyShutdownActor, Self::Error> {
+            Ok(self.build())
+        }
+
+        fn build(self) -> LeakyShutdownActor {
+            LeakyShutdownActor {
+                live_actors: self.live_actors,
+                max_live_actors: self.max_live_actors,
+            }
+        }
+    }
+
+    impl RuntimeRequestSink for LeakyShutdownActorBuilder {
         fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
             NullSender.into()
         }
