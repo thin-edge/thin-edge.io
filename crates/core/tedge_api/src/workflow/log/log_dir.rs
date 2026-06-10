@@ -157,6 +157,8 @@ impl OperationLogs {
                     path.display(),
                     err
                 );
+            } else {
+                log::info!("Removed out-dated log file: {}", path.display());
             }
         }
 
