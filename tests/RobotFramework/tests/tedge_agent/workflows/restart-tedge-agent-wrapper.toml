@@ -1,0 +1,19 @@
+operation = "restart-tedge-agent-wrapper"
+
+[init]
+action = "proceed"
+on_success = "restart"
+
+[restart]
+operation = "restart-tedge-agent-internal"
+on_exec = "restarting"
+
+[restarting]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
