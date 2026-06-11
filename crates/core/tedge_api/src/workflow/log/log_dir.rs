@@ -21,7 +21,7 @@ pub enum OperationLogsError {
 #[derive(Clone, Debug)]
 pub struct OperationLogs {
     pub log_dir: ManagedDir,
-    keep_default: u32,
+    keep_default: Option<u32>,
     keep_per_operation: HashMap<String, u32>,
 }
 
@@ -29,12 +29,12 @@ impl OperationLogs {
     pub fn new(log_dir: ManagedDir) -> OperationLogs {
         OperationLogs {
             log_dir,
-            keep_default: 5,
+            keep_default: Some(5),
             keep_per_operation: HashMap::new(),
         }
     }
 
-    pub fn keep_default(&mut self, count: u32) {
+    pub fn keep_default(&mut self, count: Option<u32>) {
         self.keep_default = count;
     }
 
@@ -97,20 +97,23 @@ impl OperationLogs {
             return;
         }
 
-        let keep_at_most = *self
+        if let Some(keep_at_most) = self
             .keep_per_operation
             .get(&log.operation)
-            .unwrap_or(&self.keep_default);
-        let keep = if keep_at_most > 0 {
-            // Make room for the new log
-            keep_at_most - 1
-        } else {
-            0
-        };
-        if let Err(err) = self.remove_outdated_logs(&log.operation, keep).await {
-            // In no case a log-cleaning error should prevent the agent to run.
-            // Hence the error is logged but not returned.
-            log::warn!("Fail to remove out-dated log files: {}", err);
+            .or(self.keep_default.as_ref())
+            .copied()
+        {
+            let keep = if keep_at_most > 0 {
+                // Make room for the new log
+                keep_at_most - 1
+            } else {
+                0
+            };
+            if let Err(err) = self.remove_outdated_logs(&log.operation, keep).await {
+                // In no case a log-cleaning error should prevent the agent to run.
+                // Hence the error is logged but not returned.
+                log::warn!("Fail to remove out-dated log files: {}", err);
+            }
         }
 
         let _ = log.open().await;
@@ -144,7 +147,6 @@ impl OperationLogs {
         operation_logs.sort_by_key(|(_, creation_date)| *creation_date);
 
         // Remove the 5 most recent files
-
         for _ in 0..keep {
             operation_logs.pop();
         }

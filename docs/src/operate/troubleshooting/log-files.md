@@ -77,8 +77,8 @@ These log files are stored in `/var/log/tedge/agent`.
 
 Each log file is named after the [command identifier as published over MQTT](../../../references/mqtt-api/#command-examples).
 
-- A software update command published on `te/<device-id>/cmd/<command-name>/<cmd_id>`
-- is monitored by the log file `workflow-<command-name>-<cmd_id>.md`
+- A software update command published on `te/<device-id>/cmd/<command-name>/<cmd-id>`
+- is monitored by the log file `workflow-<command-name>-<cmd-id>.md`
 - stored in the log directory of the agent running on the device `<device-id>`.
 
 Over time, these log files are purged by the agent.
@@ -89,6 +89,9 @@ Over time, these log files are purged by the agent.
  `tedge config add logs.max_per_operation "<operation-name>:<max-count>"`,
   for example `software_list:1`.
 - The default can be reset for an operation with `tedge config remove logs.max_per_operation "<operation-name>"`
+- The feature can be fully disabled with `tedge config set logs.max_per_operation ""`
+  or enabled only for operations explicitly listed by removing the default maximum,
+  i.e. running `tedge config remove logs.max_per_operation "*"`.
 - Note that for these configuration updates to be effective, the agent must be restarted.
 
 ### tedge-agent logs {#tedge-agent-logs}

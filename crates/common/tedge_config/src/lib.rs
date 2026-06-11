@@ -156,9 +156,8 @@ impl TEdgeConfig {
     pub fn operation_logs(&self) -> OperationLogs {
         let log_dir = self.logs_root().dir("agent").expect("infallible");
         let mut operation_logs = OperationLogs::new(log_dir);
-        if let Some(max_default) = self.logs.max_per_operation.default_count() {
-            operation_logs.keep_default(max_default);
-        }
+        let max_default = self.logs.max_per_operation.default_count();
+        operation_logs.keep_default(max_default);
         for (operation, max) in self.logs.max_per_operation.count_per_groups() {
             operation_logs.keep_count(operation, max);
         }
