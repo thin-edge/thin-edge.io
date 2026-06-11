@@ -34,6 +34,7 @@ use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
 use tokio::time::timeout;
+use tracing::Instrument;
 
 pub type IdDownloadResult = (String, DownloadResult);
 pub type IdDownloadRequest = (String, DownloadRequest);
@@ -91,25 +92,28 @@ impl FirmwareManagerWorker {
     ) -> DynSender<FirmwareOperationResponse> {
         let mut progress_sender: DynSender<OperationOutcome> = self.progress_sender.sender_clone();
         let (response_sender, response_receiver) = mpsc::channel(10);
-        tokio::spawn(async move {
-            let result = self
-                .run(
-                    operation_key.operation_id.clone(),
-                    smartrest_request,
-                    response_receiver,
-                )
-                .await;
+        tokio::spawn(
+            async move {
+                let result = self
+                    .run(
+                        operation_key.operation_id.clone(),
+                        smartrest_request,
+                        response_receiver,
+                    )
+                    .await;
 
-            if let Err(err) = progress_sender
-                .send(OperationOutcome {
-                    operation: operation_key,
-                    result,
-                })
-                .await
-            {
-                error!("Fail to forward operation progress due to: {err}");
+                if let Err(err) = progress_sender
+                    .send(OperationOutcome {
+                        operation: operation_key,
+                        result,
+                    })
+                    .await
+                {
+                    error!("Fail to forward operation progress due to: {err}");
+                }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
         response_sender.into()
     }
 

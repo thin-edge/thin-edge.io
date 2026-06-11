@@ -936,6 +936,7 @@ dependencies = [
  "tedge_utils",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5313,6 +5314,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.9.6",
+ "tracing",
  "uzers",
 ]
 

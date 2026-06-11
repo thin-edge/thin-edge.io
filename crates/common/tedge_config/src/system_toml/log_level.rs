@@ -246,15 +246,21 @@ where
     }
 
     fn event_enabled(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) -> bool {
-        let current_span = if let Some(id) = event.parent() {
-            ctx.span(id)
-        } else {
-            ctx.lookup_current()
-        };
-
-        let level = current_span
-            .and_then(|span| span.extensions().get::<ComponentName>().cloned())
-            .and_then(|component| self.component_levels.get(component.0.as_str()).copied())
+        // Walk up the span ancestry from the event to find the nearest enclosing
+        // `component` span. Dependencies a component calls into open their own
+        // child spans, which carry no `ComponentName`; only looking at the
+        // innermost span would attribute those events to the default level rather
+        // than to the component that called them.
+        let level = ctx
+            .event_scope(event)
+            .into_iter()
+            .flatten()
+            .find_map(|span| {
+                span.extensions()
+                    .get::<ComponentName>()
+                    .map(|c| c.0.clone())
+            })
+            .and_then(|component| self.component_levels.get(component.as_str()).copied())
             .unwrap_or(self.default_level);
 
         *event.metadata().level() <= level
@@ -553,6 +559,49 @@ mod tests {
         let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
         assert!(output.contains("agent_trace"));
         assert!(!output.contains("mapper_trace"));
+    }
+
+    #[test]
+    fn component_filter_applies_to_nested_dependency_spans() {
+        #[derive(Clone)]
+        struct Buffer(Arc<Mutex<Vec<u8>>>);
+
+        impl io::Write for Buffer {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let writer = Buffer(output.clone());
+        let filter = ComponentLogFilter {
+            default_level: Level::INFO,
+            component_levels: HashMap::from([("tedge-agent".to_string(), Level::TRACE)]),
+        };
+        let fmt_layer = tracing_subscriber::fmt::layer()
+            .without_time()
+            .with_ansi(false)
+            .with_writer(move || writer.clone());
+        let subscriber = tracing_subscriber::registry().with(filter).with(fmt_layer);
+
+        tracing::subscriber::with_default(subscriber, || {
+            let agent = tracing::info_span!("component", name = "tedge-agent");
+            let _guard = agent.enter();
+            // A dependency the component calls into opens its own span, which does
+            // not carry a component name. Events emitted within it must still be
+            // filtered at the enclosing component's level.
+            let dependency = tracing::info_span!("dependency_call");
+            let _dependency_guard = dependency.enter();
+            tracing::trace!("dependency_trace");
+        });
+
+        let output = String::from_utf8(output.lock().unwrap().clone()).unwrap();
+        assert!(output.contains("dependency_trace"));
     }
 
     // Need to return TempDir, otherwise the dir will be deleted when this function ends.

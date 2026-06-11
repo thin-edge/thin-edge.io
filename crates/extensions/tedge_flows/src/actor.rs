@@ -40,6 +40,7 @@ use tokio::time::Instant;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
+use tracing::Instrument;
 
 pub struct FlowsMapper {
     config: FlowsMapperConfig,
@@ -383,11 +384,14 @@ impl FlowsMapper {
             return Ok(());
         };
         let mut watch_request_sender = self.watch_request_sender.sender_clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            info!(target: "flows", info);
-            let _ = watch_request_sender.send(request).await;
-        });
+        tokio::spawn(
+            async move {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                info!(target: "flows", info);
+                let _ = watch_request_sender.send(request).await;
+            }
+            .instrument(tracing::Span::current()),
+        );
 
         Ok(())
     }
