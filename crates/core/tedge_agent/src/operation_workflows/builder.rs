@@ -204,13 +204,14 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             state_dir.clone(),
         );
         let state_repository = AgentStateRepository::with_state_dir(state_dir, "workflows");
+        let log_dir = self.config.log_dir;
 
         WorkflowActor {
             mqtt_schema: self.config.mqtt_schema,
             device_topic_id: self.config.device_topic_id,
             workflow_repository,
             state_repository,
-            log_dir: self.config.log_dir.into(),
+            log_dir,
             capabilities: self.config.capabilities,
             input_receiver: self.input_receiver,
             builtin_command_dispatcher: self.command_dispatcher,

@@ -1,6 +1,6 @@
 pub mod error;
 pub mod handlers;
-pub(crate) mod log;
+pub mod log;
 mod on_disk;
 pub mod state;
 pub mod supervisor;

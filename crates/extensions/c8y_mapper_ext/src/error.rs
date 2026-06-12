@@ -4,9 +4,9 @@ use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::error::SmartRestSerializerError;
 use c8y_http_proxy::messages::C8YRestError;
-use plugin_sm::operation_logs::OperationLogsError;
 use std::path::PathBuf;
 use tedge_api::measurement::ThinEdgeJsonSerializationError;
+use tedge_api::workflow::log::log_dir::OperationLogsError;
 use tedge_config::TEdgeConfigError;
 use tedge_mqtt_ext::MqttError;
 use tedge_utils::file::FileError;
@@ -103,7 +103,7 @@ pub enum ConversionError {
     },
 
     #[error(transparent)]
-    FromOperationLogsError(#[from] plugin_sm::operation_logs::OperationLogsError),
+    FromOperationLogsError(#[from] OperationLogsError),
 
     #[error("The given Child ID '{id}' is not registered with Cumulocity. To send the events to the child device, it has to be registered first.")]
     ChildDeviceNotRegistered { id: String },

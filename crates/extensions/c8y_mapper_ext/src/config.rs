@@ -23,6 +23,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::TopicIdError;
 use tedge_api::service_health_topic;
 use tedge_api::substitution::Record;
+use tedge_api::workflow::log::log_dir::OperationLogs;
 use tedge_config::models::AutoLogUpload;
 use tedge_config::models::SoftwareManagementApiFlag;
 use tedge_config::models::TopicPrefix;
@@ -68,7 +69,7 @@ pub struct C8yMapperConfig {
     pub smartrest_child_device_create_with_device_marker: bool,
 
     pub config_dir: Arc<TedgePaths>,
-    pub logs_path: Arc<TedgePaths>,
+    pub logs_path: Arc<OperationLogs>,
     pub ops_dir: Arc<ManagedDir>,
     pub tmp_dir: Arc<TedgePaths>,
 
@@ -80,7 +81,7 @@ impl C8yMapperConfig {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         config_dir: Arc<TedgePaths>,
-        logs_path: Arc<TedgePaths>,
+        logs_path: Arc<OperationLogs>,
         tmp_dir: Arc<TedgePaths>,
 
         device_id: String,
@@ -165,7 +166,7 @@ impl C8yMapperConfig {
     ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
         let config_dir: Arc<TedgePaths> = config_dir.clone().into();
 
-        let logs_path = Arc::new(tedge_config.logs_root());
+        let logs_path = Arc::new(tedge_config.operation_logs());
         let tmp_dir = Arc::new(tedge_config.tmp_root());
 
         let device_id = c8y_config.device.id()?.to_string();

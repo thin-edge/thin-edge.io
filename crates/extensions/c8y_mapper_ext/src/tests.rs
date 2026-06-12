@@ -19,6 +19,7 @@ use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::test_helpers::FakeServerBox;
@@ -44,6 +45,7 @@ use tedge_api::mqtt_topics::ChannelFilter::AnySignal;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::workflow::log::log_dir::OperationLogs;
 use tedge_config::models::AutoLogUpload;
 use tedge_config::models::SoftwareManagementApiFlag;
 use tedge_config::models::TopicPrefix;
@@ -3226,10 +3228,11 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     topics.remove_overlapping_patterns();
 
     let root_dir = TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "");
+    let _agent_log_dir = tmp_dir.dir("agent");
 
     C8yMapperConfig::new(
         root_dir.clone().into(),
-        root_dir.clone().into(),
+        Arc::new(OperationLogs::new(root_dir.root_dir())),
         root_dir.clone().into(),
         device_name,
         device_topic_id,

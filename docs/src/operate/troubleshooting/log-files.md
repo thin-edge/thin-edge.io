@@ -64,15 +64,37 @@ journalctl -u tedge-mapper-collectd
 Run `tedge-mapper --debug collectd` to log more debug messages
 :::
 
-### Software Management logs {#software-management}
-This section describes how to access the software management component logs
+### Operations logs {#software-management}
 
-#### Software update operation log {#software-update}
-For every new software operation (list/update), a new log file will be created at `/var/log/tedge/agent`.
-For each `plugin command` like prepare, update-list (install, remove), finalize, and list,
-the log file captures `exit status, stdout, and stderr` messages.
+The agent creates a log file per operation execution, logging all the steps, sub-commands output and errors.
+This is done for all operations: software, config and firmware updates but also software or config list requests
+as well as any [user-defined operation defined using a workflow](../../../references/agent/operation-workflow).
 
-#### tedge-agent logs {#tedge-agent-logs}
+These log files are stored in `/var/log/tedge/agent`.
+
+- This directory can be configured with `tedge config set logs.path <tedge-log-directory>`,
+- the `agent` sub-directory being created by the agent or `tedge init`.
+
+Each log file is named after the [command identifier as published over MQTT](../../../references/mqtt-api/#command-examples).
+
+- A software update command published on `te/<device-id>/cmd/<command-name>/<cmd-id>`
+- is monitored by the log file `workflow-<command-name>-<cmd-id>.md`
+- stored in the log directory of the agent running on the device `<device-id>`.
+
+Over time, these log files are purged by the agent.
+- The default agent behavior is to keep a maximum of 5 log files per operation type.
+- This default can be configured using `tedge config add logs.max_per_operation "*:4"` where `*` stands for any operation,
+  and the number is the new default (`4` in that case).
+- A max log file count can be assigned specifically to an operation with
+ `tedge config add logs.max_per_operation "<operation-name>:<max-count>"`,
+  for example `software_list:1`.
+- The default can be reset for an operation with `tedge config remove logs.max_per_operation "<operation-name>"`
+- The feature can be fully disabled with `tedge config set logs.max_per_operation ""`
+  or enabled only for operations explicitly listed by removing the default maximum,
+  i.e. running `tedge config remove logs.max_per_operation "*"`.
+- Note that for these configuration updates to be effective, the agent must be restarted.
+
+### tedge-agent logs {#tedge-agent-logs}
 The agent service logs can be accessed as below
 
 ```sh

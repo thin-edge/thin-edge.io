@@ -197,6 +197,63 @@ Placeholder workflow created for ill-defined operations
     ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-issue-3079-test-1.log
     Should Contain    ${workflow_log}    item=TOML parse error
 
+The default is to keep a maximum of 5 log files per operation
+    ${max_per_command}    Execute Command    tedge config get logs.max_per_operation
+    Should Contain    ${max_per_command}    *:5
+    Execute Operation Workflow    lite_software_update    n001
+    Execute Operation Workflow    lite_software_update    n002
+    Execute Operation Workflow    lite_software_update    n003
+    Execute Operation Workflow    lite_software_update    n004
+    Execute Operation Workflow    lite_software_update    n005
+    Execute Operation Workflow    lite_software_update    n006
+    ${log_files}    Execute Command    ls /var/log/tedge/agent/*-lite_software_update-*
+    Should Not Contain    ${log_files}    workflow-lite_software_update-n001.log
+    Should Contain    ${log_files}    workflow-lite_software_update-n002.log
+    Should Contain    ${log_files}    workflow-lite_software_update-n003.log
+    Should Contain    ${log_files}    workflow-lite_software_update-n004.log
+    Should Contain    ${log_files}    workflow-lite_software_update-n005.log
+    Should Contain    ${log_files}    workflow-lite_software_update-n006.log
+
+The default max log file count can be configured
+    Execute Command    tedge config add logs.max_per_operation '*:2'
+    ${max_per_command}    Execute Command    tedge config get logs.max_per_operation
+    Should Contain    ${max_per_command}    *:2
+    Restart Service    tedge-agent
+    Execute Operation Workflow    lite_software_update    n101
+    Execute Operation Workflow    lite_software_update    n102
+    Execute Operation Workflow    lite_software_update    n103
+    Execute Operation Workflow    lite_software_update    n104
+    Execute Operation Workflow    lite_software_update    n105
+    Execute Operation Workflow    lite_software_update    n106
+    ${log_files}    Execute Command    ls /var/log/tedge/agent/*-lite_software_update-*
+    Should Not Contain    ${log_files}    workflow-lite_software_update-n101.log
+    Should Not Contain    ${log_files}    workflow-lite_software_update-n102.log
+    Should Not Contain    ${log_files}    workflow-lite_software_update-n103.log
+    Should Not Contain    ${log_files}    workflow-lite_software_update-n104.log
+    Should Contain    ${log_files}    workflow-lite_software_update-n105.log
+    Should Contain    ${log_files}    workflow-lite_software_update-n106.log
+
+The max log file count can be configured per operation
+    Execute Command    tedge config add logs.max_per_operation '*:5'
+    Execute Command    tedge config add logs.max_per_operation 'lite_software_update:2'
+    ${max_per_command}    Execute Command    tedge config get logs.max_per_operation
+    Should Contain    ${max_per_command}    *:5
+    Should Contain    ${max_per_command}    lite_software_update:2
+    Restart Service    tedge-agent
+    Execute Operation Workflow    lite_software_update    n201
+    Execute Operation Workflow    lite_software_update    n202
+    Execute Operation Workflow    lite_software_update    n203
+    Execute Operation Workflow    lite_software_update    n204
+    Execute Operation Workflow    lite_software_update    n205
+    Execute Operation Workflow    lite_software_update    n206
+    ${log_files}    Execute Command    ls /var/log/tedge/agent/*-lite_software_update-*
+    Should Not Contain    ${log_files}    workflow-lite_software_update-n201.log
+    Should Not Contain    ${log_files}    workflow-lite_software_update-n202.log
+    Should Not Contain    ${log_files}    workflow-lite_software_update-n203.log
+    Should Not Contain    ${log_files}    workflow-lite_software_update-n204.log
+    Should Contain    ${log_files}    workflow-lite_software_update-n205.log
+    Should Contain    ${log_files}    workflow-lite_software_update-n206.log
+
 
 *** Keywords ***
 Custom Test Setup
@@ -234,3 +291,12 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_device_profile.example.txt    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-2896.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-3079.toml    /etc/tedge/operations/
+
+Execute Operation Workflow
+    [Arguments]    ${operation}    ${cmd_id}
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/${operation}/${cmd_id} '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/${operation}/${cmd_id}
+    ...    message_pattern=.*successful.*
+    ...    maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/${operation}/${cmd_id} ''

@@ -11,7 +11,7 @@ pub enum SoftwareManagerError {
     FromState(#[from] crate::state_repository::error::StateError),
 
     #[error(transparent)]
-    FromOperationsLogs(#[from] plugin_sm::operation_logs::OperationLogsError),
+    FromOperationsLogs(#[from] tedge_api::workflow::log::log_dir::OperationLogsError),
 
     #[error(transparent)]
     FromIo(#[from] std::io::Error),

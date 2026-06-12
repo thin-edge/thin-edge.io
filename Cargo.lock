@@ -974,7 +974,6 @@ dependencies = [
  "json-writer",
  "mime",
  "mockito",
- "plugin_sm",
  "proptest",
  "rand 0.10.1",
  "serde",

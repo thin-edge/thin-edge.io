@@ -38,6 +38,7 @@ use tedge_api::commands::SoftwareUpdateCommandPayload;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::workflow::log::log_dir::OperationLogs;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
@@ -794,11 +795,13 @@ async fn spawn_mqtt_operation_converter(
     let service_topic_id = device_topic_id
         .default_service_for_device("tedge-agent")
         .expect("Invalid service topic id");
+    let log_dir = TedgePaths::from_root_with_defaults(tmp_path, "", "").root_dir();
+
     let config = OperationConfig {
         mqtt_schema: MqttSchema::new(),
         device_topic_id,
         service_topic_id,
-        log_dir: TedgePaths::from_root_with_defaults(tmp_path, "", "").root_dir(),
+        log_dir: OperationLogs::new(log_dir),
         config_dir: config_root.clone(),
         state_dir: TedgePaths::from_root_with_defaults(tmp_path.join("running-operations"), "", ""),
         operations_dir: config_root.dir("operations").unwrap(),

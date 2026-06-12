@@ -46,8 +46,6 @@ use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
-use plugin_sm::operation_logs::OperationLogs;
-use plugin_sm::operation_logs::OperationLogsError;
 use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -72,8 +70,8 @@ use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::script::ShellScript;
+use tedge_api::workflow::log::log_dir::OperationLogsError;
 use tedge_api::workflow::GenericCommandState;
-use tedge_api::CommandLog;
 use tedge_api::DownloadInfo;
 use tedge_api::Jsonify;
 use tedge_api::LoggedCommand;
@@ -98,7 +96,6 @@ use tracing::trace;
 use tracing::warn;
 use tracing::Instrument;
 
-const TEDGE_AGENT_LOG_DIR: &str = "agent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
@@ -168,7 +165,6 @@ pub struct CumulocityConverter {
     pub config: Arc<C8yMapperConfig>,
     pub(crate) mapper_config: MapperConfig,
     pub device_name: String,
-    operation_logs: OperationLogs,
     mqtt_publisher: LoggingSender<MqttMessage>,
     pub http_proxy: C8YHttpProxy,
     pub service_type: String,
@@ -220,12 +216,6 @@ impl CumulocityConverter {
             operations_by_xid,
         };
 
-        let log_dir = config
-            .logs_path
-            .dir(TEDGE_AGENT_LOG_DIR)
-            .expect("infallible");
-        let operation_logs = OperationLogs::try_new(log_dir.path().into())?;
-
         let mqtt_schema = config.mqtt_schema.clone();
         let http_event_topic =
             EventConverter::http_event_topic_filter(&config.bridge_config.c8y_prefix);
@@ -260,7 +250,6 @@ impl CumulocityConverter {
             mapper_config,
             device_name: device_id,
             supported_operations: operation_manager,
-            operation_logs,
             http_proxy,
             mqtt_publisher,
             service_type,
@@ -921,14 +910,11 @@ impl CumulocityConverter {
                     operation_name: operation_name.to_string(),
                 });
 
-        let log_file = self
-            .operation_logs
-            .new_log_file(plugin_sm::operation_logs::LogKind::Operation(
-                operation_name.to_string(),
-            ))
+        let mut command_log = self
+            .config
+            .logs_path
+            .new_log_file(operation_name.to_string(), cmd_id)
             .await?;
-        let mut command_log =
-            CommandLog::from_log_path(log_file.path(), operation_name.clone(), cmd_id);
 
         match maybe_child_process {
             Ok(child_process) => {
@@ -1500,6 +1486,7 @@ pub(crate) mod tests {
     use serde_json::json;
     use serde_json::Value;
     use std::str::FromStr;
+    use std::sync::Arc;
     use std::time::Duration;
     use std::time::SystemTime;
     use tedge_actors::test_helpers::FakeServerBox;
@@ -1518,6 +1505,7 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::pending_entity_store::RegisteredEntityData;
     use tedge_api::script::ShellScript;
+    use tedge_api::workflow::log::log_dir::OperationLogs;
     use tedge_api::SoftwareUpdateCommand;
     use tedge_config::models::AutoLogUpload;
     use tedge_config::models::SoftwareManagementApiFlag;
@@ -3001,7 +2989,7 @@ pub(crate) mod tests {
             .with_raw_content(
                 r#"[exec]
             on_fragment = "c8y_Operation"
-            
+
             [exec.workflow]
             operation = "my_operation"
             "#,
@@ -3108,6 +3096,7 @@ pub(crate) mod tests {
         tmp_dir.dir("operations").dir("c8y");
         tmp_dir.dir("tedge").dir("agent");
         tmp_dir.dir(".tedge-mapper-c8y");
+        tmp_dir.dir("agent");
 
         let device_id = "test-device".into();
         let device_topic_id = EntityTopicId::default_main_device();
@@ -3134,7 +3123,7 @@ pub(crate) mod tests {
 
         C8yMapperConfig::new(
             root_dir.clone().into(),
-            root_dir.clone().into(),
+            Arc::new(OperationLogs::new(root_dir.root_dir())),
             root_dir.clone().into(),
             device_id,
             device_topic_id,
