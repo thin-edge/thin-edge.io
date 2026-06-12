@@ -3,16 +3,34 @@ use async_trait::async_trait;
 use c8y_api::http_proxy::C8yAuthRetriever;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::Instrument;
 
 #[derive(Clone)]
-pub struct SharedTokenManager(pub(crate) Arc<Mutex<dyn TokenManager>>);
+pub struct SharedTokenManager {
+    manager: Arc<Mutex<dyn TokenManager>>,
+    span: tracing::Span,
+}
 
 impl SharedTokenManager {
+    pub(crate) fn new(manager: impl TokenManager + 'static) -> Self {
+        SharedTokenManager {
+            manager: Arc::new(Mutex::new(manager)),
+            span: tracing::Span::current(),
+        }
+    }
+
+    pub(crate) fn with_current_span(mut self) -> Self {
+        self.span = tracing::Span::current();
+        self
+    }
+
     /// Returns a JWT that doesn't match the provided JWT
     ///
     /// This prevents needless token refreshes if multiple requests are made in parallel
     pub async fn not_matching(&self, input: Option<&Arc<str>>) -> Result<Arc<str>, anyhow::Error> {
-        self.0.lock().await.not_matching(input).await
+        async { self.manager.lock().await.not_matching(input).await }
+            .instrument(self.span.clone())
+            .await
     }
 }
 
@@ -46,7 +64,7 @@ impl C8yTokenManager {
     }
 
     pub fn shared(self) -> SharedTokenManager {
-        SharedTokenManager(Arc::new(Mutex::new(self)))
+        SharedTokenManager::new(self)
     }
 }
 

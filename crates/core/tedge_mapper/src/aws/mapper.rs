@@ -5,6 +5,7 @@ use crate::flows_config;
 use anyhow::Context;
 use async_trait::async_trait;
 use aws_mapper_ext::AwsConverter;
+use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
@@ -37,11 +38,11 @@ impl AwsMapper {
 
 #[async_trait]
 impl TEdgeComponent for AwsMapper {
-    async fn start(
+    async fn build(
         &self,
         tedge_config: TEdgeConfig,
         config_dir: &TedgePaths,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<Runtime, anyhow::Error> {
         let aws_config = tedge_config.mapper_config::<AwsMapperSpecificConfig>(&self.profile)?;
         let prefix = &aws_config.bridge.topic_prefix;
         let aws_mapper_name = format!("tedge-mapper-{prefix}");
@@ -111,8 +112,8 @@ impl TEdgeComponent for AwsMapper {
         runtime.spawn(fs_actor).await?;
         runtime.spawn(cmd_watcher_actor).await?;
         runtime.spawn(mqtt_actor).await?;
-        runtime.run_to_completion().await?;
-        Ok(())
+
+        Ok(runtime)
     }
 }
 

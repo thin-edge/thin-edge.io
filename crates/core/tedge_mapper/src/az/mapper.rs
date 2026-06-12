@@ -5,6 +5,7 @@ use crate::flows_config;
 use anyhow::Context;
 use async_trait::async_trait;
 use az_mapper_ext::AzureConverter;
+use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
@@ -37,11 +38,11 @@ impl AzureMapper {
 
 #[async_trait]
 impl TEdgeComponent for AzureMapper {
-    async fn start(
+    async fn build(
         &self,
         tedge_config: TEdgeConfig,
         config_dir: &TedgePaths,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<Runtime, anyhow::Error> {
         let az_config = tedge_config.mapper_config::<AzMapperSpecificConfig>(&self.profile)?;
         let prefix = &az_config.bridge.topic_prefix;
         let az_mapper_name = format!("tedge-mapper-{prefix}");
@@ -118,8 +119,8 @@ impl TEdgeComponent for AzureMapper {
         runtime.spawn(fs_actor).await?;
         runtime.spawn(cmd_watcher_actor).await?;
         runtime.spawn(mqtt_actor).await?;
-        runtime.run_to_completion().await?;
-        Ok(())
+
+        Ok(runtime)
     }
 }
 

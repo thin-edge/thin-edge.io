@@ -42,6 +42,11 @@ async fn main() -> anyhow::Result<()> {
     yansi::whenever(USE_COLOR);
 
     match opt {
+        TEdgeOptMulticall::Component(Component::All(opt)) => {
+            let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
+            log_memory_usage(tedge_config.run.log_memory_interval.duration());
+            tedge::supervisor::run(opt).await
+        }
         TEdgeOptMulticall::Component(Component::TedgeMapper(opt)) => {
             let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
             log_memory_usage(tedge_config.run.log_memory_interval.duration());

@@ -28,6 +28,8 @@ clap = { workspace = true }
 clap_complete = { version = "4.5.42", features = ["unstable-dynamic"] }
 doku = { workspace = true }
 flate2 = { workspace = true }
+flockfile = { workspace = true }
+futures = { workspace = true }
 glob = { workspace = true }
 humantime = { workspace = true }
 hyper = { workspace = true, default-features = false }
@@ -60,6 +62,7 @@ tedge-mapper = { workspace = true, default-features = false }
 tedge-p11 = { workspace = true }
 tedge-watchdog = { workspace = true }
 tedge-write = { workspace = true }
+tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
 tedge_flows = { workspace = true }
@@ -68,7 +71,7 @@ tedge_system_services = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros", "rt", "signal", "time"] }
 toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -91,7 +94,8 @@ tedge_config = { workspace = true, features = ["test"] }
 tedge_test_utils = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+whoami = { workspace = true }
 x509-parser = { workspace = true }
 
 

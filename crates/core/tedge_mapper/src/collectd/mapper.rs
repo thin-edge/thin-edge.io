@@ -8,6 +8,7 @@ use mqtt_channel::Topic;
 use mqtt_channel::TopicFilter;
 use tedge_actors::MessageSink;
 use tedge_actors::NoConfig;
+use tedge_actors::Runtime;
 use tedge_config::TEdgeConfig;
 use tedge_utils::paths::TedgePaths;
 
@@ -29,11 +30,11 @@ impl CollectdMapper {
 
 #[async_trait]
 impl TEdgeComponent for CollectdMapper {
-    async fn start(
+    async fn build(
         &self,
         tedge_config: TEdgeConfig,
         _config_dir: &TedgePaths,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<Runtime, anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
             start_basic_actors(COLLECTD_MAPPER_NAME, &tedge_config).await?;
 
@@ -52,7 +53,7 @@ impl TEdgeComponent for CollectdMapper {
         runtime.spawn(collectd_actor).await?;
         runtime.spawn(batching_actor).await?;
         runtime.spawn(mqtt_actor).await?;
-        runtime.run_to_completion().await?;
-        Ok(())
+
+        Ok(runtime)
     }
 }

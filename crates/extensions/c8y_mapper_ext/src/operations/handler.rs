@@ -23,6 +23,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
+use tracing::Instrument;
 
 /// Handles operations.
 ///
@@ -162,7 +163,10 @@ impl OperationHandler {
                 };
 
                 let context = Arc::clone(&self.context);
-                let handle = tokio::spawn(async move { context.update(message).await });
+                let handle = tokio::spawn(
+                    async move { context.update(message).await }
+                        .instrument(tracing::Span::current()),
+                );
 
                 let running_operation = RunningOperation { handle, status };
 
@@ -201,10 +205,13 @@ impl OperationHandler {
 
                 let (key, operation) = entry.remove_entry();
                 let context = Arc::clone(&self.context);
-                let handle = tokio::spawn(async move {
-                    operation.handle.await.unwrap();
-                    context.update(message).await;
-                });
+                let handle = tokio::spawn(
+                    async move {
+                        operation.handle.await.unwrap();
+                        context.update(message).await;
+                    }
+                    .instrument(tracing::Span::current()),
+                );
                 let running_operation = RunningOperation { handle, status };
                 self.running_operations.insert(key, running_operation);
             }

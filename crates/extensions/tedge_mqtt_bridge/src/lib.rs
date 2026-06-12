@@ -8,6 +8,9 @@ mod topics;
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use futures::channel::mpsc as futures_mpsc;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 pub use rumqttc;
 use rumqttc::ClientError;
 use rumqttc::ConnectionError;
@@ -35,11 +38,12 @@ use std::time::Instant;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
-use tedge_actors::NullSender;
 use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tracing::Instrument;
 
 pub type MqttConfig = mqtt_channel::Config;
 
@@ -82,7 +86,11 @@ macro_rules! log_event {
 mod health;
 mod mqtt_logging;
 
-pub struct MqttBridgeActorBuilder {}
+pub struct MqttBridgeActorBuilder {
+    tasks: Vec<JoinHandle<()>>,
+    signal_tx: futures_mpsc::Sender<RuntimeRequest>,
+    signal_rx: futures_mpsc::Receiver<RuntimeRequest>,
+}
 
 impl MqttBridgeActorBuilder {
     // XXX(marcel): this function loads certs, which can fail, so it should probably be fallible
@@ -162,39 +170,61 @@ impl MqttBridgeActorBuilder {
             BridgeHealthMonitor::new(health_topic.name.clone(), &local_target);
         let cloud_tx = cloud_target.clone_sender();
         let local_tx = local_target.clone_sender();
-        tokio::spawn(monitor.monitor());
-        tokio::spawn(half_bridge(
-            local_event_loop,
-            local_client,
-            cloud_target,
-            convert_local,
-            bidir_local,
-            tx_status.clone(),
-            "local",
-            local_topics,
-            reconnect_policy.clone(),
-            None,
-            local_tx,
-        ));
-        tokio::spawn(half_bridge(
-            cloud_event_loop,
-            cloud_client,
-            local_target,
-            convert_cloud,
-            bidir_cloud,
-            tx_status.clone(),
-            "cloud",
-            cloud_topics,
-            reconnect_policy,
-            on_cloud_reconnect,
-            cloud_tx,
-        ));
+        let monitor_task = tokio::spawn(
+            async move {
+                monitor.monitor().await;
+            }
+            .instrument(tracing::Span::current()),
+        );
+        let tasks = vec![
+            monitor_task,
+            tokio::spawn(
+                half_bridge(
+                    local_event_loop,
+                    local_client,
+                    cloud_target,
+                    convert_local,
+                    bidir_local,
+                    tx_status.clone(),
+                    "local",
+                    local_topics,
+                    reconnect_policy.clone(),
+                    None,
+                    local_tx,
+                )
+                .instrument(tracing::Span::current()),
+            ),
+            tokio::spawn(
+                half_bridge(
+                    cloud_event_loop,
+                    cloud_client,
+                    local_target,
+                    convert_cloud,
+                    bidir_cloud,
+                    tx_status.clone(),
+                    "cloud",
+                    cloud_topics,
+                    reconnect_policy,
+                    on_cloud_reconnect,
+                    cloud_tx,
+                )
+                .instrument(tracing::Span::current()),
+            ),
+        ];
+        let (signal_tx, signal_rx) = futures_mpsc::channel(1);
 
-        Self {}
+        Self {
+            tasks,
+            signal_tx,
+            signal_rx,
+        }
     }
 
     pub(crate) fn build_actor(self) -> MqttBridgeActor {
-        MqttBridgeActor {}
+        MqttBridgeActor {
+            tasks: self.tasks.into_iter().collect(),
+            signal_rx: self.signal_rx,
+        }
     }
 }
 
@@ -303,35 +333,43 @@ impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
         let target = self.target.clone();
         let published = self.published.clone();
         let acknowledged = self.acknowledged.clone();
-        tokio::spawn(async move {
-            while let Some(message) = unbounded_rx.recv().await {
-                match message {
-                    BridgeMessage::BridgePub {
-                        target_topic,
-                        publish,
-                    } => {
-                        let duplicate = (target_topic.clone(), publish.clone());
-                        tx.send(Some(duplicate)).await.unwrap();
-                        target
-                            .publish(target_topic, publish.qos, publish.retain, publish.payload)
-                            .await
-                            .unwrap();
-                        published.fetch_add(1, Ordering::Relaxed);
-                    }
-                    BridgeMessage::Pub { publish } => {
-                        tx.send(None).await.unwrap();
-                        target
-                            .publish(publish.topic, publish.qos, publish.retain, publish.payload)
-                            .await
-                            .unwrap();
-                    }
-                    BridgeMessage::BridgeAck { publish } => {
-                        target.ack(&publish).await.unwrap();
-                        acknowledged.fetch_add(1, Ordering::Relaxed);
+        tokio::spawn(
+            async move {
+                while let Some(message) = unbounded_rx.recv().await {
+                    match message {
+                        BridgeMessage::BridgePub {
+                            target_topic,
+                            publish,
+                        } => {
+                            let duplicate = (target_topic.clone(), publish.clone());
+                            tx.send(Some(duplicate)).await.unwrap();
+                            target
+                                .publish(target_topic, publish.qos, publish.retain, publish.payload)
+                                .await
+                                .unwrap();
+                            published.fetch_add(1, Ordering::Relaxed);
+                        }
+                        BridgeMessage::Pub { publish } => {
+                            tx.send(None).await.unwrap();
+                            target
+                                .publish(
+                                    publish.topic,
+                                    publish.qos,
+                                    publish.retain,
+                                    publish.payload,
+                                )
+                                .await
+                                .unwrap();
+                        }
+                        BridgeMessage::BridgeAck { publish } => {
+                            target.ack(&publish).await.unwrap();
+                            acknowledged.fetch_add(1, Ordering::Relaxed);
+                        }
                     }
                 }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
     }
 }
 
@@ -556,11 +594,14 @@ async fn half_bridge(
                 let topics = topics.clone();
                 // We have to subscribe to this asynchronously (i.e. in a task) since we might at
                 // this point have filled our cloud event loop with outgoing messages
-                tokio::spawn(async move {
-                    for topic in topics {
-                        recv_client.subscribe(topic).await.unwrap()
+                tokio::spawn(
+                    async move {
+                        for topic in topics {
+                            recv_client.subscribe(topic).await.unwrap()
+                        }
                     }
-                });
+                    .instrument(tracing::Span::current()),
+                );
 
                 session_present = Some(conn_ack.session_present);
 
@@ -814,11 +855,14 @@ impl Builder<MqttBridgeActor> for MqttBridgeActorBuilder {
 
 impl RuntimeRequestSink for MqttBridgeActorBuilder {
     fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
-        NullSender.into()
+        self.signal_tx.clone().into()
     }
 }
 
-pub struct MqttBridgeActor {}
+pub struct MqttBridgeActor {
+    tasks: FuturesUnordered<JoinHandle<()>>,
+    signal_rx: futures_mpsc::Receiver<RuntimeRequest>,
+}
 
 #[async_trait]
 impl Actor for MqttBridgeActor {
@@ -828,13 +872,81 @@ impl Actor for MqttBridgeActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        tokio::select! {
+            _ = self.signal_rx.next() => {}
+            _ = self.tasks.next(), if !self.tasks.is_empty() => {}
+        }
+        self.abort_tasks().await;
         Ok(())
+    }
+}
+
+impl MqttBridgeActor {
+    async fn abort_tasks(&mut self) {
+        for task in &self.tasks {
+            task.abort();
+        }
+
+        while let Some(result) = self.tasks.next().await {
+            let _ = result;
+        }
+    }
+
+    fn abort_tasks_on_drop(&mut self) {
+        for task in &self.tasks {
+            task.abort();
+        }
+    }
+}
+
+impl Drop for MqttBridgeActor {
+    fn drop(&mut self) {
+        self.abort_tasks_on_drop();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn bridge_actor_runs_until_shutdown_and_aborts_tasks() {
+        let (mut signal_tx, signal_rx) = futures_mpsc::channel(1);
+        let (drop_tx, drop_rx) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(async move {
+            let _guard = DropNotifier(Some(drop_tx));
+            std::future::pending::<()>().await;
+        });
+        let actor = MqttBridgeActor {
+            tasks: vec![task].into_iter().collect(),
+            signal_rx,
+        };
+        let actor = tokio::spawn(actor.run());
+
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(
+            !actor.is_finished(),
+            "the bridge actor must not finish while its bridge tasks are running"
+        );
+
+        signal_tx.try_send(RuntimeRequest::Shutdown).unwrap();
+
+        actor.await.unwrap().unwrap();
+        tokio::time::timeout(Duration::from_secs(1), drop_rx)
+            .await
+            .expect("shutdown should abort the bridge task")
+            .unwrap();
+    }
+
+    struct DropNotifier(Option<tokio::sync::oneshot::Sender<()>>);
+
+    impl Drop for DropNotifier {
+        fn drop(&mut self) {
+            if let Some(sender) = self.0.take() {
+                let _ = sender.send(());
+            }
+        }
+    }
 
     mod message_loop_breaker {
         use crate::MessageLoopBreaker;

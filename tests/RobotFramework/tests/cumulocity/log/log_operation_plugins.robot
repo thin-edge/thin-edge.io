@@ -230,7 +230,7 @@ Reporting sudo misconfiguration
     Service Logs Should Contain
     ...    tedge-agent
     ...    current_only=${True}
-    ...    text=ERROR log plugins: Skipping /etc/share/tedge/log-plugins/dummy_plugin: not properly configured to run with sudo
+    ...    text=ERROR sm-agent: log plugins: Skipping /etc/share/tedge/log-plugins/dummy_plugin: not properly configured to run with sudo
 
 Supported log types loaded when sudo disabled
     [Documentation]    Log plugins should be discovered and listed even when sudo.enable is false.

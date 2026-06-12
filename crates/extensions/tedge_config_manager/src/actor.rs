@@ -40,6 +40,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use time::OffsetDateTime;
+use tracing::Instrument;
 
 use crate::plugin::ExternalPlugin;
 use crate::plugin_manager::parse_config_type;
@@ -163,7 +164,8 @@ impl Actor for ConfigManagerActor {
                     ConfigInput::ConfigOperation(request) => {
                         let mut worker = worker.clone();
                         tokio::spawn(
-                            async move { worker.process_operation_request(request).await },
+                            async move { worker.process_operation_request(request).await }
+                                .instrument(tracing::Span::current()),
                         );
                         Ok(())
                     }
@@ -175,9 +177,12 @@ impl Actor for ConfigManagerActor {
                     }
                     ConfigInput::OperationStepRequestEnvelope(request) => {
                         let mut worker = worker.clone();
-                        tokio::spawn(async move {
-                            worker.process_operation_step_request(request).await;
-                        });
+                        tokio::spawn(
+                            async move {
+                                worker.process_operation_step_request(request).await;
+                            }
+                            .instrument(tracing::Span::current()),
+                        );
                         Ok(())
                     }
                 };

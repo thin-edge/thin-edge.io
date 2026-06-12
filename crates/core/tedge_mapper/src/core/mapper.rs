@@ -8,7 +8,6 @@ use tedge_api::mqtt_topics::ServiceTopicId;
 use tedge_config::TEdgeConfig;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
-use tedge_signal_ext::SignalActor;
 
 pub async fn start_basic_actors(
     mapper_name: &str,
@@ -41,10 +40,10 @@ pub async fn start_basic_actors(
         &config.service,
     );
 
-    // Shutdown on SIGINT
-    let signal_actor = SignalActor::builder(&runtime.get_handle());
-
-    runtime.spawn(signal_actor).await?;
+    // Note: signal handling is deliberately *not* spawned here. `start_basic_actors`
+    // is part of the rebuildable `build()` path shared by the standalone runner and
+    // the supervisor; the standalone runner installs its own SignalActor on top,
+    // while the supervisor owns signals centrally.
     runtime.spawn(health_actor).await?;
     Ok((runtime, mqtt_actor))
 }

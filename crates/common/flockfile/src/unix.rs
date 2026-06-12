@@ -12,7 +12,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use tracing::debug;
 use tracing::error;
-use tracing::info;
 use tracing::warn;
 
 const LOCK_CHILD_DIRECTORY: &str = "lock/";
@@ -148,8 +147,11 @@ pub fn check_another_instance_is_not_running(
             Err(err)
         }
         Err(_) => {
-            info!(
-                "The locking mechanism is not active, as {:?} is not a directory with write access.",
+            warn!(
+                "Single-instance locking is NOT active for {app_name}: {:?} is not a writable \
+                 directory. Another instance running concurrently will not be detected. Ensure \
+                 the run directory exists and is writable by the tedge user, or disable locking \
+                 explicitly with run.lock_files=false.",
                 lock_path.parent().unwrap() // This is true as run_dir and lock directories are always provided
             );
             Ok(None)

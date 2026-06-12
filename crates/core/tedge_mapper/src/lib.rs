@@ -12,9 +12,12 @@ use anyhow::Context;
 use camino::Utf8Path;
 use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
+use flockfile::Flockfile;
+use flockfile::FlockfileError;
 use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
+use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
@@ -25,6 +28,7 @@ use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperConfig;
 use tedge_flows::UpdateFlowRegistryError;
+use tedge_signal_ext::SignalActor;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
 use tracing::error;
@@ -208,9 +212,23 @@ impl fmt::Display for MapperName {
     }
 }
 
+impl MapperName {
+    pub fn log_service_name(&self) -> &str {
+        match self {
+            #[cfg(feature = "azure")]
+            MapperName::Az { .. } => "tedge-mapper-az",
+            #[cfg(feature = "aws")]
+            MapperName::Aws { .. } => "tedge-mapper-aws",
+            #[cfg(feature = "c8y")]
+            MapperName::C8y { .. } => "tedge-mapper-c8y",
+            MapperName::Collectd => "tedge-mapper-collectd",
+            MapperName::UserDefined(_) => "tedge-mapper",
+        }
+    }
+}
+
 pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<()> {
     let mapper_name = mapper_opt.name.to_string();
-    let component = lookup_component(mapper_opt.name)?;
 
     log_init(
         "tedge-mapper",
@@ -218,16 +236,8 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
         &mapper_opt.common.config_dir,
     )?;
 
-    let config_root = config.config_root();
-    let mappers_dir = config_root.dir("mappers")?;
-    core::mappers_dir::warn_misconfigured_mapper_dirs(mappers_dir.path()).await;
-
     // Run only one instance of a mapper (if enabled)
-    let mut _flock = None;
-    if config.run.lock_files {
-        let run_dir = config.run.path.as_std_path();
-        _flock = check_another_instance_is_not_running(&mapper_name, run_dir)?;
-    }
+    let _flock = acquire_lock(&mapper_name, &config)?;
 
     if mapper_opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release");
@@ -236,7 +246,41 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
         warn!("This --clear option has been deprecated and will be removed in a future release");
         Ok(())
     } else {
-        component.start(config, &config_root).await
+        // Standalone path: assemble via `build()`, then add this runner's own signal
+        // handling and run to completion (exiting on a runtime error). See
+        // `TEdgeComponent::build` for the build-vs-start contract.
+        let mut runtime = build(mapper_opt.name, config).await?;
+        let signal_actor = SignalActor::builder(&runtime.get_handle());
+        runtime.spawn(signal_actor).await?;
+        runtime.run_to_completion().await?;
+        Ok(())
+    }
+}
+
+/// Rebuildable factory the single-process supervisor calls (on each restart) for a
+/// mapper unit. Resolves the named component and assembles it via
+/// `TEdgeComponent::build` — no lock, no signal handling, no run-to-completion.
+pub async fn build(name: MapperName, config: TEdgeConfig) -> anyhow::Result<Runtime> {
+    let component = lookup_component(name)?;
+    let config_root = config.config_root();
+    let mappers_dir = config_root.dir("mappers")?;
+    core::mappers_dir::warn_misconfigured_mapper_dirs(mappers_dir.path()).await;
+    component.build(config, &config_root).await
+}
+
+/// Acquires a mapper's single-instance lock, if locking is enabled.
+///
+/// `mapper_name` is the full service name (e.g. `tedge-mapper-c8y`). The supervisor
+/// takes this once per process and holds it for the mapper unit's whole lifetime
+/// (across restarts), so it guards only against an external duplicate.
+pub fn acquire_lock(
+    mapper_name: &str,
+    config: &TEdgeConfig,
+) -> Result<Option<Flockfile>, FlockfileError> {
+    if config.run.lock_files {
+        check_another_instance_is_not_running(mapper_name, config.run.path.as_std_path())
+    } else {
+        Ok(None)
     }
 }
 

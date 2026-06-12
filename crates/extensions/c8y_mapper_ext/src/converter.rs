@@ -96,6 +96,7 @@ use tracing::error;
 use tracing::info;
 use tracing::trace;
 use tracing::warn;
+use tracing::Instrument;
 
 const TEDGE_AGENT_LOG_DIR: &str = "agent";
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
@@ -939,97 +940,102 @@ impl CumulocityConverter {
                     _ => (false, "".to_string()),
                 };
 
-                tokio::spawn(async move {
-                    let op_name = op_name.as_str();
-                    let topic = C8yTopic::upstream_topic(&c8y_prefix);
+                tokio::spawn(
+                    async move {
+                        let op_name = op_name.as_str();
+                        let topic = C8yTopic::upstream_topic(&c8y_prefix);
 
-                    if !skip_status_update {
-                        // mqtt client publishes executing
-                        let executing_str = if use_id {
-                            set_operation_executing_with_id(&op_id)
-                        } else {
-                            set_operation_executing_with_name(op_name)
-                        };
+                        if !skip_status_update {
+                            // mqtt client publishes executing
+                            let executing_str = if use_id {
+                                set_operation_executing_with_id(&op_id)
+                            } else {
+                                set_operation_executing_with_name(op_name)
+                            };
 
-                        mqtt_publisher
-                            .send(MqttMessage::new(&topic, executing_str.as_str()))
+                            mqtt_publisher
+                                .send(MqttMessage::new(&topic, executing_str.as_str()))
+                                .await
+                                .unwrap_or_else(|err| {
+                                    error!("Failed to publish a message: {executing_str}. Error: {err}")
+                                });
+                        }
+
+                        // execute the command and wait until it finishes
+                        // mqtt client publishes failed or successful depending on the exit code
+                        if let Ok(output) = child_process
+                            .wait_for_output_with_timeout(
+                                &mut command_log,
+                                graceful_timeout,
+                                forceful_timeout,
+                            )
                             .await
-                            .unwrap_or_else(|err| {
-                                error!("Failed to publish a message: {executing_str}. Error: {err}")
-                            });
-                    }
-
-                    // execute the command and wait until it finishes
-                    // mqtt client publishes failed or successful depending on the exit code
-                    if let Ok(output) = child_process
-                        .wait_for_output_with_timeout(
-                            &mut command_log,
-                            graceful_timeout,
-                            forceful_timeout,
-                        )
-                        .await
-                    {
-                        match output.status.code() {
-                            Some(0) => {
-                                let sanitized_stdout = sanitize_bytes_for_smartrest(
-                                    &output.stdout,
-                                    MAX_PAYLOAD_LIMIT_IN_BYTES,
-                                );
-                                let result = match result_format {
-                                    ResultFormat::Text => TextOrCsv::Text(sanitized_stdout),
-                                    ResultFormat::Csv => EmbeddedCsv::new(sanitized_stdout).into(),
-                                };
-
-                                if !skip_status_update {
-                                    let success_message = if use_id {
-                                        succeed_operation_with_id(&op_id, result)
-                                    } else {
-                                        succeed_operation_with_name(op_name, result)
+                        {
+                            match output.status.code() {
+                                Some(0) => {
+                                    let sanitized_stdout = sanitize_bytes_for_smartrest(
+                                        &output.stdout,
+                                        MAX_PAYLOAD_LIMIT_IN_BYTES,
+                                    );
+                                    let result = match result_format {
+                                        ResultFormat::Text => TextOrCsv::Text(sanitized_stdout),
+                                        ResultFormat::Csv => {
+                                            EmbeddedCsv::new(sanitized_stdout).into()
+                                        }
                                     };
-                                    match success_message {
-                                        Ok(message) => mqtt_publisher.send(MqttMessage::new(&topic, message.as_str())).await
+
+                                    if !skip_status_update {
+                                        let success_message = if use_id {
+                                            succeed_operation_with_id(&op_id, result)
+                                        } else {
+                                            succeed_operation_with_name(op_name, result)
+                                        };
+                                        match success_message {
+                                            Ok(message) => mqtt_publisher.send(MqttMessage::new(&topic, message.as_str())).await
                                             .unwrap_or_else(|err| {
                                                 error!("Failed to publish a message: {message}. Error: {err}")
                                             }),
-                                        Err(e) => {
-                                            let reason = format!("{:?}", anyhow::Error::from(e).context("Custom operation process exited successfully, but couldn't convert output to valid SmartREST message"));
-                                            let fail_message = if use_id {
-                                                fail_operation_with_id(&op_id, &reason)
-                                            } else {
-                                                fail_operation_with_name(op_name, &reason)
-                                            };
-                                            mqtt_publisher.send(MqttMessage::new(&topic, fail_message.as_str())).await.unwrap_or_else(|err| {
+                                            Err(e) => {
+                                                let reason = format!("{:?}", anyhow::Error::from(e).context("Custom operation process exited successfully, but couldn't convert output to valid SmartREST message"));
+                                                let fail_message = if use_id {
+                                                    fail_operation_with_id(&op_id, &reason)
+                                                } else {
+                                                    fail_operation_with_name(op_name, &reason)
+                                                };
+                                                mqtt_publisher.send(MqttMessage::new(&topic, fail_message.as_str())).await.unwrap_or_else(|err| {
                                                 error!("Failed to publish a message: {fail_message}. Error: {err}")
                                             })
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            _ => {
-                                if !skip_status_update {
-                                    let failure_reason = get_failure_reason_for_smartrest(
-                                        &output.stderr,
-                                        MAX_PAYLOAD_LIMIT_IN_BYTES,
-                                    );
-                                    let payload = if use_id {
-                                        fail_operation_with_id(&op_id, &failure_reason)
-                                    } else {
-                                        fail_operation_with_name(op_name, &failure_reason)
-                                    };
+                                _ => {
+                                    if !skip_status_update {
+                                        let failure_reason = get_failure_reason_for_smartrest(
+                                            &output.stderr,
+                                            MAX_PAYLOAD_LIMIT_IN_BYTES,
+                                        );
+                                        let payload = if use_id {
+                                            fail_operation_with_id(&op_id, &failure_reason)
+                                        } else {
+                                            fail_operation_with_name(op_name, &failure_reason)
+                                        };
 
-                                    mqtt_publisher
-                                        .send(MqttMessage::new(&topic, payload.as_str()))
-                                        .await
-                                        .unwrap_or_else(|err| {
-                                            error!(
-                                            "Failed to publish a message: {payload}. Error: {err}"
-                                        )
-                                        })
+                                        mqtt_publisher
+                                            .send(MqttMessage::new(&topic, payload.as_str()))
+                                            .await
+                                            .unwrap_or_else(|err| {
+                                                error!(
+                                                "Failed to publish a message: {payload}. Error: {err}"
+                                            )
+                                            })
+                                    }
                                 }
                             }
                         }
                     }
-                });
+                    .instrument(tracing::Span::current()),
+                );
                 Ok(())
             }
             Err(err) => Err(err),

@@ -8,6 +8,7 @@ use crate::Sender;
 use crate::Server;
 use crate::ServerMessageBox;
 use async_trait::async_trait;
+use tracing::Instrument;
 
 /// An actor that wraps a request-response server
 ///
@@ -80,11 +81,14 @@ impl<S: Server + Clone> Actor for ConcurrentServerActor<S> {
         {
             // Spawn the request
             let mut server = self.server.clone();
-            let request_handler = tokio::spawn(async move {
-                let result = server.handle(request).await;
-                // Ignore errors on send: the requester is simply no more expecting a response
-                let _ = reply_to.send(result).await;
-            });
+            let request_handler = tokio::spawn(
+                async move {
+                    let result = server.handle(request).await;
+                    // Ignore errors on send: the requester is simply no more expecting a response
+                    let _ = reply_to.send(result).await;
+                }
+                .instrument(tracing::Span::current()),
+            );
 
             // Send the response back to the client
             self.messages.register_request_handler(request_handler)

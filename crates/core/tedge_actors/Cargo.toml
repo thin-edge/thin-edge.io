@@ -25,6 +25,7 @@ tokio = { workspace = true, default_features = false, features = [
     "macros",
     "time",
 ] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true } # TODO: remove me

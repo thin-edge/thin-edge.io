@@ -14,6 +14,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tracing::debug;
+use tracing::Instrument;
 
 pub struct JsRuntime {
     runtime: rquickjs::AsyncRuntime,
@@ -251,10 +252,13 @@ impl JsWorker {
         store: FlowContextHandle,
     ) -> mpsc::Sender<JsRequest> {
         let (sender, requests) = mpsc::channel(100);
-        tokio::spawn(async move {
-            let worker = JsWorker { context, requests };
-            worker.run(store).await
-        });
+        tokio::spawn(
+            async move {
+                let worker = JsWorker { context, requests };
+                worker.run(store).await
+            }
+            .instrument(tracing::Span::current()),
+        );
         sender
     }
 

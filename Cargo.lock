@@ -936,6 +936,7 @@ dependencies = [
  "tedge_utils",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2953,6 +2954,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
  "zeroize",
 ]
 
@@ -4837,6 +4839,8 @@ dependencies = [
  "clap_complete",
  "doku",
  "flate2",
+ "flockfile",
+ "futures",
  "glob",
  "humantime",
  "hyper 1.6.0",
@@ -4871,6 +4875,7 @@ dependencies = [
  "tedge-p11",
  "tedge-watchdog",
  "tedge-write",
+ "tedge_actors",
  "tedge_api",
  "tedge_config",
  "tedge_flows",
@@ -4889,6 +4894,7 @@ dependencies = [
  "url",
  "uzers",
  "which",
+ "whoami",
  "x509-parser 0.18.0",
  "yansi",
 ]
@@ -5158,6 +5164,7 @@ dependencies = [
  "log",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5307,6 +5314,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.9.6",
+ "tracing",
  "uzers",
 ]
 
@@ -6358,6 +6366,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasite"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
+
+[[package]]
 name = "wasm-bindgen"
 version = "0.2.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6504,6 +6518,17 @@ dependencies = [
  "env_home",
  "rustix",
  "winsafe",
+]
+
+[[package]]
+name = "whoami"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d4a4db5077702ca3015d3d02d74974948aba2ad9e12ab7df718ee64ccd7e97d"
+dependencies = [
+ "libredox",
+ "wasite",
+ "web-sys",
 ]
 
 [[package]]
