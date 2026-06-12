@@ -2,6 +2,7 @@ use crate::CommandLog;
 use std::ffi::OsStr;
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
+use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
@@ -222,6 +223,22 @@ impl LoggedCommand {
                 .await;
         }
         outcome
+    }
+
+    pub fn stdout(&mut self, stdout: impl Into<Stdio>) {
+        self.command.stdout(stdout);
+    }
+
+    pub fn stderr(&mut self, stderr: impl Into<Stdio>) {
+        self.command.stderr(stderr);
+    }
+
+    /// Execute the command returning its status code and without logging its output.
+    ///
+    /// If the command has been executed the outcome is returned (successful or not). If the command
+    /// fails to execute (say not found or not executable) an `std::io::Error` is returned.
+    pub async fn status(mut self) -> Result<ExitStatus, std::io::Error> {
+        self.command.status().await
     }
 
     pub fn spawn(&mut self) -> Result<LoggingChild, std::io::Error> {

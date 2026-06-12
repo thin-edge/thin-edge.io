@@ -23,6 +23,7 @@ tedge_file_system_ext = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
 tedge_uploader_ext = { workspace = true }
 tedge_utils = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["macros"] }

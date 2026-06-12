@@ -335,6 +335,44 @@ Plugin dynamic filter addition
     ...    def_log::dummy_plugin
     ...    xyz_log::dummy_plugin
 
+Log operation shouldnt OOM on oversized output
+
+    [Documentation]    Install a plugin that emits a very large logfile and verify all of its output is not loaded into
+    ...                memory at once.
+
+    # install custom log plugin that generates lots of data on stdout, here 50MB
+    # but it shouldn't send all of it to c8y, so after outputting all this to stdout we print short
+    # message on stderr and exit.
+    # tedge shouldn't send any stdout/stderr data to the cloud until the plugin process exits.
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/huge_plugin.sh
+    ...    /usr/share/tedge/log-plugins/huge
+    Execute Command    chmod +x /usr/share/tedge/log-plugins/huge
+
+    # request logs
+    Should Contain Supported Log Types    huge::huge
+    ${start_timestamp}=    Get Current Date    UTC    -1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${end_timestamp}=    Get Current Date    UTC    +1 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
+    ${operation}=    Create Log Request Operation
+    ...    ${start_timestamp}
+    ...    ${end_timestamp}
+    ...    log_type=huge::huge
+
+    # Wait until huge plugin creates a pipe which means stdout was filled and we can measure memory usage
+    Execute Command    ls /tmp/huge-plugin-pipe    retries=5    timeout=2
+
+    ${tedge_agent_rss_bytes}=    Execute Command    cmd=ps -o rss= -C tedge-agent    strip=True
+    Should Be True    ${tedge_agent_rss_bytes} < 20000    tedge-agent used too much (${tedge_agent_rss_bytes}>20MB) memory
+
+    # send message to plugin to exit
+    Execute Command    echo done > /tmp/huge-plugin-pipe
+
+    # make sure operation completed and tedge-agent is still running
+    # (?s:.) matches any character regardless of flags
+    # https://docs.python.org/3/library/re.html
+    Operation Should Be FAILED    ${operation}    failure_reason=(?s:.)*script generated(?s:.)*
+    Execute Command    systemctl is-active tedge-agent
+
 
 *** Keywords ***
 Custom Setup
