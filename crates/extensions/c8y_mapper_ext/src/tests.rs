@@ -47,6 +47,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_config::models::AutoLogUpload;
 use tedge_config::models::SoftwareManagementApiFlag;
 use tedge_config::models::TopicPrefix;
+use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::C8Y_MQTT_PAYLOAD_LIMIT;
 use tedge_config::TEdgeConfig;
 use tedge_downloader_ext::DownloadResponse;
@@ -1696,6 +1697,92 @@ async fn json_custom_operation_status_update_with_operation_id() {
 }
 
 #[tokio::test]
+async fn json_custom_operation_receives_cloud_profile_env() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            command = "sh -c 'printf %s \"$TEDGE_CLOUD_PROFILE\"'"
+            on_fragment = "c8y_Command"
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        cloud_profile: Some(ProfileName::try_from("profile-a".to_string()).unwrap()),
+        smartrest_use_operation_id: true,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+            "status":"PENDING",
+            "id": "1234",
+            "c8y_Command": {},
+            "externalSource":{
+                "externalId":"test-device",
+                "type":"c8y_Serial"
+            }
+        })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234,profile-a")]).await;
+}
+
+#[tokio::test]
+async fn json_custom_operation_without_cloud_profile_receives_no_env() {
+    let ttd = TempTedgeDir::new();
+    // The script wraps the profile in BEGIN/END markers so an empty value is
+    // distinguishable from a leaked one under the substring-based assertion.
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            command = "sh -c 'printf BEGIN%sEND \"$TEDGE_CLOUD_PROFILE\"'"
+            on_fragment = "c8y_Command"
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        cloud_profile: None,
+        smartrest_use_operation_id: true,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+            "status":"PENDING",
+            "id": "1234",
+            "c8y_Command": {},
+            "externalSource":{
+                "externalId":"test-device",
+                "type":"c8y_Serial"
+            }
+        })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234,BEGINEND")]).await;
+}
+
+#[tokio::test]
 async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() {
     let ttd = TempTedgeDir::new();
     ttd.dir("operations")
@@ -3231,6 +3318,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         root_dir.clone().into(),
         root_dir.clone().into(),
         root_dir.clone().into(),
+        None,
         device_name,
         device_topic_id,
         service_topic_id,

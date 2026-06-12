@@ -30,6 +30,7 @@ use tedge_config::tedge_toml::mapper_config;
 use tedge_config::tedge_toml::mapper_config::MapperConfigError;
 use tedge_config::tedge_toml::ConfigNotSet;
 use tedge_config::tedge_toml::MultiError;
+use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadError;
 use tedge_config::tedge_toml::TEdgeConfigReaderService;
 use tedge_config::TEdgeConfig;
@@ -43,6 +44,7 @@ const C8Y_CLOUD: &str = "c8y";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";
 
 pub struct C8yMapperConfig {
+    pub cloud_profile: Option<ProfileName>,
     pub device_id: String,
     pub device_topic_id: EntityTopicId,
     pub service_topic_id: EntityTopicId,
@@ -82,6 +84,7 @@ impl C8yMapperConfig {
         config_dir: Arc<TedgePaths>,
         logs_path: Arc<TedgePaths>,
         tmp_dir: Arc<TedgePaths>,
+        cloud_profile: Option<ProfileName>,
 
         device_id: String,
         device_topic_id: EntityTopicId,
@@ -123,6 +126,7 @@ impl C8yMapperConfig {
             service_health_topic(&mqtt_schema, &device_topic_id, &bridge_service_name);
 
         Self {
+            cloud_profile,
             device_id,
             device_topic_id,
             service_topic_id,
@@ -162,6 +166,7 @@ impl C8yMapperConfig {
         tedge_config: &TEdgeConfig,
         c8y_config: &mapper_config::C8yMapperConfig,
         service_topic_id: EntityTopicId,
+        cloud_profile: Option<ProfileName>,
     ) -> Result<C8yMapperConfig, C8yMapperConfigBuildError> {
         let config_dir: Arc<TedgePaths> = config_dir.clone().into();
 
@@ -260,6 +265,7 @@ impl C8yMapperConfig {
             config_dir,
             logs_path,
             tmp_dir,
+            cloud_profile,
             device_id,
             device_topic_id,
             service_topic_id,

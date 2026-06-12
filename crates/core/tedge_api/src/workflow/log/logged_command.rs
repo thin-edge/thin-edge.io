@@ -199,6 +199,11 @@ impl LoggedCommand {
         self
     }
 
+    pub fn env(&mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> &mut LoggedCommand {
+        self.command.env(key, value);
+        self
+    }
+
     /// Execute the command and log its exit status, stdout and stderr
     ///
     /// If the command has been executed the outcome is returned (successful or not).

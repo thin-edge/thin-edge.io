@@ -89,6 +89,7 @@ impl TEdgeComponent for CumulocityMapper {
             &tedge_config,
             &c8y_config,
             service_topic_id.clone(),
+            self.profile.clone(),
         )?;
         let auth_method = auth_method(&c8y_config);
         if tedge_config.mqtt.bridge.built_in {
