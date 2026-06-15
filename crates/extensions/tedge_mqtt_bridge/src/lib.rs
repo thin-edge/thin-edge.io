@@ -42,6 +42,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::Instrument;
 
@@ -163,7 +164,7 @@ impl MqttBridgeActorBuilder {
             .map(|t| SubscribeFilter::new(t.to_owned(), QoS::AtLeastOnce))
             .collect();
 
-        let [cloud_target, local_target] =
+        let ([cloud_target, local_target], [cloud_gate_controller, local_gate_controller]) =
             bidirectional_channel(cloud_client.clone(), local_client.clone(), in_flight.into());
         let [(convert_local, bidir_local), (convert_cloud, bidir_cloud)] =
             rules.converters_and_bidirectional_topic_filters();
@@ -194,6 +195,7 @@ impl MqttBridgeActorBuilder {
                     local_tx,
                     // The local→cloud direction enforces the cloud broker's limit
                     Some(max_payload_size),
+                    local_gate_controller,
                 )
                 .instrument(tracing::Span::current()),
             ),
@@ -213,6 +215,7 @@ impl MqttBridgeActorBuilder {
                     // The cloud→local direction is left unguarded: the local broker
                     // accepts large messages and cloud messages already met the cloud's limit
                     None,
+                    cloud_gate_controller,
                 )
                 .instrument(tracing::Span::current()),
             ),
@@ -238,13 +241,82 @@ fn bidirectional_channel<Client: MqttClient + 'static>(
     cloud_client: Client,
     local_client: Client,
     buffer: usize,
-) -> [BridgeAsyncClient<Client>; 2] {
+) -> (
+    [BridgeAsyncClient<Client>; 2],
+    [SubscriptionGateController; 2],
+) {
     let (tx_first, rx_first) = mpsc::channel(buffer);
     let (tx_second, rx_second) = mpsc::channel(buffer);
-    [
-        BridgeAsyncClient::new(cloud_client, tx_first, rx_second),
-        BridgeAsyncClient::new(local_client, tx_second, rx_first),
-    ]
+    // Each gate tracks the subscriptions of one connection. Its reader gates the
+    // publisher feeding that connection, while its controller is handed to the half
+    // bridge polling that connection's event loop (which receives the SUBACKs).
+    let (cloud_gate, cloud_gate_controller) = SubscriptionGate::new();
+    let (local_gate, local_gate_controller) = SubscriptionGate::new();
+    (
+        [
+            BridgeAsyncClient::new(cloud_client, tx_first, rx_second, cloud_gate),
+            BridgeAsyncClient::new(local_client, tx_second, rx_first, local_gate),
+        ],
+        [cloud_gate_controller, local_gate_controller],
+    )
+}
+
+/// Gates outbound publishes until a connection's subscriptions are acknowledged
+///
+/// On a clean session the broker has no record of our subscriptions, so a message
+/// published before the relevant `SUBACK` could trigger a response on a topic we
+/// have not finished subscribing to. The gate lets a publisher hold outbound
+/// messages until the subscriptions for that connection are acknowledged.
+///
+/// The reader ([SubscriptionGate]) is held by the publisher feeding a broker, while
+/// the writer ([SubscriptionGateController]) is held by the half bridge polling that
+/// broker's event loop — the half that receives the connection's `SUBACK`s.
+#[derive(Clone)]
+struct SubscriptionGate {
+    open: watch::Receiver<bool>,
+}
+
+struct SubscriptionGateController {
+    open: watch::Sender<bool>,
+}
+
+impl SubscriptionGate {
+    /// Creates a gate, initially closed, with its controller
+    fn new() -> (Self, SubscriptionGateController) {
+        let (tx, rx) = watch::channel(false);
+        (
+            SubscriptionGate { open: rx },
+            SubscriptionGateController { open: tx },
+        )
+    }
+
+    /// Returns whether outbound publishes may currently proceed
+    fn is_open(&self) -> bool {
+        *self.open.borrow()
+    }
+
+    /// Resolves when the gate's open/closed state next changes
+    ///
+    /// Stays pending once the controller is dropped, so it can sit in a `select!`
+    /// without busy-spinning when the state can no longer change
+    async fn await_change(&mut self) {
+        if self.open.changed().await.is_err() {
+            // Never resolve: a ready arm would busy-spin the caller's `select!`
+            std::future::pending::<()>().await;
+        }
+    }
+}
+
+impl SubscriptionGateController {
+    /// Allows the gated publisher to forward outbound messages
+    fn open(&self) {
+        let _ = self.open.send(true);
+    }
+
+    /// Holds outbound messages until the subscriptions are acknowledged again
+    fn close(&self) {
+        let _ = self.open.send(false);
+    }
 }
 
 enum BridgeMessage {
@@ -287,6 +359,9 @@ struct BridgeAsyncClient<Client: MqttClient> {
 
     /// Count of messages that have been acknowledged
     acknowledged: Arc<AtomicUsize>,
+
+    /// Holds back outbound publishes until the target's subscriptions are acknowledged
+    gate: SubscriptionGate,
 }
 
 impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
@@ -302,6 +377,7 @@ impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
         target: Client,
         tx: mpsc::Sender<Option<(String, Publish)>>,
         rx: mpsc::Receiver<Option<(String, Publish)>>,
+        gate: SubscriptionGate,
     ) -> Self {
         let (unbounded_tx, unbounded_rx) = mpsc::unbounded_channel();
         let companion_bridge_half = BridgeAsyncClient {
@@ -310,6 +386,7 @@ impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
             sender: BridgeMessageSender { unbounded_tx },
             published: Arc::new(AtomicUsize::new(0)),
             acknowledged: Arc::new(AtomicUsize::new(0)),
+            gate,
         };
         companion_bridge_half.spawn_publisher(tx, unbounded_rx);
         companion_bridge_half
@@ -339,43 +416,77 @@ impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
         let target = self.target.clone();
         let published = self.published.clone();
         let acknowledged = self.acknowledged.clone();
+        let mut gate = self.gate.clone();
         tokio::spawn(
             async move {
-                while let Some(message) = unbounded_rx.recv().await {
-                    match message {
-                        BridgeMessage::BridgePub {
-                            target_topic,
-                            publish,
-                        } => {
-                            let duplicate = (target_topic.clone(), publish.clone());
-                            tx.send(Some(duplicate)).await.unwrap();
-                            target
-                                .publish(target_topic, publish.qos, publish.retain, publish.payload)
-                                .await
-                                .unwrap();
-                            published.fetch_add(1, Ordering::Relaxed);
+                // While the gate is closed (the target's subscriptions are not yet
+                // acknowledged on a clean session), outbound publishes are held here in
+                // order and flushed once the gate opens. Every publish goes through the
+                // buffer, so they are always forwarded in arrival order. Acks are never
+                // gated.
+                let mut buffer: VecDeque<BridgeMessage> = VecDeque::new();
+                loop {
+                    if gate.is_open() {
+                        // Flush queued publishes in order before handling anything new
+                        while let Some(message) = buffer.pop_front() {
+                            publish_to_target(&target, &tx, &published, message).await;
                         }
-                        BridgeMessage::Pub { publish } => {
-                            tx.send(None).await.unwrap();
-                            target
-                                .publish(
-                                    publish.topic,
-                                    publish.qos,
-                                    publish.retain,
-                                    publish.payload,
-                                )
-                                .await
-                                .unwrap();
-                        }
-                        BridgeMessage::BridgeAck { publish } => {
-                            target.ack(&publish).await.unwrap();
-                            acknowledged.fetch_add(1, Ordering::Relaxed);
+                    }
+                    tokio::select! {
+                        biased;
+                        // Re-check the gate at the top of the loop when it opens or closes
+                        _ = gate.await_change() => {}
+                        message = unbounded_rx.recv() => match message {
+                            // The companion half has disconnected, shut down the publisher
+                            None => break,
+                            // Acks are forwarded immediately, regardless of the gate
+                            Some(BridgeMessage::BridgeAck { publish }) => {
+                                target.ack(&publish).await.unwrap();
+                                acknowledged.fetch_add(1, Ordering::Relaxed);
+                            }
+                            // Publishes are queued and flushed at the top of the loop
+                            Some(message) => buffer.push_back(message),
                         }
                     }
                 }
             }
             .instrument(tracing::Span::current()),
         );
+    }
+}
+
+/// Forwards a single publish to the target, keeping the companion notification and the
+/// target publish atomic so a buffered message is never split across the two
+async fn publish_to_target<Client: MqttClient>(
+    target: &Client,
+    tx: &mpsc::Sender<Option<(String, Publish)>>,
+    published: &AtomicUsize,
+    message: BridgeMessage,
+) {
+    match message {
+        BridgeMessage::BridgePub {
+            target_topic,
+            publish,
+        } => {
+            let duplicate = (target_topic.clone(), publish.clone());
+            tx.send(Some(duplicate)).await.unwrap();
+            target
+                .publish(target_topic, publish.qos, publish.retain, publish.payload)
+                .await
+                .unwrap();
+            published.fetch_add(1, Ordering::Relaxed);
+        }
+        BridgeMessage::Pub { publish } => {
+            tx.send(None).await.unwrap();
+            target
+                .publish(publish.topic, publish.qos, publish.retain, publish.payload)
+                .await
+                .unwrap();
+        }
+        // Acks bypass the gate and are forwarded by the caller, never buffered
+        BridgeMessage::BridgeAck { .. } => {
+            unreachable!("acks are forwarded directly and never published through the gate")
+        }
     }
 }
 
@@ -522,6 +633,7 @@ async fn half_bridge(
     reconnect_message: Option<Publish>,
     mut self_tx: BridgeMessageSender,
     max_payload_size: Option<usize>,
+    gate: SubscriptionGateController,
 ) {
     let mut backoff = CustomBackoff::new(
         ::backoff::SystemClock {},
@@ -545,6 +657,12 @@ async fn half_bridge(
     let mut session_present: Option<bool> = None;
     let mut pending = Vec::new();
 
+    // Tracks subscription acknowledgements for the current connection so outbound
+    // publishes can be gated until this connection's subscriptions are SUBACK'd on a
+    // clean session. Reset on every (re)connection.
+    let mut subacks_seen = 0;
+    let mut subacks_needed = 0;
+
     loop {
         let res = recv_event_loop.poll().await;
         bridge_health.update(&res).await;
@@ -555,6 +673,9 @@ async fn half_bridge(
                 notification
             }
             Err(_) => {
+                // The connection is gone: hold outbound publishes until it is
+                // re-established and its subscriptions are acknowledged again.
+                gate.close();
                 let time = backoff.backoff();
                 if !time.is_zero() {
                     log_event!(
@@ -597,18 +718,35 @@ async fn half_bridge(
                     self_tx.internal_publish(msg);
                 }
 
+                // Reset the subscription-acknowledgement tracking for this connection
+                // before the gate is (re)evaluated below.
+                subacks_seen = 0;
+                subacks_needed = topics.len();
+
                 let recv_client = recv_client.clone();
-                let topics = topics.clone();
+                let subscribe_topics = topics.clone();
                 // We have to subscribe to this asynchronously (i.e. in a task) since we might at
                 // this point have filled our cloud event loop with outgoing messages
                 tokio::spawn(
                     async move {
-                        for topic in topics {
+                        for topic in subscribe_topics {
                             recv_client.subscribe(topic).await.unwrap()
                         }
                     }
                     .instrument(tracing::Span::current()),
                 );
+
+                // Gate outbound publishes until this connection's subscriptions are
+                // acknowledged. On a resumed session the broker still holds our
+                // subscriptions, so it is safe to publish immediately; likewise when
+                // there are no subscriptions to wait for. The gate is opened only after
+                // the subscriptions above have been enqueued, so a publish woken by the
+                // gate opening cannot overtake them onto the wire.
+                if conn_ack.session_present || subacks_needed == 0 {
+                    gate.open();
+                } else {
+                    gate.close();
+                }
 
                 session_present = Some(conn_ack.session_present);
 
@@ -701,8 +839,27 @@ async fn half_bridge(
                 log_event!(info: name, "Still waiting ack for pkid={pkid}");
             }
 
+            // Open the gate once the connection's subscriptions are acknowledged
+            Event::Incoming(Incoming::SubAck(suback)) => {
+                if suback
+                    .return_codes
+                    .iter()
+                    .any(|code| matches!(code, rumqttc::SubscribeReasonCode::Failure))
+                {
+                    log_event!(warn: name, "Broker rejected one or more subscriptions: {suback:?}");
+                }
+                // Count return codes, not packets: a broker may acknowledge several filters
+                // in one SUBACK, and a rejected filter still counts since we must never wait
+                // on an acknowledgement that will never arrive.
+                subacks_seen += suback.return_codes.len();
+                if subacks_seen >= subacks_needed {
+                    gate.open();
+                }
+            }
+
             Event::Incoming(Incoming::Disconnect) => {
                 log_event!(info: name, "Connection closed by peer");
+                gate.close();
             }
 
             _ => {}
@@ -1247,6 +1404,7 @@ mod tests {
 
             let bridge = Bridge::default()
                 .with_local_events(events)
+                .with_cloud_events([inc!(connack)])
                 .with_c8y_topics()
                 .process_all_events()
                 .await;
@@ -1265,6 +1423,7 @@ mod tests {
 
             let bridge = Bridge::default()
                 .with_local_events(events)
+                .with_cloud_events([inc!(connack)])
                 .with_c8y_topics()
                 .with_max_payload_size(50)
                 .process_all_events()
@@ -1285,10 +1444,11 @@ mod tests {
         #[tokio::test]
         async fn over_limit_cloud_to_local_message_is_forwarded_unchanged() {
             let big_msg = Publish::new("s/ds", QoS::AtLeastOnce, vec![b'x'; 100]);
-            let events = [inc!(publish(big_msg))];
+            let events = [inc!(connack), inc!(publish(big_msg))];
 
             let bridge = Bridge::default()
                 .with_cloud_events(events)
+                .with_local_events([inc!(connack)])
                 .with_c8y_topics()
                 // The limit applies to the local→cloud direction only; the cloud→local
                 // half is unguarded regardless of this value.
@@ -1306,7 +1466,7 @@ mod tests {
         async fn forwards_message_acknowledgements() {
             let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
             let local_events = [inc!(publish(incoming_msg))];
-            let cloud_events = [out!(publish(1)), inc!(puback(1))];
+            let cloud_events = [inc!(connack), out!(publish(1)), inc!(puback(1))];
 
             let bridge = Bridge::default()
                 .with_local_events(local_events)
@@ -1339,6 +1499,7 @@ mod tests {
             ];
             let mut bridge = Bridge::default()
                 .with_local_events(local_events)
+                .with_cloud_events([inc!(connack)])
                 .with_local_client(BlockingSubscribeClient)
                 .with_c8y_topics()
                 .process_all_events()
@@ -1361,6 +1522,7 @@ mod tests {
             let local_events: [Result<Event, ConnectionError>; 2] =
                 [inc!(publish(first_msg)), inc!(publish(second_msg))];
             let cloud_events = [
+                inc!(connack),
                 out!(publish(1)),
                 out!(publish(2)),
                 inc!(puback(2)),
@@ -1390,9 +1552,12 @@ mod tests {
             let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
             let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
             let cloud_events = [
+                inc!(connack),
                 out!(publish(1)),
                 // Abruptly disconnect client
                 inc!(network_error),
+                // Reconnect, resuming the session
+                inc!(connack),
                 // Republish message after disconnect
                 out!(publish(1)),
                 inc!(puback(1)),
@@ -1424,6 +1589,7 @@ mod tests {
             let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
             let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
             let cloud_events = [
+                inc!(connack),
                 out!(publish(1)),
                 inc!(puback(1)),
                 // Simulate the cloud sending a second acknowledgement
@@ -1634,6 +1800,450 @@ mod tests {
             assert!(actions.contains(&Action::Publish(expected_forwarded)));
         }
 
+        mod holding_publishes_until_subscribed {
+            use super::*;
+
+            #[tokio::test]
+            async fn does_not_forward_until_subscribed() {
+                let mut publisher = focused_publisher();
+                let first = Publish::new("topic", QoS::AtLeastOnce, "first");
+                let second = Publish::new("topic", QoS::AtLeastOnce, "second");
+                publisher.client.publish("topic".to_string(), first.clone());
+                publisher
+                    .client
+                    .publish("topic".to_string(), second.clone());
+
+                // The subscriptions have not been acknowledged: nothing may be forwarded
+                settle().await;
+                assert!(
+                    publisher.target.next_action().is_err(),
+                    "messages must not be forwarded before the subscriptions are acknowledged"
+                );
+
+                // Once acknowledged, the held messages are forwarded in order
+                publisher.controller.open();
+                assert_eq!(
+                    next_action_eventually(&publisher.target).await,
+                    Action::Publish(first)
+                );
+                assert_eq!(
+                    next_action_eventually(&publisher.target).await,
+                    Action::Publish(second)
+                );
+            }
+
+            #[tokio::test]
+            async fn acknowledges_messages_while_not_yet_subscribed() {
+                let mut publisher = focused_publisher();
+                let msg = Publish::new("topic", QoS::AtLeastOnce, "payload");
+
+                // Acks are never gated, even while the subscriptions are unacknowledged
+                publisher.client.ack(msg.clone());
+                assert_eq!(
+                    next_action_eventually(&publisher.target).await,
+                    Action::Ack(msg)
+                );
+            }
+
+            #[tokio::test]
+            async fn forwards_queued_messages_before_any_new_message() {
+                let mut publisher = focused_publisher();
+                let first = Publish::new("topic", QoS::AtLeastOnce, "first");
+                let second = Publish::new("topic", QoS::AtLeastOnce, "second");
+                let third = Publish::new("topic", QoS::AtLeastOnce, "third");
+
+                publisher.client.publish("topic".to_string(), first.clone());
+                publisher
+                    .client
+                    .publish("topic".to_string(), second.clone());
+                // Open the gate and immediately enqueue a new message: the queued ones come first
+                publisher.controller.open();
+                publisher.client.publish("topic".to_string(), third.clone());
+
+                assert_eq!(
+                    next_action_eventually(&publisher.target).await,
+                    Action::Publish(first)
+                );
+                assert_eq!(
+                    next_action_eventually(&publisher.target).await,
+                    Action::Publish(second)
+                );
+                assert_eq!(
+                    next_action_eventually(&publisher.target).await,
+                    Action::Publish(third)
+                );
+            }
+
+            #[tokio::test]
+            async fn holds_messages_enqueued_after_the_gate_closes_again() {
+                let mut publisher = focused_publisher();
+                let before = Publish::new("topic", QoS::AtLeastOnce, "before");
+                let after = Publish::new("topic", QoS::AtLeastOnce, "after");
+
+                // Gate open (subscribed): the message flows straight through
+                publisher.controller.open();
+                publisher
+                    .client
+                    .publish("topic".to_string(), before.clone());
+                assert_eq!(
+                    next_action_eventually(&publisher.target).await,
+                    Action::Publish(before)
+                );
+
+                // Gate closes again (e.g. the connection dropped): later messages are held
+                publisher.controller.close();
+                publisher.client.publish("topic".to_string(), after.clone());
+                settle().await;
+                assert!(
+                    publisher.target.next_action().is_err(),
+                    "messages enqueued after the gate closes must be held until it reopens"
+                );
+
+                // Reopening (re-subscribed) flushes the held message
+                publisher.controller.open();
+                assert_eq!(
+                    next_action_eventually(&publisher.target).await,
+                    Action::Publish(after)
+                );
+            }
+
+            /// A single [BridgeAsyncClient] wired to a controllable subscription gate, for
+            /// focused tests of the publisher's holding and ordering behaviour
+            struct FocusedPublisher {
+                client: BridgeAsyncClient<ActionLogger>,
+                controller: SubscriptionGateController,
+                target: ActionLogger,
+                // Keeps the companion-notification channel open so publishes do not fail
+                _companion_rx: mpsc::Receiver<Option<(String, Publish)>>,
+            }
+
+            /// Builds a publisher whose forwarded messages land in its `target`, starting with
+            /// its subscription gate closed
+            fn focused_publisher() -> FocusedPublisher {
+                let target = ActionLogger::default();
+                let (gate, controller) = SubscriptionGate::new();
+                // this -> companion: duplicate notifications used for acknowledgement tracking
+                let (tx, companion_rx) = mpsc::channel(10);
+                // companion -> this: unused by these tests, so its sender is dropped immediately
+                let (_unused_tx, rx) = mpsc::channel(10);
+                let client = BridgeAsyncClient::new(target.clone(), tx, rx, gate);
+                FocusedPublisher {
+                    client,
+                    controller,
+                    target,
+                    _companion_rx: companion_rx,
+                }
+            }
+
+            /// Yields enough times for the publisher task to drain its input and settle
+            async fn settle() {
+                for _ in 0..10 {
+                    tokio::task::yield_now().await;
+                }
+            }
+
+            /// Waits for the next action to be logged, yielding to let the publisher task run
+            async fn next_action_eventually(logger: &ActionLogger) -> Action {
+                for _ in 0..1000 {
+                    if let Ok(action) = logger.next_action() {
+                        return action;
+                    }
+                    tokio::task::yield_now().await;
+                }
+                panic!("expected an action to be logged but none appeared");
+            }
+        }
+
+        mod forwarding_respects_subscription_state {
+            use super::*;
+
+            #[tokio::test]
+            async fn does_not_forward_to_cloud_until_subscribed() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let subscription_topics =
+                    vec![SubscribeFilter::new("s/ds".into(), QoS::AtLeastOnce)];
+
+                let bridge = Bridge::default()
+                    .with_subscription_topics(subscription_topics.clone())
+                    .with_cloud_events([inc!(clean_connack)])
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                assert_eq!(
+                    bridge.cloud_client.next_action().unwrap(),
+                    Action::SubscribeMany(subscription_topics)
+                );
+                assert!(
+                bridge.cloud_client.next_action().is_err(),
+                "the forwarded message must be held until the cloud subscriptions are acknowledged"
+            );
+            }
+
+            #[tokio::test]
+            async fn forwards_and_acknowledges_once_subscribed() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let outgoing_msg = Publish::new("s/us", QoS::AtLeastOnce, "payload");
+                let subscription_topics =
+                    vec![SubscribeFilter::new("s/ds".into(), QoS::AtLeastOnce)];
+                let local_events = [inc!(publish(incoming_msg))];
+                let cloud_events = [
+                    inc!(clean_connack),
+                    inc!(suback),
+                    out!(publish(1)),
+                    inc!(puback(1)),
+                ];
+
+                let bridge = Bridge::default()
+                    .with_subscription_topics(subscription_topics)
+                    .with_local_events(local_events)
+                    .with_cloud_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                let mut cloud_actions = Vec::new();
+                while let Ok(action) = bridge.cloud_client.next_action() {
+                    cloud_actions.push(action);
+                }
+                assert!(
+                cloud_actions.contains(&Action::Publish(outgoing_msg)),
+                "expected the message to be forwarded to the cloud once subscribed, got {cloud_actions:?}"
+            );
+                assert_eq!(
+                    bridge.local_client.next_action().unwrap(),
+                    Action::Ack(incoming_msg)
+                );
+            }
+
+            #[tokio::test]
+            async fn forwards_immediately_when_session_is_resumed() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let outgoing_msg = Publish::new("s/us", QoS::AtLeastOnce, "payload");
+                let subscription_topics =
+                    vec![SubscribeFilter::new("s/ds".into(), QoS::AtLeastOnce)];
+
+                let bridge = Bridge::default()
+                    .with_subscription_topics(subscription_topics)
+                    .with_cloud_events([inc!(connack)])
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                let mut cloud_actions = Vec::new();
+                while let Ok(action) = bridge.cloud_client.next_action() {
+                    cloud_actions.push(action);
+                }
+                assert!(
+                    cloud_actions.contains(&Action::Publish(outgoing_msg)),
+                    "a resumed session must forward immediately, got {cloud_actions:?}"
+                );
+            }
+
+            #[tokio::test]
+            async fn does_not_forward_until_all_subscriptions_acknowledged() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let subscription_topics = vec![
+                    SubscribeFilter::new("s/ds".into(), QoS::AtLeastOnce),
+                    SubscribeFilter::new("s/dat".into(), QoS::AtLeastOnce),
+                ];
+
+                // Two subscriptions, but only one is acknowledged
+                let bridge = Bridge::default()
+                    .with_subscription_topics(subscription_topics)
+                    .with_cloud_events([inc!(clean_connack), inc!(suback)])
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                let cloud_actions = drain_actions(&bridge.cloud_client);
+                assert!(
+                    !cloud_actions
+                        .iter()
+                        .any(|action| matches!(action, Action::Publish(_))),
+                    "the message must be held until every subscription is acknowledged, got {cloud_actions:?}"
+                );
+            }
+
+            #[tokio::test]
+            async fn forwards_once_all_subscriptions_acknowledged() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let outgoing_msg = Publish::new("s/us", QoS::AtLeastOnce, "payload");
+                let subscription_topics = vec![
+                    SubscribeFilter::new("s/ds".into(), QoS::AtLeastOnce),
+                    SubscribeFilter::new("s/dat".into(), QoS::AtLeastOnce),
+                ];
+                let cloud_events = [
+                    inc!(clean_connack),
+                    inc!(suback),
+                    inc!(suback),
+                    out!(publish(1)),
+                    inc!(puback(1)),
+                ];
+
+                let bridge = Bridge::default()
+                    .with_subscription_topics(subscription_topics)
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    .with_cloud_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                let cloud_actions = drain_actions(&bridge.cloud_client);
+                assert!(
+                    cloud_actions.contains(&Action::Publish(outgoing_msg)),
+                    "expected the message forwarded once all subscriptions are acknowledged, got {cloud_actions:?}"
+                );
+            }
+
+            #[tokio::test]
+            async fn opens_the_gate_when_one_suback_covers_every_topic() {
+                // A broker may acknowledge several filters in a single SUBACK; the gate counts
+                // return codes, not packets, so it must not wait for a per-topic SUBACK.
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let outgoing_msg = Publish::new("s/us", QoS::AtLeastOnce, "payload");
+                let subscription_topics = vec![
+                    SubscribeFilter::new("s/ds".into(), QoS::AtLeastOnce),
+                    SubscribeFilter::new("s/dat".into(), QoS::AtLeastOnce),
+                ];
+                let combined_suback: EventRes = Ok(Event::Incoming(Incoming::SubAck(SubAck {
+                    pkid: 1,
+                    return_codes: vec![
+                        SubscribeReasonCode::Success(QoS::AtLeastOnce),
+                        SubscribeReasonCode::Success(QoS::AtLeastOnce),
+                    ],
+                })));
+                let cloud_events = [
+                    inc!(clean_connack),
+                    combined_suback,
+                    out!(publish(1)),
+                    inc!(puback(1)),
+                ];
+
+                let bridge = Bridge::default()
+                    .with_subscription_topics(subscription_topics)
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    .with_cloud_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                let cloud_actions = drain_actions(&bridge.cloud_client);
+                assert!(
+                    cloud_actions.contains(&Action::Publish(outgoing_msg)),
+                    "a single SUBACK covering all filters must open the gate, got {cloud_actions:?}"
+                );
+            }
+
+            #[tokio::test]
+            async fn forwards_even_when_a_subscription_is_rejected() {
+                // A rejected subscription still counts, otherwise the gate would wait forever
+                // for an acknowledgement that never comes.
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let outgoing_msg = Publish::new("s/us", QoS::AtLeastOnce, "payload");
+                let subscription_topics =
+                    vec![SubscribeFilter::new("s/ds".into(), QoS::AtLeastOnce)];
+                let cloud_events = [
+                    inc!(clean_connack),
+                    inc!(suback_failure),
+                    out!(publish(1)),
+                    inc!(puback(1)),
+                ];
+
+                let bridge = Bridge::default()
+                    .with_subscription_topics(subscription_topics)
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    .with_cloud_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                let cloud_actions = drain_actions(&bridge.cloud_client);
+                assert!(
+                    cloud_actions.contains(&Action::Publish(outgoing_msg)),
+                    "a rejected subscription must still release held messages, got {cloud_actions:?}"
+                );
+            }
+
+            #[tokio::test]
+            async fn forwards_immediately_when_no_subscriptions_are_configured() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let outgoing_msg = Publish::new("s/us", QoS::AtLeastOnce, "payload");
+                let cloud_events = [inc!(clean_connack), out!(publish(1)), inc!(puback(1))];
+
+                // No subscriptions: there is nothing to wait for, even on a clean session
+                let bridge = Bridge::default()
+                    .with_subscription_topics(vec![])
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    .with_cloud_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                let cloud_actions = drain_actions(&bridge.cloud_client);
+                assert!(
+                    cloud_actions.contains(&Action::Publish(outgoing_msg)),
+                    "with no subscriptions the gate must open immediately, got {cloud_actions:?}"
+                );
+            }
+        }
+
+        mod gate_across_reconnections {
+            use super::*;
+
+            #[tokio::test]
+            async fn re_gates_outbound_publishes_after_a_network_error() {
+                assert_reconnect_message_held_after_disconnect(inc!(network_error)).await;
+            }
+
+            #[tokio::test]
+            async fn re_gates_outbound_publishes_after_a_peer_disconnect() {
+                assert_reconnect_message_held_after_disconnect(inc!(disconnect)).await;
+            }
+
+            async fn assert_reconnect_message_held_after_disconnect(disconnect_event: EventRes) {
+                let reconnect_msg = Publish::new("s/us", QoS::AtLeastOnce, "reconnected");
+                let subscription_topics =
+                    vec![SubscribeFilter::new("s/ds".into(), QoS::AtLeastOnce)];
+                let cloud_events = [
+                    inc!(clean_connack),
+                    inc!(suback),
+                    out!(publish(1)),
+                    inc!(puback(1)),
+                    disconnect_event,
+                    inc!(clean_connack),
+                ];
+
+                let bridge = Bridge::default()
+                    .with_subscription_topics(subscription_topics)
+                    .with_cloud_events(cloud_events)
+                    .with_cloud_reconnect_message(Some(reconnect_msg.clone()))
+                    .process_all_events()
+                    .await;
+
+                let forwarded = drain_actions(&bridge.cloud_client)
+                    .into_iter()
+                    .filter(|action| action == &Action::Publish(reconnect_msg.clone()))
+                    .count();
+                assert_eq!(
+                    forwarded, 1,
+                    "the reconnect message after a clean reconnect must stay held until re-subscribed"
+                );
+            }
+        }
+
+        /// Drains and returns every action a client has logged so far
+        fn drain_actions(client: &ActionLogger) -> Vec<Action> {
+            let mut actions = Vec::new();
+            while let Ok(action) = client.next_action() {
+                actions.push(action);
+            }
+            actions
+        }
+
         struct Bridge<LoEv, ClEv, LoCl, ClCl> {
             local_events: LoEv,
             cloud_events: ClEv,
@@ -1766,8 +2376,14 @@ mod tests {
                 let (tx1, rx1) = mpsc::channel(10);
 
                 let (tx_health, rx_health) = mpsc::channel(10);
-                let cloud_target = BridgeAsyncClient::new(self.cloud_client.clone(), tx0, rx1);
-                let local_target = BridgeAsyncClient::new(self.local_client.clone(), tx1, rx0);
+                // Each gate tracks one connection's subscriptions: its reader gates the
+                // publisher feeding that connection, its controller drives the half polling it.
+                let (cloud_gate, cloud_gate_controller) = SubscriptionGate::new();
+                let (local_gate, local_gate_controller) = SubscriptionGate::new();
+                let cloud_target =
+                    BridgeAsyncClient::new(self.cloud_client.clone(), tx0, rx1, cloud_gate);
+                let local_target =
+                    BridgeAsyncClient::new(self.local_client.clone(), tx1, rx0, local_gate);
                 let cloud_sender = cloud_target.clone_sender();
                 let local_sender = local_target.clone_sender();
 
@@ -1784,6 +2400,7 @@ mod tests {
                     None,
                     local_sender,
                     self.max_payload_size,
+                    local_gate_controller,
                 ));
                 let cloud_task = tokio::spawn(half_bridge(
                     self.cloud_events.clone(),
@@ -1798,6 +2415,7 @@ mod tests {
                     self.cloud_reconnect_message,
                     cloud_sender,
                     None,
+                    cloud_gate_controller,
                 ));
 
                 tokio::time::timeout(Duration::from_secs(5), self.local_events.all_processed())
