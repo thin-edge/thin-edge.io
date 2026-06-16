@@ -44,6 +44,26 @@ mosquitto_log() {
     fi
 }
 
+mosquitto_db() {
+    db_file=/var/lib/mosquitto/mosquitto.db
+    if [ -f "$db_file" ]; then
+        # Get file size in bytes using wc
+        size=$(wc -c < "$db_file" ||:)
+        
+        # Note: the mosquitto.db file typically compresses to 10% of its size
+        # 104857600 bytes ~ 100 MB (this file compresses)
+        size_limit=104857600
+        if [ "$size" -lt "$size_limit" ]; then
+            echo "copying mosquitto db file: path=${db_file}, size=${size}B" >&2
+            cp -aR "$db_file" "$OUTPUT_DIR/" ||:
+        else
+            echo "skipping copying mosquitto db file as it is too large (>=${size_limit}B): path=${db_file}, size=${size}B" >&2
+        fi
+    else
+        echo "mosquitto db file not found. path=$db_file" >&2
+    fi
+}
+
 mosquitto_config() {
     if [ -d /etc/mosquitto ]; then
         if command -V tree >/dev/null >&2; then
@@ -77,6 +97,7 @@ collect() {
         fi
         mosquitto_log
         mosquitto_config
+        mosquitto_db
     else
         echo "mosquitto not found" >&2
         # this plugin is not applicable when mosquitto doesn't exist
