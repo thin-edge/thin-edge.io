@@ -12,7 +12,6 @@ use std::convert::Infallible;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
-use time::format_description;
 use time::OffsetDateTime;
 
 const ENTITY_ID_SEGMENTS: usize = 4;
@@ -960,13 +959,9 @@ impl IdGenerator {
     }
 
     pub fn new_id(&self) -> String {
-        format!(
-            "{}-{}",
-            self.prefix,
-            OffsetDateTime::now_utc()
-                .format(&format_description::well_known::Rfc3339)
-                .unwrap(),
-        )
+        let now = OffsetDateTime::now_utc();
+        let millis = now.unix_timestamp_nanos() / 1_000_000;
+        format!("{}-{}.{}", self.prefix, millis / 1000, millis % 1000)
     }
 
     pub fn new_id_with_str(&self, value: &str) -> String {
