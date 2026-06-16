@@ -111,6 +111,7 @@ impl TEdgeComponent for CumulocityMapper {
                         tc,
                         cloud_config,
                         Some(reconnect_message_mapper),
+                        c8y_config.mapper.mqtt.max_payload_size.0 as usize,
                     )
                     .await,
                 )

@@ -11,7 +11,9 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use tedge_config::models::CloudType;
 use tedge_config::models::HostPort;
+use tedge_config::models::MqttPayloadLimit;
 use tedge_config::models::SecondsOrHumanTime;
+use tedge_config::models::MQTT_MAX_PAYLOAD_SIZE;
 use tedge_config::models::MQTT_TLS_PORT;
 
 /// Authentication method for the cloud broker connection.
@@ -107,7 +109,7 @@ pub enum BridgeTlsEnable {
 }
 
 /// MQTT bridge connection settings.
-#[derive(Debug, Default, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct BridgeConfig {
     /// Whether to use a clean MQTT session when connecting to the remote broker.
     /// Default: false (persistent session).
@@ -118,6 +120,26 @@ pub struct BridgeConfig {
     /// TLS transport control: on, off, or auto (default).
     #[serde(default)]
     pub tls: BridgeTls,
+    /// Maximum MQTT packet size the bridge forwards to the cloud for this mapper.
+    /// Defaults to the MQTT maximum, leaving the limit effectively disabled for
+    /// brokers whose limit is unknown.
+    #[serde(default)]
+    pub max_payload_size: MqttPayloadLimit,
+}
+
+impl Default for BridgeConfig {
+    fn default() -> Self {
+        BridgeConfig {
+            clean_session: false,
+            keepalive_interval: None,
+            tls: BridgeTls::default(),
+            max_payload_size: default_max_payload_size(),
+        }
+    }
+}
+
+fn default_max_payload_size() -> MqttPayloadLimit {
+    MqttPayloadLimit(MQTT_MAX_PAYLOAD_SIZE)
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -463,6 +485,44 @@ keepalive_interval = "60s"
         assert_eq!(device.id.as_deref(), Some("my-device-id"));
         assert!(config.bridge.clean_session);
         assert!(config.bridge.keepalive_interval.is_some());
+    }
+
+    #[tokio::test]
+    async fn parses_configured_max_payload_size() {
+        let ttd = TempTedgeDir::new();
+        let mapper_dir = ttd.utf8_path().join("mappers/limited");
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+
+        tokio::fs::write(
+            mapper_dir.join("mapper.toml"),
+            "url = \"mqtt.example.com\"\n\n[bridge]\nmax_payload_size = 16384\n",
+        )
+        .await
+        .unwrap();
+
+        let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+        assert_eq!(config.bridge.max_payload_size, MqttPayloadLimit(16384));
+    }
+
+    #[tokio::test]
+    async fn max_payload_size_defaults_to_mqtt_maximum() {
+        let ttd = TempTedgeDir::new();
+        let mapper_dir = ttd.utf8_path().join("mappers/unlimited");
+        tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
+
+        tokio::fs::write(
+            mapper_dir.join("mapper.toml"),
+            "url = \"mqtt.example.com\"\n",
+        )
+        .await
+        .unwrap();
+
+        let config = load_mapper_config(&mapper_dir).await.unwrap().unwrap();
+        // The default leaves the limit effectively disabled.
+        assert_eq!(
+            config.bridge.max_payload_size,
+            MqttPayloadLimit(MQTT_MAX_PAYLOAD_SIZE)
+        );
     }
 
     #[tokio::test]

@@ -6,6 +6,7 @@ pub mod trie;
 
 use async_trait::async_trait;
 pub use mqtt_channel::deserialize_qos;
+pub use mqtt_channel::publish_packet_size;
 pub use mqtt_channel::serialize_qos;
 pub use mqtt_channel::DebugPayload;
 pub use mqtt_channel::MqttError;
