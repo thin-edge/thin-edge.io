@@ -81,22 +81,21 @@ pub use custom::config as custom_mapper_config;
 /// Re-export custom mapper config resolution for use by CLI commands.
 pub use custom::resolve as custom_mapper_resolve;
 
-/// Set the cloud profile either from the CLI argument or env variable,
-/// then set the environment variable so child processes automatically
-/// have the correct profile set.
-macro_rules! read_and_set_var {
+/// Read the cloud profile from the CLI argument or env variable.
+macro_rules! read_profile {
     ($profile:ident, $var:literal) => {
-        $profile
-            .or_else(|| {
-                Some(
-                    std::env::var($var)
-                        .ok()?
-                        .parse()
-                        .context(concat!("Reading environment variable ", $var))
-                        .unwrap(),
-                )
-            })
-            .inspect(|profile| std::env::set_var($var, profile))
+        $profile.or_else(|| {
+            let profile = std::env::var($var).ok()?;
+            if profile.is_empty() {
+                return None;
+            }
+            Some(
+                profile
+                    .parse()
+                    .context(concat!("Reading environment variable ", $var))
+                    .unwrap(),
+            )
+        })
     };
 }
 
@@ -104,16 +103,16 @@ fn lookup_component(component_name: MapperName) -> anyhow::Result<Box<dyn TEdgeC
     Ok(match component_name {
         #[cfg(feature = "azure")]
         MapperName::Az { profile } => Box::new(AzureMapper {
-            profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
+            profile: read_profile!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
         #[cfg(feature = "aws")]
         MapperName::Aws { profile } => Box::new(AwsMapper {
-            profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
+            profile: read_profile!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
         MapperName::Collectd => Box::new(CollectdMapper),
         #[cfg(feature = "c8y")]
         MapperName::C8y { profile } => Box::new(CumulocityMapper {
-            profile: read_and_set_var!(profile, "TEDGE_CLOUD_PROFILE"),
+            profile: read_profile!(profile, "TEDGE_CLOUD_PROFILE"),
         }),
         MapperName::UserDefined(mut args) => {
             let name = args.remove(0);

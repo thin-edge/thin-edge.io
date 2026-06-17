@@ -899,6 +899,9 @@ impl CumulocityConverter {
             }
         })?;
 
+        if let Some(profile) = &self.config.cloud_profile {
+            logged.env("TEDGE_CLOUD_PROFILE", profile);
+        }
         logged.args(script.args);
 
         let maybe_child_process =
@@ -3125,6 +3128,7 @@ pub(crate) mod tests {
             root_dir.clone().into(),
             Arc::new(OperationLogs::new(root_dir.root_dir())),
             root_dir.clone().into(),
+            None,
             device_id,
             device_topic_id,
             service_topic_id,
