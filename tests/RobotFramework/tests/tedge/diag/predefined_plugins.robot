@@ -69,6 +69,7 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
     ${log_names}=    Create List
     ...    output.log
     ...    mosquitto.log
+    ...    mosquitto.db
     ...    mosquitto/mosquitto.conf
     ...    mosquitto/conf.d/mosquitto.conf
     ...    mosquitto-journal.log
