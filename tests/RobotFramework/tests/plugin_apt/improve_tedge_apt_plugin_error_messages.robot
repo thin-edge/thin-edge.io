@@ -45,6 +45,23 @@ Wrong type
     ...    ERROR: Parsing Debian package failed for `/tmp/foo.deb`, Error: dpkg-deb: error: '/tmp/foo.deb' is not a Debian format archive
     Execute Command    rm /tmp/*.deb
 
+Missing package metadata field
+    [Documentation]    A readable archive that is missing the expected Package field must fail
+    ...    cleanly instead of crashing with an index out of bounds panic.
+    Transfer To Device    src=${CURDIR}/package_without_name_field.deb    dst=/opt/
+    ${output}=    Execute Command
+    ...    sudo /etc/tedge/sm-plugins/apt install someapp --file /opt/package_without_name_field.deb
+    ...    exp_exit_code=5
+    ...    stdout=${False}
+    ...    stderr=${True}
+    Should Contain
+    ...    ${output}
+    ...    ERROR: Validation of /opt/package_without_name_field.deb metadata failed
+    Should Contain    ${output}    someapp
+    Should Not Contain    ${output}    panicked
+    Should Not Contain    ${output}    index out of bounds
+    Execute Command    rm -f /opt/package_without_name_field.deb
+
 
 *** Keywords ***
 Custom Setup

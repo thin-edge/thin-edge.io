@@ -23,26 +23,35 @@ impl PackageMetadata {
 
     fn metadata_contains_all(&self, patterns: &[&str]) -> Result<(), InternalError> {
         for pattern in patterns {
-            if !&self.metadata.contains(pattern) {
-                // Note: Debian version may have an optional epoch prefix in the version,
-                // e.g. "Version: 1:2.3.4-1", so limit max splitting to 2 fields
-                let given_metadata_split: Vec<&str> = pattern.splitn(2, ':').collect();
-                // Extract the expected meta data value for the given key
-                // For example Package name, Version etc.
-                let expected_metadata_split: Vec<&str> = self
+            if !self.metadata.contains(pattern) {
+                // Each pattern is a "Key: expected_value" entry. The value may itself
+                // contain a colon (e.g. an epoch prefix "Version: 1:2.3.4-1"), so split
+                // only on the first colon. A pattern without a colon is treated as a key
+                // with no requested value.
+                let (expected_key, provided_value) = match pattern.split_once(':') {
+                    Some((key, value)) => (key.trim(), value.trim()),
+                    None => (pattern.trim(), ""),
+                };
+
+                // Recover the value the package actually declares for this key, looking it
+                // up line by line. The metadata may not contain the field at all (e.g. a
+                // malformed package missing the Package field), in which case the actual
+                // value is left empty rather than panicking.
+                let actual_value = self
                     .metadata
-                    .split(&given_metadata_split[0])
-                    .collect::<Vec<&str>>()[1]
-                    .split('\n')
-                    .collect::<Vec<&str>>()[0]
-                    .splitn(2, ':')
-                    .collect();
+                    .lines()
+                    .find_map(|line| {
+                        line.split_once(':').and_then(|(key, value)| {
+                            (key.trim() == expected_key).then(|| value.trim().to_string())
+                        })
+                    })
+                    .unwrap_or_default();
 
                 return Err(InternalError::MetaDataMismatch {
                     package: self.file_path().to_string_lossy().to_string(),
-                    expected_key: given_metadata_split[0].to_string(),
-                    expected_value: expected_metadata_split[1].to_string(),
-                    provided_value: given_metadata_split[1].to_string(),
+                    expected_key: expected_key.to_string(),
+                    expected_value: actual_value,
+                    provided_value: provided_value.to_string(),
                 });
             }
         }
@@ -143,5 +152,74 @@ new Debian package, version 2.0.
         // Pass
         let res = meta_info.metadata_contains_all(&[&format!("Version: {}", &"1:1.5.1")]);
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn validation_fails_cleanly_when_package_field_is_missing() {
+        // A malformed package whose metadata does not carry a `Package` field,
+        // e.g. an archive `dpkg -I` can still read but that is missing required fields
+        let contents = r#"
+new Debian package, version 2.0.
+ size 438 bytes: control archive=199 bytes.
+      92 bytes,     4 lines      control
+ Version: 1.0.0
+ Architecture: all
+ Maintainer: thin-edge.io team <info@thin-edge.io>
+ Description: a malformed archive without a name field
+"#;
+        let meta_info = PackageMetadata {
+            file_path: PathBuf::from("/tmp/malformed.deb"),
+            metadata: contents.into(),
+            remove_modified: false,
+        };
+
+        let res = meta_info.metadata_contains_all(&[&format!("Package: {}", &"someapp")]);
+        assert!(
+            res.is_err(),
+            "expected a clean error rather than a panic when the field is missing"
+        );
+        let error_message = res.unwrap_err().to_string();
+        assert!(
+            error_message.contains("Package"),
+            "expected error message to name the missing field, got: {error_message}"
+        );
+        assert!(
+            error_message.contains("someapp"),
+            "expected error message to mention the requested package, got: {error_message}"
+        );
+    }
+
+    #[test]
+    fn error_message_surfaces_actual_value_when_package_name_mismatches() {
+        let contents = r#"
+new Debian package, version 2.0.
+ size 714 bytes: control archive=362 bytes.
+      54 bytes,     1 lines      md5sums
+ Package: sampledeb
+ Version: 1.0.0
+ Architecture: all
+ Maintainer: thin-edge.io team <info@thin-edge.io>
+ Description: My Sample App Debian Package
+"#;
+        let meta_info = PackageMetadata {
+            file_path: PathBuf::from("/tmp/sampledeb.deb"),
+            metadata: contents.into(),
+            remove_modified: false,
+        };
+
+        let res = meta_info.metadata_contains_all(&[&format!("Package: {}", &"wrongname")]);
+        assert!(
+            res.is_err(),
+            "expected an error as the package name differs"
+        );
+        let error_message = res.unwrap_err().to_string();
+        assert!(
+            error_message.contains("sampledeb"),
+            "expected error message to surface the package's actual name, got: {error_message}"
+        );
+        assert!(
+            error_message.contains("wrongname"),
+            "expected error message to mention the requested name, got: {error_message}"
+        );
     }
 }
