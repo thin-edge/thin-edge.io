@@ -90,6 +90,15 @@ clean_session = false
 # off: never use TLS (plain TCP, incompatible with certificate authentication)
 # tls.enable = "auto"
 
+# Maximum MQTT packet size (in bytes) the bridge forwards to the cloud.
+# This is measured as the full MQTT PUBLISH packet (topic + framing + payload),
+# not the payload body alone. A cloud-bound message whose packet size exceeds
+# this limit is dropped (and logged) rather than forwarded, preventing an
+# oversized message from blocking the cloud connection.
+# Defaults to the MQTT maximum (268435455), leaving the limit effectively
+# disabled for brokers whose limit is unknown.
+# max_payload_size = 16384
+
 # Any additional fields you add here are available as ${mapper.*} in bridge rules.
 # For example, this field is accessible as ${mapper.bridge.topic_prefix}.
 topic_prefix = "v1/devices/me"

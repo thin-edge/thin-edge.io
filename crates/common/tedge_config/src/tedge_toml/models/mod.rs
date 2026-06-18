@@ -124,6 +124,12 @@ pub const MQTT_MAX_PAYLOAD_SIZE: u32 = 268435455;
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Document)]
 pub struct MqttPayloadLimit(pub u32);
 
+impl Default for MqttPayloadLimit {
+    fn default() -> Self {
+        MqttPayloadLimit(MQTT_MAX_PAYLOAD_SIZE)
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 #[error("Invalid MQTT payload size limit: {0}. Provide a value between 0 and 268435455 bytes")]
 pub struct InvalidMqttPayloadLimit(String);

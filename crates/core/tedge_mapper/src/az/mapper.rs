@@ -89,6 +89,7 @@ impl TEdgeComponent for AzureMapper {
                 rules,
                 cloud_config,
                 None,
+                az_config.mapper.mqtt.max_payload_size.0 as usize,
             )
             .await;
             runtime.spawn(bridge_actor).await?;

@@ -40,6 +40,8 @@ async fn start_mqtt_bridge(
         rules,
         cloud_config,
         None,
+        // No effective limit: exercise the bridge's existing forwarding behaviour.
+        268_435_455,
     )
     .await;
 }

@@ -177,6 +177,53 @@ impl EventConverter {
         let Some(max_size) = self.max_mqtt_payload_size else {
             return true;
         };
-        message.payload.len() < max_size
+        // The topic here is the local one, slightly longer than the bridge-converted
+        // cloud topic, so this is a safe over-estimate of the real wire size.
+        message.wire_size() <= max_size
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unset_limit_always_sends_over_mqtt() {
+        let converter = EventConverter::default();
+        let message = Message::new("c8y/event/events/create", vec![b'x'; 100_000]);
+        assert!(converter.can_send_over_mqtt(&message));
+    }
+
+    #[test]
+    fn packet_at_limit_is_sent_over_mqtt() {
+        let message = Message::new("c8y/event/events/create", "payload");
+        let converter = converter_with_limit(message.wire_size());
+        assert!(converter.can_send_over_mqtt(&message));
+    }
+
+    #[test]
+    fn packet_over_limit_is_not_sent_over_mqtt() {
+        let message = Message::new("c8y/event/events/create", "payload");
+        let converter = converter_with_limit(message.wire_size() - 1);
+        assert!(!converter.can_send_over_mqtt(&message));
+    }
+
+    #[test]
+    fn body_within_limit_but_packet_over_limit_is_not_sent() {
+        let message = Message::new("c8y/event/events/create", "payload");
+        // The body alone fits the limit, but the full packet does not.
+        let max_size = message.payload.len() + 1;
+        assert!(message.payload.len() <= max_size);
+        assert!(message.wire_size() > max_size);
+
+        let converter = converter_with_limit(max_size);
+        assert!(!converter.can_send_over_mqtt(&message));
+    }
+
+    fn converter_with_limit(max_size: usize) -> EventConverter {
+        EventConverter {
+            max_mqtt_payload_size: Some(max_size),
+            ..EventConverter::default()
+        }
     }
 }

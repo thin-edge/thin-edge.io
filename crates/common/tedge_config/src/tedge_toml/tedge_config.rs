@@ -77,7 +77,9 @@ pub use mqtt_config::TEdgeMqttClientAuthConfig;
 
 const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
-pub const C8Y_MQTT_PAYLOAD_LIMIT: u32 = 16184; // 16 KB
+// 200 bytes below Cumulocity's real 16384 limit, as headroom for payload growth
+// between the size check and the wire (e.g. CSV-doubled quotes in SmartREST).
+pub const C8Y_MQTT_PAYLOAD_LIMIT: u32 = 16184;
 pub const AZ_MQTT_PAYLOAD_LIMIT: u32 = 262144; // 256 KB
 pub const AWS_MQTT_PAYLOAD_LIMIT: u32 = 131072; // 128 KB
 

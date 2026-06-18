@@ -101,6 +101,7 @@ impl MqttBridgeActorBuilder {
         rules: BridgeConfig,
         mut cloud_config: MqttOptions,
         on_cloud_reconnect: Option<Publish>,
+        max_payload_size: usize,
     ) -> Self {
         let mut local_config = MqttOptions::new(
             service_name,
@@ -191,6 +192,8 @@ impl MqttBridgeActorBuilder {
                     reconnect_policy.clone(),
                     None,
                     local_tx,
+                    // The local→cloud direction enforces the cloud broker's limit
+                    Some(max_payload_size),
                 )
                 .instrument(tracing::Span::current()),
             ),
@@ -207,6 +210,9 @@ impl MqttBridgeActorBuilder {
                     reconnect_policy,
                     on_cloud_reconnect,
                     cloud_tx,
+                    // The cloud→local direction is left unguarded: the local broker
+                    // accepts large messages and cloud messages already met the cloud's limit
+                    None,
                 )
                 .instrument(tracing::Span::current()),
             ),
@@ -515,6 +521,7 @@ async fn half_bridge(
     reconnect_policy: TEdgeConfigReaderMqttBridgeReconnectPolicy,
     reconnect_message: Option<Publish>,
     mut self_tx: BridgeMessageSender,
+    max_payload_size: Option<usize>,
 ) {
     let mut backoff = CustomBackoff::new(
         ::backoff::SystemClock {},
@@ -617,8 +624,24 @@ async fn half_bridge(
             Event::Incoming(Incoming::Publish(publish)) => {
                 if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
                     if let Some(topic) = transformer.convert_topic(&publish.topic) {
-                        received += 1;
-                        target.publish(topic.to_string(), publish);
+                        let wire_size = mqtt_channel::publish_packet_size(
+                            topic.as_ref(),
+                            publish.qos,
+                            publish.payload.len(),
+                        );
+                        if let Some(limit) = max_payload_size.filter(|&limit| wire_size > limit) {
+                            // The message is too large to ever be accepted by the cloud broker.
+                            // Acknowledge it locally so it is not redelivered, and drop it rather
+                            // than let it block the cloud connection.
+                            log_event!(
+                                warn: name,
+                                "Dropping cloud-bound message on topic {topic}: packet size {wire_size} B exceeds the configured limit of {limit} B"
+                            );
+                            recv_client.ack(&publish).await.unwrap()
+                        } else {
+                            received += 1;
+                            target.publish(topic.to_string(), publish);
+                        }
                     } else {
                         // Being not forwarded to this bridge target
                         // The message has to be acknowledged
@@ -1235,6 +1258,51 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn over_limit_cloud_bound_message_is_acked_and_not_forwarded() {
+            let big_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, vec![b'x'; 100]);
+            let small_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+            let events = [inc!(publish(big_msg)), inc!(publish(small_msg))];
+
+            let bridge = Bridge::default()
+                .with_local_events(events)
+                .with_c8y_topics()
+                .with_max_payload_size(50)
+                .process_all_events()
+                .await;
+
+            // The over-limit message is acknowledged locally and never reaches the cloud.
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Ack(big_msg)
+            );
+            // The following within-limit message is still forwarded to the cloud.
+            assert_eq!(
+                bridge.cloud_client.next_action().unwrap(),
+                Action::Publish(Publish::new("s/us", QoS::AtLeastOnce, "payload"))
+            );
+        }
+
+        #[tokio::test]
+        async fn over_limit_cloud_to_local_message_is_forwarded_unchanged() {
+            let big_msg = Publish::new("s/ds", QoS::AtLeastOnce, vec![b'x'; 100]);
+            let events = [inc!(publish(big_msg))];
+
+            let bridge = Bridge::default()
+                .with_cloud_events(events)
+                .with_c8y_topics()
+                // The limit applies to the local→cloud direction only; the cloud→local
+                // half is unguarded regardless of this value.
+                .with_max_payload_size(50)
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.local_client.next_action().unwrap(),
+                Action::Publish(Publish::new("c8y/s/ds", QoS::AtLeastOnce, vec![b'x'; 100]))
+            );
+        }
+
+        #[tokio::test]
         async fn forwards_message_acknowledgements() {
             let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
             let local_events = [inc!(publish(incoming_msg))];
@@ -1575,6 +1643,7 @@ mod tests {
             local_topic_converter: TopicConverter,
             cloud_topic_converter: TopicConverter,
             cloud_reconnect_message: Option<Publish>,
+            max_payload_size: Option<usize>,
         }
 
         struct CompletedBridge<Local, Cloud> {
@@ -1602,6 +1671,7 @@ mod tests {
                     local_topic_converter: <_>::default(),
                     cloud_topic_converter: <_>::default(),
                     cloud_reconnect_message: None,
+                    max_payload_size: None,
                 }
             }
         }
@@ -1638,6 +1708,13 @@ mod tests {
                 }
             }
 
+            fn with_max_payload_size(self, max_payload_size: usize) -> Self {
+                Self {
+                    max_payload_size: Some(max_payload_size),
+                    ..self
+                }
+            }
+
             fn with_local_client<C>(self, client: C) -> Bridge<LoEv, ClEv, C, ClCl> {
                 Bridge {
                     local_client: client,
@@ -1648,6 +1725,7 @@ mod tests {
                     local_topic_converter: self.local_topic_converter,
                     cloud_topic_converter: self.cloud_topic_converter,
                     cloud_reconnect_message: self.cloud_reconnect_message,
+                    max_payload_size: self.max_payload_size,
                 }
             }
 
@@ -1661,6 +1739,7 @@ mod tests {
                     local_topic_converter: self.local_topic_converter,
                     cloud_topic_converter: self.cloud_topic_converter,
                     cloud_reconnect_message: self.cloud_reconnect_message,
+                    max_payload_size: self.max_payload_size,
                 }
             }
 
@@ -1677,6 +1756,7 @@ mod tests {
                     local_topic_converter: self.local_topic_converter,
                     cloud_topic_converter: self.cloud_topic_converter,
                     cloud_reconnect_message: self.cloud_reconnect_message,
+                    max_payload_size: self.max_payload_size,
                 }
             }
 
@@ -1703,6 +1783,7 @@ mod tests {
                     TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
                     None,
                     local_sender,
+                    self.max_payload_size,
                 ));
                 let cloud_task = tokio::spawn(half_bridge(
                     self.cloud_events.clone(),
@@ -1716,6 +1797,7 @@ mod tests {
                     TEdgeConfigReaderMqttBridgeReconnectPolicy::test_value(),
                     self.cloud_reconnect_message,
                     cloud_sender,
+                    None,
                 ));
 
                 tokio::time::timeout(Duration::from_secs(5), self.local_events.all_processed())

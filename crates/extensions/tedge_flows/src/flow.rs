@@ -612,6 +612,17 @@ impl std::fmt::Debug for Message {
     }
 }
 
+impl Message {
+    /// The size, in bytes, this message occupies as an MQTT PUBLISH packet on the wire
+    pub fn wire_size(&self) -> usize {
+        let qos = match &self.transport {
+            Some(Transport::Mqtt { qos, .. }) => *qos,
+            None => qos_default(),
+        };
+        tedge_mqtt_ext::publish_packet_size(&self.topic, qos, self.payload.len())
+    }
+}
+
 impl From<MqttMessage> for Message {
     fn from(message: MqttMessage) -> Self {
         let transport = Transport::Mqtt {

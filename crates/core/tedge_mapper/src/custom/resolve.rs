@@ -12,6 +12,7 @@ use camino::Utf8PathBuf;
 use certificate::PemCertificate;
 use tedge_config::cli::format_config_set_cmd;
 use tedge_config::models::HostPort;
+use tedge_config::models::MqttPayloadLimit;
 use tedge_config::models::SecondsOrHumanTime;
 use tedge_config::models::MQTT_TLS_PORT;
 use tedge_config::tedge_toml::Cloud;
@@ -474,6 +475,7 @@ struct BridgeSchema<'a> {
     clean_session: bool,
     keepalive_interval: Option<&'a SecondsOrHumanTime>,
     tls: BridgeTls,
+    max_payload_size: MqttPayloadLimit,
 }
 
 /// Returns all known schema-level key paths for a custom mapper config (e.g. `"device.cert_path"`).
@@ -534,6 +536,7 @@ fn build_custom_mapper_schema(config: &CustomMapperConfig) -> serde_json::Value 
             clean_session: config.bridge.clean_session,
             keepalive_interval: config.bridge.keepalive_interval.as_ref(),
             tls: config.bridge.tls,
+            max_payload_size: config.bridge.max_payload_size,
         },
         auth_method: config.auth_method,
         credentials_path: config.credentials_path.as_ref(),
@@ -848,6 +851,7 @@ mod tests {
     use crate::custom::config::BridgeConfig;
     use crate::custom::config::DeviceConfig;
     use camino::Utf8PathBuf;
+    use tedge_config::models::MQTT_MAX_PAYLOAD_SIZE;
     use tedge_config::TEdgeConfig;
     use tedge_test_utils::fs::TempTedgeDir;
 
@@ -926,6 +930,44 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         let id = effective.device_id.unwrap();
         assert_eq!(id.value, "localhost");
         assert!(matches!(id.source, ConfigSource::CertificateCN { .. }));
+    }
+
+    #[tokio::test]
+    async fn max_payload_size_surfaces_through_effective_config() {
+        let ttd = TempTedgeDir::new();
+        let (cert, key) = write_cert(ttd.utf8_path()).await;
+        let tedge_config = TEdgeConfig::load_toml_str(&format!(
+            "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+        ));
+        let mut config = make_config(Some("mqtt.example.com:1883"));
+        config.bridge.max_payload_size = MqttPayloadLimit(16384);
+
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
+            .await
+            .unwrap();
+
+        // The value the bridge builder is given for enforcement.
+        assert_eq!(effective.bridge.max_payload_size, MqttPayloadLimit(16384));
+    }
+
+    #[tokio::test]
+    async fn max_payload_size_defaults_to_mqtt_maximum() {
+        let ttd = TempTedgeDir::new();
+        let (cert, key) = write_cert(ttd.utf8_path()).await;
+        let tedge_config = TEdgeConfig::load_toml_str(&format!(
+            "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
+        ));
+        let config = make_config(Some("mqtt.example.com:1883"));
+
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
+            .await
+            .unwrap();
+
+        // The default leaves the limit effectively disabled.
+        assert_eq!(
+            effective.bridge.max_payload_size,
+            MqttPayloadLimit(MQTT_MAX_PAYLOAD_SIZE)
+        );
     }
 
     #[tokio::test]
