@@ -36,11 +36,26 @@ macro_rules! inc {
             code: ConnectReturnCode::Success,
         })))
     };
+    (clean_connack) => {
+        Ok(Event::Incoming(Incoming::ConnAck(ConnAck {
+            session_present: false,
+            code: ConnectReturnCode::Success,
+        })))
+    };
     (suback) => {
         Ok(Event::Incoming(Incoming::SubAck(SubAck {
             pkid: 1,
             return_codes: vec![SubscribeReasonCode::Success(QoS::AtLeastOnce)],
         })))
+    };
+    (suback_failure) => {
+        Ok(Event::Incoming(Incoming::SubAck(SubAck {
+            pkid: 1,
+            return_codes: vec![SubscribeReasonCode::Failure],
+        })))
+    };
+    (disconnect) => {
+        Ok(Event::Incoming(Incoming::Disconnect))
     };
     (publish($msg:expr)) => {
         Ok(Event::Incoming(Incoming::Publish($msg.clone())))
@@ -165,7 +180,14 @@ impl ActionLogger {
 
     pub fn next_action(&self) -> anyhow::Result<Action> {
         let next_message = self.log.lock().unwrap().pop_front();
-        next_message.ok_or(anyhow!("Expected client to be interacted with. Did you forget to call `bridge.<type>_client.all_processed().await`?"))
+        next_message.ok_or(anyhow!(
+            "Expected client to be interacted with, but no actions were logged.\n\
+             Likely causes:\n\
+             - The subscription gate is still closed (messages are buffered, not forwarded). \
+             Ensure the relevant event stream includes a `connack` (with session_present=true) \
+             or enough `suback`s to open the gate.\n\
+             - `bridge.<type>_client.all_processed().await` was not called before checking actions."
+        ))
     }
 }
 
@@ -211,6 +233,7 @@ pub struct ChannelEvents(Arc<TokioMutex<ChannelEventsInner>>);
 
 struct ChannelEventsInner {
     connected: bool,
+    connack_sent: bool,
     rx: mpsc::Receiver<Publish>,
     count: u16,
     pkid: u16,
@@ -222,6 +245,7 @@ impl ChannelEvents {
     pub fn new(rx: mpsc::Receiver<Publish>, client: ChannelClient) -> Self {
         Self(Arc::new(TokioMutex::new(ChannelEventsInner {
             connected: false,
+            connack_sent: false,
             rx,
             count: 0,
             pkid: 0,
@@ -253,6 +277,15 @@ impl AllProcessed for ChannelEvents {
 impl MqttEvents for ChannelEvents {
     async fn poll(&mut self) -> Result<Event, ConnectionError> {
         let mut inner = self.0.lock().await;
+        if !inner.connack_sent {
+            // Resume the session so the subscription gate opens before any publishing,
+            // otherwise the gate would hold the publishes that fill the event loop below
+            inner.connack_sent = true;
+            return Ok(Event::Incoming(Incoming::ConnAck(rumqttc::ConnAck {
+                session_present: true,
+                code: rumqttc::ConnectReturnCode::Success,
+            })));
+        }
         if !inner.connected {
             while inner.rx.len() < inner.rx.capacity() {
                 drop(inner);
