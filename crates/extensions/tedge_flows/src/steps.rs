@@ -260,8 +260,8 @@ impl FlowStep {
 impl StepHandler {
     pub fn set_config(&mut self, config: JsonValue) -> Result<(), ConfigError> {
         match self {
-            StepHandler::JsScript(_, ref mut c) => *c = config,
-            StepHandler::Transformer(_, ref mut builtin) => {
+            StepHandler::JsScript(_, c) => *c = config,
+            StepHandler::Transformer(_, builtin) => {
                 builtin.set_config(config)?;
             }
         }

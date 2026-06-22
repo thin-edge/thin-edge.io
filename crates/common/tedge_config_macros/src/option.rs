@@ -97,7 +97,7 @@ impl<T> OptionalConfig<T> {
         T: Deref,
     {
         match self {
-            Self::Present { ref value, key } => OptionalConfig::Present {
+            Self::Present { value, key } => OptionalConfig::Present {
                 value: value.deref(),
                 key: key.clone(),
             },

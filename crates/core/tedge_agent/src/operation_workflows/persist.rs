@@ -346,7 +346,7 @@ impl WorkflowRepository {
         // If the resumed commands have been triggered by an agent without workflow version management
         // then these commands are assigned the current version of the operation workflow.
         // These currents versions have also to be marked as in use and persisted.
-        for (_, ref mut command) in commands.iter_mut() {
+        for (_, command) in commands.iter_mut() {
             if command.workflow_version().is_none() {
                 if let Some(operation) = command.operation() {
                     if let Some(current_version) = self.workflows.use_current_version(&operation) {

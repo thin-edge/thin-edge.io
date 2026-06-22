@@ -105,8 +105,8 @@ impl AsyncRead for MaybeTlsStream {
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         match self.get_mut() {
-            Self::Plain(ref mut tcp) => Pin::new(tcp).poll_read(cx, buf),
-            Self::Rustls(ref mut tcp) => Pin::new(tcp).poll_read(cx, buf),
+            Self::Plain(tcp) => Pin::new(tcp).poll_read(cx, buf),
+            Self::Rustls(tcp) => Pin::new(tcp).poll_read(cx, buf),
         }
     }
 }
@@ -118,8 +118,8 @@ impl AsyncWrite for MaybeTlsStream {
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, std::io::Error>> {
         match self.get_mut() {
-            Self::Plain(ref mut tcp) => Pin::new(tcp).poll_write(cx, buf),
-            Self::Rustls(ref mut tcp) => Pin::new(tcp).poll_write(cx, buf),
+            Self::Plain(tcp) => Pin::new(tcp).poll_write(cx, buf),
+            Self::Rustls(tcp) => Pin::new(tcp).poll_write(cx, buf),
         }
     }
 
@@ -128,8 +128,8 @@ impl AsyncWrite for MaybeTlsStream {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
         match self.get_mut() {
-            Self::Plain(ref mut tcp) => Pin::new(tcp).poll_flush(cx),
-            Self::Rustls(ref mut tcp) => Pin::new(tcp).poll_flush(cx),
+            Self::Plain(tcp) => Pin::new(tcp).poll_flush(cx),
+            Self::Rustls(tcp) => Pin::new(tcp).poll_flush(cx),
         }
     }
 
@@ -138,8 +138,8 @@ impl AsyncWrite for MaybeTlsStream {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
         match self.get_mut() {
-            Self::Plain(ref mut tcp) => Pin::new(tcp).poll_shutdown(cx),
-            Self::Rustls(ref mut tcp) => Pin::new(tcp).poll_shutdown(cx),
+            Self::Plain(tcp) => Pin::new(tcp).poll_shutdown(cx),
+            Self::Rustls(tcp) => Pin::new(tcp).poll_shutdown(cx),
         }
     }
 }
