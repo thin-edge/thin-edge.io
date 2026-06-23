@@ -219,7 +219,7 @@ fn get_installer(
 
         (None, Some(file_path)) => {
             let mut package = PackageMetadata::try_new(file_path)?;
-            package.validate_package(&[&format!("Package: {}", &module), "Debian package"])?;
+            package.validate_package(&[&format!("Package: {}", &module)])?;
             Ok((format!("{}", package.file_path().display()), Some(package)))
         }
 
@@ -228,7 +228,6 @@ fn get_installer(
             package.validate_package(&[
                 &format!("Version: {}", &version),
                 &format!("Package: {}", &module),
-                "Debian package",
             ])?;
 
             Ok((format!("{}", package.file_path().display()), Some(package)))
