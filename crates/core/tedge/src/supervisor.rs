@@ -33,7 +33,8 @@ use tedge_actors::Runtime;
 use tedge_actors::RuntimeHandle;
 use tedge_agent::AgentOpt;
 use tedge_config::cli::CommonArgs;
-use tedge_config::log_init_for_services;
+use tedge_config::log_init_reloadable_for_services;
+use tedge_config::LogLevelReloadHandle;
 use tedge_config::TEdgeConfig;
 use tedge_mapper::MapperName;
 use tokio::signal::unix;
@@ -127,6 +128,9 @@ enum Command {
     ShutdownAll,
     /// Restart all mapper units, leaving the agent running (SIGUSR1).
     RestartMappers,
+    /// Re-read `system.toml` and apply the log levels live, without restarting
+    /// any component (SIGHUP).
+    ReloadLogLevels,
 }
 
 struct Supervisor {
@@ -143,6 +147,9 @@ struct Supervisor {
     /// Deadline by which a drain must complete before the supervisor force-exits.
     drain_deadline: Option<tokio::time::Instant>,
     drain_timeout: Duration,
+    /// Refreshes log levels on SIGHUP; `None` when an override fixes them (see
+    /// [`Command::ReloadLogLevels`]).
+    log_reload: Option<LogLevelReloadHandle>,
 }
 
 impl Supervisor {
@@ -162,7 +169,14 @@ impl Supervisor {
             // Generous bound on the collective drain; each unit's own runtime has a
             // shorter internal cleanup timeout.
             drain_timeout: Duration::from_secs(75),
+            log_reload: None,
         }
+    }
+
+    /// Attaches the handle used to refresh log levels live on SIGHUP.
+    fn with_log_reload(mut self, log_reload: Option<LogLevelReloadHandle>) -> Self {
+        self.log_reload = log_reload;
+        self
     }
 
     /// A handle for injecting [`Command`]s (used by the signal listener, and tests).
@@ -315,6 +329,20 @@ impl Supervisor {
         }
     }
 
+    /// Applies the file-configured log levels to the running components without
+    /// restarting them (the SIGHUP action).
+    fn reload_log_levels(&mut self) {
+        let Some(handle) = self.log_reload.as_ref() else {
+            warn!("SIGHUP: log levels are fixed by --log-level/--debug/RUST_LOG; ignoring");
+            return;
+        };
+        info!("SIGHUP: reloading log levels from system.toml");
+        match handle.reload() {
+            Ok(()) => info!("log levels reloaded"),
+            Err(err) => warn!("failed to reload log levels; keeping current levels: {err}"),
+        }
+    }
+
     /// Restarts all mapper units, leaving the agent running (the SIGUSR1 action).
     async fn restart_mappers(&mut self) {
         info!("SIGUSR1: restarting all mapper components");
@@ -390,6 +418,7 @@ impl Supervisor {
                         }
                         Command::ShutdownAll => self.begin_shutdown().await,
                         Command::RestartMappers => self.restart_mappers().await,
+                        Command::ReloadLogLevels => self.reload_log_levels(),
                     }
                 }
                 _ = async {
@@ -412,6 +441,7 @@ impl Supervisor {
 ///
 /// - SIGINT / SIGTERM / SIGQUIT — graceful shutdown of every component
 /// - SIGUSR1 — restart the mappers, leaving the agent running
+/// - SIGHUP — reload log levels from `system.toml` live (no restart)
 ///
 /// The supervisor owns all signal handling, so the per-component `SignalActor` is
 /// unused on this path.
@@ -424,6 +454,8 @@ fn spawn_signal_listener(commands: mpsc::Sender<Command>) -> anyhow::Result<()> 
         unix::signal(unix::SignalKind::quit()).context("registering SIGQUIT handler")?;
     let mut sigusr1 =
         unix::signal(unix::SignalKind::user_defined1()).context("registering SIGUSR1 handler")?;
+    let mut sighup =
+        unix::signal(unix::SignalKind::hangup()).context("registering SIGHUP handler")?;
 
     tokio::spawn(async move {
         loop {
@@ -432,6 +464,7 @@ fn spawn_signal_listener(commands: mpsc::Sender<Command>) -> anyhow::Result<()> 
                 _ = sigterm.recv() => Command::ShutdownAll,
                 _ = sigquit.recv() => Command::ShutdownAll,
                 _ = sigusr1.recv() => Command::RestartMappers,
+                _ = sighup.recv() => Command::ReloadLogLevels,
             };
             // The supervisor has exited (loop dropped the receiver): stop listening.
             if commands.send(command).await.is_err() {
@@ -449,7 +482,13 @@ pub async fn run(opt: RunAllOpt) -> anyhow::Result<()> {
     // attributed to its component via the `component` span field.
     let log_services = log_service_names(opt.mapper.as_ref());
     let log_services: Vec<_> = log_services.iter().map(String::as_str).collect();
-    log_init_for_services(&log_services, &opt.common.log_args, &opt.common.config_dir)?;
+    // The handle lets SIGHUP refresh these levels from system.toml at runtime;
+    // it is `None` when an explicit override (flags / RUST_LOG) is in effect.
+    let log_reload = log_init_reloadable_for_services(
+        &log_services,
+        &opt.common.log_args,
+        &opt.common.config_dir,
+    )?;
 
     let config_dir = opt.common.config_dir.clone();
     let tedge_config = TEdgeConfig::load(&config_dir).await?;
@@ -513,7 +552,10 @@ pub async fn run(opt: RunAllOpt) -> anyhow::Result<()> {
         });
     }
 
-    Supervisor::new(units).run().await
+    Supervisor::new(units)
+        .with_log_reload(log_reload)
+        .run()
+        .await
 }
 
 fn log_service_names(mapper: Option<&MapperName>) -> Vec<String> {
