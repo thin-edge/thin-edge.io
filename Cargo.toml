@@ -27,7 +27,6 @@ repository = "https://github.com/thin-edge/thin-edge.io"
 aws_mapper_ext = { path = "crates/extensions/aws_mapper_ext" }
 axum_tls = { path = "crates/common/axum_tls" }
 az_mapper_ext = { path = "crates/extensions/az_mapper_ext" }
-batcher = { path = "crates/common/batcher" }
 c8y-firmware-plugin = { path = "plugins/c8y_firmware_plugin" }
 c8y-remote-access-plugin = { path = "plugins/c8y_remote_access_plugin" }
 c8y_api = { path = "crates/core/c8y_api" }
@@ -37,7 +36,6 @@ c8y_http_proxy = { path = "crates/extensions/c8y_http_proxy" }
 c8y_mapper_ext = { path = "crates/extensions/c8y_mapper_ext" }
 certificate = { path = "crates/common/certificate" }
 clock = { path = "crates/common/clock" }
-collectd_ext = { path = "crates/extensions/collectd_ext" }
 download = { path = "crates/common/download" }
 flockfile = { path = "crates/common/flockfile" }
 json-writer = { path = "crates/common/json_writer" }

@@ -49,10 +49,9 @@ This tutorial is divided into small steps. The first three steps are needed to i
 - [Step 1 Install %%te%%](#step-1-install-thin-edgeio)
 - [Step 2 Configure and Connect to Cumulocity](#step-2-configure-and-connect-to-cumulocity)
 - [Step 3 Sending Device Data](#step-3-sending-device-data)
-- [Step 4 Monitor the device](#step-4-monitor-the-device)
-- [Step 5 Add software management](#step-5-add-software-management)
-- [Step 6 Manage configuration files](#step-6-manage-configuration-files)
-- [Step 7 Manage Log Files](#step-7-manage-log-files)
+- [Step 4 Add software management](#step-5-add-software-management)
+- [Step 5 Manage configuration files](#step-6-manage-configuration-files)
+- [Step 6 Manage Log Files](#step-7-manage-log-files)
 
 
 ## Step 1 Install %%te%% {#step-1-install-thin-edgeio}
@@ -264,77 +263,7 @@ When you go to events (`Device management` &rarr; `your device` &rarr; `events`)
 
 </BrowserWindow>
 
-## Step 4 Monitor the device
-
-With %%te%% device monitoring, you can collect metrics from the device and forward these device metrics to Cumulocity.
-
-Device monitoring can be enabled by installing a community package, [tedge-collectd-setup](https://cloudsmith.io/~thinedge/repos/community/packages/?q=name%3A%27%5Etedge-collectd-setup%24%27), which will install [collectd](https://www.collectd.org/) and configure some sensible defaults including monitoring of cpu, memory and disk metrics.
-
-```sh tab={"label":"Debian/Ubuntu"}
-sudo apt-get install tedge-collectd-setup
-```
-
-```sh tab={"label":"RHEL/Fedora/RockyLinux"}
-sudo dnf install tedge-collectd-setup
-```
-
-```sh tab={"label":"Alpine"}
-sudo apk add tedge-collectd-setup
-```
-
-What you should see by now is that data arrives on the `collectd/#` topics. You can check that via:
-
-```sh te2mqtt formats=v1
-tedge mqtt sub 'collectd/#'
-```
-
-The output will be similar like:
-
-```log title="Output"
-INFO: Connected
-[collectd/raspberrypi/df-root/percent_bytes-used] 1667205183.407:11.7998857498169
-[collectd/raspberrypi/memory/percent-used] 1667205183.408:4.87045198079293
-[collectd/raspberrypi/cpu/percent-active] 1667205184.398:1.52284263959391
-```
-
-:::note
-The default collectd settings, `/etc/collectd/collectd.conf`, use conservative interval times, e.g. 10 mins to 1 hour depending on the metric. This is done so that the metrics don't consume unnecessary IoT resources both on the device and in the cloud. If you want to push the metrics more frequently then you will have to adjust the `Interval` settings either globally or on the individual plugins. Make sure you restart the collectd service after making any changes to the configuration.
-:::
-
-The `tedge-mapper-collectd` service subscribes to the `collectd/#` topics and translates them to the tedge payloads, then the respective cloud mappers will translate the %%te%% messages to the format dictated by each cloud.
-
-As an example, you can inspect the Cumulocity translated metrics using the following command:
-
-```sh te2mqtt formats=v1
-tedge mqtt sub 'c8y/#'
-```
-
-The output will be similar like:
-
-```log title="Output"
-INFO: Connected
-[c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:44.398000001Z","cpu":{"percent-active":{"value":1.26262626262626}},"memory":{"percent-used":{"value":4.87024847292786}}}
-[c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:45.398000001Z","memory":{"percent-used":{"value":4.87024847292786}},"cpu":{"percent-active":{"value":1.01522842639594}}}
-[c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:46.398000001Z","memory":{"percent-used":{"value":4.87024847292786}},"cpu":{"percent-active":{"value":0.759493670886076}}}
-[c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:47.398000001Z","memory":{"percent-used":{"value":4.87024847292786}},"cpu":{"percent-active":{"value":2.01005025125628}}}
-[c8y/measurement/measurements/create] {"type":"ThinEdgeMeasurement","time":"2022-10-31T08:35:48.398000001Z","memory":{"percent-used":{"value":4.87004496506279}},"cpu":{"percent-active":{"value":0.254452926208651}}}
-```
-
-The monitoring data will appear in Cumulocity on the device in the measurement section.
-
-<BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/measurements">
-
-![CollectdMeasurements](./images/collectd-metrics.png)
-
-</BrowserWindow>
-
-
-### Edit Collectd
-
-To change the monitored data, it is needed to change the collectd.conf. This can be done via Cumulocity, and [step 6](#change-collectd-configuration) explains how to do it.
-
-
-## Step 5 Add software management
+## Step 4 Add software management
 
 Software management takes care of allowing installation and management of any type of software from Cumulocity. Since the type is generic, any type of software can be managed. In %%te%% this can be extended with plugins. For every software type, a particular plugin is needed.
 
@@ -399,7 +328,7 @@ Find more information about [how to manage the software](https://cumulocity.com/
 
 How to [develop your own plugins](../extend/software-management.md) is described here.
 
-## Step 6 Manage configuration files
+## Step 5 Manage configuration files
 
 With %%te%% it is possible to manage config files on a device by using the Cumulocity configuration management feature as a part of Device Management.
 
@@ -482,7 +411,7 @@ To change the collectd metrics of the device, which are displayed in Cumulocity,
 10. If you then click on get snapshot from device (select the right configuration file in device supported configurations), you will see the change of the configuration file.
 
 
-## Step 7 Manage Log Files
+## Step 6 Manage Log Files
 
 With %%te%% it is possible to request log files from a device by using the Cumulocity log request feature as a part of Device Management.
 

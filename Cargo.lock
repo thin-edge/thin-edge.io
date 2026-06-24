@@ -674,16 +674,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
-name = "batcher"
-version = "2.0.1"
-dependencies = [
- "async-trait",
- "tedge_actors",
- "time",
- "tokio",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1193,24 +1183,6 @@ name = "cobs"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
-
-[[package]]
-name = "collectd_ext"
-version = "2.0.1"
-dependencies = [
- "anyhow",
- "assert_matches",
- "async-trait",
- "batcher",
- "clock",
- "log",
- "tedge_actors",
- "tedge_api",
- "tedge_mqtt_ext",
- "thiserror 2.0.12",
- "time",
- "tokio",
-]
 
 [[package]]
 name = "colorchoice"
@@ -5041,15 +5013,12 @@ dependencies = [
  "async-trait",
  "aws_mapper_ext",
  "az_mapper_ext",
- "batcher",
  "c8y_api",
  "c8y_auth_proxy",
  "c8y_mapper_ext",
  "camino",
  "certificate",
  "clap",
- "clock",
- "collectd_ext",
  "flockfile",
  "mqtt_channel",
  "rcgen",

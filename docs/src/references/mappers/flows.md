@@ -568,7 +568,8 @@ __Note__ that when the input of a test is received from its stdin,
 the topic is given using a bracket syntax `[<TOPIC>] <PAYLOAD>`
 similar to the output of `tedge mqtt sub` and `tedge flows test` itself.
 
-This can be used to chain tests:
+This can be used to chain tests.
+For example, assuming a flow has been installed to transform `collectd` messages into %%te%% measurements:
 
 ```shell
 $ tedge flows test collectd/mandarine/cpu/percent-active '1754571280.572:2.07156308851224' | tedge flows test
