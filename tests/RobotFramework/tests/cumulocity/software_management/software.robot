@@ -4,8 +4,8 @@ Library             Collections
 Library             Cumulocity
 Library             ThinEdgeIO
 
-Test Setup          Custom Setup
-Test Teardown       Custom Teardown
+Suite Setup          Custom Setup
+Suite Teardown       Custom Teardown
 
 Test Tags           theme:c8y    theme:software    theme:plugins
 
@@ -23,10 +23,7 @@ Supported software types should not be declared during startup when disabled
     ...    minimum=1
     ...    maximum=1
     ...    message_contains="types":["apt","flow"]
-    Run Keyword And Expect Error
-    ...    *
-    ...    Device Should Have Fragment Values
-    ...    c8y_SupportedSoftwareTypes\=["apt", "flow"]
+    Managed Object Should Not Have Fragments    c8y_SupportedSoftwareTypes
 
 Supported software types and c8y_SupportedSoftwareTypes should be declared during startup
     [Documentation]    c8y_SupportedSoftwareTypes should be created if the relevant config is set to true #2654
@@ -66,6 +63,8 @@ tedge-agent should terminate on SIGINT while downloading file
     # Service should stop within 5s
     Stop tedge-agent
 
+    [Teardown]    Start Service    tedge-agent
+
 Software list should only show currently installed software and not candidates
     ${EXPECTED_VERSION}=    Execute Command    dpkg -s tedge | grep "^Version: " | cut -d' ' -f2    strip=True
     ${VERSION}=    Escape Pattern    ${EXPECTED_VERSION}    is_json=${True}
@@ -96,6 +95,8 @@ Manual software_update operation request with empty url
     ...    c8y_fragment=c8y_SoftwareUpdate
 
 Operation log uploaded automatically with default auto_log_upload setting as on-failure
+    [Setup]    Custom Setup
+
     ${default_value}=    Execute Command    tedge config get c8y.operations.auto_log_upload    strip=${True}
     Should Be Equal    ${default_value}    on-failure
 
@@ -124,6 +125,8 @@ Operation log uploaded automatically with auto_log_upload setting as always
     Validate operation log uploaded
 
 Operation log uploaded automatically with auto_log_upload setting as never
+    [Setup]    Custom Setup
+
     Execute Command    tedge config set c8y.operations.auto_log_upload never
     Restart Service    tedge-mapper-c8y
 
@@ -156,6 +159,8 @@ Backward compatibility using 501-503 templates to update status
     Should Have MQTT Messages    c8y/s/us    message_pattern=^(501|502|503),c8y_SoftwareUpdate.*    minimum=1
 
 Operation gets updated regardless of the order of the creation time
+    [Setup]    Custom Setup
+
     Stop Service    tedge-agent
     ${OPERATION1}=    Install Software    non-existent-package1
     ${OPERATION2}=    Install Software    non-existent-package2
@@ -178,6 +183,8 @@ Operation gets updated regardless of the order of the creation time
     Operation Should Be SUCCESSFUL    ${OPERATION1}    timeout=60
 
 Agent should ignore unknown software-update fields
+    [Setup]    Custom Setup
+
     # Issue https://github.com/thin-edge/thin-edge.io/issues/3136
     # Add the softwareType field erroneously to an item in the modules array
     Execute Command
