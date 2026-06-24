@@ -3,8 +3,12 @@ use camino::Utf8Path;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::fs::File;
+use std::fs::OpenOptions;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Write;
 use std::path::PathBuf;
+use std::process::ExitStatus;
 use std::process::Output;
 use std::sync::Arc;
 use tedge_api::CommandLog;
@@ -58,6 +62,14 @@ impl ExternalPluginCommand {
             .await
             .map_err(|err| self.plugin_error(err))?;
         Ok(output)
+    }
+
+    pub async fn status(&self, command: LoggedCommand) -> Result<ExitStatus, LogManagementError> {
+        let status = command
+            .status()
+            .await
+            .map_err(|err| self.plugin_error(err))?;
+        Ok(status)
     }
 
     pub fn plugin_error(&self, err: impl std::fmt::Display) -> LogManagementError {
@@ -118,18 +130,67 @@ impl ExternalPluginCommand {
             command.arg(until_time.unix_timestamp().to_string());
         }
 
+        let stdout_file =
+            tempfile::NamedTempFile::new_in(self.tmp_dir.as_std_path()).map_err(|err| {
+                self.plugin_error(format!(
+                    "Failed to create temporary file in {}: {err}",
+                    tempfile::env::temp_dir().to_string_lossy()
+                ))
+            })?;
+        let stderr_file =
+            tempfile::NamedTempFile::new_in(self.tmp_dir.as_std_path()).map_err(|err| {
+                self.plugin_error(format!(
+                    "Failed to create temporary file in {}: {err}",
+                    tempfile::env::temp_dir().to_string_lossy()
+                ))
+            })?;
+
+        let stdout = OpenOptions::new()
+            .create(false)
+            .read(false)
+            .write(true)
+            .open(stdout_file.path())
+            .map_err(|err| {
+                self.plugin_error(format!(
+                    "failed to open temporary file for writing process output '{}': {err}",
+                    stdout_file.path().to_string_lossy()
+                ))
+            })?;
+        let stderr = OpenOptions::new()
+            .create(false)
+            .read(false)
+            .write(true)
+            .open(stderr_file.path())
+            .map_err(|err| {
+                self.plugin_error(format!(
+                    "failed to open temporary file for writing process output'{}': {err}",
+                    stderr_file.path().to_string_lossy()
+                ))
+            })?;
+
+        command.stdout(stdout);
+        command.stderr(stderr);
+
         debug!(
             target: "log plugins",
             "Fetching log using command: {}", command
         );
-        let output = self.execute(command, None).await?;
+        let status = self.status(command).await?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(self.plugin_error(format!("Get command error: {}", stderr)));
+        if !status.success() {
+            // we assume stderr is short enough to load in memory
+            let stderr = std::fs::read_to_string(stderr_file.path())?;
+            return Err(self.plugin_error(format!("Get command error: {stderr}",)));
         }
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stdout = File::open(stdout_file.path()).map_err(|err| {
+            self.plugin_error(format!(
+                "failed to open temporary file for writing process output'{}': {err}",
+                stdout_file.path().to_string_lossy()
+            ))
+        })?;
+        let stdout = BufReader::new(stdout);
+
         let file = File::create(output_file_path).map_err(|err| {
             self.plugin_error(format!(
                 "Failed to create plugin output file at {} due to {}",
@@ -139,8 +200,14 @@ impl ExternalPluginCommand {
         let mut writer = std::io::BufWriter::new(&file);
 
         let mut filtered_lines = VecDeque::new();
-
         for line in stdout.lines() {
+            let line = line.map_err(|err| {
+                self.plugin_error(format!(
+                    "error reading output file: '{}': {err:?}",
+                    stdout_file.path().to_string_lossy()
+                ))
+            })?;
+
             if let Some(filter) = filter_text {
                 if !filter.is_empty() && !line.contains(filter) {
                     continue;
