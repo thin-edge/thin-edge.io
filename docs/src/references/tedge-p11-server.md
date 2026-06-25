@@ -101,6 +101,22 @@ device.cryptoki.socket_path  A path to the tedge-p11-server socket.  Needs to be
                              Example: /run/tedge-p11-server/tedge-p11-server.sock
 ```
 
+## Version compatibility with tedge
+
+Starting from version `2.0.0`, we commit to full backwards compatibility for `tedge` with respect to `tedge-p11-server`.
+`tedge 2.0.0` is compatible with `tedge-p11-server≥1.7.0` and any new `tedge` version will keep supporting
+that `tedge-p11-server` version, so you will be able to update main `tedge` without also having to update
+`tedge-p11-server`, if you aren't using any new `tedge-p11-server` features.
+
+However before `tedge 2.0.0`, some versions of `tedge` and `tedge-p11-server` may be incompatible with each other,
+because of breaking changes being made to the message format introduced in these versions. See table below:
+
+| Range of mutually compatible `tedge-p11-server` and `tedge` versions | commit | Protocol compatibility break |
+| --- | --- | --- |
+| `≥1.7.0` | `2c7d88a391` | Added `GetPublicKeyPem*`, `CreateKey*`, `GetTokensUris*` frames and optional `pin` fields. |
+| `1.6.1` | `72c9b88ebe` | Added `SignRequestWithSigScheme` support for signature scheme selection. |
+| `1.5.0 - 1.6.0`  | - | Initial version |
+
 ## Command help
 
 <!-- the command component doesn't generate any output, perhaps because tedge-p11-server binary isn't present? -->
