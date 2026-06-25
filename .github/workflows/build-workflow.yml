@@ -78,9 +78,10 @@ jobs:
         run: df -BM
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          allow-unsafe-pr-checkout: true
 
       - name: Retrieve MSRV from workspace Cargo.toml
         id: rust_version
@@ -205,10 +206,11 @@ jobs:
         run: |
           sudo apt-get update -y
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || '' }}
           fetch-depth: 0
+          allow-unsafe-pr-checkout: true
 
       # Install nfpm used to for linux packaging
       - uses: actions/setup-go@v6
@@ -284,10 +286,11 @@ jobs:
     steps:
       # Checkout either the PR or the branch
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || '' }}
           fetch-depth: 0
+          allow-unsafe-pr-checkout: true
 
       - name: Download release artifacts
         uses: actions/download-artifact@v8
@@ -376,7 +379,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Setup python required by cloudsmith cli
       - uses: actions/setup-python@v6
@@ -419,7 +422,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: taiki-e/install-action@just
@@ -487,7 +490,7 @@ jobs:
     needs: [publish]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # Setup python required by cloudsmith cli
@@ -524,7 +527,7 @@ jobs:
       needs.publish-containers.result == 'success'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
