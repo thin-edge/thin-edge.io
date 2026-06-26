@@ -91,6 +91,28 @@ Set configuration with broken url
     Main Device    ${PARENT_SN}    ${PARENT_SN}    CONFIG1    /etc/config1.json    invalid://hellö.zip
     Child Device    ${CHILD_SN}    ${PARENT_SN}:device:${CHILD_SN}    CONFIG1    /etc/config1.json    invalid://hellö.zip
 
+Set Configuration Without Duplicate Executing Messages
+    [Documentation]    Regression test for \#4160: the legacy FileCacheActor was reacting
+    ...    to config_update commands and causing a duplicate "executing" status message.
+    [Tags]    \#4160
+    Cumulocity.Set Device    ${PARENT_SN}
+    ThinEdgeIO.Set Device Context    ${PARENT_SN}
+
+    ${config_url}=    Cumulocity.Create Inventory Binary
+    ...    config1-regression
+    ...    CONFIG1
+    ...    file=${CURDIR}/config1-version2.json
+    ${start_time}=    Get Unix Timestamp
+    ${operation}=    Cumulocity.Set Configuration    CONFIG1    url=${config_url}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=60
+
+    Should Have MQTT Messages
+    ...    te/+/+/+/+/cmd/config_update/+
+    ...    date_from=${start_time}
+    ...    message_contains="status":"executing"
+    ...    minimum=1
+    ...    maximum=1
+
 Set Configuration Should Restart Service
     Cumulocity.Set Device    ${PARENT_SN}
     ThinEdgeIO.Set Device Context    ${PARENT_SN}

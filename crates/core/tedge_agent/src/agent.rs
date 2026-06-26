@@ -5,7 +5,6 @@ use crate::entity_manager::server::EntityStoreServer;
 use crate::entity_manager::server::EntityStoreServerConfig;
 use crate::http_server::actor::HttpServerBuilder;
 use crate::http_server::actor::HttpServerConfig;
-use crate::operation_file_cache::FileCacheActorBuilder;
 use crate::operation_workflows::OperationConfig;
 use crate::operation_workflows::WorkflowActorBuilder;
 use crate::restart_manager::builder::RestartManagerBuilder;
@@ -88,7 +87,6 @@ pub(crate) struct AgentConfig {
     pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
     pub cloud_root_certs: CloudHttpConfig,
-    pub fts_url: Arc<str>,
     pub is_sudo_enabled: bool,
     pub capabilities: Capabilities,
     pub log_plugin_dirs: Vec<Utf8PathBuf>,
@@ -182,11 +180,6 @@ impl AgentConfig {
             config_snapshot: tedge_config.agent.enable.config_snapshot,
             log_upload: tedge_config.agent.enable.log_upload,
         };
-        let fts_url = format!(
-            "{}:{}",
-            tedge_config.http.client.host, tedge_config.http.client.port
-        )
-        .into();
 
         let entity_auto_register = tedge_config.agent.entity_store.auto_register;
         let entity_store_clean_start = tedge_config.agent.entity_store.clean_start;
@@ -225,7 +218,6 @@ impl AgentConfig {
             tedge_http_protocol,
             identity,
             cloud_root_certs,
-            fts_url,
             is_sudo_enabled,
             service: tedge_config.service.clone(),
             capabilities,
@@ -471,17 +463,8 @@ impl Agent {
             )
             .await?;
 
-            let operation_file_cache_builder = FileCacheActorBuilder::new(
-                mqtt_schema,
-                self.config.fts_url.clone(),
-                self.config.data_dir.clone(),
-                &mut downloader_actor_builder,
-                &mut mqtt_actor_builder,
-            );
-
             runtime.spawn(file_transfer_server_builder).await?;
             runtime.spawn(entity_store_actor_builder).await?;
-            runtime.spawn(operation_file_cache_builder).await?;
         } else {
             info!("Running as a child device: File Transfer Service disabled");
         }
