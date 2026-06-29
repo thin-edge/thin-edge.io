@@ -1,3 +1,8 @@
+//! This actor is not used. For the reason, see the PR \#4231
+//!
+//! However, the file caching mechanism itself is still a valid idea for future improvements
+//! (Issue \#2798) so this implementation is kept for future reference.
+
 //! Inspects incoming operation requests for URLs to files and downloads them into the File Transfer
 //! Service, so that they can be downloaded more quickly by the child devices.
 //!
