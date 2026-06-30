@@ -2,8 +2,7 @@ use crate::actor::ConfigOperationStep;
 use crate::error::ConfigManagementError;
 use camino::Utf8Path;
 use serde_json::Value;
-use std::fs::File;
-use std::io::Write;
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::process::Output;
 use std::sync::Arc;
@@ -110,13 +109,74 @@ impl ExternalPlugin {
         let mut command = self.command(GET)?;
         command.arg(config_type);
 
-        let output = self.execute(command, command_log).await?;
-        let mut file = File::create(target_file_path).map_err(|err| {
+        let stderr_file =
+            tempfile::NamedTempFile::new_in(self.tmp_dir.as_std_path()).map_err(|err| {
+                self.plugin_error(format!(
+                    "Failed to create temporary file in {}: {err}",
+                    tempfile::env::temp_dir().to_string_lossy()
+                ))
+            })?;
+
+        let target_dir = target_file_path.parent().ok_or_else(|| {
+            self.plugin_error(format!("Invalid target file path: '{target_file_path}'"))
+        })?;
+
+        let target_file =
+            tempfile::NamedTempFile::new_in(target_dir.as_std_path()).map_err(|err| {
+                self.plugin_error(format!(
+                    "Failed to create temporary plugin output file in {target_dir}: {err}",
+                    target_dir = target_dir.as_std_path().display()
+                ))
+            })?;
+
+        let target_stdout = target_file.reopen().map_err(|err| {
             self.plugin_error(format!(
-                "Failed to create plugin output file at {target_file_path} due to {err}",
+                "Failed to open temporary plugin output file '{}': {err}",
+                target_file.path().to_string_lossy()
             ))
         })?;
-        file.write_all(&output.stdout)?;
+
+        let stderr = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(stderr_file.path())
+            .map_err(|err| {
+                self.plugin_error(format!(
+                    "failed to open temporary file for writing process output '{}': {err}",
+                    stderr_file.path().to_string_lossy()
+                ))
+            })?;
+
+        command.stdout(target_stdout);
+        command.stderr(stderr);
+
+        let child = command.spawn().map_err(|err| self.plugin_error(err))?;
+        let output = child
+            .wait_with_output(command_log)
+            .await
+            .map_err(|err| self.plugin_error(err))?;
+
+        if !output.status.success() {
+            let stderr = std::fs::read_to_string(stderr_file.path()).map_err(|err| {
+                self.plugin_error(format!(
+                    "failed to read plugin error output from '{}': {err}",
+                    stderr_file.path().to_string_lossy()
+                ))
+            })?;
+            return Err(ConfigManagementError::PluginError {
+                plugin_name: self.name.clone(),
+                reason: format!("Command execution failed: {}", stderr),
+            });
+        }
+
+        target_file
+            .persist(target_file_path.as_std_path())
+            .map_err(|err| {
+                self.plugin_error(format!(
+                    "Failed to persist plugin output file to {target_file_path}: {err}",
+                ))
+            })?;
 
         Ok(())
     }
