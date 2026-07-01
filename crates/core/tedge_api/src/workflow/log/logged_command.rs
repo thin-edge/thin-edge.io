@@ -1,5 +1,6 @@
 use crate::CommandLog;
 use std::ffi::OsStr;
+use std::io::Cursor;
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::process::ExitStatus;
@@ -8,6 +9,8 @@ use std::process::Stdio;
 use std::time::Duration;
 use tedge_utils::signals::terminate_process;
 use tedge_utils::signals::Signal;
+use tokio::io::AsyncBufRead;
+use tokio::io::AsyncBufReadExt as _;
 use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Child;
@@ -52,7 +55,7 @@ impl LoggingChild {
         let outcome = self.inner_child.wait_with_output().await;
         if let Some(command_log) = command_log {
             command_log
-                .log_command_and_output(&self.command_line, &outcome)
+                .log_command_and_output(&self.command_line, outcome.as_ref())
                 .await;
         }
         outcome
@@ -72,7 +75,7 @@ impl LoggingChild {
             }
         };
         command_log
-            .log_command_and_output(&command_line, &outcome)
+            .log_command_and_output(&command_line, outcome.as_ref())
             .await;
         outcome
     }
@@ -219,7 +222,7 @@ impl LoggedCommand {
         let outcome = self.command.output().await;
         if let Some(command_log) = command_log {
             command_log
-                .log_command_and_output(&self.to_string(), &outcome)
+                .log_command_and_output(&self.to_string(), outcome.as_ref())
                 .await;
         }
         outcome
@@ -251,7 +254,7 @@ impl LoggedCommand {
 
     pub async fn log_outcome(
         command_line: &str,
-        result: &Result<Output, std::io::Error>,
+        result: Result<impl Into<CommandOutput<'_>>, &std::io::Error>,
         logger: &mut (impl AsyncWrite + Unpin),
     ) -> Result<(), std::io::Error> {
         if !command_line.is_empty() {
@@ -260,8 +263,10 @@ impl LoggedCommand {
                 .await?;
         }
 
-        match result.as_ref() {
+        match result {
             Ok(output) => {
+                let output: CommandOutput<'_> = output.into();
+
                 if let Some(code) = &output.status.code() {
                     let exit_code_msg = if *code == 0 { "OK" } else { "ERROR" };
                     logger
@@ -273,22 +278,25 @@ impl LoggedCommand {
                         .write_all(format!("Killed by signal: {signal}\n\n").as_bytes())
                         .await?
                 }
+
                 // Log stderr then stdout, so the flow reads chronologically
                 // as the stderr is used for log messages and the stdout is used for results
-                if !output.stderr.is_empty() {
+                let mut stderr = output.stderr;
+                if !stderr.fill_buf().await?.is_empty() {
                     logger.write_all(b"stderr <<EOF\n").await?;
-                    logger.write_all(&output.stderr).await?;
+                    tokio::io::copy_buf(&mut stderr, logger).await?;
                     logger.write_all(b"EOF\n\n").await?;
                 } else {
                     logger.write_all(b"stderr (EMPTY)\n\n").await?;
                 }
 
-                if !output.stdout.is_empty() {
-                    logger.write_all(b"stdout <<EOF\n").await?;
-                    logger.write_all(&output.stdout).await?;
-                    logger.write_all(b"EOF\n").await?;
+                let mut stdout = output.stdout;
+                if !stdout.fill_buf().await?.is_empty() {
+                    logger.write_all(b"stderr <<EOF\n").await?;
+                    tokio::io::copy_buf(&mut stdout, logger).await?;
+                    logger.write_all(b"EOF\n\n").await?;
                 } else {
-                    logger.write_all(b"stdout (EMPTY)\n").await?;
+                    logger.write_all(b"stderr (EMPTY)\n\n").await?;
                 }
             }
             Err(err) => {
@@ -300,5 +308,22 @@ impl LoggedCommand {
 
         logger.flush().await?;
         Ok(())
+    }
+}
+
+/// A command output that allows reading from it, no matter if output was captured to memory or attached to a file.
+pub struct CommandOutput<'a> {
+    pub status: ExitStatus,
+    pub stdout: Box<dyn AsyncBufRead + Unpin + Send + 'a>,
+    pub stderr: Box<dyn AsyncBufRead + Unpin + Send + 'a>,
+}
+
+impl<'a> From<&'a std::process::Output> for CommandOutput<'a> {
+    fn from(output: &'a std::process::Output) -> Self {
+        Self {
+            status: output.status,
+            stdout: Box::new(Cursor::new(&output.stdout[..])),
+            stderr: Box::new(Cursor::new(&output.stderr[..])),
+        }
     }
 }

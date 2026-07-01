@@ -7,9 +7,11 @@ use std::path::PathBuf;
 use std::process::Output;
 use std::sync::Arc;
 use tedge_api::workflow::extract_script_output;
+use tedge_api::workflow::log::logged_command::CommandOutput;
 use tedge_api::CommandLog;
 use tedge_api::LoggedCommand;
 use tedge_config::SudoCommandBuilder;
+use tokio::io::BufReader;
 
 pub const LIST: &str = "list";
 const GET: &str = "get";
@@ -151,13 +153,12 @@ impl ExternalPlugin {
         command.stdout(target_stdout);
         command.stderr(stderr);
 
-        let child = command.spawn().map_err(|err| self.plugin_error(err))?;
-        let output = child
-            .wait_with_output(command_log)
+        let status = command
+            .status()
             .await
             .map_err(|err| self.plugin_error(err))?;
 
-        if !output.status.success() {
+        if !status.success() {
             let stderr = std::fs::read_to_string(stderr_file.path()).map_err(|err| {
                 self.plugin_error(format!(
                     "failed to read plugin error output from '{}': {err}",
@@ -168,6 +169,23 @@ impl ExternalPlugin {
                 plugin_name: self.name.clone(),
                 reason: format!("Command execution failed: {}", stderr),
             });
+        }
+
+        if let Some(command_log) = command_log {
+            command_log
+                .log_command_and_output(
+                    GET,
+                    Ok(CommandOutput {
+                        status,
+                        stdout: Box::new(BufReader::new(
+                            tokio::fs::File::open(target_file.path()).await?,
+                        )),
+                        stderr: Box::new(BufReader::new(
+                            tokio::fs::File::open(stderr_file.path()).await?,
+                        )),
+                    }),
+                )
+                .await;
         }
 
         target_file
