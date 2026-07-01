@@ -396,7 +396,7 @@ impl WorkflowActor {
                     }
                 };
                 let output = self.script_runner.await_response(command).await?;
-                log_file.log_script_output(&output).await;
+                log_file.log_script_output(output.as_ref()).await;
 
                 let new_state = state.update_with_script_output(script_name, output, handlers);
                 self.publish_command_state(new_state, &mut log_file).await
@@ -412,7 +412,7 @@ impl WorkflowActor {
                 // Run the command, but ignore its result
                 let command = Execute::new(script.command, script.args);
                 let output = self.script_runner.await_response(command).await?;
-                log_file.log_script_output(&output).await;
+                log_file.log_script_output(output.as_ref()).await;
                 Ok(())
             }
             OperationAction::Download(input_excerpt, handlers) => {
@@ -514,7 +514,7 @@ impl WorkflowActor {
                     Some(script) => {
                         let command = Execute::new(script.command.clone(), script.args);
                         let output = self.script_runner.await_response(command).await?;
-                        log_file.log_script_output(&output).await;
+                        log_file.log_script_output(output.as_ref()).await;
                         match extract_json_output(&script.command, output) {
                             Ok(init_state) => init_state,
                             Err(reason) => {
