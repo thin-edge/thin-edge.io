@@ -70,6 +70,10 @@ Dynamic plugin install and remove
     ${operation}=    Cumulocity.Get Configuration    dummy_config::dummy_plugin
     Operation Should Be SUCCESSFUL    ${operation}    timeout=30
 
+    # Verify operation stdout is logged
+    ${operation_logfile}=    Execute Command    ls -t /var/log/tedge/agent/workflow-config_snapshot-* | head -1    strip=True
+    Execute Command    grep "Dummy content" ${operation_logfile}    exp_exit_code=0    retries=0    timeout=0
+
     ${config_url}=    Cumulocity.Create Inventory Binary
     ...    dummy_config
     ...    dummy_config
