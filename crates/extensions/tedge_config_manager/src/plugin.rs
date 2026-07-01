@@ -113,7 +113,7 @@ impl ExternalPlugin {
             tempfile::NamedTempFile::new_in(self.tmp_dir.as_std_path()).map_err(|err| {
                 self.plugin_error(format!(
                     "Failed to create temporary file in {}: {err}",
-                    tempfile::env::temp_dir().to_string_lossy()
+                    self.tmp_dir
                 ))
             })?;
 
