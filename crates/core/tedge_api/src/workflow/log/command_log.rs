@@ -1,4 +1,5 @@
 use super::logged_command::LoggedCommand;
+use crate::workflow::log::logged_command::CommandOutput;
 use crate::workflow::CommandId;
 use crate::workflow::GenericCommandState;
 use crate::workflow::OperationAction;
@@ -7,7 +8,6 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use log::error;
 use log::info;
-use std::process::Output;
 use time::format_description;
 use time::OffsetDateTime;
 use tokio::fs::File;
@@ -160,14 +160,17 @@ Action:   {action}
             .await
     }
 
-    pub async fn log_script_output(&mut self, result: &Result<Output, std::io::Error>) {
+    pub async fn log_script_output(
+        &mut self,
+        result: Result<impl Into<CommandOutput<'_>>, &std::io::Error>,
+    ) {
         self.log_command_and_output("", result).await
     }
 
     pub async fn log_command_and_output(
         &mut self,
         command_line: &str,
-        result: &Result<Output, std::io::Error>,
+        result: Result<impl Into<CommandOutput<'_>>, &std::io::Error>,
     ) {
         if let Err(err) = self.write_script_output(command_line, result).await {
             error!("Fail to log to {}: {err}", self.path)
@@ -193,7 +196,7 @@ Action:   {action}
     pub async fn write_script_output(
         &mut self,
         command_line: &str,
-        result: &Result<Output, std::io::Error>,
+        result: Result<impl Into<CommandOutput<'_>>, &std::io::Error>,
     ) -> Result<(), std::io::Error> {
         let file = self.open().await?;
         let mut writer = BufWriter::new(file);

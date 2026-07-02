@@ -70,6 +70,10 @@ Dynamic plugin install and remove
     ${operation}=    Cumulocity.Get Configuration    dummy_config::dummy_plugin
     Operation Should Be SUCCESSFUL    ${operation}    timeout=30
 
+    # Verify operation stdout is logged
+    ${operation_logfile}=    Execute Command    ls -t /var/log/tedge/agent/workflow-config_snapshot-* | head -1    strip=True
+    Execute Command    grep "Dummy content" ${operation_logfile}    exp_exit_code=0    retries=0    timeout=0
+
     ${config_url}=    Cumulocity.Create Inventory Binary
     ...    dummy_config
     ...    dummy_config
@@ -85,6 +89,39 @@ Dynamic plugin install and remove
     ...    ${operation}
     ...    timeout=30
     ...    failure_reason=.*Plugin not found.*
+
+Config operation shouldnt OOM on oversized output
+
+    [Documentation]    Install a plugin that emits a very large config and verify all of its output is not loaded into
+    ...                memory at once.
+
+    # install custom config plugin that generates lots of data on stdout, here 50MB
+    # but it shouldn't send all of it to c8y, so after outputting all this to stdout we print short
+    # message on stderr and exit.
+    # tedge shouldn't send any stdout/stderr data to the cloud until the plugin process exits.
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/plugins/huge
+    ...    /usr/share/tedge/config-plugins/huge
+    Execute Command    chmod +x /usr/share/tedge/config-plugins/huge
+
+    # request config
+    Should Contain Supported Configuration Types    huge::huge
+    ${operation}=    Cumulocity.Get Configuration    huge::huge
+
+    # Wait until huge plugin creates a pipe which means stdout was filled and we can measure memory usage
+    Execute Command    ls /tmp/huge-config-plugin-pipe    retries=5    timeout=2
+
+    ${tedge_agent_rss_bytes}=    Execute Command    cmd=ps -o rss= -C tedge-agent    strip=True
+    Should Be True    ${tedge_agent_rss_bytes} < 20000    tedge-agent used too much (${tedge_agent_rss_bytes}>20MB) memory
+
+    # send message to plugin to exit
+    Execute Command    echo done > /tmp/huge-config-plugin-pipe
+
+    # make sure operation completed and tedge-agent is still running
+    # (?s:.) matches any character regardless of flags
+    # https://docs.python.org/3/library/re.html
+    Operation Should Be FAILED    ${operation}    failure_reason=(?s:.)*script generated(?s:.)*
+    Execute Command    systemctl is-active tedge-agent
 
 
 *** Keywords ***
