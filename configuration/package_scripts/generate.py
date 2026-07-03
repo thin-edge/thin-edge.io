@@ -58,6 +58,11 @@ class Service:
     stop_on_upgrade: bool = True
     restart_after_upgrade: bool = True
 
+    # a deprecated service should not be automatically enabled or started,
+    # but it should still be removed on upgrade.
+    # Eventually the service may be completely removed from the services list in the packages.json file
+    deprecated: bool = False
+
 
 def get_template(name, default=""):
     file = Path(name)
@@ -200,20 +205,21 @@ def process_package(name: str, manifest: dict, package_type: str, out_dir: Path)
         # Special case for rpm packages:
         # By default rpm maintainer scripts restart mark a service to be restarted in the postrm script
         # unlike debian which does this in the postinst.
+        # Note: if the service is deprecated, it should still be removed
         if package_type == "deb":
             append_matching_services(
                 postrm, "postrm-systemd", lambda x: True, variables
             )
         elif package_type == "rpm":
             append_matching_services(
-                postrm, "postrm-systemd", lambda x: service.stop_on_upgrade, variables
+                postrm, "postrm-systemd", lambda x: service and service.stop_on_upgrade, variables
             )
 
         ## postinst: restart after upgrade and start
         append_matching_services(
             postinst,
             "postinst-systemd-restart",
-            lambda x: x.restart_after_upgrade and x.start,
+            lambda x: x.restart_after_upgrade and x.start and not x.deprecated,
             {
                 **variables,
                 "RESTART_ACTION": "restart",
@@ -224,7 +230,7 @@ def process_package(name: str, manifest: dict, package_type: str, out_dir: Path)
         append_matching_services(
             postinst,
             "postinst-systemd-restartnostart",
-            lambda x: x.restart_after_upgrade and not x.start,
+            lambda x: x.restart_after_upgrade and not x.start and not x.deprecated,
             {
                 **variables,
                 "RESTART_ACTION": "try-restart",
@@ -235,15 +241,16 @@ def process_package(name: str, manifest: dict, package_type: str, out_dir: Path)
         append_matching_services(
             postinst,
             "postinst-systemd-start",
-            lambda x: not x.restart_after_upgrade and x.start,
+            lambda x: not x.restart_after_upgrade and x.start and not x.deprecated,
             variables,
         )
 
         # prerm: stop_on_upgrade=false or restart_after_upgrade=true
+        # Note: if the service is deprecated, it should still be removed
         append_matching_services(
             prerm,
             "prerm-systemd-restart",
-            lambda x: not x.stop_on_upgrade or x.restart_after_upgrade,
+            lambda x: (not x.stop_on_upgrade or x.restart_after_upgrade),
             variables,
         )
 
@@ -252,7 +259,7 @@ def process_package(name: str, manifest: dict, package_type: str, out_dir: Path)
             prerm,
             "prerm-systemd",
             lambda x: not (not x.stop_on_upgrade or x.restart_after_upgrade)
-            and x.start,
+            and x.start and not x.deprecated,
             variables,
         )
 

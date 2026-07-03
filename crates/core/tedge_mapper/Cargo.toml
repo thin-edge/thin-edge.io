@@ -14,15 +14,12 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws_mapper_ext = { workspace = true, optional = true }
 az_mapper_ext = { workspace = true, optional = true }
-batcher = { workspace = true }
 c8y_api = { workspace = true, optional = true }
 c8y_auth_proxy = { workspace = true, optional = true }
 c8y_mapper_ext = { workspace = true, optional = true }
 camino = { workspace = true }
 certificate = { workspace = true }
 clap = { workspace = true }
-clock = { workspace = true }
-collectd_ext = { workspace = true }
 flockfile = { workspace = true }
 mqtt_channel = { workspace = true }
 serde = { workspace = true }
