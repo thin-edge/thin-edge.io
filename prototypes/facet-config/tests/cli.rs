@@ -743,6 +743,315 @@ mod cloud_type_dispatch {
     }
 }
 
+mod cloud_type_conversion {
+    use super::*;
+
+    #[test]
+    fn custom_to_c8y_preserves_shared_values_in_raw_toml() {
+        let env = TestEnv::new();
+        env.write_mapper_toml(
+            "mycloud",
+            r#"
+            url = "custom.example.com"
+
+            [device]
+            cert_path = "/custom/cert.pem"
+            key_path = "/custom/key.pem"
+            "#,
+        );
+        env.cmd()
+            .args(["set", "mappers.mycloud.cloud_type", "c8y"])
+            .assert()
+            .success();
+
+        let table = env.read_mapper_toml("mycloud");
+        assert_eq!(table["cloud_type"].as_str(), Some("c8y"));
+        // Any write through the schema canonicalizes url to host:port form
+        assert_eq!(table["url"].as_str(), Some("custom.example.com:443"));
+        assert_eq!(
+            table["device"]["cert_path"].as_str(),
+            Some("/custom/cert.pem")
+        );
+        assert_eq!(
+            table["device"]["key_path"].as_str(),
+            Some("/custom/key.pem")
+        );
+    }
+
+    #[test]
+    fn custom_to_c8y_exposes_c8y_schema() {
+        let env = TestEnv::new();
+        env.write_mapper_toml("mycloud", "url = \"custom.example.com\"\n");
+        env.cmd()
+            .args(["set", "mappers.mycloud.cloud_type", "c8y"])
+            .assert()
+            .success();
+
+        env.cmd()
+            .args(["get", "mappers.mycloud.smartrest.use_operation_id"])
+            .assert()
+            .success()
+            .stdout("true\n");
+        env.cmd()
+            .args(["get", "mappers.mycloud.url"])
+            .assert()
+            .success()
+            .stdout("custom.example.com:443\n");
+    }
+
+    #[test]
+    fn c8y_to_custom_preserves_shared_values_in_raw_toml() {
+        let env = TestEnv::new();
+        env.write_mapper_toml(
+            "mycloud",
+            r#"
+            cloud_type = "c8y"
+            url = "tenant.example.com"
+
+            [device]
+            cert_path = "/c8y/cert.pem"
+            key_path = "/c8y/key.pem"
+
+            [smartrest]
+            templates = ["t1", "t2"]
+            "#,
+        );
+        env.cmd()
+            .args(["set", "mappers.mycloud.cloud_type", "custom"])
+            .assert()
+            .success();
+
+        let table = env.read_mapper_toml("mycloud");
+        assert_eq!(table["cloud_type"].as_str(), Some("custom"));
+        assert_eq!(table["url"].as_str(), Some("tenant.example.com:443"));
+        assert_eq!(table["device"]["cert_path"].as_str(), Some("/c8y/cert.pem"));
+        assert_eq!(table["device"]["key_path"].as_str(), Some("/c8y/key.pem"));
+    }
+
+    #[test]
+    fn c8y_to_custom_deletes_keys_outside_the_new_schema() {
+        let env = TestEnv::new();
+        env.write_mapper_toml(
+            "mycloud",
+            r#"
+            cloud_type = "c8y"
+            url = "tenant.example.com"
+
+            [smartrest]
+            templates = ["t1"]
+            use_operation_id = false
+
+            [proxy.bind]
+            port = 9999
+
+            [availability]
+            interval = 60
+            "#,
+        );
+        env.cmd()
+            .args(["set", "mappers.mycloud.cloud_type", "custom"])
+            .assert()
+            .success();
+
+        let table = env.read_mapper_toml("mycloud");
+        assert!(
+            !table.contains_key("smartrest"),
+            "smartrest should be deleted, got: {table}"
+        );
+        assert!(
+            !table.contains_key("proxy"),
+            "proxy should be deleted, got: {table}"
+        );
+        assert!(
+            !table.contains_key("availability"),
+            "availability should be deleted, got: {table}"
+        );
+    }
+
+    #[test]
+    fn c8y_to_custom_hides_c8y_keys_from_cli() {
+        let env = TestEnv::new();
+        env.write_mapper_toml(
+            "mycloud",
+            r#"
+            cloud_type = "c8y"
+
+            [smartrest]
+            use_operation_id = false
+            "#,
+        );
+        env.cmd()
+            .args(["set", "mappers.mycloud.cloud_type", "custom"])
+            .assert()
+            .success();
+
+        env.cmd()
+            .args(["get", "mappers.mycloud.smartrest.use_operation_id"])
+            .assert()
+            .failure();
+    }
+
+    #[test]
+    fn builtin_c8y_mapper_converted_to_custom_uses_custom_schema() {
+        let env = TestEnv::new();
+        env.write_mapper_toml(
+            "c8y",
+            r#"
+            url = "tenant.example.com"
+
+            [smartrest]
+            templates = ["t1"]
+            "#,
+        );
+        env.cmd()
+            .args(["set", "mappers.c8y.cloud_type", "custom"])
+            .assert()
+            .success();
+
+        let table = env.read_mapper_toml("c8y");
+        assert_eq!(table["cloud_type"].as_str(), Some("custom"));
+        assert!(
+            !table.contains_key("smartrest"),
+            "smartrest should be deleted, got: {table}"
+        );
+        env.cmd()
+            .args(["get", "mappers.c8y.smartrest.use_operation_id"])
+            .assert()
+            .failure();
+        env.cmd()
+            .args(["get", "mappers.c8y.url"])
+            .assert()
+            .success()
+            .stdout("tenant.example.com:443\n");
+    }
+
+    #[test]
+    fn unset_cloud_type_reverts_non_builtin_mapper_to_custom_schema() {
+        let env = TestEnv::new();
+        env.write_mapper_toml(
+            "mycloud",
+            r#"
+            cloud_type = "c8y"
+            url = "tenant.example.com"
+
+            [smartrest]
+            templates = ["t1"]
+            "#,
+        );
+        env.cmd()
+            .args(["unset", "mappers.mycloud.cloud_type"])
+            .assert()
+            .success();
+
+        let table = env.read_mapper_toml("mycloud");
+        assert!(!table.contains_key("cloud_type"));
+        assert!(
+            !table.contains_key("smartrest"),
+            "smartrest should be deleted, got: {table}"
+        );
+        assert_eq!(table["url"].as_str(), Some("tenant.example.com:443"));
+        env.cmd()
+            .args(["get", "mappers.mycloud.cloud_type"])
+            .assert()
+            .success()
+            .stdout("custom\n");
+    }
+
+    #[test]
+    fn unset_cloud_type_on_builtin_name_keeps_c8y_schema() {
+        let env = TestEnv::new();
+        env.write_mapper_toml(
+            "c8y",
+            r#"
+            cloud_type = "c8y"
+
+            [smartrest]
+            templates = ["t1"]
+            "#,
+        );
+        env.cmd()
+            .args(["unset", "mappers.c8y.cloud_type"])
+            .assert()
+            .success();
+
+        let table = env.read_mapper_toml("c8y");
+        assert!(!table.contains_key("cloud_type"));
+        assert!(
+            table.contains_key("smartrest"),
+            "smartrest should survive, got: {table}"
+        );
+        env.cmd()
+            .args(["get", "mappers.c8y.smartrest.templates"])
+            .assert()
+            .success()
+            .stdout("t1\n");
+    }
+
+    #[test]
+    fn unrecognised_cloud_type_falls_back_to_custom_schema() {
+        let env = TestEnv::new();
+        env.write_mapper_toml(
+            "mycloud",
+            r#"
+            cloud_type = "c8y"
+            url = "tenant.example.com"
+
+            [smartrest]
+            templates = ["t1"]
+            "#,
+        );
+        env.cmd()
+            .args(["set", "mappers.mycloud.cloud_type", "az"])
+            .assert()
+            .success();
+
+        let table = env.read_mapper_toml("mycloud");
+        assert_eq!(table["cloud_type"].as_str(), Some("az"));
+        assert_eq!(table["url"].as_str(), Some("tenant.example.com:443"));
+        assert!(
+            !table.contains_key("smartrest"),
+            "smartrest should be deleted, got: {table}"
+        );
+    }
+
+    #[test]
+    fn converting_away_and_back_loses_c8y_specific_values() {
+        let env = TestEnv::new();
+        env.write_mapper_toml(
+            "mycloud",
+            r#"
+            cloud_type = "c8y"
+            url = "tenant.example.com"
+
+            [smartrest]
+            templates = ["t1", "t2"]
+            "#,
+        );
+        env.cmd()
+            .args(["set", "mappers.mycloud.cloud_type", "custom"])
+            .assert()
+            .success();
+        env.cmd()
+            .args(["set", "mappers.mycloud.cloud_type", "c8y"])
+            .assert()
+            .success();
+
+        let table = env.read_mapper_toml("mycloud");
+        assert_eq!(table["cloud_type"].as_str(), Some("c8y"));
+        assert_eq!(table["url"].as_str(), Some("tenant.example.com:443"));
+        // Documents the clobber hazard motivating a future guard on cloud_type changes
+        assert!(
+            !table.contains_key("smartrest"),
+            "c8y-specific settings do not survive a round trip, got: {table}"
+        );
+        env.cmd()
+            .args(["get", "mappers.mycloud.smartrest.templates"])
+            .assert()
+            .success()
+            .stdout("\n");
+    }
+}
+
 mod error_messages {
     use super::*;
 
@@ -853,6 +1162,16 @@ impl TestEnv {
         let mapper_dir = self.dir.path().join("mappers").join(name);
         std::fs::create_dir_all(&mapper_dir).unwrap();
         std::fs::write(mapper_dir.join("mapper.toml"), content).unwrap();
+    }
+
+    fn read_mapper_toml(&self, name: &str) -> toml::Table {
+        let path = self
+            .dir
+            .path()
+            .join("mappers")
+            .join(name)
+            .join("mapper.toml");
+        std::fs::read_to_string(&path).unwrap().parse().unwrap()
     }
 
     fn cmd(&self) -> Command {

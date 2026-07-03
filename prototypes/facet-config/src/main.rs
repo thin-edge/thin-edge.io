@@ -142,6 +142,18 @@ fn build_federated(
     Ok(fed)
 }
 
+/// Rewrites a mapper's file under its new schema after a `cloud_type` change
+fn normalize_mapper_schema(config_dir: &Path, full_key: &str) -> anyhow::Result<()> {
+    if let Some(name) = full_key
+        .strip_prefix("mappers.")
+        .and_then(|k| k.strip_suffix(".cloud_type"))
+    {
+        mapper_config::normalize_schema(config_dir, name)
+            .with_context(|| format!("rewriting mapper '{name}' under its new schema"))?;
+    }
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let env = EnvOverrides::from_env();
@@ -166,10 +178,12 @@ fn main() -> anyhow::Result<()> {
         Command::Set { key, value } => {
             let key = resolve_full_key(&key, profile);
             fed.mutate(&key, Action::Set(value))?;
+            normalize_mapper_schema(&cli.config_dir, &key)?;
         }
         Command::Unset { key } => {
             let key = resolve_full_key(&key, profile);
             fed.mutate(&key, Action::Unset)?;
+            normalize_mapper_schema(&cli.config_dir, &key)?;
         }
         Command::Add { key, value } => {
             let key = resolve_full_key(&key, profile);
@@ -1314,6 +1328,8 @@ mod tests {
     }
 
     mod loaded_mapper_dispatch {
+        use mapper_config::CloudSchema;
+
         #[test]
         fn cloud_type_c8y_returns_c8y_variant() {
             let dir = tempfile::TempDir::new().unwrap();
@@ -1369,7 +1385,7 @@ mod tests {
             else {
                 panic!("expected Custom variant");
             };
-            assert_eq!(config.cloud_type, "custom");
+            assert_eq!(config.cloud_type, CloudSchema::Custom);
         }
 
         #[test]

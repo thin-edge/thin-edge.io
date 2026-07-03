@@ -1,10 +1,11 @@
+use crate::CloudSchema;
 use facet_config_runtime::*;
 
 facet_config_macro::define_config! {
     C8yMapper {
         /// Cloud type for this mapper
         #[tedge_config(default(value = "c8y"))]
-        cloud_type: String,
+        cloud_type: CloudSchema,
 
         /// Endpoint URL of Cumulocity tenant
         #[tedge_config(example = "your-tenant.cumulocity.com")]
