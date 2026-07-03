@@ -1,0 +1,54 @@
+# Example: tedge + tedge-p11-server (SoftHSM2, software token — for testing without hardware).
+# No device passthrough and no group_add needed; runs fully non-root. See ./README.md.
+#
+# Usage:
+#   1. cp ../tedge/packages/tedge-p11-server_*.deb ./packages/
+#   2. export TEDGE_C8Y_URL=example.c8y.cumulocity.com
+#   3. docker compose -f docker-compose.softhsm.yaml up --build -d
+#   4. Enroll once (the token is auto-initialized; create the key over the socket, then the cert):
+#      docker compose -f docker-compose.softhsm.yaml exec tedge \
+#        sh -c 'tedge cert create-key-hsm c8y && tedge cert download c8y --device-id <id>'
+services:
+  tedge-p11-server:
+    build:
+      context: .
+      args:
+        VARIANT: softhsm
+    # SoftHSM is a pure software token: no devices, no group_add. The token is auto-initialized on
+    # first start (P11_INIT=auto) using the default PIN 123456.
+    environment:
+      TEDGE_DEVICE_CRYPTOKI_PIN: "123456"
+    volumes:
+      - p11-socket:/run/tedge-p11-server
+      - p11-hsm-store:/etc/tedge/hsm        # persists the SoftHSM token/key
+    restart: unless-stopped
+
+  tedge:
+    image: ghcr.io/thin-edge/tedge-container-bundle:latest
+    depends_on:
+      - tedge-p11-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:1883:1883"
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8001"
+    environment:
+      TEDGE_C8Y_URL: "${TEDGE_C8Y_URL:?set TEDGE_C8Y_URL to your Cumulocity tenant URL}"
+      TEDGE_C8Y_OPERATIONS_AUTO_LOG_UPLOAD: always
+      TEDGE_MQTT_BRIDGE_BUILT_IN: "true"
+      TEDGE_DEVICE_CRYPTOKI_MODE: socket
+      TEDGE_DEVICE_CRYPTOKI_SOCKET_PATH: /run/tedge-p11-server/tedge-p11-server.sock
+      TEDGE_DEVICE_KEY_URI: "pkcs11:object=tedge;type=private"
+    volumes:
+      - device-certs:/etc/tedge/device-certs
+      - tedge:/data/tedge
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - p11-socket:/run/tedge-p11-server
+    restart: always
+
+volumes:
+  p11-socket:
+  p11-hsm-store:
+  device-certs:
+  tedge:

@@ -1,0 +1,66 @@
+# Example: tedge + tedge-p11-server (USB smartcard token, e.g. Nitrokey HSM 2 / Yubikey).
+# tedge-p11-server runs its own pcscd as a non-root user. See ./README.md ("USB tokens").
+# Validated on a Raspberry Pi 4 with a Nitrokey HSM 2.
+#
+# Prerequisites:
+#   - A host udev rule granting a group read/write to the reader, e.g.:
+#       # /etc/udev/rules.d/99-hsm-usb.rules
+#       SUBSYSTEM=="usb", ATTRS{idVendor}=="20a0", MODE="0660", GROUP="plugdev"
+#     then `udevadm control --reload && udevadm trigger`.
+#   - The token already initialized with a user PIN (USB tokens are not auto-initialized).
+#
+# Usage:
+#   1. cp ../tedge/packages/tedge-p11-server_*.deb ./packages/
+#   2. export TEDGE_C8Y_URL=example.c8y.cumulocity.com
+#      export USB_GID=$(stat -c %g /dev/bus/usb/001/003)   # gid of the reader's node (e.g. plugdev)
+#      export TEDGE_DEVICE_CRYPTOKI_PIN=<token-user-pin>
+#   3. docker compose -f docker-compose.usb.yaml up --build -d
+#   4. Enroll once (create a key on the token if none exists, then the cert):
+#      docker compose -f docker-compose.usb.yaml exec tedge \
+#        sh -c 'tedge cert create-key-hsm c8y && tedge cert download c8y --device-id <id>'
+services:
+  tedge-p11-server:
+    build:
+      context: .
+      args:
+        VARIANT: usb
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    # Grant the non-root user access to the USB reader node (the group set by the udev rule above).
+    group_add:
+      - "${USB_GID:?set USB_GID to the gid owning the reader node, e.g. the plugdev gid}"
+    environment:
+      # USB token PIN (token-specific; override with your value or pass it from a secret/.env).
+      TEDGE_DEVICE_CRYPTOKI_PIN: "${TEDGE_DEVICE_CRYPTOKI_PIN:-123456}"
+    volumes:
+      - p11-socket:/run/tedge-p11-server
+    restart: unless-stopped
+
+  tedge:
+    image: ghcr.io/thin-edge/tedge-container-bundle:latest
+    depends_on:
+      - tedge-p11-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:1883:1883"
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8001"
+    environment:
+      TEDGE_C8Y_URL: "${TEDGE_C8Y_URL:?set TEDGE_C8Y_URL to your Cumulocity tenant URL}"
+      TEDGE_C8Y_OPERATIONS_AUTO_LOG_UPLOAD: always
+      TEDGE_MQTT_BRIDGE_BUILT_IN: "true"
+      TEDGE_DEVICE_CRYPTOKI_MODE: socket
+      TEDGE_DEVICE_CRYPTOKI_SOCKET_PATH: /run/tedge-p11-server/tedge-p11-server.sock
+      TEDGE_DEVICE_KEY_URI: "pkcs11:object=tedge;type=private"
+    volumes:
+      - device-certs:/etc/tedge/device-certs
+      - tedge:/data/tedge
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - p11-socket:/run/tedge-p11-server
+    restart: always
+
+volumes:
+  p11-socket:
+  device-certs:
+  tedge:

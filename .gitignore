@@ -46,6 +46,8 @@ dist/
 tmp/
 containers/tedge/packages/
 containers/tedge/*.tar
+containers/tedge-p11-server/packages/
+containers/tedge-p11-server/*.tar
 
 # Other files
 Makefile.toml
