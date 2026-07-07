@@ -1,11 +1,12 @@
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
+use syn::spanned::Spanned;
 
 use crate::dto::struct_name_for_group;
 use crate::input::{ConfigField, ConfigGroup, Configuration, FieldDefault, FieldOrGroup};
 
 pub fn generate_reader(config: &Configuration, root_name: &str) -> TokenStream {
-    let root_ident = format_ident!("{root_name}Config");
+    let root_ident = format_ident!("{root_name}Config", span = config.name.span());
     let mut structs = Vec::new();
 
     let fields = generate_reader_fields(&config.groups, "", &mut structs);
@@ -70,10 +71,11 @@ fn generate_reader_leaf(field: &ConfigField) -> TokenStream {
             pub #ident: #ty,
         }
     } else {
+        let field_ty = quote_spanned! {ty.span()=> OptionalConfig<#ty> };
         quote! {
             #(#doc_attrs)*
             #(#extra_attrs)*
-            pub #ident: OptionalConfig<#ty>,
+            pub #ident: #field_ty,
         }
     }
 }
@@ -85,7 +87,7 @@ fn generate_reader_group(
     let group_ident = &group.ident;
     let base_name = struct_name_for_group(parent_prefix, &group.ident.to_string());
     let struct_name = format!("{base_name}Config");
-    let struct_ident = format_ident!("{struct_name}");
+    let struct_ident = format_ident!("{struct_name}", span = group.ident.span());
     let doc_attrs = &group.doc_attrs;
 
     let child_prefix = if parent_prefix.is_empty() {
@@ -118,6 +120,7 @@ fn generate_reader_group(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{ident_starts, position_of};
     use syn::parse_quote;
 
     #[track_caller]
@@ -244,5 +247,50 @@ mod tests {
             }
         };
         assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn root_struct_ident_spans_the_config_name() {
+        let src = "Mapper {
+    c8y: {
+        url: String,
+    },
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate_reader(&input, &input.name.to_string());
+        assert_eq!(
+            ident_starts(&generated, "MapperConfig"),
+            vec![position_of(src, "Mapper")],
+        );
+    }
+
+    #[test]
+    fn group_struct_idents_span_the_group_name() {
+        let src = "Mapper {
+    c8y: {
+        url: String,
+    },
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate_reader(&input, &input.name.to_string());
+        let starts = ident_starts(&generated, "C8yConfig");
+        let expected = position_of(src, "c8y");
+        // The ident appears both as the field type and the struct definition
+        assert_eq!(starts.len(), 2);
+        assert!(starts.iter().all(|start| *start == expected));
+    }
+
+    #[test]
+    fn optional_config_wrapper_spans_the_field_type() {
+        let src = "Mapper {
+    c8y: {
+        url: String,
+    },
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate_reader(&input, &input.name.to_string());
+        let expected = position_of(src, "String");
+        assert_eq!(ident_starts(&generated, "OptionalConfig"), vec![expected]);
+        assert_eq!(ident_starts(&generated, "String"), vec![expected]);
     }
 }

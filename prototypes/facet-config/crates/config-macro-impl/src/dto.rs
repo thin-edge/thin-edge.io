@@ -1,11 +1,12 @@
 use heck::ToUpperCamelCase;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
+use syn::spanned::Spanned;
 
 use crate::input::{ConfigField, ConfigGroup, Configuration, FieldOrGroup};
 
 pub fn generate_dto(config: &Configuration, root_name: &str) -> TokenStream {
-    let root_ident = format_ident!("{root_name}ConfigDto");
+    let root_ident = format_ident!("{root_name}ConfigDto", span = config.name.span());
     let mut structs = Vec::new();
 
     let fields = generate_group_fields(&config.groups, "", &mut structs);
@@ -66,10 +67,12 @@ fn generate_leaf_field(field: &ConfigField) -> TokenStream {
         extra_attrs.push(quote! { #[serde(rename = #rename)] });
     }
 
+    let field_ty = quote_spanned! {ty.span()=> Option<#ty> };
+
     quote! {
         #(#doc_attrs)*
         #(#extra_attrs)*
-        pub #ident: Option<#ty>,
+        pub #ident: #field_ty,
     }
 }
 
@@ -77,7 +80,7 @@ fn generate_group(group: &ConfigGroup, parent_prefix: &str) -> (TokenStream, Vec
     let group_ident = &group.ident;
     let base_name = struct_name_for_group(parent_prefix, &group.ident.to_string());
     let struct_name = format!("{base_name}ConfigDto");
-    let struct_ident = format_ident!("{struct_name}");
+    let struct_ident = format_ident!("{struct_name}", span = group.ident.span());
     let doc_attrs = &group.doc_attrs;
 
     let child_prefix = if parent_prefix.is_empty() {
@@ -93,7 +96,7 @@ fn generate_group(group: &ConfigGroup, parent_prefix: &str) -> (TokenStream, Vec
 
     if group.multi {
         let profile_name = format!("{base_name}ProfileDto");
-        let profile_ident = format_ident!("{profile_name}");
+        let profile_ident = format_ident!("{profile_name}", span = group.ident.span());
 
         all_fields.push(quote! {
             #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
@@ -141,7 +144,7 @@ fn generate_group_fields_for_profile(
                 let group_ident = &g.ident;
                 let base_name = struct_name_for_group(parent_prefix, &g.ident.to_string());
                 let struct_name = format!("{base_name}ConfigDto");
-                let struct_ident = format_ident!("{struct_name}");
+                let struct_ident = format_ident!("{struct_name}", span = g.ident.span());
                 let doc_attrs = &g.doc_attrs;
                 fields.push(quote! {
                     #(#doc_attrs)*
@@ -157,6 +160,7 @@ fn generate_group_fields_for_profile(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{ident_starts, position_of};
     use syn::parse_quote;
 
     #[track_caller]
@@ -389,5 +393,66 @@ mod tests {
             }
         };
         assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn root_struct_ident_spans_the_config_name() {
+        let src = "Mapper {
+    mqtt: {
+        port: u16,
+    },
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate_dto(&input, &input.name.to_string());
+        assert_eq!(
+            ident_starts(&generated, "MapperConfigDto"),
+            vec![position_of(src, "Mapper")],
+        );
+    }
+
+    #[test]
+    fn group_struct_idents_span_the_group_name() {
+        let src = "Mapper {
+    mqtt: {
+        port: u16,
+    },
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate_dto(&input, &input.name.to_string());
+        let starts = ident_starts(&generated, "MqttConfigDto");
+        let expected = position_of(src, "mqtt");
+        // The ident appears both as the field type and the struct definition
+        assert_eq!(starts.len(), 2);
+        assert!(starts.iter().all(|start| *start == expected));
+    }
+
+    #[test]
+    fn profile_struct_ident_spans_the_group_name() {
+        let src = "Test {
+    #[tedge_config(multi)]
+    c8y: {
+        url: String,
+    },
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate_dto(&input, &input.name.to_string());
+        let starts = ident_starts(&generated, "C8yProfileDto");
+        let expected = position_of(src, "c8y");
+        assert!(!starts.is_empty());
+        assert!(starts.iter().all(|start| *start == expected));
+    }
+
+    #[test]
+    fn option_wrapper_spans_the_field_type() {
+        let src = "Mapper {
+    mqtt: {
+        port: u16,
+    },
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate_dto(&input, &input.name.to_string());
+        let expected = position_of(src, "u16");
+        assert!(ident_starts(&generated, "Option").contains(&expected));
+        assert_eq!(ident_starts(&generated, "u16"), vec![expected]);
     }
 }

@@ -8,6 +8,8 @@ mod dto;
 pub mod input;
 mod reader;
 mod registries;
+#[cfg(test)]
+mod test_utils;
 
 pub fn generate_configuration(input: TokenStream) -> TokenStream {
     let config: Configuration = match parse2(input) {

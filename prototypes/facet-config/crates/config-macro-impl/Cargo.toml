@@ -13,3 +13,6 @@ syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
 [dev-dependencies]
 pretty_assertions = "1"
 prettyplease = "0.2"
+# span-locations makes Span::start()/end() available so tests can assert
+# that generated tokens point back at the macro input
+proc-macro2 = { version = "1", features = ["span-locations"] }

@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream;
-use quote::quote;
-use std::collections::BTreeSet;
+use quote::{quote, quote_spanned};
+use std::collections::BTreeMap;
+use syn::spanned::Spanned;
 
 use crate::input::{Configuration, FieldDefault, FieldOrGroup};
 
@@ -116,7 +117,7 @@ fn generate_type_registry(
     return_type: &str,
     register_fn: &str,
 ) -> TokenStream {
-    let mut types = BTreeSet::new();
+    let mut types = BTreeMap::new();
     collect_leaf_types(&config.groups, &mut types);
 
     let fn_name: syn::Ident = syn::parse_str(fn_name).unwrap();
@@ -124,10 +125,15 @@ fn generate_type_registry(
     let register_fn: syn::Path = syn::parse_str(register_fn).unwrap();
 
     let register_calls: Vec<TokenStream> = types
-        .iter()
-        .map(|ty_str| {
-            let ty: syn::Type = syn::parse_str(ty_str).unwrap();
-            quote! { #register_fn::<#ty>(&mut r); }
+        .values()
+        .map(|ty| {
+            // Point the whole registration call at the field's type, so a
+            // missing trait impl is reported against the input declaration
+            let mut register_fn = register_fn.clone();
+            for segment in &mut register_fn.segments {
+                segment.ident.set_span(ty.span());
+            }
+            quote_spanned! {ty.span()=> #register_fn::<#ty>(&mut r); }
         })
         .collect();
 
@@ -142,16 +148,17 @@ fn generate_type_registry(
 
 fn collect_leaf_types(
     items: &syn::punctuated::Punctuated<FieldOrGroup, syn::Token![,]>,
-    types: &mut BTreeSet<String>,
+    types: &mut BTreeMap<String, syn::Type>,
 ) {
     for item in items {
         match item {
             FieldOrGroup::Field(f) => {
                 let ty = &f.ty;
                 let ty_str = quote::quote!(#ty).to_string();
-                // Normalize whitespace for dedup
+                // Normalize whitespace for dedup, keeping the first
+                // occurrence's spans for error reporting
                 let normalized: String = ty_str.split_whitespace().collect::<Vec<_>>().join(" ");
-                types.insert(normalized);
+                types.entry(normalized).or_insert_with(|| ty.clone());
             }
             FieldOrGroup::Group(g) => {
                 collect_leaf_types(&g.contents, types);
@@ -273,6 +280,7 @@ fn dotted_key(prefix: &str, name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{ident_starts, position_of};
     use syn::parse_quote;
 
     #[track_caller]
@@ -433,5 +441,54 @@ mod tests {
             }
         };
         assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn register_calls_span_the_field_type() {
+        let src = "Test {
+    mqtt: {
+        port: u16,
+    },
+    c8y: {
+        url: String,
+    },
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate_type_registry(
+            &input,
+            "build_registry",
+            "AppendRemoveRegistry",
+            "register_append_remove",
+        );
+        // Types are ordered by name, so String comes before u16
+        assert_eq!(
+            ident_starts(&generated, "register_append_remove"),
+            vec![position_of(src, "String"), position_of(src, "u16")],
+        );
+        assert_eq!(
+            ident_starts(&generated, "u16"),
+            vec![position_of(src, "u16")],
+        );
+    }
+
+    #[test]
+    fn duplicate_types_span_the_first_occurrence() {
+        let src = "Test {
+    mqtt: {
+        port: u16,
+        bind_port: u16,
+    },
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate_type_registry(
+            &input,
+            "build_registry",
+            "AppendRemoveRegistry",
+            "register_append_remove",
+        );
+        assert_eq!(
+            ident_starts(&generated, "u16"),
+            vec![position_of(src, "u16")],
+        );
     }
 }
