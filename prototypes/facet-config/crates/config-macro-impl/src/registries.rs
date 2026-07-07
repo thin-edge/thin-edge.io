@@ -95,6 +95,30 @@ fn collect_defaults(
                                 spec: DefaultSpec::FromRoot(#root_key),
                             },
                         },
+                        FieldDefault::FromKeyVia(via) => {
+                            let source = &via.key;
+                            let function = &via.function;
+                            let ty = &f.ty;
+                            // The function returns the field's own type; the
+                            // adapter stringifies it for the defaults engine.
+                            // Spanning the typed binding at the function path
+                            // reports a wrong return type against the attribute
+                            let adapter = quote_spanned! {function.span()=>
+                                |source: &str| {
+                                    let derived: Option<#ty> = #function(source)?;
+                                    Ok(derived.map(|value| value.to_string()))
+                                }
+                            };
+                            quote! {
+                                FieldDefault {
+                                    key: #key,
+                                    spec: DefaultSpec::FromKeyVia {
+                                        key: #source,
+                                        function: #adapter,
+                                    },
+                                },
+                            }
+                        }
                     };
                     entries.push(entry);
                 }
@@ -319,6 +343,81 @@ mod tests {
     }
 
     #[test]
+    fn function_default_generates_function_spec() {
+        let input: Configuration = parse_quote!(
+            Test {
+                run: {
+                    #[tedge_config(default(function = "generated_value"))]
+                    stamp: String,
+                },
+            }
+        );
+        let generated = generate_defaults(&input);
+        let expected: TokenStream = parse_quote! {
+            fn build_defaults(config_dir: &std::path::Path) -> DefaultsRegistry {
+                DefaultsRegistry::new(vec![
+                    FieldDefault {
+                        key: "run.stamp",
+                        spec: DefaultSpec::Function(generated_value),
+                    },
+                ])
+                .expect("invalid defaults registry")
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn from_optional_key_default_generates_from_optional_key_spec() {
+        let input: Configuration = parse_quote!(
+            Test {
+                c8y: {
+                    #[tedge_config(default(from_optional_key = "c8y.url"))]
+                    http: String,
+                },
+            }
+        );
+        let generated = generate_defaults(&input);
+        let expected: TokenStream = parse_quote! {
+            fn build_defaults(config_dir: &std::path::Path) -> DefaultsRegistry {
+                DefaultsRegistry::new(vec![
+                    FieldDefault {
+                        key: "c8y.http",
+                        spec: DefaultSpec::FromOptionalKey("c8y.url"),
+                    },
+                ])
+                .expect("invalid defaults registry")
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn from_root_default_generates_from_root_spec() {
+        let input: Configuration = parse_quote!(
+            Test {
+                device: {
+                    #[tedge_config(default(from_root = "device.cert_path"))]
+                    cert_path: String,
+                },
+            }
+        );
+        let generated = generate_defaults(&input);
+        let expected: TokenStream = parse_quote! {
+            fn build_defaults(config_dir: &std::path::Path) -> DefaultsRegistry {
+                DefaultsRegistry::new(vec![
+                    FieldDefault {
+                        key: "device.cert_path",
+                        spec: DefaultSpec::FromRoot("device.cert_path"),
+                    },
+                ])
+                .expect("invalid defaults registry")
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
     fn from_key_default_generates_from_key_spec() {
         let input: Configuration = parse_quote!(
             Test {
@@ -337,6 +436,74 @@ mod tests {
                     FieldDefault {
                         key: "c8y.device.cert_path",
                         spec: DefaultSpec::FromKey("device.cert_path"),
+                    },
+                ])
+                .expect("invalid defaults registry")
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn from_key_via_default_generates_from_key_via_spec() {
+        let input: Configuration = parse_quote!(
+            Test {
+                device: {
+                    #[tedge_config(default(from_key_via(
+                        key = "device.cert_path",
+                        function = "device_id_from_cert"
+                    )))]
+                    id: String,
+                },
+            }
+        );
+        let generated = generate_defaults(&input);
+        let expected: TokenStream = parse_quote! {
+            fn build_defaults(config_dir: &std::path::Path) -> DefaultsRegistry {
+                DefaultsRegistry::new(vec![
+                    FieldDefault {
+                        key: "device.id",
+                        spec: DefaultSpec::FromKeyVia {
+                            key: "device.cert_path",
+                            function: |source: &str| {
+                                let derived: Option<String> = device_id_from_cert(source)?;
+                                Ok(derived.map(|value| value.to_string()))
+                            },
+                        },
+                    },
+                ])
+                .expect("invalid defaults registry")
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn from_key_via_adapter_returns_the_field_type() {
+        let input: Configuration = parse_quote!(
+            Test {
+                mqtt: {
+                    #[tedge_config(default(from_key_via(
+                        key = "mqtt.port",
+                        function = "external_port"
+                    )))]
+                    external_port: u16,
+                },
+            }
+        );
+        let generated = generate_defaults(&input);
+        let expected: TokenStream = parse_quote! {
+            fn build_defaults(config_dir: &std::path::Path) -> DefaultsRegistry {
+                DefaultsRegistry::new(vec![
+                    FieldDefault {
+                        key: "mqtt.external_port",
+                        spec: DefaultSpec::FromKeyVia {
+                            key: "mqtt.port",
+                            function: |source: &str| {
+                                let derived: Option<u16> = external_port(source)?;
+                                Ok(derived.map(|value| value.to_string()))
+                            },
+                        },
                     },
                 ])
                 .expect("invalid defaults registry")

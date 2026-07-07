@@ -62,7 +62,18 @@ impl ConfigManager {
         dto: &T,
         key: &str,
     ) -> Result<Option<String>, ConfigError> {
-        config_get_with_defaults(dto, key, &self.defaults, None)
+        self.read_with_root(dto, key, None)
+    }
+
+    /// Returns the effective value for `key`, resolving `from_root` defaults
+    /// through `root_resolver`.
+    pub fn read_with_root<T: for<'a> Facet<'a>>(
+        &self,
+        dto: &T,
+        key: &str,
+        root_resolver: crate::defaults::RootResolver<'_>,
+    ) -> Result<Option<String>, ConfigError> {
+        config_get_with_defaults(dto, key, &self.defaults, root_resolver)
     }
 
     /// Sets `key` to `value` in the DTO (parses and validates).
@@ -143,7 +154,7 @@ impl ConfigManager {
     pub fn build_reader<Dto: for<'a> Facet<'a>, Reader: for<'a> Facet<'a>>(
         &self,
         dto: &Dto,
-        root_resolver: Option<&dyn Fn(&str) -> Option<String>>,
+        root_resolver: crate::defaults::RootResolver<'_>,
         display_prefix: &str,
     ) -> Result<Reader, ConfigError> {
         build_reader_at(dto, &self.defaults, root_resolver, display_prefix)
@@ -179,9 +190,5 @@ impl ConfigManager {
     ) -> Vec<String> {
         let all_keys = self.keys::<T>();
         env.apply_for_cloud(dto, cloud, profile, &all_keys)
-    }
-
-    pub(crate) fn defaults(&self) -> &DefaultsRegistry {
-        &self.defaults
     }
 }

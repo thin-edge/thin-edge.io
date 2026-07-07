@@ -4,7 +4,11 @@ facet_config_macro::define_config! {
     TEdge {
         device: {
             /// Unique device identifier
-            #[tedge_config(example = "my-device-001", example = "AINA12345678")]
+            #[tedge_config(
+                example = "my-device-001",
+                example = "AINA12345678",
+                default(from_key_via(key = "device.cert_path", function = "certificate_common_name"))
+            )]
             id: String,
 
             /// Device type identifier
@@ -32,6 +36,7 @@ facet_config_macro::define_config! {
             /// MQTT client bind address
             #[tedge_config(default(value = "127.0.0.1"))]
             bind_address: std::net::IpAddr,
+
         },
     }
 }

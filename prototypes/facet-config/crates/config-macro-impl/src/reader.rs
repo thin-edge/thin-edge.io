@@ -187,6 +187,36 @@ mod tests {
     }
 
     #[test]
+    fn field_with_from_key_via_default_is_optional() {
+        let input: Configuration = parse_quote!(
+            Mapper {
+                device: {
+                    #[tedge_config(default(from_key_via(
+                        key = "device.cert_path",
+                        function = "device_id_from_cert"
+                    )))]
+                    id: String,
+                },
+            }
+        );
+        let generated = generate_reader(&input, &input.name.to_string());
+        let expected: TokenStream = parse_quote! {
+            #[derive(Debug, ::facet::Facet)]
+            #[facet(type_tag = "config_group")]
+            pub struct MapperConfig {
+                pub device: DeviceConfig,
+            }
+
+            #[derive(Debug, ::facet::Facet)]
+            #[facet(type_tag = "config_group")]
+            pub struct DeviceConfig {
+                pub id: OptionalConfig<String>,
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
     fn nested_group_uses_parent_prefix() {
         let input: Configuration = parse_quote!(
             Test {

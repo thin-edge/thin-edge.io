@@ -10,3 +10,7 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 camino = { version = "1", features = ["serde1"] }
 thiserror = "2"
+x509-parser = "0.17"
+
+[dev-dependencies]
+tempfile = "3"

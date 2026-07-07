@@ -15,9 +15,29 @@ pub enum DefaultSpec {
     /// An optional fallback to another key in the same DTO.
     FromOptionalKey(&'static str),
 
+    /// An optional fallback computed from another key's resolved value
+    ///
+    /// The source key is resolved with defaults applied, then passed to
+    /// `function`. The default is absent if the source key resolves to
+    /// nothing or `function` returns `Ok(None)`; an `Err` surfaces as a
+    /// [ConfigError::DerivedValue] naming the key, source and reason.
+    ///
+    /// The function only runs when the key is read, and its result is
+    /// memoized per source value for the lifetime of the registry.
+    FromKeyVia {
+        key: &'static str,
+        function: DeriveFn,
+    },
+
     /// A fallback to a key owned by the root config.
     FromRoot(&'static str),
 }
+
+/// A fallible derivation used by [DefaultSpec::FromKeyVia].
+pub type DeriveFn = fn(&str) -> Result<Option<String>, String>;
+
+/// Memoized [DefaultSpec::FromKeyVia] results, keyed by (field key, source value).
+type DerivedCache = std::collections::HashMap<(String, String), Result<Option<String>, String>>;
 
 /// Associates a config key with its defaulting rule.
 pub struct FieldDefault {
@@ -28,6 +48,7 @@ pub struct FieldDefault {
 /// Defaulting rules for one config schema.
 pub struct DefaultsRegistry {
     defaults: Vec<FieldDefault>,
+    derived: std::sync::Mutex<DerivedCache>,
 }
 
 /// Callback used by mounted configs to read fallback values from the root config.
@@ -41,23 +62,32 @@ pub struct EnvOverrides {
 impl DefaultsRegistry {
     /// Creates a registry and rejects impossible required fallback chains.
     pub fn new(defaults: Vec<FieldDefault>) -> Result<Self, String> {
-        let registry = Self { defaults };
+        let registry = Self {
+            defaults,
+            derived: <_>::default(),
+        };
         registry.validate()?;
         Ok(registry)
     }
 
-    pub fn get(&self, key: &str) -> Option<&DefaultSpec> {
-        self.defaults.iter().find(|d| d.key == key).map(|d| &d.spec)
+    /// Runs a [DefaultSpec::FromKeyVia] derivation, memoizing the result
+    /// (including failures) per source value
+    fn derive(
+        &self,
+        field_key: &str,
+        source_value: &str,
+        function: DeriveFn,
+    ) -> Result<Option<String>, String> {
+        self.derived
+            .lock()
+            .unwrap()
+            .entry((field_key.to_owned(), source_value.to_owned()))
+            .or_insert_with(|| function(source_value))
+            .clone()
     }
 
-    pub fn root_defaults(&self) -> Vec<(&str, &str)> {
-        self.defaults
-            .iter()
-            .filter_map(|d| match &d.spec {
-                DefaultSpec::FromRoot(root_key) => Some((d.key, *root_key)),
-                _ => None,
-            })
-            .collect()
+    pub fn get(&self, key: &str) -> Option<&DefaultSpec> {
+        self.defaults.iter().find(|d| d.key == key).map(|d| &d.spec)
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -81,7 +111,11 @@ impl DefaultsRegistry {
         match self.get(key) {
             Some(DefaultSpec::Value(_) | DefaultSpec::Function(_)) => true,
             Some(DefaultSpec::FromKey(source)) => self.is_resolvable(source, depth + 1),
-            Some(DefaultSpec::FromOptionalKey(_) | DefaultSpec::FromRoot(_)) => true,
+            Some(
+                DefaultSpec::FromOptionalKey(_)
+                | DefaultSpec::FromRoot(_)
+                | DefaultSpec::FromKeyVia { .. },
+            ) => true,
             None => false,
         }
     }
@@ -269,6 +303,31 @@ fn config_get_with_defaults_inner<T: for<'a> Facet<'a>>(
         DefaultSpec::FromOptionalKey(source_key) => {
             config_get_with_defaults_inner(dto, source_key, defaults, root_resolver, depth + 1)
         }
+        DefaultSpec::FromKeyVia {
+            key: source_key,
+            function,
+        } => {
+            let resolved = config_get_with_defaults_inner(
+                dto,
+                source_key,
+                defaults,
+                root_resolver,
+                depth + 1,
+            )?;
+            match resolved {
+                None => Ok(None),
+                Some(source_value) => {
+                    defaults
+                        .derive(key, &source_value, *function)
+                        .map_err(|reason| ConfigError::DerivedValue {
+                            key: key.to_owned(),
+                            source_key: source_key.to_string(),
+                            source_value,
+                            reason,
+                        })
+                }
+            }
+        }
         DefaultSpec::FromRoot(root_key) => Ok(root_resolver.and_then(|resolve| resolve(root_key))),
     }
 }
@@ -317,6 +376,115 @@ fn resolve_recursive(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Debug, Default, facet::Facet)]
+    struct ViaDto {
+        source: Option<String>,
+        derived: Option<String>,
+    }
+
+    #[test]
+    fn from_key_via_derives_value_from_source_key() {
+        let defaults = from_key_via_defaults(uppercased);
+        let dto = ViaDto {
+            source: Some("my-device".into()),
+            ..<_>::default()
+        };
+        assert_eq!(
+            config_get_with_defaults(&dto, "derived", &defaults, None).unwrap(),
+            Some("MY-DEVICE".into())
+        );
+    }
+
+    #[test]
+    fn from_key_via_resolves_source_through_its_own_default() {
+        let defaults = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "source",
+                spec: DefaultSpec::Value("fallback".into()),
+            },
+            FieldDefault {
+                key: "derived",
+                spec: DefaultSpec::FromKeyVia {
+                    key: "source",
+                    function: uppercased,
+                },
+            },
+        ])
+        .unwrap();
+        let dto = ViaDto::default();
+        assert_eq!(
+            config_get_with_defaults(&dto, "derived", &defaults, None).unwrap(),
+            Some("FALLBACK".into())
+        );
+    }
+
+    #[test]
+    fn from_key_via_is_unset_when_source_key_is_unset() {
+        let defaults = from_key_via_defaults(uppercased);
+        let dto = ViaDto::default();
+        assert_eq!(
+            config_get_with_defaults(&dto, "derived", &defaults, None).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn from_key_via_is_unset_when_function_returns_none() {
+        let defaults = from_key_via_defaults(|_| Ok(None));
+        let dto = ViaDto {
+            source: Some("my-device".into()),
+            ..<_>::default()
+        };
+        assert_eq!(
+            config_get_with_defaults(&dto, "derived", &defaults, None).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn from_key_via_failure_names_the_key_source_and_reason() {
+        let defaults = from_key_via_defaults(|_| Err("file is not a certificate".into()));
+        let dto = ViaDto {
+            source: Some("/etc/tedge/cert.pem".into()),
+            ..<_>::default()
+        };
+        let err = config_get_with_defaults(&dto, "derived", &defaults, None).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Failed to derive a value for 'derived' from source '/etc/tedge/cert.pem': file is not a certificate"
+        );
+    }
+
+    #[test]
+    fn from_key_via_function_runs_once_per_source_value() {
+        let defaults = from_key_via_defaults(counted);
+        let dto = ViaDto {
+            source: Some("my-device".into()),
+            ..<_>::default()
+        };
+        CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
+        for _ in 0..3 {
+            assert_eq!(
+                config_get_with_defaults(&dto, "derived", &defaults, None).unwrap(),
+                Some("MY-DEVICE".into())
+            );
+        }
+        assert_eq!(CALLS.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn explicitly_set_value_wins_over_from_key_via_default() {
+        let defaults = from_key_via_defaults(uppercased);
+        let dto = ViaDto {
+            source: Some("my-device".into()),
+            derived: Some("explicit".into()),
+        };
+        assert_eq!(
+            config_get_with_defaults(&dto, "derived", &defaults, None).unwrap(),
+            Some("explicit".into())
+        );
+    }
 
     #[test]
     fn resolve_env_key_maps_underscore_to_dot_separator() {
@@ -367,6 +535,28 @@ mod tests {
         let raw = "a_b_c_d_e_f_g_h_i_j_k_l_m_n_o_p_q_r_s_t_u_v_w_x_y_z";
         let keys = vec!["not.a.match".into()];
         assert_eq!(resolve_env_key_or_timeout(raw, &keys), None);
+    }
+
+    fn from_key_via_defaults(function: DeriveFn) -> DefaultsRegistry {
+        DefaultsRegistry::new(vec![FieldDefault {
+            key: "derived",
+            spec: DefaultSpec::FromKeyVia {
+                key: "source",
+                function,
+            },
+        }])
+        .unwrap()
+    }
+
+    fn uppercased(value: &str) -> Result<Option<String>, String> {
+        Ok(Some(value.to_uppercase()))
+    }
+
+    static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    fn counted(value: &str) -> Result<Option<String>, String> {
+        CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        uppercased(value)
     }
 
     fn resolve_env_key_or_timeout(raw: &str, keys: &[String]) -> Option<String> {

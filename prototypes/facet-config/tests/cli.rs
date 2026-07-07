@@ -1127,6 +1127,142 @@ mod env_var_suppression {
     }
 }
 
+mod device_id_from_certificate {
+    use super::*;
+
+    const CERT_CN_DEVICE_UNDER_TEST: &str = "-----BEGIN CERTIFICATE-----
+MIIBjDCCATOgAwIBAgIUeA8Gov/Qu/raEF5ttAE+NSERsHAwCgYIKoZIzj0EAwIw
+HDEaMBgGA1UEAwwRZGV2aWNlLXVuZGVyLXRlc3QwHhcNMjYwNzA3MTQyNDIyWhcN
+MzYwNzA0MTQyNDIyWjAcMRowGAYDVQQDDBFkZXZpY2UtdW5kZXItdGVzdDBZMBMG
+ByqGSM49AgEGCCqGSM49AwEHA0IABNpkLrT4jun6Lcd5XvXpkd529zKlAuEG9zyJ
+hDM6QTCTH38/vvTZ8o3rFhms4CwiQZU8pBq5d8vnDdhYDjAa4omjUzBRMB0GA1Ud
+DgQWBBR4BM4tMqXLEaw+K9+Cuu+/ZgP38DAfBgNVHSMEGDAWgBR4BM4tMqXLEaw+
+K9+Cuu+/ZgP38DAPBgNVHRMBAf8EBTADAQH/MAoGCCqGSM49BAMCA0cAMEQCIFuT
+2xfkDVMUKSrTY/34TUZz0DcXKZ/xh++BjwvH80lcAiA03/aYoiuk5QPaAtzZA+7s
+1pkrKODGEA7ma2HoeqqdRA==
+-----END CERTIFICATE-----
+";
+
+    const CERT_CN_ALTERNATIVE_DEVICE: &str = "-----BEGIN CERTIFICATE-----
+MIIBjzCCATWgAwIBAgIUFfvw5yHm3pbxNEnwGJX+y419brEwCgYIKoZIzj0EAwIw
+HTEbMBkGA1UEAwwSYWx0ZXJuYXRpdmUtZGV2aWNlMB4XDTI2MDcwNzE0MjQyMloX
+DTM2MDcwNDE0MjQyMlowHTEbMBkGA1UEAwwSYWx0ZXJuYXRpdmUtZGV2aWNlMFkw
+EwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEbQmsgw72WqAtse6SqirvdX1ZjLwiVAJ0
+bRvOiqHnvrp/fzk+mA+n1g3WQEGypbpqeO1lj9FsOpS7ZAvJVqZA56NTMFEwHQYD
+VR0OBBYEFKNxvU4CUfLmgtR+lmM4mXr+L0keMB8GA1UdIwQYMBaAFKNxvU4CUfLm
+gtR+lmM4mXr+L0keMA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDSAAwRQIh
+ALHolJYqVzgoAFCYNjTFXwH45/pBV/6X2Zm32tTLShKLAiAyhaDGhhhZP8fnCJEh
+4TI7a2S8iniQoyC5dju8ga4bpA==
+-----END CERTIFICATE-----
+";
+
+    #[test]
+    fn device_id_defaults_to_certificate_common_name() {
+        let env = TestEnv::new();
+        write_default_certificate(&env, CERT_CN_DEVICE_UNDER_TEST);
+        env.cmd()
+            .args(["get", "device.id"])
+            .assert()
+            .success()
+            .stdout("device-under-test\n");
+    }
+
+    #[test]
+    fn set_device_id_overrides_certificate_common_name() {
+        let env = TestEnv::new();
+        write_default_certificate(&env, CERT_CN_DEVICE_UNDER_TEST);
+        env.cmd()
+            .args(["set", "device.id", "explicit-id"])
+            .assert()
+            .success();
+        env.cmd()
+            .args(["get", "device.id"])
+            .assert()
+            .success()
+            .stdout("explicit-id\n");
+    }
+
+    #[test]
+    fn device_id_follows_configured_cert_path() {
+        let env = TestEnv::new();
+        write_default_certificate(&env, CERT_CN_DEVICE_UNDER_TEST);
+        let other_cert = env.config_dir().join("other-cert.pem");
+        std::fs::write(&other_cert, CERT_CN_ALTERNATIVE_DEVICE).unwrap();
+        env.cmd()
+            .args(["set", "device.cert_path", other_cert.to_str().unwrap()])
+            .assert()
+            .success();
+        env.cmd()
+            .args(["get", "device.id"])
+            .assert()
+            .success()
+            .stdout("alternative-device\n");
+    }
+
+    #[test]
+    fn device_id_is_unset_when_certificate_is_missing() {
+        TestEnv::new()
+            .cmd()
+            .args(["get", "device.id"])
+            .assert()
+            .failure();
+    }
+
+    #[test]
+    fn invalid_certificate_reports_key_source_and_reason() {
+        let env = TestEnv::new();
+        write_default_certificate(&env, "not a certificate");
+        env.cmd()
+            .args(["get", "device.id"])
+            .assert()
+            .failure()
+            .stderr(
+                predicates::str::contains("Failed to derive a value for 'device.id'")
+                    .and(predicates::str::contains("device.cert_path"))
+                    .and(predicates::str::contains("not a PEM certificate")),
+            );
+    }
+
+    #[test]
+    fn mapper_device_id_defaults_to_mapper_certificate_common_name() {
+        let env = TestEnv::new();
+        env.write_mapper_toml("c8y", "");
+        let cert = env.config_dir().join("c8y-cert.pem");
+        std::fs::write(&cert, CERT_CN_ALTERNATIVE_DEVICE).unwrap();
+        env.cmd()
+            .args([
+                "set",
+                "mappers.c8y.device.cert_path",
+                cert.to_str().unwrap(),
+            ])
+            .assert()
+            .success();
+        env.cmd()
+            .args(["get", "mappers.c8y.device.id"])
+            .assert()
+            .success()
+            .stdout("alternative-device\n");
+    }
+
+    #[test]
+    fn mapper_device_id_falls_back_to_root_certificate() {
+        let env = TestEnv::new();
+        env.write_mapper_toml("c8y", "");
+        write_default_certificate(&env, CERT_CN_DEVICE_UNDER_TEST);
+        env.cmd()
+            .args(["get", "mappers.c8y.device.id"])
+            .assert()
+            .success()
+            .stdout("device-under-test\n");
+    }
+
+    fn write_default_certificate(env: &TestEnv, contents: &str) {
+        let certs_dir = env.config_dir().join("device-certs");
+        std::fs::create_dir_all(&certs_dir).unwrap();
+        std::fs::write(certs_dir.join("tedge-certificate.pem"), contents).unwrap();
+    }
+}
+
 struct TestEnv {
     dir: TempDir,
     envs: Vec<(String, String)>,

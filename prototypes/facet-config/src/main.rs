@@ -542,7 +542,13 @@ mod tests {
             keys.sort();
             pretty_assertions::assert_eq!(
                 keys,
-                vec!["cloud_type", "device.cert_path", "device.key_path", "url",]
+                vec![
+                    "cloud_type",
+                    "device.cert_path",
+                    "device.id",
+                    "device.key_path",
+                    "url",
+                ]
             );
         }
 
@@ -1216,8 +1222,8 @@ mod tests {
                 .build_reader(
                     &dto,
                     Some(&|key| match key {
-                        "device.cert_path" => Some("/root/cert.pem".into()),
-                        "device.key_path" => Some("/root/key.pem".into()),
+                        "device.cert_path" => Some("/nonexistent/root/cert.pem".into()),
+                        "device.key_path" => Some("/nonexistent/root/key.pem".into()),
                         _ => None,
                     }),
                     "",
@@ -1226,11 +1232,11 @@ mod tests {
 
             assert_eq!(
                 config.device.cert_path.or_none().unwrap().as_str(),
-                "/root/cert.pem"
+                "/nonexistent/root/cert.pem"
             );
             assert_eq!(
                 config.device.key_path.or_none().unwrap().as_str(),
-                "/root/key.pem"
+                "/nonexistent/root/key.pem"
             );
         }
 
@@ -1244,8 +1250,8 @@ mod tests {
                 .build_reader(
                     &dto,
                     Some(&|key| match key {
-                        "device.cert_path" => Some("/root/cert.pem".into()),
-                        "device.key_path" => Some("/root/key.pem".into()),
+                        "device.cert_path" => Some("/nonexistent/root/cert.pem".into()),
+                        "device.key_path" => Some("/nonexistent/root/key.pem".into()),
                         _ => None,
                     }),
                     "",
@@ -1258,7 +1264,7 @@ mod tests {
             );
             assert_eq!(
                 config.device.key_path.or_none().unwrap().as_str(),
-                "/root/key.pem"
+                "/nonexistent/root/key.pem"
             );
         }
 
@@ -1298,8 +1304,8 @@ mod tests {
                 .build_reader(
                     &dto,
                     Some(&|key| match key {
-                        "device.cert_path" => Some("/root/cert.pem".into()),
-                        "device.key_path" => Some("/root/key.pem".into()),
+                        "device.cert_path" => Some("/nonexistent/root/cert.pem".into()),
+                        "device.key_path" => Some("/nonexistent/root/key.pem".into()),
                         _ => None,
                     }),
                     "",
@@ -1308,11 +1314,11 @@ mod tests {
 
             assert_eq!(
                 config.device.cert_path.or_none().unwrap().as_str(),
-                "/root/cert.pem"
+                "/nonexistent/root/cert.pem"
             );
             assert_eq!(
                 config.device.key_path.or_none().unwrap().as_str(),
-                "/root/key.pem"
+                "/nonexistent/root/key.pem"
             );
         }
 
@@ -1420,15 +1426,19 @@ mod tests {
         }
     }
 
+    // A config dir that never exists on the host, so defaults derived from
+    // files (such as device.id from the certificate) stay unset in tests
+    const TEST_CONFIG_DIR: &str = "/nonexistent/tedge";
+
     fn root_mgr() -> facet_config_runtime::ConfigManager {
-        tedge_config::config_manager(Path::new("/etc/tedge"))
+        tedge_config::config_manager(Path::new(TEST_CONFIG_DIR))
     }
 
     fn mapper_mgr() -> facet_config_runtime::ConfigManager {
-        mapper_config::config_manager(Path::new("/etc/tedge"))
+        mapper_config::config_manager(Path::new(TEST_CONFIG_DIR))
     }
 
     fn c8y_mgr() -> facet_config_runtime::ConfigManager {
-        mapper_config::c8y::config_manager(Path::new("/etc/tedge"))
+        mapper_config::c8y::config_manager(Path::new(TEST_CONFIG_DIR))
     }
 }

@@ -22,6 +22,13 @@ facet_config_macro::define_config! {
         },
 
         device: {
+            /// Unique device identifier for this mapper
+            #[tedge_config(default(from_key_via(
+                key = "device.cert_path",
+                function = "certificate_common_name"
+            )))]
+            id: String,
+
             /// Path to the device certificate
             #[tedge_config(default(from_root = "device.cert_path"))]
             cert_path: camino::Utf8PathBuf,

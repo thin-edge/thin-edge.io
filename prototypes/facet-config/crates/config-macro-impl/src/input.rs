@@ -52,6 +52,14 @@ pub enum FieldDefault {
     FromOptionalKey(String),
     FromConfigDir(String),
     FromRoot(String),
+    FromKeyVia(FromKeyVia),
+}
+
+/// A default derived from another key's resolved value via a function
+#[derive(Debug, FromMeta)]
+pub struct FromKeyVia {
+    pub key: String,
+    pub function: syn::Path,
 }
 
 #[derive(FromAttributes, Debug)]
@@ -306,6 +314,34 @@ mod tests {
                     _ => panic!("expected field"),
                 }
             }
+            _ => panic!("expected group"),
+        }
+    }
+
+    #[test]
+    fn parse_from_key_via_default() {
+        let config: Configuration = parse_quote!(
+            Test {
+                device: {
+                    #[tedge_config(default(from_key_via(
+                        key = "device.cert_path",
+                        function = "device_id_from_cert"
+                    )))]
+                    id: String,
+                },
+            }
+        );
+        match &config.groups[0] {
+            FieldOrGroup::Group(g) => match &g.contents[0] {
+                FieldOrGroup::Field(f) => match &f.default {
+                    Some(FieldDefault::FromKeyVia(via)) => {
+                        assert_eq!(via.key, "device.cert_path");
+                        assert!(via.function.is_ident("device_id_from_cert"));
+                    }
+                    other => panic!("expected from_key_via default, got {other:?}"),
+                },
+                _ => panic!("expected field"),
+            },
             _ => panic!("expected group"),
         }
     }

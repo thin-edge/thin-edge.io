@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use facet::Facet;
 
-use crate::defaults::EnvOverrides;
+use crate::defaults::{EnvOverrides, RootResolver};
 use crate::manager::ConfigManager;
 use crate::reflect::{ConfigError, KeyEntry};
 
@@ -17,10 +17,9 @@ pub enum Action {
 /// Object-safe boundary used to mount different DTO types in one config space.
 pub trait ConfigOps {
     fn get(&self, key: &str) -> Result<Option<String>, ConfigError>;
-    fn read(&self, key: &str) -> Result<Option<String>, ConfigError>;
+    fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError>;
     fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError>;
     fn entries(&self) -> Vec<KeyEntry>;
-    fn root_defaults(&self) -> Vec<(&str, &str)>;
 }
 
 /// File-backed config operations for a single concrete DTO type.
@@ -106,8 +105,8 @@ where
         self.manager.get(&self.dto, key)
     }
 
-    fn read(&self, key: &str) -> Result<Option<String>, ConfigError> {
-        self.manager.read(&self.dto, key)
+    fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError> {
+        self.manager.read_with_root(&self.dto, key, root)
     }
 
     fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError> {
@@ -123,10 +122,6 @@ where
 
     fn entries(&self) -> Vec<KeyEntry> {
         self.manager.key_entries::<T>()
-    }
-
-    fn root_defaults(&self) -> Vec<(&str, &str)> {
-        self.manager.defaults().root_defaults()
     }
 }
 

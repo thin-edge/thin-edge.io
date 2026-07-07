@@ -19,6 +19,13 @@ pub enum ConfigError {
     ParseError(String),
     #[error("Config key '{0}' is read-only")]
     ReadOnly(String),
+    #[error("Failed to derive a value for '{key}' from {source_key} '{source_value}': {reason}")]
+    DerivedValue {
+        key: String,
+        source_key: String,
+        source_value: String,
+        reason: String,
+    },
     #[error("Reflection error: {0}")]
     ReflectError(String),
     #[error("I/O error: {0}")]

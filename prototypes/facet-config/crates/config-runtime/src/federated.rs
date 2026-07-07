@@ -46,21 +46,20 @@ impl FederatedConfig {
     /// Reads the effective value, including defaults that may fall back to root config.
     pub fn read(&self, full_key: &str) -> Result<Option<String>, ConfigError> {
         let (mount, local_key) = self.route(full_key)?;
-        let value = mount
+        let root_mount = self.root_mount();
+        let resolve_root =
+            |key: &str| root_mount.and_then(|m| m.source.read(key, None).ok().flatten());
+        // The root config has no `from_root` defaults of its own, so it
+        // never needs (and must not recurse into) a root resolver
+        let resolver = if mount.prefix.is_empty() {
+            None
+        } else {
+            Some(&resolve_root as &dyn Fn(&str) -> Option<String>)
+        };
+        mount
             .source
-            .read(&local_key)
-            .map_err(|e| self.contextualize(full_key, e))?;
-        if value.is_some() {
-            return Ok(value);
-        }
-        for (local, root_key) in mount.source.root_defaults() {
-            if local == local_key {
-                if let Some(root_mount) = self.root_mount() {
-                    return root_mount.source.read(root_key);
-                }
-            }
-        }
-        Ok(None)
+            .read(&local_key, resolver)
+            .map_err(|e| self.contextualize(full_key, e))
     }
 
     /// Routes a write operation to the mounted source and persists that source.

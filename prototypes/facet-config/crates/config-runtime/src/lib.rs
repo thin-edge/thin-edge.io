@@ -8,6 +8,7 @@
 //! connector configs mounted below keys like `mappers.c8y.*`.
 
 mod append_remove;
+mod cert;
 mod defaults;
 mod host_port;
 mod manager;
@@ -23,7 +24,10 @@ pub mod federated;
 pub mod ops;
 
 pub use append_remove::{register_append_remove, AppendRemoveItem, AppendRemoveRegistry};
-pub use defaults::{DefaultSpec, DefaultsRegistry, EnvOverrides, FieldDefault, RootResolver};
+pub use cert::certificate_common_name;
+pub use defaults::{
+    DefaultSpec, DefaultsRegistry, DeriveFn, EnvOverrides, FieldDefault, RootResolver,
+};
 pub use host_port::{HostPort, ParseHostPortError, HTTPS_PORT};
 pub use manager::ConfigManager;
 pub use optional::{ConfigNotSet, OptionalConfig};
