@@ -99,15 +99,12 @@ fn collect_defaults(
                             let source = &via.key;
                             let function = &via.function;
                             let ty = &f.ty;
-                            // The function returns the field's own type; the
-                            // adapter stringifies it for the defaults engine.
-                            // Spanning the typed binding at the function path
-                            // reports a wrong return type against the attribute
+                            // The function returns the field's own type;
+                            // `derive_to_string` stringifies it for the
+                            // defaults engine and, being fully typed, reports
+                            // a wrong function signature against the attribute
                             let adapter = quote_spanned! {function.span()=>
-                                |source: &str| {
-                                    let derived: Option<#ty> = #function(source)?;
-                                    Ok(derived.map(|value| value.to_string()))
-                                }
+                                |source: &str| derive_to_string::<#ty>(#function, source)
                             };
                             quote! {
                                 FieldDefault {
@@ -465,10 +462,7 @@ mod tests {
                         key: "device.id",
                         spec: DefaultSpec::FromKeyVia {
                             key: "device.cert_path",
-                            function: |source: &str| {
-                                let derived: Option<String> = device_id_from_cert(source)?;
-                                Ok(derived.map(|value| value.to_string()))
-                            },
+                            function: |source: &str| derive_to_string::<String>(device_id_from_cert, source),
                         },
                     },
                 ])
@@ -499,10 +493,7 @@ mod tests {
                         key: "mqtt.external_port",
                         spec: DefaultSpec::FromKeyVia {
                             key: "mqtt.port",
-                            function: |source: &str| {
-                                let derived: Option<u16> = external_port(source)?;
-                                Ok(derived.map(|value| value.to_string()))
-                            },
+                            function: |source: &str| derive_to_string::<u16>(external_port, source),
                         },
                     },
                 ])

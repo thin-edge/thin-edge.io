@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use facet::Facet;
 
-use crate::defaults::{EnvOverrides, RootResolver};
+use crate::defaults::{EnvOverrides, RootDependency, RootResolver};
 use crate::manager::ConfigManager;
 use crate::reflect::{ConfigError, KeyEntry};
 
@@ -20,6 +20,8 @@ pub trait ConfigOps {
     fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError>;
     fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError>;
     fn entries(&self) -> Vec<KeyEntry>;
+    /// The `from_root` references this source's schema declares.
+    fn root_dependencies(&self) -> Vec<RootDependency>;
 }
 
 /// File-backed config operations for a single concrete DTO type.
@@ -122,6 +124,10 @@ where
 
     fn entries(&self) -> Vec<KeyEntry> {
         self.manager.key_entries::<T>()
+    }
+
+    fn root_dependencies(&self) -> Vec<RootDependency> {
+        self.manager.root_dependencies()
     }
 }
 

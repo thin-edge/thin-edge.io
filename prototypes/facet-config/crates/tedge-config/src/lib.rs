@@ -22,6 +22,10 @@ facet_config_macro::define_config! {
             /// Path to the device private key
             #[tedge_config(default(from_config_dir = "device-certs/tedge-private-key.pem"))]
             key_path: camino::Utf8PathBuf,
+
+            /// A port
+            #[tedge_config(default(value = "1738"))]
+            port: u16,
         },
 
         mqtt: {

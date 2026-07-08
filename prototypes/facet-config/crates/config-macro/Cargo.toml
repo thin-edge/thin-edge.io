@@ -13,3 +13,4 @@ facet-config-macro-impl = { path = "../config-macro-impl" }
 facet-config-runtime = { path = "../config-runtime" }
 facet = { version = "0.50.0-rc.5", features = ["camino", "net", "nonzero"] }
 serde = { version = "1", features = ["derive"] }
+trybuild = "1"

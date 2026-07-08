@@ -36,6 +36,18 @@ pub enum DefaultSpec {
 /// A fallible derivation used by [DefaultSpec::FromKeyVia].
 pub type DeriveFn = fn(&str) -> Result<Option<String>, String>;
 
+/// Calls a typed derivation and stringifies its value for the defaults engine
+///
+/// `define_config!` routes `from_key_via` functions through this, so a
+/// function with the wrong return type fails to compile with an error
+/// stating the expected signature
+pub fn derive_to_string<T: std::fmt::Display>(
+    function: fn(&str) -> Result<Option<T>, String>,
+    source: &str,
+) -> Result<Option<String>, String> {
+    Ok(function(source)?.map(|value| value.to_string()))
+}
+
 /// Memoized [DefaultSpec::FromKeyVia] results, keyed by (field key, source value).
 type DerivedCache = std::collections::HashMap<(String, String), Result<Option<String>, String>>;
 
@@ -52,7 +64,38 @@ pub struct DefaultsRegistry {
 }
 
 /// Callback used by mounted configs to read fallback values from the root config.
-pub type RootResolver<'a> = Option<&'a dyn Fn(&str) -> Option<String>>;
+///
+/// Resolution is fallible so that a broken `from_root` reference surfaces as
+/// an error instead of silently reading as unset.
+pub type RootResolver<'a> = Option<&'a dyn Fn(&str) -> Result<Option<String>, ConfigError>>;
+
+/// A `from_root` reference declared by a config schema: `key` in the mounted
+/// config falls back to `root_key` in the root config.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RootDependency {
+    pub key: &'static str,
+    pub root_key: &'static str,
+}
+
+/// Rejects `from_root` references to keys the root config does not define
+///
+/// `display_prefix` (such as `mappers.c8y.`) is prepended to the offending
+/// key in the error so it names the full user-facing key
+pub fn validate_root_dependencies(
+    dependencies: &[RootDependency],
+    root_keys: &[String],
+    display_prefix: &str,
+) -> Result<(), ConfigError> {
+    for dep in dependencies {
+        if !root_keys.iter().any(|k| k == dep.root_key) {
+            return Err(ConfigError::UnknownRootKey {
+                key: format!("{display_prefix}{}", dep.key),
+                root_key: dep.root_key.to_owned(),
+            });
+        }
+    }
+    Ok(())
+}
 
 /// Environment variables captured as data before being applied to a config DTO.
 pub struct EnvOverrides {
@@ -88,6 +131,20 @@ impl DefaultsRegistry {
 
     pub fn get(&self, key: &str) -> Option<&DefaultSpec> {
         self.defaults.iter().find(|d| d.key == key).map(|d| &d.spec)
+    }
+
+    /// Returns the `from_root` references this schema declares
+    pub fn root_dependencies(&self) -> Vec<RootDependency> {
+        self.defaults
+            .iter()
+            .filter_map(|d| match d.spec {
+                DefaultSpec::FromRoot(root_key) => Some(RootDependency {
+                    key: d.key,
+                    root_key,
+                }),
+                _ => None,
+            })
+            .collect()
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -328,7 +385,13 @@ fn config_get_with_defaults_inner<T: for<'a> Facet<'a>>(
                 }
             }
         }
-        DefaultSpec::FromRoot(root_key) => Ok(root_resolver.and_then(|resolve| resolve(root_key))),
+        DefaultSpec::FromRoot(root_key) => match root_resolver {
+            Some(resolve) => resolve(root_key),
+            None => Err(ConfigError::NoRootConfig {
+                key: key.to_owned(),
+                root_key: (*root_key).to_owned(),
+            }),
+        },
     }
 }
 
@@ -381,6 +444,11 @@ mod tests {
     struct ViaDto {
         source: Option<String>,
         derived: Option<String>,
+    }
+
+    #[derive(Debug, Default, facet::Facet)]
+    struct RootFallbackDto {
+        cert: Option<String>,
     }
 
     #[test]
@@ -487,6 +555,98 @@ mod tests {
     }
 
     #[test]
+    fn from_root_resolves_through_the_root_resolver() {
+        let defaults = from_root_defaults();
+        let dto = RootFallbackDto::default();
+        let resolve = |key: &str| {
+            assert_eq!(key, "device.cert_path");
+            Ok(Some("/root/cert.pem".into()))
+        };
+        assert_eq!(
+            config_get_with_defaults(&dto, "cert", &defaults, Some(&resolve)).unwrap(),
+            Some("/root/cert.pem".into())
+        );
+    }
+
+    #[test]
+    fn from_root_without_root_config_is_an_error() {
+        let defaults = from_root_defaults();
+        let dto = RootFallbackDto::default();
+        let err = config_get_with_defaults(&dto, "cert", &defaults, None).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "'cert' can fall back to the root config key 'device.cert_path', but no root config was supplied"
+        );
+    }
+
+    #[test]
+    fn from_root_resolver_errors_propagate() {
+        let defaults = from_root_defaults();
+        let dto = RootFallbackDto::default();
+        let resolve = |key: &str| Err(ConfigError::UnknownKey(key.to_owned()));
+        let err = config_get_with_defaults(&dto, "cert", &defaults, Some(&resolve)).unwrap_err();
+        assert!(matches!(err, ConfigError::UnknownKey(key) if key == "device.cert_path"));
+    }
+
+    #[test]
+    fn explicitly_set_value_needs_no_root_config() {
+        let defaults = from_root_defaults();
+        let dto = RootFallbackDto {
+            cert: Some("/local/cert.pem".into()),
+        };
+        assert_eq!(
+            config_get_with_defaults(&dto, "cert", &defaults, None).unwrap(),
+            Some("/local/cert.pem".into())
+        );
+    }
+
+    #[test]
+    fn root_dependencies_lists_only_from_root_specs() {
+        let defaults = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "cert",
+                spec: DefaultSpec::FromRoot("device.cert_path"),
+            },
+            FieldDefault {
+                key: "port",
+                spec: DefaultSpec::Value("1883".into()),
+            },
+        ])
+        .unwrap();
+        assert_eq!(
+            defaults.root_dependencies(),
+            vec![RootDependency {
+                key: "cert",
+                root_key: "device.cert_path",
+            }]
+        );
+    }
+
+    #[test]
+    fn validate_root_dependencies_rejects_unknown_root_key() {
+        let deps = [RootDependency {
+            key: "device.cert_path",
+            root_key: "device.certificate_path",
+        }];
+        let root_keys = vec!["device.cert_path".to_owned(), "device.id".to_owned()];
+        let err = validate_root_dependencies(&deps, &root_keys, "mappers.c8y.").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "'mappers.c8y.device.cert_path' falls back to 'device.certificate_path', which is not a key in the root config"
+        );
+    }
+
+    #[test]
+    fn validate_root_dependencies_accepts_known_root_keys() {
+        let deps = [RootDependency {
+            key: "device.cert_path",
+            root_key: "device.cert_path",
+        }];
+        let root_keys = vec!["device.cert_path".to_owned()];
+        assert!(validate_root_dependencies(&deps, &root_keys, "mappers.c8y.").is_ok());
+    }
+
+    #[test]
     fn resolve_env_key_maps_underscore_to_dot_separator() {
         let keys = vec!["mqtt.port".into(), "mqtt.host".into()];
         assert_eq!(
@@ -535,6 +695,14 @@ mod tests {
         let raw = "a_b_c_d_e_f_g_h_i_j_k_l_m_n_o_p_q_r_s_t_u_v_w_x_y_z";
         let keys = vec!["not.a.match".into()];
         assert_eq!(resolve_env_key_or_timeout(raw, &keys), None);
+    }
+
+    fn from_root_defaults() -> DefaultsRegistry {
+        DefaultsRegistry::new(vec![FieldDefault {
+            key: "cert",
+            spec: DefaultSpec::FromRoot("device.cert_path"),
+        }])
+        .unwrap()
     }
 
     fn from_key_via_defaults(function: DeriveFn) -> DefaultsRegistry {

@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::defaults::{validate_root_dependencies, RootResolver};
 use crate::ops::{Action, ConfigOps};
 use crate::reflect::{ConfigError, KeyEntry};
 
@@ -25,13 +26,38 @@ impl FederatedConfig {
     }
 
     /// Adds a source under `prefix`; longer prefixes are matched first.
-    pub fn mount(&mut self, prefix: &str, source: Box<dyn ConfigOps>) {
+    ///
+    /// A source using `from_root` defaults can only be mounted once the root
+    /// config (empty prefix) is mounted, and every `from_root` reference is
+    /// checked against the root config's keys, so a schema referencing a
+    /// nonexistent root key is a mount-time error rather than a value that
+    /// silently reads as unset.
+    pub fn mount(&mut self, prefix: &str, source: Box<dyn ConfigOps>) -> Result<(), ConfigError> {
+        let dependencies = source.root_dependencies();
+        if prefix.is_empty() {
+            if let Some(dep) = dependencies.first() {
+                return Err(ConfigError::FromRootInRootConfig {
+                    key: dep.key.to_owned(),
+                    root_key: dep.root_key.to_owned(),
+                });
+            }
+        } else if let Some(dep) = dependencies.first() {
+            let Some(root) = self.root_mount() else {
+                return Err(ConfigError::NoRootConfig {
+                    key: format!("{prefix}{}", dep.key),
+                    root_key: dep.root_key.to_owned(),
+                });
+            };
+            let root_keys: Vec<String> = root.source.entries().into_iter().map(|e| e.key).collect();
+            validate_root_dependencies(&dependencies, &root_keys, prefix)?;
+        }
         self.mounts.push(ConfigMount {
             prefix: prefix.to_owned(),
             source,
         });
         self.mounts
             .sort_by(|a, b| b.prefix.len().cmp(&a.prefix.len()));
+        Ok(())
     }
 
     /// Reads values explicitly set in the mounted source.
@@ -47,14 +73,18 @@ impl FederatedConfig {
     pub fn read(&self, full_key: &str) -> Result<Option<String>, ConfigError> {
         let (mount, local_key) = self.route(full_key)?;
         let root_mount = self.root_mount();
-        let resolve_root =
-            |key: &str| root_mount.and_then(|m| m.source.read(key, None).ok().flatten());
-        // The root config has no `from_root` defaults of its own, so it
-        // never needs (and must not recurse into) a root resolver
-        let resolver = if mount.prefix.is_empty() {
+        let resolve_root = |key: &str| match root_mount {
+            Some(m) => m.source.read(key, None),
+            None => Ok(None),
+        };
+        // The root config has no `from_root` defaults of its own (mount
+        // rejects them), so it never needs (and must not recurse into) a
+        // root resolver. Without a root mount no resolver is offered, so a
+        // `from_root` default fails loudly instead of reading as unset.
+        let resolver: RootResolver = if mount.prefix.is_empty() || root_mount.is_none() {
             None
         } else {
-            Some(&resolve_root as &dyn Fn(&str) -> Option<String>)
+            Some(&resolve_root)
         };
         mount
             .source
@@ -152,11 +182,13 @@ fn make_unknown_key_error(key: &str, config_dir: &Path, _mounts: &[ConfigMount])
                 }
             }
             known.sort();
-            return ConfigError::UnknownMapper {
-                name: mapper_name.to_owned(),
-                mappers_dir,
-                known,
-            };
+            if !known.contains(&mapper_name.to_owned()) {
+                return ConfigError::UnknownMapper {
+                    name: mapper_name.to_owned(),
+                    mappers_dir,
+                    known,
+                };
+            }
         }
     }
     ConfigError::UnknownKey(key.to_owned())

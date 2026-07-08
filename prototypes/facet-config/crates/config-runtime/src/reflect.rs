@@ -26,6 +26,14 @@ pub enum ConfigError {
         source_value: String,
         reason: String,
     },
+    #[error("'{key}' can fall back to the root config key '{root_key}', but no root config was supplied")]
+    NoRootConfig { key: String, root_key: String },
+    #[error("'{key}' falls back to '{root_key}', which is not a key in the root config")]
+    UnknownRootKey { key: String, root_key: String },
+    #[error(
+        "The root config cannot use from_root defaults, but '{key}' falls back to '{root_key}'"
+    )]
+    FromRootInRootConfig { key: String, root_key: String },
     #[error("Reflection error: {0}")]
     ReflectError(String),
     #[error("I/O error: {0}")]

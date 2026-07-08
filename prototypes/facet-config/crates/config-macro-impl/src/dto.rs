@@ -92,32 +92,11 @@ fn generate_group(group: &ConfigGroup, parent_prefix: &str) -> (TokenStream, Vec
     let mut nested_structs = Vec::new();
     let fields = generate_group_fields(&group.contents, &child_prefix, &mut nested_structs);
 
-    let mut all_fields: Vec<TokenStream> = fields;
-
-    if group.multi {
-        let profile_name = format!("{base_name}ProfileDto");
-        let profile_ident = format_ident!("{profile_name}", span = group.ident.span());
-
-        all_fields.push(quote! {
-            #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
-            pub profiles: std::collections::HashMap<String, #profile_ident>,
-        });
-
-        let profile_fields = generate_group_fields_for_profile(&group.contents, &child_prefix);
-        nested_structs.push(quote! {
-            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
-            #[facet(type_tag = "config_group")]
-            pub struct #profile_ident {
-                #(#profile_fields)*
-            }
-        });
-    }
-
     let struct_def = quote! {
         #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
         #[facet(type_tag = "config_group")]
         pub struct #struct_ident {
-            #(#all_fields)*
+            #(#fields)*
         }
     };
 
@@ -130,31 +109,6 @@ fn generate_group(group: &ConfigGroup, parent_prefix: &str) -> (TokenStream, Vec
     };
 
     (field_token, nested_structs)
-}
-
-fn generate_group_fields_for_profile(
-    items: &syn::punctuated::Punctuated<FieldOrGroup, syn::Token![,]>,
-    parent_prefix: &str,
-) -> Vec<TokenStream> {
-    let mut fields = Vec::new();
-    for item in items {
-        match item {
-            FieldOrGroup::Field(f) => fields.push(generate_leaf_field(f)),
-            FieldOrGroup::Group(g) => {
-                let group_ident = &g.ident;
-                let base_name = struct_name_for_group(parent_prefix, &g.ident.to_string());
-                let struct_name = format!("{base_name}ConfigDto");
-                let struct_ident = format_ident!("{struct_name}", span = g.ident.span());
-                let doc_attrs = &g.doc_attrs;
-                fields.push(quote! {
-                    #(#doc_attrs)*
-                    #[serde(default, skip_serializing_if = "Option::is_none")]
-                    pub #group_ident: Option<#struct_ident>,
-                });
-            }
-        }
-    }
-    fields
 }
 
 #[cfg(test)]
@@ -347,55 +301,6 @@ mod tests {
     }
 
     #[test]
-    fn multi_group_generates_profiles_field_and_profile_struct() {
-        let input: Configuration = parse_quote!(
-            Test {
-                #[tedge_config(multi)]
-                c8y: {
-                    url: String,
-                    device: {
-                        cert_path: String,
-                    },
-                },
-            }
-        );
-        let generated = generate_dto(&input, &input.name.to_string());
-        let expected: TokenStream = parse_quote! {
-            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
-            #[facet(type_tag = "config_group")]
-            pub struct TestConfigDto {
-                #[serde(default, skip_serializing_if = "Option::is_none")]
-                pub c8y: Option<C8yConfigDto>,
-            }
-
-            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
-            #[facet(type_tag = "config_group")]
-            pub struct C8yConfigDto {
-                pub url: Option<String>,
-                #[serde(default, skip_serializing_if = "Option::is_none")]
-                pub device: Option<C8yDeviceConfigDto>,
-                #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
-                pub profiles: std::collections::HashMap<String, C8yProfileDto>,
-            }
-
-            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
-            #[facet(type_tag = "config_group")]
-            pub struct C8yDeviceConfigDto {
-                pub cert_path: Option<String>,
-            }
-
-            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
-            #[facet(type_tag = "config_group")]
-            pub struct C8yProfileDto {
-                pub url: Option<String>,
-                #[serde(default, skip_serializing_if = "Option::is_none")]
-                pub device: Option<C8yDeviceConfigDto>,
-            }
-        };
-        assert_eq(&generated, &expected);
-    }
-
-    #[test]
     fn root_struct_ident_spans_the_config_name() {
         let src = "Mapper {
     mqtt: {
@@ -423,22 +328,6 @@ mod tests {
         let expected = position_of(src, "mqtt");
         // The ident appears both as the field type and the struct definition
         assert_eq!(starts.len(), 2);
-        assert!(starts.iter().all(|start| *start == expected));
-    }
-
-    #[test]
-    fn profile_struct_ident_spans_the_group_name() {
-        let src = "Test {
-    #[tedge_config(multi)]
-    c8y: {
-        url: String,
-    },
-}";
-        let input: Configuration = syn::parse_str(src).unwrap();
-        let generated = generate_dto(&input, &input.name.to_string());
-        let starts = ident_starts(&generated, "C8yProfileDto");
-        let expected = position_of(src, "c8y");
-        assert!(!starts.is_empty());
         assert!(starts.iter().all(|start| *start == expected));
     }
 

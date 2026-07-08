@@ -417,6 +417,31 @@ mod cross_config_defaults {
     }
 
     #[test]
+    fn all_mapper_defaults_can_be_read() {
+        let env = TestEnv::new();
+        env.write_root_toml("");
+        env.write_mapper_toml("tb", "[device]");
+        let mgr = mapper_config::config_manager(env.dir.path());
+        let entries = mgr.key_entries::<mapper_config::MapperConfigDto>();
+        for entry in entries.iter().map(|e| e.key.as_str()) {
+            let assert = env
+                .cmd()
+                .args(["get", &format!("mappers.tb.{entry}")])
+                .assert();
+
+            dbg!(&entry, &assert);
+            match assert.try_success() {
+                Ok(_) => continue,
+                Err(assert) => {
+                    assert.assert().failure().stderr(format!(
+                        "Error: The value for 'mappers.tb.{entry}' is not set.\n"
+                    ));
+                }
+            }
+        }
+    }
+
+    #[test]
     fn env_device_cert_path_propagates_to_c8y() {
         let env = TestEnv::new().env("TEDGE_DEVICE_CERT_PATH", "/env/cert.pem");
         env.write_mapper_toml("c8y", "");

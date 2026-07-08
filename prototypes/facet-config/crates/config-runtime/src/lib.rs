@@ -26,7 +26,8 @@ pub mod ops;
 pub use append_remove::{register_append_remove, AppendRemoveItem, AppendRemoveRegistry};
 pub use cert::certificate_common_name;
 pub use defaults::{
-    DefaultSpec, DefaultsRegistry, DeriveFn, EnvOverrides, FieldDefault, RootResolver,
+    derive_to_string, validate_root_dependencies, DefaultSpec, DefaultsRegistry, DeriveFn,
+    EnvOverrides, FieldDefault, RootDependency, RootResolver,
 };
 pub use host_port::{HostPort, ParseHostPortError, HTTPS_PORT};
 pub use manager::ConfigManager;

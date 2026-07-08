@@ -28,6 +28,10 @@ facet_config_macro::define_config! {
             /// Path to the device private key for this mapper
             #[tedge_config(default(from_root = "device.key_path"))]
             key_path: camino::Utf8PathBuf,
+
+            ///A port
+            #[tedge_config(default(from_root = "device.port"))]
+            port: u16,
         },
     }
 }
@@ -122,8 +126,11 @@ impl CloudSchema {
         self,
         config_dir: &std::path::Path,
         name: &str,
+        root: &dyn facet_config_runtime::ops::ConfigOps,
     ) -> Result<LoadedMapper, facet_config_runtime::ConfigError> {
         let path = mapper_toml_path(config_dir, name);
+        let root_keys: Vec<String> = root.entries().into_iter().map(|e| e.key).collect();
+        let resolve_root = |key: &str| root.read(key, None);
         match self {
             Self::C8y => {
                 let mgr = c8y::config_manager(config_dir);
@@ -131,11 +138,13 @@ impl CloudSchema {
                     facet_config_runtime::ops::TypedConfigOps::<c8y::C8yMapperConfigDto>::new(
                         mgr, path,
                     )?;
+                ops.manager()
+                    .validate_root_dependencies(&root_keys, &format!("{name}."))?;
                 let config = ops
                     .manager()
                     .build_reader::<c8y::C8yMapperConfigDto, c8y::C8yMapperConfig>(
                         ops.dto(),
-                        None,
+                        Some(&resolve_root),
                         name,
                     )?;
                 Ok(LoadedMapper::C8y(config))
@@ -145,9 +154,15 @@ impl CloudSchema {
                 let mgr = config_manager(config_dir);
                 let ops =
                     facet_config_runtime::ops::TypedConfigOps::<MapperConfigDto>::new(mgr, path)?;
+                ops.manager()
+                    .validate_root_dependencies(&root_keys, &format!("{name}."))?;
                 let config = ops
                     .manager()
-                    .build_reader::<MapperConfigDto, MapperConfig>(ops.dto(), None, name)?;
+                    .build_reader::<MapperConfigDto, MapperConfig>(
+                        ops.dto(),
+                        Some(&resolve_root),
+                        name,
+                    )?;
                 Ok(LoadedMapper::Custom(config))
             }
         }
@@ -195,11 +210,17 @@ pub fn source(
 }
 
 /// Loads the mapper configuration as as a struct so the code can read the values directly
+///
+/// `root` is the root config the mapper's `from_root` defaults fall back to.
+/// Requiring it here means a mapper config cannot be loaded without a root
+/// config, and its `from_root` references are validated against the root
+/// schema before any value is read
 pub fn load(
     config_dir: &std::path::Path,
     name: &str,
+    root: &dyn facet_config_runtime::ops::ConfigOps,
 ) -> Result<LoadedMapper, facet_config_runtime::ConfigError> {
-    CloudSchema::resolve(config_dir, name).load(config_dir, name)
+    CloudSchema::resolve(config_dir, name).load(config_dir, name, root)
 }
 
 /// Rewrites a mapper's TOML file under the schema selected by its current

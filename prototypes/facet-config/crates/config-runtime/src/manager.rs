@@ -1,7 +1,7 @@
 use facet::Facet;
 
 use crate::append_remove::AppendRemoveRegistry;
-use crate::defaults::{config_get_with_defaults, DefaultsRegistry, EnvOverrides};
+use crate::defaults::{config_get_with_defaults, DefaultsRegistry, EnvOverrides, RootDependency};
 use crate::reader::build_reader_at;
 use crate::reflect::{
     config_add, config_get, config_remove, config_set, config_unset, list_key_entries, list_keys,
@@ -114,6 +114,28 @@ impl ConfigManager {
     /// Returns an error if `key` is marked read-only.
     pub fn check_read_only(&self, key: &str) -> Result<(), ConfigError> {
         self.read_only.check(key)
+    }
+
+    /// Returns the `from_root` references declared by this schema.
+    pub fn root_dependencies(&self) -> Vec<RootDependency> {
+        self.defaults.root_dependencies()
+    }
+
+    /// Rejects `from_root` references to keys the root config does not define.
+    ///
+    /// Call this when the root config becomes available, so a misspelled
+    /// `from_root` key is reported as a schema error up front instead of
+    /// reading as an unset value later.
+    pub fn validate_root_dependencies(
+        &self,
+        root_keys: &[String],
+        display_prefix: &str,
+    ) -> Result<(), ConfigError> {
+        crate::defaults::validate_root_dependencies(
+            &self.defaults.root_dependencies(),
+            root_keys,
+            display_prefix,
+        )
     }
 
     /// Resolves a potentially-aliased key to the canonical key.

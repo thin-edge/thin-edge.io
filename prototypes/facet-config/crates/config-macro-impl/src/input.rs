@@ -21,7 +21,6 @@ pub enum FieldOrGroup {
 #[derive(Debug)]
 pub struct ConfigGroup {
     pub doc_attrs: Vec<syn::Attribute>,
-    pub multi: bool,
     pub ident: syn::Ident,
     pub contents: Punctuated<FieldOrGroup, Token![,]>,
 }
@@ -62,12 +61,11 @@ pub struct FromKeyVia {
     pub function: syn::Path,
 }
 
+/// Groups accept no `tedge_config` attributes; parsing this rejects any
+/// that are present with an error naming the unknown attribute
 #[derive(FromAttributes, Debug)]
 #[darling(attributes(tedge_config))]
-struct GroupAttributes {
-    #[darling(default)]
-    pub multi: bool,
-}
+struct GroupAttributes {}
 
 impl Parse for Configuration {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -99,7 +97,7 @@ impl Parse for ConfigGroup {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let content;
         let attrs = input.call(Attribute::parse_outer)?;
-        let known = GroupAttributes::from_attributes(&attrs)
+        GroupAttributes::from_attributes(&attrs)
             .map_err(|e| syn::Error::new(e.span(), e.to_string()))?;
         let doc_attrs = attrs.into_iter().filter(is_doc_attr).collect();
         let ident = input.parse()?;
@@ -108,7 +106,6 @@ impl Parse for ConfigGroup {
         let contents = content.parse_terminated(<_>::parse, Token![,])?;
         Ok(ConfigGroup {
             doc_attrs,
-            multi: known.multi,
             ident,
             contents,
         })
@@ -232,21 +229,20 @@ mod tests {
     }
 
     #[test]
-    fn parse_group_attributes() {
-        let config: Configuration = parse_quote!(
-            Test {
+    fn group_attributes_are_rejected() {
+        let err = syn::parse_str::<Configuration>(
+            "Test {
                 #[tedge_config(multi)]
                 c8y: {
                     url: String,
                 },
-            }
+            }",
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("Unknown field: `multi`"),
+            "unexpected error: {err}"
         );
-        match &config.groups[0] {
-            FieldOrGroup::Group(g) => {
-                assert!(g.multi);
-            }
-            _ => panic!("expected group"),
-        }
     }
 
     #[test]
