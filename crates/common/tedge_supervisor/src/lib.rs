@@ -1,14 +1,24 @@
-//! Single-process supervisor reached through `tedge run all`.
+//! Supervisor for thin-edge components.
 //!
-//! Hosts the core thin-edge components (the agent and a mapper) inside one process
-//! so no external init system is required. Each component is a *unit*: a rebuildable
-//! factory plus a restart policy. The supervisor owns process-wide signal handling,
-//! isolates a crashing unit from its co-hosted peers (rebuilding it under a bounded
-//! backoff), and drains everything cleanly on termination.
+//! Serves two execution modes:
 //!
-//! Each component's `build()` factory is also used by the standalone per-component
-//! path (`tedge-agent`, `tedge-mapper c8y`, …); only the way the resulting runtime
-//! is driven differs.
+//! - **Multi-unit** (`tedge run all`): hosts the agent and a mapper inside one process
+//!   so no external init system is required.
+//! - **Single-unit** (standalone `tedge-agent`, `tedge-mapper`): wraps one component
+//!   with the same signal handling and SIGHUP log-level reloading, but leaves crash
+//!   recovery to the init system: the first unit failure exits the process, exactly
+//!   as the component behaved before it ran under the supervisor.
+//!
+//! Each component is a *unit*: a rebuildable factory plus a restart policy. The
+//! supervisor owns process-wide signal handling, isolates a crashing unit from its
+//! co-hosted peers (rebuilding it under a bounded backoff), and drains everything
+//! cleanly on termination.
+//!
+//! A unit that finishes with [`RuntimeError::RestartRequired`] (self-update, or a
+//! configuration update to the component's own config) needs the *process* to be
+//! re-executed — a self-update only takes effect by running the new binary. In both
+//! modes the supervisor drains every unit and exits non-zero so the init system
+//! restarts the process.
 
 // Crash isolation depends on tokio catching a panicking actor task per-task, which
 // only happens with the unwinding panic runtime. Refuse to build the supervisor if
@@ -16,9 +26,8 @@
 // component's panic abort every co-hosted component.
 #[cfg(panic = "abort")]
 compile_error!(
-    "the single-process supervisor (`tedge run all`) requires `panic = \"unwind\"` for \
-     per-component crash isolation; `panic = \"abort\"` would let one component's panic \
-     abort the whole process"
+    "the supervisor requires `panic = \"unwind\"` for per-component crash isolation; \
+     `panic = \"abort\"` would let one component's panic abort the whole process"
 );
 
 use anyhow::Context;
@@ -30,13 +39,9 @@ use std::collections::VecDeque;
 use std::time::Duration;
 use std::time::Instant;
 use tedge_actors::Runtime;
+use tedge_actors::RuntimeError;
 use tedge_actors::RuntimeHandle;
-use tedge_agent::AgentOpt;
-use tedge_config::cli::CommonArgs;
-use tedge_config::log_init_reloadable_for_services;
 use tedge_config::LogLevelReloadHandle;
-use tedge_config::TEdgeConfig;
-use tedge_mapper::MapperName;
 use tokio::signal::unix;
 use tokio::sync::mpsc;
 use tracing::error;
@@ -44,31 +49,20 @@ use tracing::info;
 use tracing::warn;
 use tracing::Instrument;
 
-/// `tedge run all` — run the agent and (optionally) a mapper under one supervisor.
-#[derive(Debug, clap::Parser)]
-pub struct RunAllOpt {
-    /// The mapper to run alongside the agent (e.g. `c8y`, `aws`, `az`).
-    #[clap(subcommand)]
-    pub mapper: Option<MapperName>,
-
-    #[command(flatten)]
-    pub common: CommonArgs,
-}
-
 /// Kind of a supervised unit. Drives start ordering (agent before mappers) and
 /// which signals target it (SIGUSR1 restarts only mappers).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum UnitKind {
+pub enum UnitKind {
     Agent,
     Mapper,
 }
 
 #[derive(Clone, Copy, Debug)]
-struct RestartPolicy {
-    initial_backoff: Duration,
-    max_backoff: Duration,
-    max_restarts: usize,
-    window: Duration,
+pub struct RestartPolicy {
+    pub initial_backoff: Duration,
+    pub max_backoff: Duration,
+    pub max_restarts: usize,
+    pub window: Duration,
 }
 
 impl Default for RestartPolicy {
@@ -83,7 +77,7 @@ impl Default for RestartPolicy {
 }
 
 /// Produces a fresh component runtime on each call (the rebuildable factory).
-type RuntimeFactory = Box<dyn Fn() -> BoxFuture<'static, anyhow::Result<Runtime>> + Send>;
+pub type RuntimeFactory = Box<dyn Fn() -> BoxFuture<'static, anyhow::Result<Runtime>> + Send>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UnitStatus {
@@ -100,11 +94,11 @@ enum UnitStatus {
     Stopped,
 }
 
-struct Unit {
-    name: String,
-    kind: UnitKind,
-    factory: RuntimeFactory,
-    policy: RestartPolicy,
+pub struct Unit {
+    pub name: String,
+    pub kind: UnitKind,
+    pub factory: RuntimeFactory,
+    pub policy: RestartPolicy,
     status: UnitStatus,
     /// `Some` while a runtime is live — used to request a graceful drain.
     handle: Option<RuntimeHandle>,
@@ -112,6 +106,26 @@ struct Unit {
     restarts: VecDeque<Instant>,
     /// Single-instance lock, held for the unit's whole lifetime (across restarts).
     _lock: Option<flockfile::Flockfile>,
+}
+
+impl Unit {
+    pub fn new(
+        name: String,
+        kind: UnitKind,
+        factory: RuntimeFactory,
+        lock: Option<flockfile::Flockfile>,
+    ) -> Self {
+        Self {
+            name,
+            kind,
+            factory,
+            policy: RestartPolicy::default(),
+            status: UnitStatus::Stopped,
+            handle: None,
+            restarts: VecDeque::new(),
+            _lock: lock,
+        }
+    }
 }
 
 /// Message sent back to the supervisor when a unit's runtime finishes.
@@ -133,7 +147,7 @@ enum Command {
     ReloadLogLevels,
 }
 
-struct Supervisor {
+pub struct Supervisor {
     units: Vec<Unit>,
     events_tx: mpsc::Sender<UnitFinished>,
     events_rx: mpsc::Receiver<UnitFinished>,
@@ -150,10 +164,16 @@ struct Supervisor {
     /// Refreshes log levels on SIGHUP; `None` when an override fixes them (see
     /// [`Command::ReloadLogLevels`]).
     log_reload: Option<LogLevelReloadHandle>,
+    /// Whether a failed unit is rebuilt in-process. Standalone processes disable
+    /// this and leave crash recovery to the init system instead: the first unit
+    /// failure exits the process.
+    restart_on_crash: bool,
+    /// The failure the run loop exits with once every unit has drained.
+    failure: Option<anyhow::Error>,
 }
 
 impl Supervisor {
-    fn new(units: Vec<Unit>) -> Self {
+    pub fn new(units: Vec<Unit>) -> Self {
         let (events_tx, events_rx) = mpsc::channel(16);
         let (commands_tx, commands_rx) = mpsc::channel(16);
         Self {
@@ -170,13 +190,43 @@ impl Supervisor {
             // shorter internal cleanup timeout.
             drain_timeout: Duration::from_secs(75),
             log_reload: None,
+            restart_on_crash: true,
+            failure: None,
         }
     }
 
+    /// Sets whether a failed unit is rebuilt in-process (the default). When disabled,
+    /// the first unit failure exits the process instead, leaving crash recovery to
+    /// the init system.
+    pub fn with_restart_on_crash(mut self, restart_on_crash: bool) -> Self {
+        self.restart_on_crash = restart_on_crash;
+        self
+    }
+
     /// Attaches the handle used to refresh log levels live on SIGHUP.
-    fn with_log_reload(mut self, log_reload: Option<LogLevelReloadHandle>) -> Self {
+    pub fn with_log_reload(mut self, log_reload: Option<LogLevelReloadHandle>) -> Self {
         self.log_reload = log_reload;
         self
+    }
+
+    /// Constructs and runs a single-unit supervisor for a standalone process.
+    ///
+    /// Provides the same signal handling and SIGHUP log-level reloading as
+    /// `tedge run all`, but for a single component. Crash recovery stays with the
+    /// init system: the first unit failure exits the process with an error, just
+    /// as the component behaved before it ran under the supervisor.
+    pub async fn run_standalone(
+        name: String,
+        kind: UnitKind,
+        factory: RuntimeFactory,
+        lock: Option<flockfile::Flockfile>,
+        log_reload: Option<LogLevelReloadHandle>,
+    ) -> anyhow::Result<()> {
+        Supervisor::new(vec![Unit::new(name, kind, factory, lock)])
+            .with_log_reload(log_reload)
+            .with_restart_on_crash(false)
+            .run()
+            .await
     }
 
     /// A handle for injecting [`Command`]s (used by the signal listener, and tests).
@@ -186,16 +236,23 @@ impl Supervisor {
 
     /// Builds a unit's runtime and spawns the task that awaits its completion.
     ///
-    /// A build failure is treated like a crash so the restart policy still applies
-    /// (and the process is not taken down).
+    /// A build failure is treated like a crash: the restart policy applies while
+    /// in-process crash recovery is enabled, otherwise it ends the process.
     async fn spawn_unit(&mut self, id: usize) {
         if self.shutting_down {
             return;
         }
-        // Build (and thereby spawn the unit's actors) inside a `component` span so
-        // every log record the unit emits is attributed to it in the shared process
-        // log stream. The runtime captures this span at construction.
-        let span = tracing::info_span!("component", name = %self.units[id].name);
+        // In multi-unit mode, build (and thereby spawn the unit's actors) inside a
+        // `component` span so every log record the unit emits is attributed to it in
+        // the shared process log stream. The runtime captures this span at
+        // construction. A standalone unit owns the whole log stream, so the span
+        // would only prefix every record with noise and change the log format the
+        // component had before it ran under the supervisor.
+        let span = if self.units.len() > 1 {
+            tracing::info_span!("component", name = %self.units[id].name)
+        } else {
+            tracing::Span::none()
+        };
         let build = (self.units[id].factory)().instrument(span);
         match build.await {
             Ok(runtime) => {
@@ -211,10 +268,27 @@ impl Supervisor {
                 self.running += 1;
                 info!(component = %name, "started");
             }
-            Err(err) => {
+            Err(err) if self.restart_on_crash => {
                 error!(component = %self.units[id].name, "failed to build: {err:#}");
                 self.schedule_restart_or_give_up(id);
             }
+            Err(err) => {
+                error!(component = %self.units[id].name, "failed to build: {err:#}");
+                let name = self.units[id].name.clone();
+                self.exit_with(err.context(format!("failed to build {name}")))
+                    .await;
+            }
+        }
+    }
+
+    /// Records the failure the run loop exits with and drains every unit; once the
+    /// drain completes the process exits non-zero so the init system takes over.
+    async fn exit_with(&mut self, failure: anyhow::Error) {
+        if self.failure.is_none() {
+            self.failure = Some(failure);
+        }
+        if !self.shutting_down {
+            self.begin_shutdown().await;
         }
     }
 
@@ -263,8 +337,6 @@ impl Supervisor {
         );
     }
 
-    /// Handles a unit's runtime finishing, reacting to clean exit vs error/panic and
-    /// to whether the stop was requested (restart / shutdown) or unexpected.
     async fn on_unit_finished(&mut self, finished: UnitFinished) {
         let UnitFinished { id, result } = finished;
         self.running -= 1;
@@ -274,31 +346,44 @@ impl Supervisor {
 
         match status {
             UnitStatus::Restarting => {
-                // On-demand restart (e.g. SIGUSR1): rebuild immediately.
                 info!(component = %name, "restarting");
                 self.spawn_unit(id).await;
             }
             UnitStatus::Stopped => {
-                // Supervisor-initiated graceful shutdown: stay down.
                 info!(component = %name, "stopped");
             }
             _ => match result {
                 Ok(()) => {
-                    // The component decided to exit on its own; honour that.
                     info!(component = %name, "exited cleanly; not restarting");
                     self.units[id].status = UnitStatus::Stopped;
                 }
-                Err(err) => {
+                // A self-update (or an update of the component's own configuration)
+                // only takes effect by re-executing the binary: rebuilding the unit
+                // in-process would keep running the old code, so exit and let the
+                // init system restart the process.
+                Err(err @ RuntimeError::RestartRequired) => {
+                    info!(component = %name, "requested a process restart; draining and exiting");
+                    self.units[id].status = UnitStatus::Stopped;
+                    self.exit_with(
+                        anyhow::Error::from(err)
+                            .context(format!("{name} requested a process restart")),
+                    )
+                    .await;
+                }
+                Err(err) if self.restart_on_crash => {
                     error!(component = %name, "crashed: {err}");
                     self.schedule_restart_or_give_up(id);
+                }
+                Err(err) => {
+                    error!(component = %name, "crashed: {err}");
+                    self.units[id].status = UnitStatus::Stopped;
+                    self.exit_with(anyhow::Error::from(err).context(format!("{name} crashed")))
+                        .await;
                 }
             },
         }
     }
 
-    /// Restarts every unit matching `selector`, coalescing requests for units already
-    /// restarting or in backoff. SIGUSR1 targets the mappers (see
-    /// [`Supervisor::restart_mappers`]).
     async fn restart_units(&mut self, selector: impl Fn(&Unit) -> bool) {
         if self.shutting_down {
             return;
@@ -315,7 +400,6 @@ impl Supervisor {
                     }
                 }
                 UnitStatus::GaveUp => {
-                    // Operator intervention: give a unit that gave up a fresh chance.
                     self.units[id].restarts.clear();
                     self.spawn_unit(id).await;
                 }
@@ -329,8 +413,6 @@ impl Supervisor {
         }
     }
 
-    /// Applies the file-configured log levels to the running components without
-    /// restarting them (the SIGHUP action).
     fn reload_log_levels(&mut self) {
         let Some(handle) = self.log_reload.as_ref() else {
             warn!("SIGHUP: log levels are fixed by --log-level/--debug/RUST_LOG; ignoring");
@@ -343,27 +425,19 @@ impl Supervisor {
         }
     }
 
-    /// Restarts all mapper units, leaving the agent running (the SIGUSR1 action).
     async fn restart_mappers(&mut self) {
         info!("SIGUSR1: restarting all mapper components");
         self.restart_units(|unit| unit.kind == UnitKind::Mapper)
             .await;
     }
 
-    /// Begins a collective graceful shutdown and arms the drain deadline. Drain
-    /// *requests* go out in reverse start order, but the units then drain
-    /// concurrently; `run_loop` exits once all have finished or the deadline elapses.
     async fn begin_shutdown(&mut self) {
         info!("shutdown requested; draining all components");
         self.shutting_down = true;
         self.drain_deadline = Some(tokio::time::Instant::now() + self.drain_timeout);
-        // Cancel any pending backoff restarts.
         self.backoffs.clear();
 
         for id in (0..self.units.len()).rev() {
-            // Live units drain via their handle and report back through a
-            // `UnitFinished` event; units already down (in backoff / gave up) simply
-            // become terminal. Either way the unit must not be restarted.
             if let Some(handle) = self.units[id].handle.as_mut() {
                 let _ = handle.shutdown().await;
             }
@@ -372,29 +446,33 @@ impl Supervisor {
     }
 
     /// Registers the process signal handlers and runs the supervisor to completion.
-    async fn run(self) -> anyhow::Result<()> {
-        // The supervisor owns all signal handling for the process. Each signal is
-        // translated into a [`Command`] and fed to the same loop as any future
-        // control-plane trigger.
+    pub async fn run(self) -> anyhow::Result<()> {
         spawn_signal_listener(self.commands())?;
         self.run_loop().await
     }
 
-    /// The core supervisor loop: starts every unit, then services unit completions,
-    /// backoff restarts and control commands until everything has drained (after a
-    /// shutdown command) or the drain deadline forces an exit.
+    /// The core supervisor loop, free of OS-signal machinery so it can be driven
+    /// deterministically in tests via [`Supervisor::commands`].
     ///
-    /// Free of any OS-signal machinery so it can be driven deterministically in tests
-    /// via [`Supervisor::commands`].
+    /// Ends once every unit has stopped: after a drain (termination signal, restart
+    /// request, or a failure with in-process crash recovery disabled), or when every
+    /// unit has exited cleanly of its own accord — a unit that gave up restarting
+    /// keeps the process (and its co-hosted peers) up instead.
+    ///
+    /// Returns an error when a unit requested a process restart, or when a unit
+    /// failed while in-process crash recovery is disabled — the non-zero process
+    /// exit is what hands recovery over to the init system.
     async fn run_loop(mut self) -> anyhow::Result<()> {
-        // Best-effort start ordering: spawn units in declaration order (agent first),
-        // with no readiness gate between them.
         for id in 0..self.units.len() {
             self.spawn_unit(id).await;
         }
 
         loop {
-            if self.shutting_down && self.running == 0 {
+            let all_stopped = self
+                .units
+                .iter()
+                .all(|unit| unit.status == UnitStatus::Stopped);
+            if self.running == 0 && (self.shutting_down || all_stopped) {
                 info!("all components stopped; exiting");
                 break;
             }
@@ -412,7 +490,6 @@ impl Supervisor {
                 Some(command) = self.commands_rx.recv() => {
                     match command {
                         Command::ShutdownAll if shutting_down => {
-                            // Second termination signal: abort immediately.
                             warn!("second termination signal; forcing exit");
                             break;
                         }
@@ -433,18 +510,14 @@ impl Supervisor {
             }
         }
 
-        Ok(())
+        match self.failure.take() {
+            None => Ok(()),
+            Some(failure) => Err(failure),
+        }
     }
 }
 
-/// Translates process signals into supervisor [`Command`]s:
-///
-/// - SIGINT / SIGTERM / SIGQUIT — graceful shutdown of every component
-/// - SIGUSR1 — restart the mappers, leaving the agent running
-/// - SIGHUP — reload log levels from `system.toml` live (no restart)
-///
-/// The supervisor owns all signal handling, so the per-component `SignalActor` is
-/// unused on this path.
+/// Translates process signals into supervisor [`Command`]s.
 fn spawn_signal_listener(commands: mpsc::Sender<Command>) -> anyhow::Result<()> {
     let mut sigint =
         unix::signal(unix::SignalKind::interrupt()).context("registering SIGINT handler")?;
@@ -466,7 +539,6 @@ fn spawn_signal_listener(commands: mpsc::Sender<Command>) -> anyhow::Result<()> 
                 _ = sigusr1.recv() => Command::RestartMappers,
                 _ = sighup.recv() => Command::ReloadLogLevels,
             };
-            // The supervisor has exited (loop dropped the receiver): stop listening.
             if commands.send(command).await.is_err() {
                 break;
             }
@@ -474,100 +546,6 @@ fn spawn_signal_listener(commands: mpsc::Sender<Command>) -> anyhow::Result<()> 
     });
 
     Ok(())
-}
-
-/// Entry point for `tedge run all`: assembles the units and runs the supervisor.
-pub async fn run(opt: RunAllOpt) -> anyhow::Result<()> {
-    // A single tracing subscriber for the whole process; each unit's logs are
-    // attributed to its component via the `component` span field.
-    let log_services = log_service_names(opt.mapper.as_ref());
-    let log_services: Vec<_> = log_services.iter().map(String::as_str).collect();
-    // The handle lets SIGHUP refresh these levels from system.toml at runtime;
-    // it is `None` when an explicit override (flags / RUST_LOG) is in effect.
-    let log_reload = log_init_reloadable_for_services(
-        &log_services,
-        &opt.common.log_args,
-        &opt.common.config_dir,
-    )?;
-
-    let config_dir = opt.common.config_dir.clone();
-    let tedge_config = TEdgeConfig::load(&config_dir).await?;
-
-    let mut units: Vec<Unit> = Vec::new();
-
-    // Agent unit — spawned first (best-effort ordering).
-    {
-        let lock = tedge_agent::acquire_lock(&tedge_config).context("acquiring agent lock")?;
-        let agent_opt = AgentOpt {
-            common: opt.common.clone(),
-            mqtt_device_topic_id: None,
-            mqtt_topic_root: None,
-        };
-        let config_dir = config_dir.clone();
-        let factory: RuntimeFactory = Box::new(move || {
-            let config_dir = config_dir.clone();
-            let agent_opt = agent_opt.clone();
-            async move {
-                let config = TEdgeConfig::load(&config_dir).await?;
-                tedge_agent::build(agent_opt, config).await
-            }
-            .boxed()
-        });
-        units.push(Unit {
-            name: tedge_agent::AGENT_NAME.to_string(),
-            kind: UnitKind::Agent,
-            factory,
-            policy: RestartPolicy::default(),
-            status: UnitStatus::Stopped,
-            handle: None,
-            restarts: VecDeque::new(),
-            _lock: lock,
-        });
-    }
-
-    // Mapper unit — optional, spawned after the agent.
-    if let Some(mapper) = opt.mapper {
-        let name = mapper.to_string();
-        let lock = tedge_mapper::acquire_lock(&name, &tedge_config)
-            .with_context(|| format!("acquiring lock for {name}"))?;
-        let config_dir = config_dir.clone();
-        let factory: RuntimeFactory = Box::new(move || {
-            let config_dir = config_dir.clone();
-            let mapper = mapper.clone();
-            async move {
-                let config = TEdgeConfig::load(&config_dir).await?;
-                tedge_mapper::build(mapper, config).await
-            }
-            .boxed()
-        });
-        units.push(Unit {
-            name,
-            kind: UnitKind::Mapper,
-            factory,
-            policy: RestartPolicy::default(),
-            status: UnitStatus::Stopped,
-            handle: None,
-            restarts: VecDeque::new(),
-            _lock: lock,
-        });
-    }
-
-    Supervisor::new(units)
-        .with_log_reload(log_reload)
-        .run()
-        .await
-}
-
-fn log_service_names(mapper: Option<&MapperName>) -> Vec<String> {
-    let mut services = vec![
-        "tedge".to_string(),
-        tedge_agent::AGENT_NAME.to_string(),
-        "tedge-mapper".to_string(),
-    ];
-    if let Some(mapper) = mapper {
-        services.push(mapper.log_service_name().to_string());
-    }
-    services
 }
 
 #[cfg(test)]
@@ -590,33 +568,16 @@ mod tests {
         let unit = dummy_unit("x", UnitKind::Mapper, policy(3, Duration::from_secs(60)));
         let mut sup = Supervisor::new(vec![unit]);
 
-        // Each crash within the window schedules a backoff restart...
         for _ in 0..3 {
             sup.schedule_restart_or_give_up(0);
             assert_eq!(sup.units[0].status, UnitStatus::BackingOff);
         }
-        // ...until the cap is exceeded, at which point the unit is left down.
         sup.schedule_restart_or_give_up(0);
         assert_eq!(sup.units[0].status, UnitStatus::GaveUp);
     }
 
     #[test]
-    fn run_all_logging_considers_supervisor_agent_and_mapper_services() {
-        assert_eq!(
-            log_service_names(Some(&MapperName::Collectd)),
-            vec![
-                "tedge".to_string(),
-                tedge_agent::AGENT_NAME.to_string(),
-                "tedge-mapper".to_string(),
-                "tedge-mapper-collectd".to_string(),
-            ]
-        );
-    }
-
-    #[test]
     fn crashes_outside_the_window_do_not_count_towards_the_cap() {
-        // A zero-length window means every prior restart has aged out, so a unit
-        // crashing slowly never exhausts its budget.
         let unit = dummy_unit("x", UnitKind::Mapper, policy(3, Duration::from_millis(0)));
         let mut sup = Supervisor::new(vec![unit]);
 
@@ -640,7 +601,6 @@ mod tests {
     async fn a_crashing_unit_is_restarted_while_others_keep_running() {
         let agent_builds = Arc::new(AtomicUsize::new(0));
         let mapper_builds = Arc::new(AtomicUsize::new(0));
-        // A high cap so the mapper keeps being restarted for the duration of the test.
         let policy = test_policy(1000);
 
         let units = vec![
@@ -661,13 +621,11 @@ mod tests {
         let commands = supervisor.commands();
         let handle = tokio::spawn(supervisor.run_loop());
 
-        // The crashing mapper is rebuilt again and again...
         wait_until(
             || mapper_builds.load(Ordering::SeqCst) >= 3,
             "the crashing mapper to be restarted",
         )
         .await;
-        // ...while the healthy agent was built exactly once and never disturbed.
         assert_eq!(
             agent_builds.load(Ordering::SeqCst),
             1,
@@ -685,7 +643,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn repeated_crashes_back_off_and_eventually_give_up_without_exiting() {
         let builds = Arc::new(AtomicUsize::new(0));
-        // 1 initial build + 3 restarts, then give up.
         let policy = test_policy(3);
 
         let units = vec![make_unit(
@@ -704,8 +661,6 @@ mod tests {
         )
         .await;
 
-        // After the cap it must stop restarting, and crucially the supervisor process
-        // must stay alive rather than exiting.
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert_eq!(
             builds.load(Ordering::SeqCst),
@@ -758,7 +713,6 @@ mod tests {
         )
         .await;
 
-        // The SIGUSR1 action.
         commands.send(Command::RestartMappers).await.unwrap();
 
         wait_until(
@@ -870,8 +824,6 @@ mod tests {
         )
         .await;
 
-        // The SIGTERM action: drains every unit, then the loop returns and the
-        // process exits.
         commands.send(Command::ShutdownAll).await.unwrap();
         timeout(Duration::from_secs(5), handle)
             .await
@@ -883,7 +835,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_unit_that_fails_to_build_backs_off_and_eventually_gives_up() {
         let builds = Arc::new(AtomicUsize::new(0));
-        // 1 initial build attempt + 3 retries, then give up.
         let policy = test_policy(3);
 
         let units = vec![make_unit(
@@ -896,8 +847,6 @@ mod tests {
         let commands = supervisor.commands();
         let handle = tokio::spawn(supervisor.run_loop());
 
-        // A build failure is treated like a crash, so the unit is retried under the
-        // same backoff policy until its budget is exhausted.
         wait_until(
             || builds.load(Ordering::SeqCst) >= 4,
             "the unit to exhaust its build-retry budget",
@@ -924,34 +873,44 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn a_unit_that_exits_cleanly_is_not_restarted() {
-        let builds = Arc::new(AtomicUsize::new(0));
-        // A high cap so any restart would be visible rather than a give-up.
+    async fn a_unit_that_exits_cleanly_is_not_restarted_while_others_keep_running() {
+        let agent_builds = Arc::new(AtomicUsize::new(0));
+        let mapper_builds = Arc::new(AtomicUsize::new(0));
         let policy = test_policy(1000);
 
-        let units = vec![make_unit(
-            "mapper",
-            UnitKind::Mapper,
-            clean_exit_factory(builds.clone()),
-            policy,
-        )];
+        let units = vec![
+            make_unit(
+                "agent",
+                UnitKind::Agent,
+                healthy_factory(agent_builds.clone()),
+                policy,
+            ),
+            make_unit(
+                "mapper",
+                UnitKind::Mapper,
+                clean_exit_factory(mapper_builds.clone()),
+                policy,
+            ),
+        ];
         let supervisor = Supervisor::new(units);
         let commands = supervisor.commands();
         let handle = tokio::spawn(supervisor.run_loop());
 
         wait_until(
-            || builds.load(Ordering::SeqCst) >= 1,
-            "the unit to be built once",
+            || mapper_builds.load(Ordering::SeqCst) >= 1,
+            "the mapper to be built once",
         )
         .await;
 
-        // The component returned `Ok` of its own accord, so the supervisor must honour
-        // that and leave it down rather than restarting it.
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert_eq!(
-            builds.load(Ordering::SeqCst),
+            mapper_builds.load(Ordering::SeqCst),
             1,
             "a cleanly-exited unit must not be restarted"
+        );
+        assert!(
+            !handle.is_finished(),
+            "the process must stay up for the still-running unit"
         );
 
         commands.send(Command::ShutdownAll).await.unwrap();
@@ -960,6 +919,62 @@ mod tests {
             .expect("supervisor should exit after shutdown")
             .unwrap()
             .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_standalone_unit_that_exits_cleanly_ends_the_process() {
+        let builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![make_unit(
+            "agent",
+            UnitKind::Agent,
+            clean_exit_factory(builds.clone()),
+            policy,
+        )];
+        let supervisor = Supervisor::new(units).with_restart_on_crash(false);
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("a standalone clean exit should end the process")
+            .unwrap()
+            .expect("a clean exit must end the process without an error");
+        assert_eq!(
+            builds.load(Ordering::SeqCst),
+            1,
+            "a cleanly-exited unit must not be rebuilt"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_process_exits_cleanly_once_every_unit_has_stopped() {
+        let agent_builds = Arc::new(AtomicUsize::new(0));
+        let mapper_builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![
+            make_unit(
+                "agent",
+                UnitKind::Agent,
+                clean_exit_factory(agent_builds.clone()),
+                policy,
+            ),
+            make_unit(
+                "mapper",
+                UnitKind::Mapper,
+                clean_exit_factory(mapper_builds.clone()),
+                policy,
+            ),
+        ];
+        let supervisor = Supervisor::new(units);
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("the supervisor should exit once every unit has stopped")
+            .unwrap()
+            .expect("clean unit exits must end the process without an error");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -983,9 +998,6 @@ mod tests {
         )
         .await;
 
-        // The first termination signal asks the unit to drain, but it never does, so
-        // with the (generous) drain timeout the supervisor is still draining a moment
-        // later.
         commands.send(Command::ShutdownAll).await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(
@@ -993,7 +1005,6 @@ mod tests {
             "the supervisor must keep draining after a single termination signal"
         );
 
-        // A second termination signal abandons the drain and exits immediately.
         commands.send(Command::ShutdownAll).await.unwrap();
         timeout(Duration::from_secs(5), handle)
             .await
@@ -1014,7 +1025,6 @@ mod tests {
             policy,
         )];
         let mut supervisor = Supervisor::new(units);
-        // Force the drain deadline to fire quickly; the stubborn unit never drains.
         supervisor.drain_timeout = Duration::from_millis(100);
         let commands = supervisor.commands();
         let handle = tokio::spawn(supervisor.run_loop());
@@ -1025,8 +1035,6 @@ mod tests {
         )
         .await;
 
-        // The unit ignores the drain request, so the supervisor exits once the drain
-        // deadline elapses rather than hanging forever.
         commands.send(Command::ShutdownAll).await.unwrap();
         timeout(Duration::from_secs(5), handle)
             .await
@@ -1035,17 +1043,243 @@ mod tests {
             .unwrap();
     }
 
-    fn dummy_unit(name: &str, kind: UnitKind, policy: RestartPolicy) -> Unit {
-        Unit {
-            name: name.to_string(),
-            kind,
-            factory: Box::new(|| async { Err(anyhow::anyhow!("dummy")) }.boxed()),
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn standalone_supervisor_shuts_down_cleanly() {
+        let builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![make_unit(
+            "agent",
+            UnitKind::Agent,
+            healthy_factory(builds.clone()),
             policy,
-            status: UnitStatus::Stopped,
-            handle: None,
-            restarts: VecDeque::new(),
-            _lock: None,
-        }
+        )];
+        let supervisor = Supervisor::new(units);
+        let commands = supervisor.commands();
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        wait_until(
+            || builds.load(Ordering::SeqCst) == 1,
+            "the standalone unit to start",
+        )
+        .await;
+
+        commands.send(Command::ShutdownAll).await.unwrap();
+        timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("standalone supervisor should exit after shutdown")
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_standalone_unit_crash_exits_the_process_with_an_error() {
+        let builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![make_unit(
+            "agent",
+            UnitKind::Agent,
+            crashing_factory(builds.clone()),
+            policy,
+        )];
+        let supervisor = Supervisor::new(units).with_restart_on_crash(false);
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        let result = timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("a standalone crash should stop the supervisor")
+            .unwrap();
+        assert!(
+            result.is_err(),
+            "a standalone crash must exit the process with an error, for the init system to restart it"
+        );
+        assert_eq!(
+            builds.load(Ordering::SeqCst),
+            1,
+            "a standalone unit must not be rebuilt in-process after a crash"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_standalone_build_failure_exits_the_process_with_an_error() {
+        let builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![make_unit(
+            "agent",
+            UnitKind::Agent,
+            failing_build_factory(builds.clone()),
+            policy,
+        )];
+        let supervisor = Supervisor::new(units).with_restart_on_crash(false);
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        let result = timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("a standalone build failure should stop the supervisor")
+            .unwrap();
+        assert!(
+            result.is_err(),
+            "a standalone build failure must exit the process with an error"
+        );
+        assert_eq!(
+            builds.load(Ordering::SeqCst),
+            1,
+            "a standalone unit must not be rebuilt in-process after a build failure"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_restart_request_exits_a_standalone_process_instead_of_rebuilding_the_unit() {
+        let builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![make_unit(
+            "agent",
+            UnitKind::Agent,
+            restart_required_factory(builds.clone()),
+            policy,
+        )];
+        let supervisor = Supervisor::new(units).with_restart_on_crash(false);
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        let result = timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("a restart request should stop the supervisor")
+            .unwrap();
+        assert!(
+            result.is_err(),
+            "a restart request must exit the process with an error, for the init system to re-execute the binary"
+        );
+        assert_eq!(
+            builds.load(Ordering::SeqCst),
+            1,
+            "a restart request must not rebuild the unit in-process"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_restart_request_drains_co_hosted_units_and_exits_the_process() {
+        let agent_builds = Arc::new(AtomicUsize::new(0));
+        let mapper_builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![
+            make_unit(
+                "agent",
+                UnitKind::Agent,
+                restart_required_factory(agent_builds.clone()),
+                policy,
+            ),
+            make_unit(
+                "mapper",
+                UnitKind::Mapper,
+                healthy_factory(mapper_builds.clone()),
+                policy,
+            ),
+        ];
+        let supervisor = Supervisor::new(units);
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        let result = timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("a restart request should drain the co-hosted units and stop the supervisor")
+            .unwrap();
+        assert!(
+            result.is_err(),
+            "a restart request must exit the whole process with an error, even with crash recovery enabled"
+        );
+        assert_eq!(
+            agent_builds.load(Ordering::SeqCst),
+            1,
+            "a restart request must not rebuild the unit in-process"
+        );
+        assert_eq!(
+            mapper_builds.load(Ordering::SeqCst),
+            1,
+            "the co-hosted unit must be drained, not restarted"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn reload_log_levels_invokes_the_handle() {
+        let builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![make_unit(
+            "agent",
+            UnitKind::Agent,
+            healthy_factory(builds.clone()),
+            policy,
+        )];
+        let mut supervisor = Supervisor::new(units);
+        // No log reload handle — the command should log a warning but not crash.
+        supervisor.log_reload = None;
+        let commands = supervisor.commands();
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        wait_until(|| builds.load(Ordering::SeqCst) == 1, "the unit to start").await;
+
+        commands.send(Command::ReloadLogLevels).await.unwrap();
+        // If we get here without panic/hang, the command was handled.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            !handle.is_finished(),
+            "ReloadLogLevels must not stop the supervisor"
+        );
+
+        commands.send(Command::ShutdownAll).await.unwrap();
+        timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("supervisor should exit after shutdown")
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn restart_mappers_is_a_noop_for_a_single_agent_unit() {
+        let builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![make_unit(
+            "agent",
+            UnitKind::Agent,
+            healthy_factory(builds.clone()),
+            policy,
+        )];
+        let supervisor = Supervisor::new(units);
+        let commands = supervisor.commands();
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        wait_until(|| builds.load(Ordering::SeqCst) == 1, "the agent to start").await;
+
+        commands.send(Command::RestartMappers).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        assert_eq!(
+            builds.load(Ordering::SeqCst),
+            1,
+            "RestartMappers must not restart an agent-only supervisor"
+        );
+
+        commands.send(Command::ShutdownAll).await.unwrap();
+        timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("supervisor should exit after shutdown")
+            .unwrap()
+            .unwrap();
+    }
+
+    fn dummy_unit(name: &str, kind: UnitKind, policy: RestartPolicy) -> Unit {
+        let mut unit = Unit::new(
+            name.to_string(),
+            kind,
+            Box::new(|| async { Err(anyhow::anyhow!("dummy")) }.boxed()),
+            None,
+        );
+        unit.policy = policy;
+        unit
     }
 
     fn policy(max_restarts: usize, window: Duration) -> RestartPolicy {
@@ -1057,7 +1291,6 @@ mod tests {
         }
     }
 
-    /// A policy with tiny backoffs so restart behaviour plays out quickly in tests.
     fn test_policy(max_restarts: usize) -> RestartPolicy {
         RestartPolicy {
             initial_backoff: Duration::from_millis(2),
@@ -1073,32 +1306,18 @@ mod tests {
         factory: RuntimeFactory,
         policy: RestartPolicy,
     ) -> Unit {
-        Unit {
-            name: name.to_string(),
-            kind,
-            factory,
-            policy,
-            status: UnitStatus::Stopped,
-            handle: None,
-            restarts: VecDeque::new(),
-            _lock: None,
-        }
+        let mut unit = Unit::new(name.to_string(), kind, factory, None);
+        unit.policy = policy;
+        unit
     }
 
-    /// A factory whose runtime stays alive until the supervisor drains it (a healthy
-    /// component). It records each build so tests can tell when, and how often, it
-    /// was (re)started.
     fn healthy_factory(builds: Arc<AtomicUsize>) -> RuntimeFactory {
         Box::new(move || {
             builds.fetch_add(1, Ordering::SeqCst);
-            // An empty runtime parks on its actions channel until it receives a
-            // shutdown request via its handle, so it models a running component.
             async { Ok(Runtime::new()) }.boxed()
         })
     }
 
-    /// A factory whose runtime crashes shortly after starting (an actor that returns
-    /// an error), exercising the crash-restart path. Records each build.
     fn crashing_factory(builds: Arc<AtomicUsize>) -> RuntimeFactory {
         Box::new(move || {
             builds.fetch_add(1, Ordering::SeqCst);
@@ -1111,8 +1330,18 @@ mod tests {
         })
     }
 
-    /// A factory that always fails to build its runtime, exercising the build-failure
-    /// path (which the supervisor treats like a crash). Records each attempt.
+    fn restart_required_factory(builds: Arc<AtomicUsize>) -> RuntimeFactory {
+        Box::new(move || {
+            builds.fetch_add(1, Ordering::SeqCst);
+            async {
+                let mut runtime = Runtime::new();
+                runtime.spawn(RestartRequiredActorBuilder).await?;
+                Ok(runtime)
+            }
+            .boxed()
+        })
+    }
+
     fn failing_build_factory(builds: Arc<AtomicUsize>) -> RuntimeFactory {
         Box::new(move || {
             builds.fetch_add(1, Ordering::SeqCst);
@@ -1120,15 +1349,11 @@ mod tests {
         })
     }
 
-    /// A factory whose runtime shuts itself down immediately, so it completes with
-    /// `Ok` — modelling a component that exits of its own accord. Records each build.
     fn clean_exit_factory(builds: Arc<AtomicUsize>) -> RuntimeFactory {
         Box::new(move || {
             builds.fetch_add(1, Ordering::SeqCst);
             async {
                 let runtime = Runtime::new();
-                // Ask the runtime to stop, so `run_to_completion_supervised` returns
-                // `Ok` and the supervisor sees a clean exit.
                 let mut handle = runtime.get_handle();
                 handle.shutdown().await.ok();
                 Ok(runtime)
@@ -1137,9 +1362,6 @@ mod tests {
         })
     }
 
-    /// A factory whose runtime never drains: it hosts an actor that parks forever and
-    /// ignores shutdown requests, used to exercise the forced-exit paths. Records each
-    /// build.
     fn stubborn_factory(builds: Arc<AtomicUsize>) -> RuntimeFactory {
         Box::new(move || {
             builds.fetch_add(1, Ordering::SeqCst);
@@ -1152,9 +1374,6 @@ mod tests {
         })
     }
 
-    /// A factory whose actor stays alive after shutdown is requested. This models an
-    /// actor that has not actually released its external resource (e.g. an MQTT
-    /// client id) by the time the runtime gives up waiting for cleanup.
     fn leaky_shutdown_factory(
         builds: Arc<AtomicUsize>,
         live_actors: Arc<AtomicUsize>,
@@ -1178,7 +1397,6 @@ mod tests {
         })
     }
 
-    /// Polls `cond` until it holds, failing the test if it does not within 5s.
     async fn wait_until(mut cond: impl FnMut() -> bool, what: &str) {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         while !cond() {
@@ -1190,7 +1408,6 @@ mod tests {
         }
     }
 
-    /// An actor that fails immediately, so the runtime hosting it reports a crash.
     struct CrashActor;
 
     #[async_trait::async_trait]
@@ -1224,8 +1441,39 @@ mod tests {
         }
     }
 
-    /// An actor that parks forever and never responds to a shutdown request, so the
-    /// runtime hosting it cannot drain.
+    struct RestartRequiredActor;
+
+    #[async_trait::async_trait]
+    impl Actor for RestartRequiredActor {
+        fn name(&self) -> &str {
+            "restart-required"
+        }
+
+        async fn run(self) -> Result<(), RuntimeError> {
+            Err(RuntimeError::RestartRequired)
+        }
+    }
+
+    struct RestartRequiredActorBuilder;
+
+    impl Builder<RestartRequiredActor> for RestartRequiredActorBuilder {
+        type Error = std::convert::Infallible;
+
+        fn try_build(self) -> Result<RestartRequiredActor, Self::Error> {
+            Ok(RestartRequiredActor)
+        }
+
+        fn build(self) -> RestartRequiredActor {
+            RestartRequiredActor
+        }
+    }
+
+    impl RuntimeRequestSink for RestartRequiredActorBuilder {
+        fn get_signal_sender(&self) -> DynSender<RuntimeRequest> {
+            NullSender.into()
+        }
+    }
+
     struct StubbornActor;
 
     #[async_trait::async_trait]

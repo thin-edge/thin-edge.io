@@ -41,9 +41,7 @@ pub async fn start_basic_actors(
     );
 
     // Note: signal handling is deliberately *not* spawned here. `start_basic_actors`
-    // is part of the rebuildable `build()` path shared by the standalone runner and
-    // the supervisor; the standalone runner installs its own SignalActor on top,
-    // while the supervisor owns signals centrally.
+    // is part of the rebuildable `build()` path; the supervisor owns signals centrally.
     runtime.spawn(health_actor).await?;
     Ok((runtime, mqtt_actor))
 }

@@ -14,13 +14,14 @@ use clap::Parser;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
+use futures::FutureExt;
 use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_config::cli::CommonArgs;
-use tedge_config::log_init;
+use tedge_config::log_init_reloadable_for_services;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tedge_flows::BaseFlowRegistry;
@@ -28,7 +29,8 @@ use tedge_flows::ConnectedFlowRegistry;
 use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperConfig;
 use tedge_flows::UpdateFlowRegistryError;
-use tedge_signal_ext::SignalActor;
+use tedge_supervisor::Supervisor;
+use tedge_supervisor::UnitKind;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
 use tracing::error;
@@ -229,14 +231,17 @@ impl MapperName {
 pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<()> {
     let mapper_name = mapper_opt.name.to_string();
 
-    log_init(
-        "tedge-mapper",
+    // Only the concrete component name: the generic `tedge-mapper` level and the
+    // `tedge` fallback are resolved inside the filter, and the single-name shape is
+    // what lets the configured level apply process-wide — the standalone supervisor
+    // runs its unit without a `component` span to attribute events to.
+    let log_reload = log_init_reloadable_for_services(
+        &[mapper_opt.name.log_service_name()],
         &mapper_opt.common.log_args,
         &mapper_opt.common.config_dir,
     )?;
 
-    // Run only one instance of a mapper (if enabled)
-    let _flock = acquire_lock(&mapper_name, &config)?;
+    let lock = acquire_lock(&mapper_name, &config)?;
 
     if mapper_opt.init {
         warn!("This --init option has been deprecated and will be removed in a future release");
@@ -245,14 +250,19 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
         warn!("This --clear option has been deprecated and will be removed in a future release");
         Ok(())
     } else {
-        // Standalone path: assemble via `build()`, then add this runner's own signal
-        // handling and run to completion (exiting on a runtime error). See
-        // `TEdgeComponent::build` for the build-vs-start contract.
-        let mut runtime = build(mapper_opt.name, config).await?;
-        let signal_actor = SignalActor::builder(&runtime.get_handle());
-        runtime.spawn(signal_actor).await?;
-        runtime.run_to_completion().await?;
-        Ok(())
+        let config_dir = mapper_opt.common.config_dir.clone();
+        let mapper = mapper_opt.name;
+        let factory: tedge_supervisor::RuntimeFactory = Box::new(move || {
+            let config_dir = config_dir.clone();
+            let mapper = mapper.clone();
+            async move {
+                let config = TEdgeConfig::load(&config_dir).await?;
+                build(mapper, config).await
+            }
+            .boxed()
+        });
+
+        Supervisor::run_standalone(mapper_name, UnitKind::Mapper, factory, lock, log_reload).await
     }
 }
 

@@ -22,15 +22,19 @@ to start or keep the components running.
 - **THEN** both components run inside the one process
 - **AND** each component connects to the local MQTT broker as it does when run standalone
 
-#### Scenario: Standalone invocation is unaffected
+#### Scenario: Standalone invocation uses the supervisor
 
 - **WHEN** a component is invoked standalone (e.g. `tedge-mapper c8y` or `tedge-agent`)
-- **THEN** it behaves exactly as before this change, including owning its own signal handling, lock file, and MQTT connection, and exiting the process on a runtime error
+- **THEN** it runs under a single-unit supervisor with SIGHUP log level reloading
+- **AND** it acquires its own lock file and MQTT connection
+- **AND** it exits through the supervisor's shutdown path rather than calling `process::exit` directly
+- **AND** a crash of its component exits the process, leaving recovery to the init system
 
 ### Requirement: Crash isolation and automatic restart
 
-The supervisor SHALL isolate component failures so that one component crashing does
-not terminate the others, and SHALL automatically restart a crashed component.
+The supervisor SHALL isolate component failures in the single-process run mode so
+that one component crashing does not terminate the others, and SHALL automatically
+restart a crashed component.
 
 #### Scenario: One component crashes
 
@@ -43,6 +47,19 @@ not terminate the others, and SHALL automatically restart a crashed component.
 - **WHEN** a component crashes repeatedly within the restart window
 - **THEN** the supervisor applies a backoff between restart attempts
 - **AND** after the maximum number of attempts it stops restarting that component and logs that it has given up, without exiting the process
+
+### Requirement: Restart requests exit the process
+
+A supervised component that requires a restart (after a self-update, or an update
+of its own configuration) SHALL cause the supervisor to drain every component and
+exit the process with a non-zero code, since only re-executing the binary makes
+such an update effective.
+
+#### Scenario: Self-update exits the single-process run mode
+
+- **WHEN** a supervised component reports that a restart is required
+- **THEN** the other components are drained gracefully
+- **AND** the process exits with a non-zero code so its service manager can restart it
 
 ### Requirement: Best-effort start ordering
 

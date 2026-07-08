@@ -24,6 +24,7 @@ clap = { workspace = true }
 clock = { workspace = true }
 collectd_ext = { workspace = true }
 flockfile = { workspace = true }
+futures = { workspace = true }
 mqtt_channel = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -38,7 +39,7 @@ tedge_health_ext = { workspace = true }
 tedge_http_ext = { workspace = true }
 tedge_mqtt_bridge = { workspace = true }
 tedge_mqtt_ext = { workspace = true }
-tedge_signal_ext = { workspace = true }
+tedge_supervisor = { workspace = true }
 tedge_timer_ext = { workspace = true }
 tedge_uploader_ext = { workspace = true }
 tedge_utils = { workspace = true }

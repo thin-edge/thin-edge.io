@@ -251,6 +251,38 @@ service = "tedge-agent"
 }
 
 #[test]
+fn test_verify_command_does_not_probe_the_tedge_agent_service() {
+    let ttd = TempTedgeDir::new();
+
+    let dest_file = ttd.file("tedge.conf").with_raw_content("conf=new");
+
+    let config_content = format!(
+        r###"
+[[files]]
+path = "{}"
+type = "tedge.conf"
+service = "tedge-agent"
+"###,
+        dest_file.utf8_path()
+    );
+    ttd.dir("plugins")
+        .file("tedge-configuration-plugin.toml")
+        .with_raw_content(&config_content);
+
+    let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
+    cmd.arg("--config-dir")
+        .arg(ttd.path().to_str().unwrap())
+        .arg("verify")
+        .arg("tedge.conf")
+        .arg("--work-dir")
+        .arg(ttd.path().join("workdir").to_str().unwrap());
+
+    // The agent spawns this plugin, so it is running by definition; there may not
+    // even be a tedge-agent service to probe (e.g. under `tedge run all`).
+    cmd.assert().success();
+}
+
+#[test]
 fn test_empty_config_file() {
     let ttd = TempTedgeDir::new();
 

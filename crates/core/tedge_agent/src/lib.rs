@@ -17,10 +17,13 @@ use agent::AgentConfig;
 use flockfile::check_another_instance_is_not_running;
 use flockfile::Flockfile;
 use flockfile::FlockfileError;
+use futures::FutureExt;
 use tedge_actors::Runtime;
 use tedge_config::cli::CommonArgs;
-use tedge_config::log_init;
+use tedge_config::log_init_reloadable_for_services;
 use tedge_config::TEdgeConfig;
+use tedge_supervisor::Supervisor;
+use tedge_supervisor::UnitKind;
 use tracing::info;
 
 mod agent;
@@ -56,21 +59,34 @@ pub async fn run(
     agent_opt: AgentOpt,
     tedge_config: tedge_config::TEdgeConfig,
 ) -> Result<(), anyhow::Error> {
-    log_init(
-        "tedge-agent",
+    let log_reload = log_init_reloadable_for_services(
+        &[AGENT_NAME],
         &agent_opt.common.log_args,
         &agent_opt.common.config_dir,
     )?;
 
-    // Single-instance lock held for the lifetime of the standalone agent.
-    let _flock = acquire_lock(&tedge_config)?;
+    let lock = acquire_lock(&tedge_config)?;
     info!("{AGENT_NAME} starting");
 
-    let config = AgentConfig::from_config_and_cliopts(tedge_config, agent_opt).await?;
-    let agent = agent::Agent::new(config);
-    agent.start().await?;
+    let config_dir = agent_opt.common.config_dir.clone();
+    let factory: tedge_supervisor::RuntimeFactory = Box::new(move || {
+        let config_dir = config_dir.clone();
+        let agent_opt = agent_opt.clone();
+        async move {
+            let config = TEdgeConfig::load(&config_dir).await?;
+            build(agent_opt, config).await
+        }
+        .boxed()
+    });
 
-    Ok(())
+    Supervisor::run_standalone(
+        AGENT_NAME.to_string(),
+        UnitKind::Agent,
+        factory,
+        lock,
+        log_reload,
+    )
+    .await
 }
 
 /// Name under which the agent registers its single-instance lock and service.

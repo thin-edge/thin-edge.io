@@ -55,7 +55,6 @@ use tedge_log_manager::PluginConfig;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_script_ext::ScriptActor;
-use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
 use tedge_utils::http::Protocol;
 use tedge_utils::paths::ManagedDir;
@@ -257,26 +256,8 @@ impl Agent {
         Ok(())
     }
 
-    /// Standalone entry point over [`Agent::build`]: adds the agent's own signal
-    /// handling and runs to completion, exiting the process on a runtime error. The
-    /// supervisor bypasses this wrapper and drives [`Agent::build`] directly.
-    pub async fn start(self) -> Result<(), anyhow::Error> {
-        let mut runtime = self.build().await?;
-
-        // Shutdown on SIGINT/SIGTERM/SIGQUIT — owned by the standalone runner only.
-        // Under the supervisor a single process-wide handler owns signals instead,
-        // so the per-component SignalActor is deliberately not part of `build()`.
-        let signal_actor_builder = SignalActor::builder(&runtime.get_handle());
-        runtime.spawn(signal_actor_builder).await?;
-
-        runtime.run_to_completion().await?;
-
-        Ok(())
-    }
-
-    /// Runs init, wires every actor, and spawns the runtime — without the signal
-    /// handling, single-instance lock, or run-to-completion that [`Agent::start`] and
-    /// the supervisor layer on top. Safe to call repeatedly for a fresh incarnation.
+    /// Wires every actor and spawns the runtime. Safe to call repeatedly for a
+    /// fresh incarnation. The supervisor owns signal handling and run-to-completion.
     #[instrument(skip(self), name = "sm-agent")]
     pub async fn build(self) -> Result<Runtime, anyhow::Error> {
         let version = env!("CARGO_PKG_VERSION");

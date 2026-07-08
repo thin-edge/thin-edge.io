@@ -160,6 +160,14 @@ impl FileConfigPlugin {
 
         // If service is configured, verify it's running
         if let Some(service_name) = &entry.service {
+            // The agent spawns this plugin, so when the agent is the target service
+            // its restart is proven by this step running at all. It may also have no
+            // service unit to probe: under `tedge run all` the agent runs supervised
+            // inside the tedge process rather than as its own service.
+            if service_name == "tedge-agent" {
+                return Ok(());
+            }
+
             let service = SystemService::new(service_name);
 
             let is_running = self
