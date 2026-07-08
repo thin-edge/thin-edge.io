@@ -4,15 +4,27 @@ Library             Collections
 Library             Cumulocity
 Library             ThinEdgeIO
 
-Test Setup          Custom Setup
-Test Teardown       Custom Teardown
+Suite Setup         Custom Setup
+Suite Teardown      Custom Teardown
+Test Setup          Set Managed Object    ${DEVICE_SN}
 
 Test Tags           theme:c8y    theme:software    theme:plugins
 
 
+*** Variables ***
+${DEVICE_SN}    ${EMPTY}
+
+
 *** Test Cases ***
 Supported software types should not be declared during startup when disabled
-    [Setup]    Custom Setup With Software Types Disabled
+    # explicitly reset c8y_SupportedSoftwareTypes if it has been already set on tedge startup
+    Execute Command    tedge mqtt pub c8y/inventory/managedObjects/update/${DEVICE_SN} '{"c8y_SupportedSoftwareTypes":null}'
+    Managed Object Should Not Have Fragments    c8y_SupportedSoftwareTypes
+
+    # check that the mapper doesn't send c8y_SupportedSoftwareTypes if it's disabled
+    Set Mapper Config And Restart    tedge config set c8y.software_management.with_types false
+    Restart Service    tedge-agent
+
     Should Have MQTT Messages
     ...    topic=te/device/main///cmd/software_list
     ...    minimum=1
@@ -23,15 +35,28 @@ Supported software types should not be declared during startup when disabled
     ...    minimum=1
     ...    maximum=1
     ...    message_contains="types":["apt","flow"]
-    Run Keyword And Expect Error
-    ...    *
-    ...    Device Should Have Fragment Values
-    ...    c8y_SupportedSoftwareTypes\=["apt", "flow"]
+    Managed Object Should Not Have Fragments    c8y_SupportedSoftwareTypes
+
+    [Teardown]    Run Keywords
+    ...    Set Mapper Config And Restart    tedge config unset c8y.software_management.with_types
+    ...    AND    Restart Service    tedge-agent
 
 Supported software types and c8y_SupportedSoftwareTypes should be declared during startup
     [Documentation]    c8y_SupportedSoftwareTypes should be created if the relevant config is set to true #2654
-    [Setup]    Custom Setup With Software Types Enabled
+
+    # explicitly reset c8y_SupportedSoftwareTypes if it has been already set on tedge startup
+    Execute Command    tedge mqtt pub c8y/inventory/managedObjects/update/${DEVICE_SN} '{"c8y_SupportedSoftwareTypes":null}'
+    Managed Object Should Not Have Fragments    c8y_SupportedSoftwareTypes
+
+    # check that the mapper sends c8y_SupportedSoftwareTypes if it's enabled
+    Set Mapper Config And Restart    tedge config set c8y.software_management.with_types true
+    Restart Service    tedge-agent
+
     Device Should Have Fragment Values    c8y_SupportedSoftwareTypes\=["apt", "flow"]
+
+    [Teardown]    Run Keywords
+    ...    Set Mapper Config And Restart    tedge config unset c8y.software_management.with_types
+    ...    AND    Restart Service    tedge-agent
 
 Software list should be populated during startup
     [Documentation]    The list is sent via HTTP by default.
@@ -39,14 +64,15 @@ Software list should be populated during startup
 
 Software list should be populated during startup with advanced software management
     [Documentation]    The list is sent via SmartREST with advanced software management. See #2654
-    Execute Command    tedge config set c8y.software_management.api advanced
-    Restart Service    tedge-mapper-c8y
+    Set Mapper Config And Restart    tedge config set c8y.software_management.api advanced
     # Note: Only check minimum message count, as it is possible that the mapper isn't finished
     # processing previous created software_list operations before the tedge-mapper-c8y service
     # is restarted which results in more than 1 c8y/s/us 140 message being sent
     # See related flaky test issue #3426
     Should Have MQTT Messages    c8y/s/us    message_contains=140,    minimum=1
     Device Should Have Installed Software    tedge    timeout=120
+
+    [Teardown]    Set Mapper Config And Restart    tedge config unset c8y.software_management.api
 
 Install software via Cumulocity
     ${OPERATION}=    Install Software    c8y-remote-access-plugin    # TODO: Use different package
@@ -65,6 +91,8 @@ tedge-agent should terminate on SIGINT while downloading file
 
     # Service should stop within 5s
     Stop tedge-agent
+
+    [Teardown]    Start Service    tedge-agent
 
 Software list should only show currently installed software and not candidates
     ${EXPECTED_VERSION}=    Execute Command    dpkg -s tedge | grep "^Version: " | cut -d' ' -f2    strip=True
@@ -96,6 +124,7 @@ Manual software_update operation request with empty url
     ...    c8y_fragment=c8y_SoftwareUpdate
 
 Operation log uploaded automatically with default auto_log_upload setting as on-failure
+    [Setup]    Custom Setup
     ${default_value}=    Execute Command    tedge config get c8y.operations.auto_log_upload    strip=${True}
     Should Be Equal    ${default_value}    on-failure
 
@@ -109,9 +138,10 @@ Operation log uploaded automatically with default auto_log_upload setting as on-
     Operation Should Be FAILED    ${OPERATION}    timeout=60
     Validate operation log uploaded
 
+    [Teardown]    Set Mapper Config And Restart    tedge config unset c8y.operations.auto_log_upload
+
 Operation log uploaded automatically with auto_log_upload setting as always
-    Execute Command    tedge config set c8y.operations.auto_log_upload always
-    Restart Service    tedge-mapper-c8y
+    Set Mapper Config And Restart    tedge config set c8y.operations.auto_log_upload always
 
     # Validate that the operation log is uploaded for a successful operation as well
     ${OPERATION}=    Install Software    c8y-remote-access-plugin
@@ -123,9 +153,14 @@ Operation log uploaded automatically with auto_log_upload setting as always
     Operation Should Be FAILED    ${OPERATION}    timeout=60
     Validate operation log uploaded
 
+    [Teardown]    Set Mapper Config And Restart    tedge config unset c8y.operations.auto_log_upload
+
 Operation log uploaded automatically with auto_log_upload setting as never
-    Execute Command    tedge config set c8y.operations.auto_log_upload never
-    Restart Service    tedge-mapper-c8y
+    # We could remove this Setup making suite faster
+    # if Validate operation log not uploaded used operation/event ID instead of looking at all events for a device
+    [Setup]    Custom Setup
+
+    Set Mapper Config And Restart    tedge config set c8y.operations.auto_log_upload never
 
     # Validate that the operation log is NOT uploaded for a successful operation
     ${OPERATION}=    Install Software    c8y-remote-access-plugin
@@ -136,6 +171,8 @@ Operation log uploaded automatically with auto_log_upload setting as never
     ${OPERATION}=    Install Software    non-existent-package
     Operation Should Be FAILED    ${OPERATION}    timeout=60
     Validate operation log not uploaded
+
+    [Teardown]    Set Mapper Config And Restart    tedge config unset c8y.operations.auto_log_upload
 
 Workflow log includes plugin output
     ${OPERATION}=    Install Software    c8y-remote-access-plugin
@@ -154,6 +191,8 @@ Backward compatibility using 501-503 templates to update status
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
     Device Should Have Installed Software    c8y-remote-access-plugin
     Should Have MQTT Messages    c8y/s/us    message_pattern=^(501|502|503),c8y_SoftwareUpdate.*    minimum=1
+
+    [Teardown]    Set Mapper Config And Restart    tedge config unset c8y.smartrest.use_operation_id
 
 Operation gets updated regardless of the order of the creation time
     Stop Service    tedge-agent
@@ -177,7 +216,11 @@ Operation gets updated regardless of the order of the creation time
     ...    tedge mqtt pub -r te/device/main///cmd/software_update/c8y-mapper-${op_id1} '{"status":"successful","updateList":[{"type":"default","modules":[{"name":"non-existent-package1","action":"install"}]}]}'
     Operation Should Be SUCCESSFUL    ${OPERATION1}    timeout=60
 
+    [Teardown]    Start Service    tedge-agent
+
 Agent should ignore unknown software-update fields
+    ${start}=    Get Unix Timestamp
+
     # Issue https://github.com/thin-edge/thin-edge.io/issues/3136
     # Add the softwareType field erroneously to an item in the modules array
     Execute Command
@@ -186,6 +229,7 @@ Agent should ignore unknown software-update fields
     ...    te/device/main///cmd/software_update/test-3136
     ...    message_pattern=.*"status":"successful".*
     ...    timeout=60
+    ...    date_from=${start}
 
 Supports disabling the Cumulocity c8y_SoftwareUpdate Command
     Execute Command    tedge config set c8y.enable.software_update false
@@ -196,7 +240,6 @@ Supports disabling the Cumulocity c8y_SoftwareUpdate Command
     File Should Not Exist    /etc/tedge/operations/c8y/c8y_SoftwareUpdate
     Should Not Contain Supported Operations    c8y_SoftwareUpdate
     ${operation}=    Cumulocity.Install Software    dummy
-    Sleep    5s    reason=Allow time for the message to be delivered
     Operation Should Be PENDING    ${operation}    timeout=30
 
     # Cleanup operation for cleaner logs (as pending operations pollute the test report output)
@@ -205,22 +248,18 @@ Supports disabling the Cumulocity c8y_SoftwareUpdate Command
     Execute Command    tedge mqtt pub c8y/s/us '505,${operation.to_json()["id"]},Cancelled operation'
     Operation Should Be FAILED    ${operation}
 
+    [Teardown]    Set Mapper Config And Restart    tedge config unset c8y.enable.software_update
+
 
 *** Keywords ***
 Custom Setup
-    [Arguments]    ${tedge_config}=
-    ${DEVICE_SN}=    Setup    tedge_config=${tedge_config}
-    Device Should Exist    ${DEVICE_SN}
-    Set Test Variable    $DEVICE_SN
+    ${device_sn}=    Setup
+    VAR    ${DEVICE_SN}=    ${device_sn}    scope=SUITE
+    Device Should Exist    ${device_sn}
     Should Have MQTT Messages    te/device/main/service/tedge-mapper-c8y/status/health
     Execute Command    sudo start-http-server.sh
     Execute Command    tedge config set software.plugin.default apt
-
-Custom Setup With Software Types Disabled
-    Custom Setup    tedge_config=["c8y.software_management.with_types=false"]
-
-Custom Setup With Software Types Enabled
-    Custom Setup    tedge_config=["c8y.software_management.with_types=true"]
+    RETURN    ${device_sn}
 
 Stop tedge-agent
     [Timeout]    5 seconds
@@ -239,11 +278,13 @@ Publish and Verify Local Command
     ...    maximum=1
     ...    message_contains="status":"${expected_status}"
 
+    # make sure that the mapper does not clear the topic (it should be done by the caller)
     Sleep    5s    reason=Given mapper a chance to react, if it does not react with 5 seconds it never will
     ${retained_message}=    Execute Command
     ...    tedge mqtt sub --no-topic '${topic}' --duration 1
     ...    ignore_exit_code=${True}
     ...    strip=${True}
+    ...    timeout=5
     Should Be Equal    ${messages[0]}    ${retained_message}    msg=MQTT message should be unchanged
 
     IF    "${c8y_fragment}"
@@ -275,3 +316,14 @@ Validate operation log not uploaded
     ...    minimum=0
     ...    maximum=0
     ...    type=software_update_op_log
+
+Set Managed Object
+    [Arguments]    ${device_sn}
+    Cumulocity.Set Managed Object    ${device_sn}
+    ThinEdgeIO.Set Device Context    ${device_sn}
+
+Set Mapper Config And Restart
+    [Documentation]    Runs `${config_cmd}` as a command to set a config option and restarts the c8y mapper.
+    [Arguments]    ${config_cmd}
+    Execute Command    ${config_cmd}
+    Restart Service    tedge-mapper-c8y
