@@ -1499,6 +1499,7 @@ pub(crate) mod tests {
     use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
     use tedge_actors::SimpleMessageBoxBuilder;
+    use tedge_api::file_transfer_url::FileTransferUrls;
     use tedge_api::mqtt_topics::default_topic_schema;
     use tedge_api::mqtt_topics::Channel;
     use tedge_api::mqtt_topics::ChannelFilter;
@@ -3106,7 +3107,7 @@ pub(crate) mod tests {
         let service_topic_id = EntityTopicId::default_main_service("tedge-mapper-c8y").unwrap();
         let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
         let c8y_host = "test.c8y.io".to_owned();
-        let tedge_http_host = "127.0.0.1".into();
+        let file_transfer_urls = FileTransferUrls::new("127.0.0.1".into(), Protocol::Http);
         let auth_proxy_addr = "127.0.0.1".into();
         let auth_proxy_port = 8001;
         let auth_proxy_protocol = Protocol::Http;
@@ -3135,8 +3136,7 @@ pub(crate) mod tests {
             tedge_config.service.clone(),
             c8y_host.clone(),
             c8y_host,
-            tedge_http_host,
-            Protocol::Http,
+            file_transfer_urls,
             topics,
             Capabilities::default(),
             auth_proxy_addr,

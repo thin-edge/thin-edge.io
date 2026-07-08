@@ -17,6 +17,8 @@ use tedge_actors::NoMessage;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::file_transfer_url::FileTransferUrls;
+use tedge_api::file_transfer_url::Protocol;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationStepRequest;
@@ -28,7 +30,6 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
-use tedge_utils::http::Protocol;
 use tedge_utils::paths::TedgePaths;
 use toml::from_str;
 use toml::Table;
@@ -131,8 +132,7 @@ async fn new_config_manager_builder(
         mqtt_schema: MqttSchema::new(),
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
-        tedge_http_host: "127.0.0.1:3000".into(),
-        tedge_http_protocol: Protocol::Http,
+        file_transfer_urls: FileTransferUrls::new("127.0.0.1:3000".into(), Protocol::Http),
         config_snapshot_enabled: true,
         config_update_enabled: true,
         sudo_enabled: false,
@@ -856,8 +856,7 @@ fn test_config(tempdir: &TempTedgeDir) -> ConfigManagerConfig {
         config_update_meta_topic: Topic::new_unchecked("te/device/main///cmd/config_update/meta"),
         config_update_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_update/+"),
         config_snapshot_topic: TopicFilter::new_unchecked("te/device/main///cmd/config_snapshot/+"),
-        tedge_http_host: Arc::from("localhost"),
-        tedge_http_protocol: Protocol::Http,
+        file_transfer_urls: FileTransferUrls::new(Arc::from("localhost"), Protocol::Http),
         config_snapshot_enabled: false,
         config_update_enabled: false,
         sudo_enabled: false,

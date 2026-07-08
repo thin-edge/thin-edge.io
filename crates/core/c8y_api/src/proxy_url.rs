@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-pub use tedge_utils::http::Protocol;
+pub use tedge_api::file_transfer_url::Protocol;
 
 #[derive(Clone, Debug)]
 pub struct ProxyUrlGenerator {
