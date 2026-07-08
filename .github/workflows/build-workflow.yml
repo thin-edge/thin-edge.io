@@ -478,6 +478,87 @@ jobs:
             VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
             REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
 
+  # Build and publish the tedge-p11-server container, one image per hardware variant.
+  # Published tags are variant-suffixed, e.g. ghcr.io/thin-edge/tedge-p11-server-main:latest-tpm
+  publish-p11-server-containers:
+    name: Publish tedge-p11-server (${{ matrix.variant }})
+    if: |
+      always() &&
+      (github.event_name != 'pull_request_target' && github.event_name != 'workflow_dispatch') &&
+      (needs.check-build.result == 'success') &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-24.04
+    needs: [check-build, test, cargo-test]
+    env:
+      BUILDX_NO_DEFAULT_ATTESTATIONS: 1
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # minimal: no bundled module (mount at runtime); usb: OpenSC+pcscd; tpm: tpm2-pkcs11;
+        # softhsm: SoftHSM2 (testing); full: all modules.
+        variant: [minimal, usb, tpm, softhsm, full]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: taiki-e/install-action@just
+      - id: tedge
+        name: Get Version
+        run: |
+          version=$(just version container)
+          echo "Detected version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Download artifacts for all targets; the docker build selects the correct .deb per platform
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: containers/tedge-p11-server/packages/
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+      - name: Setup Docker buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            name=ghcr.io/thin-edge/tedge-p11-server,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            name=ghcr.io/thin-edge/tedge-p11-server-main,enable=true
+          flavor: |
+            suffix=-${{ matrix.variant }},onlatest=true
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ steps.tedge.outputs.version }},enable=${{ !startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: containers/tedge-p11-server
+          push: ${{ github.event_name != 'pull_request_target' }}
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VARIANT=${{ matrix.variant }}
+            BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+            REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
+
   # Wait until all other publishing jobs are finished
   # before publishing the virtual packages (which are architecture agnostic)
   publish-virtual-packages:
@@ -519,12 +600,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    needs: [publish-virtual-packages, publish-containers]
+    needs: [publish-virtual-packages, publish-containers, publish-p11-server-containers]
     if: |
       always() &&
       startsWith(github.ref, 'refs/tags/') &&
       needs.publish-virtual-packages.result == 'success' &&
-      needs.publish-containers.result == 'success'
+      needs.publish-containers.result == 'success' &&
+      needs.publish-p11-server-containers.result == 'success'
     steps:
       - name: Checkout
         uses: actions/checkout@v7

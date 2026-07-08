@@ -1,0 +1,60 @@
+# Example: tedge + tedge-p11-server (TPM 2.0), HSM-backed MQTT auth without installing
+# tedge-p11-server on the host. Mirrors the tedge-container-bundle "Container network with a HSM"
+# guide, but tedge-p11-server runs in its own (non-root) container.
+# See ./README.md. Validated on a Raspberry Pi 4 with an Infineon SLB9672 TPM.
+#
+# Usage:
+#   1. cp ../tedge/packages/tedge-p11-server_*.deb ./packages/
+#   2. export TEDGE_C8Y_URL=example.c8y.cumulocity.com
+#      # TPM_GID = host gid owning /dev/tpmrm0 (the `tss` group); `stat -c %g /dev/tpmrm0`. Default 114.
+#   3. docker compose -f docker-compose.tpm.yaml up --build -d
+#   4. Enroll once (creates the key on the TPM over the socket, then the cert):
+#      docker compose -f docker-compose.tpm.yaml exec tedge \
+#        sh -c 'tedge cert create-key-hsm c8y && tedge cert download c8y --device-id <id>'
+services:
+  tedge-p11-server:
+    # The image runs as non-root uid/gid 999:992 to match the tedge-container-bundle client. If you
+    # use the plain ghcr.io/thin-edge/tedge image (1000:1000) rebuild with USER_UID/USER_GID.
+    build:
+      context: .
+      args:
+        VARIANT: tpm
+    devices:
+      - /dev/tpmrm0:/dev/tpmrm0
+    # Grant the non-root user access to the TPM: the host gid that owns /dev/tpmrm0 (usually `tss`).
+    group_add:
+      - "${TPM_GID:-114}"
+    volumes:
+      - p11-socket:/run/tedge-p11-server
+      - p11-hsm-store:/etc/tedge/hsm        # persists the tpm2-pkcs11 token store
+    restart: unless-stopped
+
+  tedge:
+    image: ghcr.io/thin-edge/tedge-container-bundle:latest
+    depends_on:
+      - tedge-p11-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:1883:1883"
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8001"
+    environment:
+      TEDGE_C8Y_URL: "${TEDGE_C8Y_URL:?set TEDGE_C8Y_URL to your Cumulocity tenant URL}"
+      TEDGE_C8Y_OPERATIONS_AUTO_LOG_UPLOAD: always
+      TEDGE_MQTT_BRIDGE_BUILT_IN: "true"
+      TEDGE_DEVICE_CRYPTOKI_MODE: socket
+      TEDGE_DEVICE_CRYPTOKI_SOCKET_PATH: /run/tedge-p11-server/tedge-p11-server.sock
+      TEDGE_DEVICE_KEY_URI: "pkcs11:token=tedge;object=tedge"
+    volumes:
+      - device-certs:/etc/tedge/device-certs
+      - tedge:/data/tedge
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - p11-socket:/run/tedge-p11-server
+    restart: always
+
+volumes:
+  p11-socket:
+  p11-hsm-store:
+  device-certs:
+  tedge:
