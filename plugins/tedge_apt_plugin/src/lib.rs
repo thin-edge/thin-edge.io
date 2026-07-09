@@ -219,15 +219,15 @@ fn get_installer(
 
         (None, Some(file_path)) => {
             let mut package = PackageMetadata::try_new(file_path)?;
-            package.validate_package(&[&format!("Package: {}", &module)])?;
+            package.validate_package(&[&format!("Package: {}", module)])?;
             Ok((format!("{}", package.file_path().display()), Some(package)))
         }
 
         (Some(version), Some(file_path)) => {
             let mut package = PackageMetadata::try_new(file_path)?;
             package.validate_package(&[
-                &format!("Version: {}", &version),
-                &format!("Package: {}", &module),
+                &format!("Version: {}", version),
+                &format!("Package: {}", module),
             ])?;
 
             Ok((format!("{}", package.file_path().display()), Some(package)))

@@ -282,7 +282,7 @@ impl OperationWorkflow {
         }
 
         let main_operation = operation.to_string();
-        for (_, action) in states.iter() {
+        for action in states.values() {
             match action {
                 // A `builtin:<operation>` can only be invoked from the same `<operation>`
                 OperationAction::BuiltInOperation(builtin_operation, _)

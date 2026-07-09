@@ -96,7 +96,7 @@ async fn subscribe(cmd: &MqttSubscribeCommand) -> Result<(), anyhow::Error> {
         let line = if cmd.hide_topic {
             format!("{payload}\n")
         } else {
-            format!("[{}] {payload}\n", &message.topic)
+            format!("[{}] {payload}\n", message.topic)
         };
         let _ = stdout.write_all(line.as_bytes()).await;
         let _ = stdout.flush().await;

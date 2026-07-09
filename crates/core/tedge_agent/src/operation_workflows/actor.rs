@@ -161,7 +161,7 @@ impl WorkflowActor {
     /// Only the former will be actually processed with [Self::process_command_update].
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
         let Ok((_, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) else {
-            log::error!("Unknown topic: {}", &message.topic.name);
+            log::error!("Unknown topic: {}", message.topic.name);
             return Ok(());
         };
         match channel {
@@ -231,7 +231,7 @@ impl WorkflowActor {
             return Ok(());
         }
         let Ok(state) = GenericCommandState::from_command_message(&message) else {
-            log::error!("Invalid command payload: {}", &message.topic.name);
+            log::error!("Invalid command payload: {}", message.topic.name);
             return Ok(());
         };
         let step = state.status.clone();

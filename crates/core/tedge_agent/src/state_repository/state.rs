@@ -212,7 +212,7 @@ mod tests {
 
         let data = tokio::fs::read_to_string(&format!(
             "{}/.agent/current-operation",
-            &temp_dir.temp_dir.path().to_str().unwrap()
+            temp_dir.temp_dir.path().to_str().unwrap()
         ))
         .await
         .unwrap();

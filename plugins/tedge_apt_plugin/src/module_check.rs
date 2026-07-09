@@ -138,7 +138,7 @@ new Debian package, version 2.0.
         };
 
         // Fail
-        let res = meta_info.metadata_contains_all(&[&format!("Version: {}", &"1.5.1")]);
+        let res = meta_info.metadata_contains_all(&[&format!("Version: {}", "1.5.1")]);
         assert!(
             res.is_err(),
             "expected error as there is a version mismatch"
@@ -150,7 +150,7 @@ new Debian package, version 2.0.
         );
 
         // Pass
-        let res = meta_info.metadata_contains_all(&[&format!("Version: {}", &"1:1.5.1")]);
+        let res = meta_info.metadata_contains_all(&[&format!("Version: {}", "1:1.5.1")]);
         assert!(res.is_ok());
     }
 
@@ -173,7 +173,7 @@ new Debian package, version 2.0.
             remove_modified: false,
         };
 
-        let res = meta_info.metadata_contains_all(&[&format!("Package: {}", &"someapp")]);
+        let res = meta_info.metadata_contains_all(&[&format!("Package: {}", "someapp")]);
         assert!(
             res.is_err(),
             "expected a clean error rather than a panic when the field is missing"
@@ -207,7 +207,7 @@ new Debian package, version 2.0.
             remove_modified: false,
         };
 
-        let res = meta_info.metadata_contains_all(&[&format!("Package: {}", &"wrongname")]);
+        let res = meta_info.metadata_contains_all(&[&format!("Package: {}", "wrongname")]);
         assert!(
             res.is_err(),
             "expected an error as the package name differs"

@@ -357,7 +357,7 @@ mod tests {
         assert!(
             inventory_messages.is_empty(),
             "Expected no converted messages, but received {:?}",
-            &inventory_messages
+            inventory_messages
         );
 
         // Assert that the same payload with different key order is also ignored
@@ -369,7 +369,7 @@ mod tests {
         assert!(
             inventory_messages.is_empty(),
             "Expected no converted messages, but received {:?}",
-            &inventory_messages
+            inventory_messages
         );
     }
 
