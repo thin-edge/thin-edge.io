@@ -52,7 +52,7 @@ impl Command for C8yUpload {
 
     async fn execute(&self, _: TEdgeConfig) -> Result<(), MaybeFancy<Error>> {
         if !path_exists(&self.file).await {
-            return Err(anyhow!("Failed to open file: {:?}", self.file))?;
+            Err(anyhow!("Failed to open file: {:?}", self.file))?;
         }
         let internal_id = self.get_internal_id().await?;
         let event_id = self.create_event(&internal_id).await?;

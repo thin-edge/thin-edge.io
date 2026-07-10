@@ -97,7 +97,7 @@ impl OperationContext {
                 let tedge_file_url = format!(
                     "{}://{}/te/v1/files/{external_id}/config_snapshot/{config_filename}",
                     self.tedge_http_protocol.as_str(),
-                    &self.tedge_http_host,
+                    self.tedge_http_host,
                     external_id = target.external_id.as_ref()
                 );
                 Cow::Owned(tedge_file_url)

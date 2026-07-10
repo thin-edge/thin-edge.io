@@ -210,8 +210,8 @@ pub trait Plugin {
                 .write(
                     format!(
                         "----- $ Downloading: {} to {} \n",
-                        &url.url(),
-                        &downloader.filename().to_string_lossy().to_string()
+                        url.url(),
+                        downloader.filename().to_string_lossy()
                     )
                     .as_bytes(),
                 )
@@ -230,9 +230,7 @@ pub trait Plugin {
         {
             error!(target: "SM plugins", "Download error: {err:#?}");
             if let Some(ref mut logger) = command_log {
-                logger
-                    .write(format!("error: {}\n", &err).as_bytes())
-                    .await?;
+                logger.write(format!("error: {}\n", err).as_bytes()).await?;
             }
             return Err(err);
         }
@@ -254,7 +252,7 @@ pub trait Plugin {
             })
         {
             if let Some(logger) = command_log {
-                logger.write(format!("warn: {}\n", &err).as_bytes()).await?;
+                logger.write(format!("warn: {}\n", err).as_bytes()).await?;
             }
         }
         Ok(())

@@ -179,7 +179,7 @@ impl Batchable for CollectdMessage {
     type Key = String;
 
     fn key(&self) -> Self::Key {
-        format!("{}/{}", &self.metric_group_key, &self.metric_key)
+        format!("{}/{}", self.metric_group_key, self.metric_key)
     }
 
     fn event_time(&self) -> OffsetDateTime {

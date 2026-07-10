@@ -177,7 +177,7 @@ impl Downloader {
         // Move the downloaded file to the final destination
         debug!(
             "Moving downloaded file from {:?} to {:?}",
-            &tmp_target_path, &target_file_path
+            tmp_target_path, target_file_path
         );
 
         file.persist(target_file_path)
@@ -250,7 +250,7 @@ impl Downloader {
     /// Builds a temporary filename the file will be downloaded into.
     async fn temp_filename(&self) -> Result<PathBuf, DownloadError> {
         if self.target_filename.is_relative() {
-            return Err(FileError::InvalidFileName {
+            Err(FileError::InvalidFileName {
                 path: self.target_filename.clone(),
                 source: anyhow!("Path can't be relative"),
             })?;

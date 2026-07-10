@@ -168,7 +168,7 @@ impl Uploader {
         let operation = || async {
             let file = File::open(&self.source_filename)
                 .await
-                .context(format!("Can't open a file {:?}", &self.source_filename))
+                .context(format!("Can't open a file {:?}", self.source_filename))
                 .map_err(backoff::Error::Permanent)?;
 
             let file_length = file
@@ -176,7 +176,7 @@ impl Uploader {
                 .await
                 .context(format!(
                     "Can't read a file {:?} metadata",
-                    &self.source_filename
+                    self.source_filename
                 ))
                 .map_err(backoff::Error::Permanent)?
                 .len();

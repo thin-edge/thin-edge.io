@@ -303,7 +303,7 @@ impl LoggedCommand {
             }
             Err(err) => {
                 logger
-                    .write_all(format!("error: {}\n", &err).as_bytes())
+                    .write_all(format!("error: {}\n", err).as_bytes())
                     .await?;
             }
         }

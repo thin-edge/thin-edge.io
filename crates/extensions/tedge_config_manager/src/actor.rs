@@ -416,7 +416,7 @@ impl ConfigManagerWorker {
         Ok(format!(
             "{}://{}/te/v1/files/{}/{}/{}-{}",
             self.config.tedge_http_protocol.as_str(),
-            &self.config.tedge_http_host,
+            self.config.tedge_http_host,
             device_name,
             operation_type,
             config_type.replace('/', ":"),

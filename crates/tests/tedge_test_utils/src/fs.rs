@@ -206,13 +206,13 @@ mod tests {
 
         assert!(Path::new(&format!(
             "{}/c8y/c8y-log-plugin.toml",
-            &tedge_dir.temp_dir.path().to_str().unwrap()
+            tedge_dir.temp_dir.path().to_str().unwrap()
         ))
         .exists());
 
         assert!(Path::new(&format!(
             "{}/operations/c8y/c8y_Restart",
-            &tedge_dir.temp_dir.path().to_str().unwrap()
+            tedge_dir.temp_dir.path().to_str().unwrap()
         ))
         .exists());
         Ok(())
@@ -231,7 +231,7 @@ mod tests {
             });
         let file_path = &format!(
             "{}/c8y/c8y-log-plugin.toml",
-            &tedge_dir.temp_dir.path().to_str().unwrap()
+            tedge_dir.temp_dir.path().to_str().unwrap()
         );
         assert!(Path::new(&file_path).exists());
 
@@ -261,13 +261,13 @@ mod tests {
 
         assert!(Path::new(&format!(
             "{}/operations/c8y/c8y_Restart",
-            &ttd.temp_dir.path().to_str().unwrap()
+            ttd.temp_dir.path().to_str().unwrap()
         ))
         .exists());
 
         assert!(Path::new(&format!(
             "{}/operations/c8y/c8y_SoftwareUpdate",
-            &ttd.temp_dir.path().to_str().unwrap()
+            ttd.temp_dir.path().to_str().unwrap()
         ))
         .exists());
         Ok(())

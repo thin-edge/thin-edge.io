@@ -517,7 +517,7 @@ impl TestMqttBroker {
         // Cleanup: Remove client's sender from shared maps when connection closes.
         client_senders.lock().await.remove(&client_id);
         let mut subs_guard = subscriptions.lock().await;
-        for (_filter, senders) in subs_guard.iter_mut() {
+        for senders in subs_guard.values_mut() {
             senders.retain(|(_, s)| !s.same_channel(&tx));
         }
         // Remove empty topic filter entries

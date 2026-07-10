@@ -86,7 +86,7 @@ impl OperationContext {
         {
             let log_path = command.get_log_path().unwrap();
             let event_type = format!("{}_op_log", op_type);
-            let event_text = format!("{} operation log", &op_type);
+            let event_text = format!("{} operation log", op_type);
             let _upload_url = self
                 .upload_file(
                     external_id,

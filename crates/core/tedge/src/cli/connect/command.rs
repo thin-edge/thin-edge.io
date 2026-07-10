@@ -327,11 +327,11 @@ impl ConnectCommand {
             eprintln!("Offline mode. Skipping new device certificate validation");
             eprintln!(
                 "  => use current certificate {}",
-                &certificate_shift.active_cert_path
+                certificate_shift.active_cert_path
             );
             eprintln!(
                 "  => ignoring new certificate {}",
-                &certificate_shift.new_cert_path
+                certificate_shift.new_cert_path
             );
             return Ok(false);
         }
@@ -343,7 +343,7 @@ impl ConnectCommand {
             let banner = if attempt == 1 {
                 format!(
                     "Validating new certificate: {}",
-                    &certificate_shift.new_cert_path
+                    certificate_shift.new_cert_path
                 )
             } else {
                 format!("Validating new certificate: attempt {attempt} of {max_attempts}")
@@ -364,7 +364,7 @@ impl ConnectCommand {
             eprintln!("Error validating the new certificate: {err}");
             eprintln!(
                 "  => keep using the current certificate unchanged {}",
-                &certificate_shift.active_cert_path
+                certificate_shift.active_cert_path
             );
             return Ok(false);
         }

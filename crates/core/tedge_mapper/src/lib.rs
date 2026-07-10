@@ -360,7 +360,7 @@ async fn flow_registry(
             "failed to create flow directory '{}': {err}",
             flows_dir.as_ref()
         );
-        return Err(err)?;
+        Err(err)?;
     };
 
     let mut flows = match mapper_config {
