@@ -1,5 +1,6 @@
 use camino::Utf8PathBuf;
 use std::sync::Arc;
+use tedge_api::file_transfer_url::FileTransferUrls;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -8,7 +9,6 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_config::tedge_toml::ReadError;
 use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
-use tedge_utils::http::Protocol;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::ManagedFile;
 use tedge_utils::paths::TedgePaths;
@@ -31,8 +31,7 @@ pub struct ConfigManagerConfig {
     pub config_update_meta_topic: Topic,
     pub config_update_topic: TopicFilter,
     pub config_snapshot_topic: TopicFilter,
-    pub tedge_http_host: Arc<str>,
-    pub tedge_http_protocol: Protocol,
+    pub file_transfer_urls: FileTransferUrls,
     pub config_snapshot_enabled: bool,
     pub config_update_enabled: bool,
     pub sudo_enabled: bool,
@@ -42,8 +41,7 @@ pub struct ConfigManagerOptions {
     pub config_dir: TedgePaths,
     pub mqtt_topic_root: MqttSchema,
     pub mqtt_device_topic_id: EntityTopicId,
-    pub tedge_http_host: Arc<str>,
-    pub tedge_http_protocol: Protocol,
+    pub file_transfer_urls: FileTransferUrls,
     pub tmp_path: Arc<TedgePaths>,
     pub ops_dir: ManagedDir,
     pub is_sudo_enabled: bool,
@@ -90,8 +88,7 @@ impl ConfigManagerConfig {
             config_update_meta_topic,
             config_update_topic,
             config_snapshot_topic,
-            tedge_http_host: cliopts.tedge_http_host,
-            tedge_http_protocol: cliopts.tedge_http_protocol,
+            file_transfer_urls: cliopts.file_transfer_urls,
             config_snapshot_enabled: cliopts.config_snapshot_enabled,
             config_update_enabled: cliopts.config_update_enabled,
             sudo_enabled: cliopts.is_sudo_enabled,

@@ -87,14 +87,12 @@ impl CumulocityConverter {
         let topic = self.mqtt_schema.topic_for(target.topic_id(), &channel);
 
         // Replace '/' with ':' to avoid creating unexpected directories in file transfer repo
-        let tedge_url = format!(
-            "{}://{}/te/v1/files/{}/config_snapshot/{}-{}",
-            self.config.tedge_http_protocol.as_str(),
-            self.config.tedge_http_host,
+        let tedge_url = self.config.file_transfer_urls.for_path(&format!(
+            "{}/config_snapshot/{}-{}",
             target.external_id.as_ref(),
             config_upload_request.config_type.replace('/', ":"),
             cmd_id
-        );
+        ));
 
         let request = ConfigSnapshotCmdPayload {
             status: CommandStatus::Init,
@@ -127,14 +125,12 @@ impl CumulocityConverter {
         };
         let topic = self.mqtt_schema.topic_for(target.topic_id(), &channel);
 
-        let tedge_url = format!(
-            "{}://{}/te/v1/files/{}/log_upload/{}-{}",
-            self.config.tedge_http_protocol.as_str(),
-            self.config.tedge_http_host,
+        let tedge_url = self.config.file_transfer_urls.for_path(&format!(
+            "{}/log_upload/{}-{}",
             target.external_id.as_ref(),
             log_request.log_file,
             cmd_id
-        );
+        ));
 
         let request = LogUploadCmdPayload {
             status: CommandStatus::Init,

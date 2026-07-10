@@ -62,6 +62,8 @@ use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tedge_api::file_transfer_url::FileTransferUrls;
+use tedge_api::file_transfer_url::Protocol;
 use tedge_api::mqtt_topics::EntityTopicId;
 pub use tedge_config_macros::ConfigNotSet;
 pub use tedge_config_macros::MultiError;
@@ -1805,6 +1807,23 @@ impl TEdgeConfigReaderHttp {
             .map(|(key, cert)| create_tls_config(root_certificates, key, cert))
             .unwrap_or_else(|| create_tls_config_without_client_cert(root_certificates))
             .map_err(|e| anyhow!("{e}"))
+    }
+
+    /// Whether the File Transfer Service HTTP server is configured to serve over TLS.
+    pub fn is_secure(&self) -> bool {
+        self.cert_path.or_none().is_some() && self.key_path.or_none().is_some()
+    }
+
+    /// Builds the URLs at which the File Transfer Service HTTP server exposes files,
+    /// as seen by a client connecting to `http.client.host:http.client.port`.
+    pub fn file_transfer_urls(&self) -> FileTransferUrls {
+        let authority: Arc<str> = format!("{}:{}", self.client.host, self.client.port).into();
+        let protocol = if self.is_secure() {
+            Protocol::Https
+        } else {
+            Protocol::Http
+        };
+        FileTransferUrls::new(authority, protocol)
     }
 }
 

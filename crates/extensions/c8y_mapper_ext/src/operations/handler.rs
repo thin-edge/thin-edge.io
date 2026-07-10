@@ -62,8 +62,7 @@ impl OperationHandler {
             context: Arc::new(OperationContext {
                 capabilities: c8y_mapper_config.capabilities,
                 auto_log_upload: c8y_mapper_config.auto_log_upload,
-                tedge_http_host: c8y_mapper_config.tedge_http_host.clone(),
-                tedge_http_protocol: c8y_mapper_config.tedge_http_protocol,
+                file_transfer_urls: c8y_mapper_config.file_transfer_urls.clone(),
                 tmp_dir: c8y_mapper_config.tmp_dir.root().into(),
                 mqtt_schema: c8y_mapper_config.mqtt_schema.clone(),
                 mqtt_publisher: mqtt_publisher.clone(),

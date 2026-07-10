@@ -12,6 +12,7 @@ use camino::Utf8Path;
 use serde_json::Value;
 use std::ops::Add;
 use std::sync::Arc;
+use tedge_api::file_transfer_url::FileTransferUrls;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommandMetadata;
 use tedge_api::mqtt_topics::ChannelFilter::AnySignal;
@@ -52,8 +53,7 @@ pub struct C8yMapperConfig {
     pub service: TEdgeConfigReaderService,
     pub c8y_host: String,
     pub c8y_mqtt: String,
-    pub tedge_http_host: Arc<str>,
-    pub tedge_http_protocol: Protocol,
+    pub file_transfer_urls: FileTransferUrls,
     pub topics: TopicFilter,
     pub capabilities: Capabilities,
     pub auth_proxy_addr: Arc<str>,
@@ -93,8 +93,7 @@ impl C8yMapperConfig {
         service: TEdgeConfigReaderService,
         c8y_host: String,
         c8y_mqtt: String,
-        tedge_http_host: Arc<str>,
-        tedge_http_protocol: Protocol,
+        file_transfer_urls: FileTransferUrls,
         topics: TopicFilter,
         capabilities: Capabilities,
         auth_proxy_addr: Arc<str>,
@@ -134,8 +133,7 @@ impl C8yMapperConfig {
             service,
             c8y_host,
             c8y_mqtt,
-            tedge_http_host,
-            tedge_http_protocol,
+            file_transfer_urls,
             topics,
             capabilities,
             auth_proxy_addr,
@@ -187,8 +185,6 @@ impl C8yMapperConfig {
             .mqtt
             .or_config_not_set()?
             .to_string();
-        let tedge_http_address = tedge_config.http.client.host.clone();
-        let tedge_http_port = tedge_config.http.client.port;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
         let auth_proxy_addr = c8y_config.cloud_specific.proxy.client.host.clone();
         let auth_proxy_port = c8y_config.cloud_specific.proxy.client.port;
@@ -199,14 +195,7 @@ impl C8yMapperConfig {
             .or_none()
             .map_or(Protocol::Http, |_| Protocol::Https);
 
-        let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
-        let tedge_http_protocol = if tedge_config.http.cert_path.or_none().is_some()
-            && tedge_config.http.key_path.or_none().is_some()
-        {
-            Protocol::Https
-        } else {
-            Protocol::Http
-        };
+        let file_transfer_urls = tedge_config.http.file_transfer_urls();
 
         let capabilities = Capabilities {
             log_upload: c8y_config.cloud_specific.enable.log_upload,
@@ -273,8 +262,7 @@ impl C8yMapperConfig {
             service,
             c8y_host,
             c8y_mqtt,
-            tedge_http_host,
-            tedge_http_protocol,
+            file_transfer_urls,
             topics,
             capabilities,
             auth_proxy_addr,

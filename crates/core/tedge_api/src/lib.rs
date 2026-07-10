@@ -5,6 +5,7 @@ pub mod entity;
 pub mod entity_store;
 pub mod error;
 pub mod event;
+pub mod file_transfer_url;
 pub mod health;
 pub mod measurement;
 pub mod mqtt_topics;

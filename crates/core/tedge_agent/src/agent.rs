@@ -33,6 +33,7 @@ use tedge_actors::Sequential;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
 use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::file_transfer_url::FileTransferUrls;
 use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -57,7 +58,6 @@ use tedge_mqtt_ext::MqttConfig;
 use tedge_script_ext::ScriptActor;
 use tedge_signal_ext::SignalActor;
 use tedge_uploader_ext::UploaderActor;
-use tedge_utils::http::Protocol;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
 use tracing::info;
@@ -82,8 +82,7 @@ pub(crate) struct AgentConfig {
     pub mqtt_device_topic_id: EntityTopicId,
     pub service_topic_id: ServiceTopicId,
     pub mqtt_topic_root: Arc<str>,
-    pub tedge_http_host: Arc<str>,
-    pub tedge_http_protocol: Protocol,
+    pub file_transfer_urls: FileTransferUrls,
     pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
     pub cloud_root_certs: CloudHttpConfig,
@@ -123,17 +122,7 @@ impl AgentConfig {
             .mqtt_config()?
             .with_session_name(mqtt_session_name);
 
-        // Tedge HTTP config
-        let tedge_http_address = tedge_config.http.client.host.clone();
-        let tedge_http_port = tedge_config.http.client.port;
-        let tedge_http_host = format!("{}:{}", tedge_http_address, tedge_http_port).into();
-        let tedge_http_protocol = if tedge_config.http.cert_path.or_none().is_some()
-            && tedge_config.http.key_path.or_none().is_some()
-        {
-            Protocol::Https
-        } else {
-            Protocol::Http
-        };
+        let file_transfer_urls = tedge_config.http.file_transfer_urls();
 
         // HTTP config
         let data_dir = tedge_config.data_root();
@@ -214,8 +203,7 @@ impl AgentConfig {
             mqtt_topic_root,
             mqtt_device_topic_id,
             service_topic_id,
-            tedge_http_host,
-            tedge_http_protocol,
+            file_transfer_urls,
             identity,
             cloud_root_certs,
             is_sudo_enabled,
@@ -357,8 +345,7 @@ impl Agent {
                     config_dir: self.config.config_dir.clone(),
                     mqtt_topic_root: mqtt_schema.clone(),
                     mqtt_device_topic_id: device_topic_id.clone(),
-                    tedge_http_host: self.config.tedge_http_host,
-                    tedge_http_protocol: self.config.tedge_http_protocol,
+                    file_transfer_urls: self.config.file_transfer_urls.clone(),
                     tmp_path: self.config.tmp_dir.clone(),
                     ops_dir: self.config.operations_dir.clone(),
                     is_sudo_enabled: self.config.is_sudo_enabled,

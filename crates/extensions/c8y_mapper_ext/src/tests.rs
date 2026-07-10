@@ -41,6 +41,7 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::file_transfer_url::FileTransferUrls;
 use tedge_api::mqtt_topics::ChannelFilter::AnySignal;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -3282,7 +3283,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let service_topic_id = EntityTopicId::default_main_service("tedge-mapper-c8y").unwrap();
     let config = TEdgeConfig::load_toml_str("service.ty = \"service\"");
     let c8y_host = "test.c8y.io".to_owned();
-    let tedge_http_host = "localhost:8888".into();
+    let file_transfer_urls = FileTransferUrls::new("localhost:8888".into(), Protocol::Http);
     let mqtt_schema = MqttSchema::default();
     let auth_proxy_addr = "127.0.0.1".into();
     let auth_proxy_port = 8001;
@@ -3328,8 +3329,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         config.service.clone(),
         c8y_host.clone(),
         c8y_host,
-        tedge_http_host,
-        Protocol::Http,
+        file_transfer_urls,
         topics,
         capabilities,
         auth_proxy_addr,

@@ -94,12 +94,10 @@ impl OperationContext {
         let tedge_file_url = match command.payload.tedge_url {
             Some(ref tedge_file_url) => Cow::Borrowed(tedge_file_url),
             None => {
-                let tedge_file_url = format!(
-                    "{}://{}/te/v1/files/{external_id}/config_snapshot/{config_filename}",
-                    self.tedge_http_protocol.as_str(),
-                    self.tedge_http_host,
-                    external_id = target.external_id.as_ref()
-                );
+                let external_id = target.external_id.as_ref();
+                let tedge_file_url = self
+                    .file_transfer_urls
+                    .for_path(&format!("{external_id}/config_snapshot/{config_filename}"));
                 Cow::Owned(tedge_file_url)
             }
         };

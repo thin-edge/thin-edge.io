@@ -17,7 +17,6 @@ use crate::actor::IdDownloadResult;
 use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::Capabilities;
-use c8y_api::proxy_url::Protocol;
 use c8y_api::smartrest::payload::SmartrestPayload;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
@@ -39,6 +38,7 @@ use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::entity::EntityExternalId;
+use tedge_api::file_transfer_url::FileTransferUrls;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
@@ -59,8 +59,7 @@ use tracing::info;
 pub(super) struct OperationContext {
     pub(super) capabilities: Capabilities,
     pub(super) auto_log_upload: AutoLogUpload,
-    pub(super) tedge_http_host: Arc<str>,
-    pub(super) tedge_http_protocol: Protocol,
+    pub(super) file_transfer_urls: FileTransferUrls,
     pub(super) tmp_dir: Arc<Utf8Path>,
     pub(super) mqtt_schema: MqttSchema,
     pub(super) software_management_api: SoftwareManagementApiFlag,
