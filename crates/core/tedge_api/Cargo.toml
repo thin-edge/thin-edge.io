@@ -15,7 +15,6 @@ csv = { workspace = true }
 download = { workspace = true }
 indexmap = { workspace = true }
 json-writer = { workspace = true }
-log = { workspace = true }
 mqtt_channel = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
@@ -31,6 +30,7 @@ time = { workspace = true, features = [
     "serde-well-known",
 ] }
 tokio = { workspace = true, features = ["fs", "process"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

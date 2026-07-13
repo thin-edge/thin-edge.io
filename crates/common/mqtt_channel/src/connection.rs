@@ -9,9 +9,6 @@ use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::SinkExt;
 use futures::StreamExt;
-use log::error;
-use log::info;
-use log::warn;
 use rumqttc::AsyncClient;
 use rumqttc::Event;
 use rumqttc::EventLoop;
@@ -27,6 +24,9 @@ use std::time::Duration;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 use tracing::Instrument;
 
 /// A connection to some MQTT server

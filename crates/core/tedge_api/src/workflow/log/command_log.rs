@@ -6,13 +6,13 @@ use crate::workflow::OperationAction;
 use crate::workflow::OperationName;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use log::error;
-use log::info;
 use time::format_description;
 use time::OffsetDateTime;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
+use tracing::error;
+use tracing::info;
 
 /// Log all command steps
 pub struct CommandLog {

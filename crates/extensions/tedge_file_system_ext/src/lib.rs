@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use log::error;
 use std::path::PathBuf;
 use tedge_actors::futures::channel::mpsc;
 use tedge_actors::futures::StreamExt;
@@ -15,6 +14,7 @@ use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_utils::notify::FsEvent;
 use tedge_utils::notify::NotifyStream;
+use tracing::error;
 use try_traits::Infallible;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

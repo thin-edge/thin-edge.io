@@ -5,9 +5,6 @@ use crate::state_repository::state::AgentStateRepository;
 use crate::Capabilities;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
-use log::error;
-use log::info;
-use log::warn;
 use serde_json::json;
 use std::collections::HashMap;
 use std::process::Output;
@@ -49,6 +46,9 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
 use tokio::time::sleep;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 type DownloaderRequest = (String, DownloadRequest);
 type DownloaderResult = (String, DownloadResult);
@@ -161,7 +161,7 @@ impl WorkflowActor {
     /// Only the former will be actually processed with [Self::process_command_update].
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
         let Ok((_, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) else {
-            log::error!("Unknown topic: {}", message.topic.name);
+            error!("Unknown topic: {}", message.topic.name);
             return Ok(());
         };
         match channel {
@@ -231,7 +231,7 @@ impl WorkflowActor {
             return Ok(());
         }
         let Ok(state) = GenericCommandState::from_command_message(&message) else {
-            log::error!("Invalid command payload: {}", message.topic.name);
+            error!("Invalid command payload: {}", message.topic.name);
             return Ok(());
         };
         let step = state.status.clone();
@@ -279,7 +279,7 @@ impl WorkflowActor {
         state: GenericCommandState,
     ) -> Result<(), RuntimeError> {
         let Ok((operation, cmd_id)) = self.extract_command_identifiers(&state.topic.name) else {
-            log::error!("Unknown command channel: {}", state.topic.name);
+            error!("Unknown command channel: {}", state.topic.name);
             return Ok(());
         };
         if !self.is_operation_enabled(&operation) {

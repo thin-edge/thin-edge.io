@@ -15,7 +15,6 @@ backoff = { workspace = true }
 certificate = { workspace = true, features = ["reqwest"] }
 http = { workspace = true }
 hyper = { workspace = true }
-log = { workspace = true }
 nix = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 rustls = { workspace = true }
@@ -24,6 +23,7 @@ tedge_utils = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 axum = { workspace = true }

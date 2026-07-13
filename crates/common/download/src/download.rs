@@ -7,9 +7,6 @@ use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
 use certificate::CloudHttpConfig;
 use http::StatusCode;
-use log::debug;
-use log::info;
-use log::warn;
 use nix::sys::statvfs;
 pub use partial_response::InvalidResponseError;
 use reqwest::header::HeaderMap;
@@ -27,6 +24,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_utils::file::FileError;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 #[cfg(target_os = "linux")]
 use nix::fcntl::fallocate;

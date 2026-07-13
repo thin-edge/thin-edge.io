@@ -10,7 +10,6 @@ mod tests;
 use crate::plugin_manager::ExternalPlugins;
 use actor::*;
 pub use config::*;
-use log::error;
 use serde_json::json;
 use std::path::PathBuf;
 use std::vec;
@@ -50,6 +49,7 @@ use tedge_utils::file::move_file;
 use tedge_utils::file::PermissionEntry;
 use tedge_utils::fs::atomically_write_file_sync;
 use toml::toml;
+use tracing::error;
 
 /// An instance of the config manager
 ///

@@ -6,6 +6,8 @@ use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use tedge_config::SudoCommandBuilder;
 use tedge_system_services::GeneralServiceManager;
+use tracing::error;
+use tracing::info;
 
 #[derive(clap::Parser, Debug)]
 #[clap(
@@ -96,7 +98,7 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
         &cli.common.log_args,
         &cli.common.config_dir,
     ) {
-        log::error!("Can't enable logging due to error: {err}");
+        error!("Can't enable logging due to error: {err}");
         return Err(err.into());
     }
 
@@ -124,7 +126,7 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
             Ok(())
         }
         PluginOp::Get { config_type } => plugin.get(&config_type).map_err(|err| {
-            log::error!("Failed to get configuration for {config_type} : {err}");
+            error!("Failed to get configuration for {config_type} : {err}");
             err.into()
         }),
         PluginOp::Prepare {
@@ -139,11 +141,11 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
                 .await
             {
                 Ok(()) => {
-                    log::info!("Successfully prepared configuration for {}", config_type);
+                    info!("Successfully prepared configuration for {}", config_type);
                     Ok(())
                 }
                 Err(err) => {
-                    log::error!("Failed to prepare configuration: {err}");
+                    error!("Failed to prepare configuration: {err}");
                     Err(err.into())
                 }
             }
@@ -156,11 +158,11 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
             let source_path = Utf8PathBuf::from(config_path);
             match plugin.set(&config_type, &source_path).await {
                 Ok(()) => {
-                    log::info!("Successfully updated configuration for {}", config_type);
+                    info!("Successfully updated configuration for {}", config_type);
                     Ok(())
                 }
                 Err(err) => {
-                    log::error!("Failed to set configuration: {err}");
+                    error!("Failed to set configuration: {err}");
                     Err(err.into())
                 }
             }
@@ -172,11 +174,11 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
             let workdir_path = Utf8PathBuf::from(work_dir);
             match plugin.verify(&config_type, &workdir_path).await {
                 Ok(()) => {
-                    log::info!("Successfully verified configuration for {}", config_type);
+                    info!("Successfully verified configuration for {}", config_type);
                     Ok(())
                 }
                 Err(err) => {
-                    log::error!("Failed to verify configuration: {err}");
+                    error!("Failed to verify configuration: {err}");
                     Err(err.into())
                 }
             }
@@ -188,11 +190,11 @@ pub async fn run(cli: FileConfigCli, tedge_config: TEdgeConfigView) -> anyhow::R
             let workdir_path = Utf8PathBuf::from(work_dir);
             match plugin.rollback(&config_type, &workdir_path).await {
                 Ok(()) => {
-                    log::info!("Successfully rolled back configuration for {}", config_type);
+                    info!("Successfully rolled back configuration for {}", config_type);
                     Ok(())
                 }
                 Err(err) => {
-                    log::error!("Failed to rollback configuration: {err}");
+                    error!("Failed to rollback configuration: {err}");
                     Err(err.into())
                 }
             }

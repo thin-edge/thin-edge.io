@@ -3,7 +3,6 @@ use certificate::CloudHttpConfig;
 use download::DownloadError;
 use download::DownloadInfo;
 use download::Downloader;
-use log::info;
 use reqwest::header::HeaderMap;
 use reqwest::Identity;
 use std::marker::PhantomData;
@@ -15,6 +14,7 @@ use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
 use tedge_utils::file::PermissionEntry;
+use tracing::info;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DownloadRequest {

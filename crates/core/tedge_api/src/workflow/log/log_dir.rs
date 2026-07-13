@@ -8,6 +8,8 @@ use std::vec;
 use tedge_utils::paths::ManagedDir;
 use time::format_description;
 use time::OffsetDateTime;
+use tracing::info;
+use tracing::warn;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OperationLogsError {
@@ -84,7 +86,7 @@ impl OperationLogs {
     pub async fn remove_all_outdated_logs(&self) {
         for (operation, keep) in self.keep_per_operation.iter() {
             if let Err(err) = self.remove_outdated_logs(operation, *keep).await {
-                log::warn!("Fail to remove out-dated log files: {}", err);
+                warn!("Fail to remove out-dated log files: {}", err);
             }
         }
     }
@@ -112,7 +114,7 @@ impl OperationLogs {
             if let Err(err) = self.remove_outdated_logs(&log.operation, keep).await {
                 // In no case a log-cleaning error should prevent the agent to run.
                 // Hence the error is logged but not returned.
-                log::warn!("Fail to remove out-dated log files: {}", err);
+                warn!("Fail to remove out-dated log files: {}", err);
             }
         }
 
@@ -154,13 +156,13 @@ impl OperationLogs {
         // Delete the others
         for (path, _) in operation_logs {
             if let Err(err) = tokio::fs::remove_file(&path).await {
-                log::warn!(
+                warn!(
                     "Fail to remove out-dated log file {} : {}",
                     path.display(),
                     err
                 );
             } else {
-                log::info!("Removed out-dated log file: {}", path.display());
+                info!("Removed out-dated log file: {}", path.display());
             }
         }
 

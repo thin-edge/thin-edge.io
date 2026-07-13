@@ -214,7 +214,7 @@ impl LoggedCommand {
     /// If the command fails to execute (say not found or not executable) an `std::io::Error` is returned.
     ///
     /// If the function fails to log the execution of the command,
-    /// this is logged with `log::error!` without changing the return value.
+    /// this is logged with `tracing::error!` without changing the return value.
     pub async fn execute(
         mut self,
         command_log: Option<&mut CommandLog>,

@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use log::error;
 use std::collections::HashMap;
 use tedge_actors::ChannelError;
 use tedge_actors::DynSender;
@@ -8,6 +7,7 @@ use tedge_api::commands::CmdMetaSyncSignal;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::workflow::OperationName;
+use tracing::error;
 
 /// A sender of [GenericCommandState]
 /// that dispatches each command to the appropriate actor according the command's type.

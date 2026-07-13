@@ -2,8 +2,6 @@ use anyhow::Context;
 use async_trait::async_trait;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use log::error;
-use log::info;
 use serde_json::json;
 use serde_json::Value;
 use std::str::FromStr;
@@ -40,6 +38,9 @@ use tedge_mqtt_ext::Topic;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use time::OffsetDateTime;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 use tracing::Instrument;
 
 use crate::plugin::ExternalPlugin;
@@ -733,7 +734,7 @@ impl ConfigManagerWorker {
                 "Cleaning up work directory: {}", work_dir
             );
             if let Err(err) = std::fs::remove_dir_all(work_dir) {
-                log::warn!("Failed to cleanup work directory {}: {}", work_dir, err);
+                warn!("Failed to cleanup work directory {}: {}", work_dir, err);
             }
         }
 
@@ -777,7 +778,7 @@ impl ConfigManagerWorker {
                 "Cleaning up work directory: {}", work_dir
             );
             if let Err(err) = std::fs::remove_dir_all(work_dir) {
-                log::warn!("Failed to cleanup work directory {}: {}", work_dir, err);
+                warn!("Failed to cleanup work directory {}: {}", work_dir, err);
             }
         }
 

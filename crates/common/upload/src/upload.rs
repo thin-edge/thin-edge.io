@@ -4,8 +4,6 @@ use backoff::ExponentialBackoff;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::CloudHttpConfig;
-use log::info;
-use log::warn;
 use mime::Mime;
 use mime_guess::MimeGuess;
 use reqwest::header::CONTENT_LENGTH;
@@ -17,6 +15,8 @@ use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::codec::BytesCodec;
 use tokio_util::codec::FramedRead;
+use tracing::info;
+use tracing::warn;
 
 fn default_backoff() -> ExponentialBackoff {
     // Default retry is an exponential retry with a limit of 5 minutes total.
