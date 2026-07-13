@@ -186,6 +186,13 @@ build-integration-test: build
 
 # Run integration tests (using local build)
 integration-test *ARGS: build-integration-test
+    #!/usr/bin/env bash
+    set -e
+    if [ ! -d tests/RobotFramework/.venv ]; then
+        just -f {{justfile()}} setup-integration-test
+    fi
+    cd tests/RobotFramework
+    source .venv/bin/activate
     invoke tests {{ARGS}}
 
 # All arguments are forwarded as-is to the `invoke flake-finder` task.
