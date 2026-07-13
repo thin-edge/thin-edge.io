@@ -40,7 +40,7 @@ use tedge_mqtt_ext::Topic;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
-use tracing::log::warn;
+use tracing::warn;
 
 const C8Y_CLOUD: &str = "c8y";
 const SUPPORTED_OPERATIONS_DIRECTORY: &str = "operations";

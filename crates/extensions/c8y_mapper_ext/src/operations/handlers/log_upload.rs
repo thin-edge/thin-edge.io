@@ -10,7 +10,7 @@ use tedge_api::commands::LogUploadCmd;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_mqtt_ext::MqttMessage;
-use tracing::log::warn;
+use tracing::warn;
 
 impl OperationContext {
     /// Address a received log_upload command. If its status is

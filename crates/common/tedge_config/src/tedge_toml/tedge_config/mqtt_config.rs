@@ -13,7 +13,7 @@ use certificate::parse_root_certificate;
 use certificate::parse_root_certificate::SecretString;
 use certificate::CertificateError;
 use tedge_config_macros::all_or_nothing;
-use tracing::log::debug;
+use tracing::debug;
 
 use super::CloudConfig;
 use super::TEdgeConfigReaderDevice;
