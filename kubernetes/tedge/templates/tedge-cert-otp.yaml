@@ -1,0 +1,22 @@
+{{- if eq .Values.certs.source "pvc" }}
+{{- $name := include "tedge.otpSecretName" . -}}
+{{- $key := "one-time-password" -}}
+{{- $otp := "" -}}
+{{- if .Values.certs.oneTimePassword -}}
+{{- $otp = .Values.certs.oneTimePassword | b64enc -}}
+{{- else -}}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $name -}}
+{{- if and $existing (hasKey $existing.data $key) -}}
+{{- $otp = index $existing.data $key -}}
+{{- else -}}
+{{- $otp = randAlphaNum 32 | b64enc -}}
+{{- end -}}
+{{- end -}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+type: Opaque
+data:
+  {{ $key }}: {{ $otp }}
+{{- end }}

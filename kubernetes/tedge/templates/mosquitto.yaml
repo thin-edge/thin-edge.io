@@ -1,9 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mosquitto
+  name: mqtt
 spec:
-  replicas: 1 # Number of broker pods
+  replicas: 1
+  # Never run two mosquitto pods at once: on upgrade Recreate terminates the old
+  # pod before starting the new one, avoiding concurrent access to the broker's
+  # persistent state (the default RollingUpdate would briefly run both).
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: mosquitto
@@ -12,72 +17,20 @@ spec:
       labels:
         app: mosquitto
     spec:
-      volumes:
-      - name: tedge-vol
-        persistentVolumeClaim:
-          claimName: "tedge-pvc"
-      - name: mosquitto-config-vol
-        configMap:
-          name: mosquitto-config
-      - name: tedge-certs-vol
-        secret:
-          secretName: tedge-certs
-      initContainers:
-      - name: tedge-bootstrap
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
-        securityContext:
-          runAsUser: 0
-        command:
-          - sh
-          - -xec
-          - "tedge init && cp /tedge/device-certs/* /etc/tedge/device-certs/ && tedge cert show && tedge connect c8y && cat /etc/tedge/mosquitto-conf/c8y-bridge.conf"
-        volumeMounts:
-        - name: tedge-vol
-          mountPath: /etc/tedge
-        - name: tedge-certs-vol
-          mountPath: /tedge/device-certs
-        env:
-        - name: TEDGE_C8Y_URL
-          value: {{ required "A valid c8y.url is required!" .Values.c8y.url }}
       containers:
       - name: mosquitto
-        image: eclipse-mosquitto
+        image: ghcr.io/thin-edge/tedge-mosquitto:20260528.1607
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
         - containerPort: 1883
           name: mqtt-svc
-        volumeMounts:
-        - name: mosquitto-config-vol
-          mountPath: /mosquitto/config
-        - name: tedge-vol
-          mountPath: /etc/tedge
-      - name: tedge-mapper
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
-        command: ["tedge-mapper", "c8y"]
-        ports:
-        - containerPort: 8001
-        volumeMounts:
-        - name: tedge-vol
-          mountPath: /etc/tedge
-        env:
-        - name: TEDGE_MQTT_CLIENT_HOST
-          value: "localhost"
-        - name: TEDGE_C8Y_URL
-          value: {{ required "A valid c8y.url is required!" .Values.c8y.url }}
-        - name: TEDGE_HTTP_CLIENT_HOST
-          value: "fts"
-        - name: TEDGE_C8Y_PROXY_CLIENT_HOST
-          value: "localhost"
-
 
 ---
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: mosquitto
+  name: mqtt
 spec:
   selector:
     app: mosquitto

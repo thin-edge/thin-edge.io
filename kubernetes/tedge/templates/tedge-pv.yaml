@@ -1,27 +1,65 @@
+{{- if .Values.persistence.createPv }}
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: "tedge-pv"
+  name: {{ include "tedge.persistence.pvName" . | quote }}
   labels:
     storage: "tedge"
 spec:
   capacity:
-    storage: 100Mi
+    storage: {{ .Values.persistence.size }}
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.persistence.accessMode }}
   hostPath:
-    path: "/data/tedge"
+    path: {{ include "tedge.persistence.hostPath" . | quote }}
     type: DirectoryOrCreate
+{{- end }}
 
+{{- if .Values.persistence.createClaim }}
+{{- if .Values.persistence.createPv }}
 ---
+{{- end }}
 
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: "tedge-pvc"
+  name: {{ include "tedge.persistence.claimName" . | quote }}
 spec:
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.persistence.accessMode }}
   resources:
     requests:
-      storage: 100Mi
+      storage: {{ .Values.persistence.size }}
+{{- end }}
+
+{{- if and (eq .Values.certs.source "pvc") .Values.certs.createPv }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "tedge.certs.pvName" . | quote }}
+  labels:
+    storage: "tedge-certs"
+spec:
+  capacity:
+    storage: {{ .Values.certs.size }}
+  accessModes:
+    - {{ .Values.certs.accessMode }}
+  hostPath:
+    path: {{ include "tedge.certs.hostPath" . | quote }}
+    type: DirectoryOrCreate
+{{- end }}
+
+{{- if and (eq .Values.certs.source "pvc") .Values.certs.createClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "tedge.certs.claimName" . | quote }}
+spec:
+  accessModes:
+    - {{ .Values.certs.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.certs.size }}
+{{- end }}
