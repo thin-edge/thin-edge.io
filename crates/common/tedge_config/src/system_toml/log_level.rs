@@ -323,7 +323,18 @@ fn build_component_log_filter(
     default_level: tracing::Level,
 ) -> Result<ComponentLogFilter, SystemTomlError> {
     let config = SystemConfig::try_new(config_dir)?;
-    component_log_filter(&config, service_names, default_level)
+    let mut filter = component_log_filter(&config, service_names, default_level)?;
+
+    // A single-service process is entirely that component: its level applies
+    // process-wide, so events need no span-based attribution and the process
+    // does not have to run inside a `component` span.
+    if let [service_name] = service_names {
+        if let Some(level) = filter.component_levels.remove(*service_name) {
+            filter.default_level = level;
+        }
+    }
+
+    Ok(filter)
 }
 
 /// Maps an already-parsed [`SystemConfig`] to per-component levels. The `tedge`
@@ -575,6 +586,41 @@ mod tests {
         let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
         let res = log_level_for_service("tedge-agent", &config_dir);
         assert_eq!(Some(Level::TRACE), res);
+        Ok(())
+    }
+
+    #[test]
+    fn standalone_service_log_level_applies_without_component_spans() -> anyhow::Result<()> {
+        let toml_conf = r#"
+        [log]
+        tedge-agent = "debug"
+    "#;
+
+        let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
+        let res = build_component_log_filter(&["tedge-agent"], &config_dir, DEFAULT_LEVEL)?;
+        assert_eq!(Level::DEBUG, res.default_level);
+        assert!(
+            res.component_levels.is_empty(),
+            "a single-service process must not depend on span-based attribution"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn standalone_mapper_inherits_generic_mapper_level_without_component_spans(
+    ) -> anyhow::Result<()> {
+        let toml_conf = r#"
+        [log]
+        tedge-mapper = "debug"
+    "#;
+
+        let (_dir, config_dir) = create_temp_system_config(toml_conf)?;
+        let res = build_component_log_filter(&["tedge-mapper-c8y"], &config_dir, DEFAULT_LEVEL)?;
+        assert_eq!(Level::DEBUG, res.default_level);
+        assert!(
+            res.component_levels.is_empty(),
+            "a single-service process must not depend on span-based attribution"
+        );
         Ok(())
     }
 

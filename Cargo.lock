@@ -3683,16 +3683,16 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.5.12"
+version = "0.5.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee4e529991f949c5e25755532370b8af5d114acae52326361d68d47af64aa842"
+checksum = "addec6a0dcad8a8d96a771f815f0eaf55f9d1805756410b39f5fa81332574cbd"
 dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4876,6 +4876,7 @@ dependencies = [
  "tedge_config",
  "tedge_flows",
  "tedge_mqtt_bridge",
+ "tedge_supervisor",
  "tedge_system_services",
  "tedge_test_utils",
  "tedge_utils",
@@ -4934,7 +4935,7 @@ dependencies = [
  "tedge_log_manager",
  "tedge_mqtt_ext",
  "tedge_script_ext",
- "tedge_signal_ext",
+ "tedge_supervisor",
  "tedge_test_utils",
  "tedge_uploader_ext",
  "tedge_utils",
@@ -5048,6 +5049,7 @@ dependencies = [
  "clock",
  "collectd_ext",
  "flockfile",
+ "futures",
  "mqtt_channel",
  "rcgen",
  "serde",
@@ -5063,7 +5065,7 @@ dependencies = [
  "tedge_http_ext",
  "tedge_mqtt_bridge",
  "tedge_mqtt_ext",
- "tedge_signal_ext",
+ "tedge_supervisor",
  "tedge_test_utils",
  "tedge_timer_ext",
  "tedge_uploader_ext",
@@ -5512,6 +5514,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_supervisor"
+version = "2.0.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "flockfile",
+ "futures",
+ "tedge_actors",
+ "tedge_config",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tedge_system_services"
 version = "2.0.1"
 dependencies = [
@@ -5777,9 +5793,9 @@ dependencies = [
 
 [[package]]
 name = "tinyvec"
-version = "1.9.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09b3661f17e86524eccd4371ab0429194e0d7c008abb45f7a7495b1719463c71"
+checksum = "3e61e67053d25a4e82c844e8424039d9745781b3fc4f32b8d55ed50f5f667ef3"
 dependencies = [
  "tinyvec_macros",
 ]

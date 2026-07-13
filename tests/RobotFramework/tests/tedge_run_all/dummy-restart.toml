@@ -1,0 +1,2 @@
+# Dummy configuration whose only purpose is to trigger an agent restart on update
+marker = "updated"

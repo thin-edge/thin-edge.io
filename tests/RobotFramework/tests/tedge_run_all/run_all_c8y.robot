@@ -3,10 +3,11 @@ Documentation       Smoke tests for the single-process supervisor (`tedge run al
 ...                 Runs the agent and the c8y mapper together inside one process and
 ...                 checks both come up healthy and the device keeps talking to
 ...                 Cumulocity, that the supervisor's locks make it mutually exclusive
-...                 with the standalone components, and that SIGUSR1 really restarts
+...                 with the standalone components, that SIGUSR1 really restarts
 ...                 the mapper (proven via the mapper's health `time`, which is refreshed
 ...                 on every restart, while its pid stays put — only the supervised task
-...                 is rebuilt, not the process).
+...                 is rebuilt, not the process), and that an update requiring an agent
+...                 restart exits the whole process for the service manager to restart it.
 ...
 ...                 The device is registered once for the suite, but each test gets a
 ...                 freshly started supervisor and tears it down again afterwards, so the
@@ -48,6 +49,44 @@ The supervisor is mutually exclusive with the standalone components
     # must refuse to start rather than clobber the supervised one. The standalone
     # mapper fails fast on the lock, so this does not block.
     Execute Command    tedge-mapper c8y    exp_exit_code=!0
+
+A config update restarting the agent restarts the whole process
+    # A configuration update whose config type declares `service = "tedge-agent"`
+    # makes the agent request a restart of itself. Such a restart (like the one after
+    # a self-update) only takes effect by re-executing the binary, so the supervisor
+    # must exit the whole process and let the service manager start it again; the
+    # resumed operation then completes on the restarted agent.
+    [Setup]    Start Supervisor With Restart On Failure
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-agent
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
+
+    # Declare a config type whose update restarts tedge-agent.
+    ThinEdgeIO.Transfer To Device
+    ...    ${CURDIR}/tedge-configuration-plugin.toml
+    ...    /etc/tedge/plugins/tedge-configuration-plugin.toml
+    Should Contain Supported Configuration Types    dummy-restart
+
+    ${pid_before}=    Get Service PID    tedge-run-all
+
+    ${config_url}=    Cumulocity.Create Inventory Binary
+    ...    dummy-restart
+    ...    dummy-restart
+    ...    file=${CURDIR}/dummy-restart.toml
+    ${operation}=    Cumulocity.Set Configuration    dummy-restart    url=${config_url}
+    ${operation}=    Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    # The whole process was re-executed by the service manager, not rebuilt in-process.
+    ${pid_after}=    Get Service PID    tedge-run-all
+    Should Not Be Equal    ${pid_before}    ${pid_after}
+
+    # Both components come back up in the restarted process.
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-agent
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
+    [Teardown]    Stop Supervisor And Remove Config Type
 
 SIGUSR1 restarts the mapper
     # The mapper publishes a health `up` message every time it (re)starts, stamped
@@ -97,6 +136,20 @@ Start Supervisor
     # `--collect` reaps the unit when it stops, freeing the name for the next test.
     Execute Command
     ...    cmd=systemd-run --unit=tedge-run-all --collect -p User=tedge -p Group=tedge /usr/bin/tedge run all c8y
+
+Start Supervisor With Restart On Failure
+    # Like Start Supervisor, but with the restart policy the packaged service files
+    # use: when a component requires a process restart (a self-update, or an update of
+    # the agent's own configuration) the supervisor exits non-zero and relies on the
+    # service manager to start it again.
+    Execute Command
+    ...    cmd=systemd-run --unit=tedge-run-all --collect -p User=tedge -p Group=tedge -p Restart=on-failure /usr/bin/tedge run all c8y
+
+Stop Supervisor And Remove Config Type
+    # Drop the config type declaration (and the file its update created) so the other
+    # tests of the suite see the device exactly as the suite setup left it.
+    Execute Command    rm -f /etc/tedge/plugins/tedge-configuration-plugin.toml /etc/tedge/dummy-restart.toml
+    Stop Supervisor
 
 Mapper Restarted Since
     [Arguments]    ${before}
