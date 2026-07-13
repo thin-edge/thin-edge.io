@@ -110,11 +110,6 @@ Watchdog sends notification if service is up which leads to service continuing t
 Custom Setup
     Setup    register=${False}
 
-    # Need to manually restart the mqtt-logger because after the bootstrapping step it
-    # isn't restarted, whereas normal bootstrap would have restarted it
-    # TODO: update the bootstrap logic to always restart mqtt-logger
-    Restart Service    mqtt-logger
-
     Execute Command    mv /lib/systemd/system/tedge-agent.service /lib/systemd/system/tedge-agent.service.bak
     Transfer To Device    ${CURDIR}/tedge-agent.service    /lib/systemd/system/
 

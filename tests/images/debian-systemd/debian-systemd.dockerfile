@@ -32,11 +32,22 @@ RUN apt-get -y update \
     # PKCS11 / cryptoki support
     gnutls-bin \
     softhsm2 \
-    # mosquitto (default version used by Debian, see below for more details)
-    mosquitto \
-    mosquitto-clients \
     # configure locales
     && echo "LANG=C.UTF-8" > /etc/default/locale
+
+# Setup community repository and install mosquitto and log plugin
+RUN \
+    keyring_location=/usr/share/keyrings/thinedge-community-archive-keyring.gpg \
+    && curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/community/gpg.2E65716592E5C6D4.key' |  gpg --dearmor >> ${keyring_location} \
+    && curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/community/config.deb.txt?distro=debian&codename=any-version&component=main' > /etc/apt/sources.list.d/thinedge-community.list \
+    && chmod 644 ${keyring_location} \
+    && chmod 644 /etc/apt/sources.list.d/thinedge-community.list \
+    && apt-get update \
+    && apt-get install -y \
+        # mosquitto (default version used by Debian, see below for more details)
+        tedge-mosquitto-gnu \
+        mosquitto-log-plugin \
+        mosquitto-log-client
 
 # Since vim.tiny is installed, vi command runs it under the hood, but in compatibility mode.
 # Disabling this classic compatibility mode to make it more user friendly (like vim) enabling features like:
@@ -87,10 +98,6 @@ COPY files/system.toml /etc/tedge/
 COPY files/tedge.toml /etc/tedge/tedge.toml
 COPY files/tedge-configuration-plugin.toml /etc/tedge/plugins/
 COPY files/packages/ /setup/packages/
-
-COPY files/mqtt-logger.service /etc/systemd/system/
-COPY files/mqtt-logger /usr/bin/
-RUN systemctl enable mqtt-logger.service
 
 # Custom mosquitto config
 COPY files/mosquitto.conf /etc/mosquitto/conf.d/
