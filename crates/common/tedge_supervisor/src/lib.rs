@@ -2,8 +2,8 @@
 //!
 //! Serves two execution modes:
 //!
-//! - **Multi-unit** (`tedge run all`): hosts the agent and a mapper inside one process
-//!   so no external init system is required.
+//! - **Multi-unit** (`tedge run all`): hosts the agent and one or more mappers inside
+//!   one process so no external init system is required.
 //! - **Single-unit** (standalone `tedge-agent`, `tedge-mapper`): wraps one component
 //!   with the same signal handling and SIGHUP log-level reloading, but leaves crash
 //!   recovery to the init system: the first unit failure exits the process, exactly
