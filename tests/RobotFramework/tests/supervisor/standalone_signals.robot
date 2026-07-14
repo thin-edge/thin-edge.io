@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation       Live log-level reload for standalone tedge-agent and tedge-mapper.
+Documentation       Signal handling for standalone tedge-agent and tedge-mapper.
 ...                 On SIGHUP each standalone process re-reads its `[log]` level from
 ...                 `system.toml` and applies it without restarting, unless an explicit
 ...                 override (`--log-level`/`--debug`/`RUST_LOG`) is in effect.
@@ -8,6 +8,10 @@ Documentation       Live log-level reload for standalone tedge-agent and tedge-m
 ...                 `EntityStoreServer: recv` line only once the agent has been raised to
 ...                 `debug`; likewise the mapper's MQTT actor leaves an `MQTT recv` line
 ...                 for a published measurement.
+...
+...                 SIGUSR1 is the mapper-restart signal used by the `tedge run all`
+...                 supervisor. A standalone mapper must ignore it so that a stray signal
+...                 does not disrupt the service.
 
 Resource            ../../resources/common.resource
 Library             ThinEdgeIO
@@ -67,6 +71,15 @@ Mapper applies updated log levels on SIGHUP without restarting
     Wait Until Keyword Succeeds
     ...    30s    2s    Service Log Should Contain    tedge-mapper-c8y    MQTT recv    date_from=${after}
 
+    Service Not Restarted Since    tedge-mapper-c8y    ${before}
+
+SIGUSR1 does not restart the standalone mapper
+    ${before}=    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
+
+    Execute Command    cmd=systemctl kill --signal=SIGUSR1 tedge-mapper-c8y
+
+    Sleep    5s    reason=Give the mapper time to (not) react to SIGUSR1
     Service Not Restarted Since    tedge-mapper-c8y    ${before}
 
 Explicit override is not affected by SIGHUP
@@ -158,11 +171,13 @@ Get Service Logs
 
 Service Not Restarted Since
     [Arguments]    ${service}    ${before}
-    # SIGHUP must not restart the service: its health `up` message keeps the same `time`
-    # and `pid` (a restart would refresh both).
     ${now}=    Service Health Status Should Be Up    ${service}
-    Should Be Equal As Numbers    ${now["time"]}    ${before["time"]}
-    Should Be Equal As Integers    ${now["pid"]}    ${before["pid"]}
+    Should Be Equal As Numbers
+    ...    ${now["time"]}    ${before["time"]}
+    ...    msg=${service} was restarted (health timestamp changed from ${before["time"]} to ${now["time"]})
+    Should Be Equal As Integers
+    ...    ${now["pid"]}    ${before["pid"]}
+    ...    msg=${service} was restarted (PID changed from ${before["pid"]} to ${now["pid"]})
 
 Restore Log Levels
     # Restore the pristine system.toml and re-signal both services so the next test
