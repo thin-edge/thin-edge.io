@@ -385,6 +385,88 @@ mod env_var_overrides {
     }
 }
 
+mod env_var_persistence {
+    use super::*;
+
+    #[test]
+    fn get_applies_env_but_set_and_unset_do_not_persist_it() {
+        let env = TestEnv::new().env("TEDGE_MQTT_PORT", "9999");
+        env.write_root_toml("[mqtt]\nport = 1883\n");
+
+        env.cmd()
+            .args(["get", "mqtt.port"])
+            .assert()
+            .success()
+            .stdout("9999\n");
+        env.cmd()
+            .args(["set", "device.id", "temporary"])
+            .assert()
+            .success();
+        env.cmd().args(["unset", "device.id"]).assert().success();
+
+        let root: toml::Table = std::fs::read_to_string(env.config_dir().join("tedge.toml"))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert_eq!(root["mqtt"]["port"].as_integer(), Some(1883));
+        assert!(root["device"].get("id").is_none());
+
+        env.cmd()
+            .args(["get", "mqtt.port"])
+            .assert()
+            .success()
+            .stdout("9999\n");
+    }
+
+    #[test]
+    fn empty_env_override_does_not_delete_file_value_during_set() {
+        let env = TestEnv::new().env("TEDGE_DEVICE_TYPE", "");
+        env.write_root_toml("[device]\ntype = \"from-file\"\n");
+
+        env.cmd()
+            .args(["set", "mqtt.port", "8883"])
+            .assert()
+            .success();
+
+        let root: toml::Table = std::fs::read_to_string(env.config_dir().join("tedge.toml"))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert_eq!(root["device"]["type"].as_str(), Some("from-file"));
+        assert_eq!(root["mqtt"]["port"].as_integer(), Some(8883));
+    }
+
+    #[test]
+    fn mapper_add_and_remove_use_the_persisted_list() {
+        let env = TestEnv::new().env("TEDGE_C8Y_SMARTREST_TEMPLATES", "env-a,env-b");
+        env.write_mapper_toml("c8y", "[smartrest]\ntemplates = [\"file-a\", \"file-b\"]\n");
+
+        env.cmd()
+            .args(["add", "mappers.c8y.smartrest.templates", "file-c"])
+            .assert()
+            .success();
+        env.cmd()
+            .args(["remove", "mappers.c8y.smartrest.templates", "file-a"])
+            .assert()
+            .success();
+
+        let mapper = env.read_mapper_toml("c8y");
+        let templates: Vec<_> = mapper["smartrest"]["templates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_str().unwrap())
+            .collect();
+        assert_eq!(templates, ["file-b", "file-c"]);
+
+        env.cmd()
+            .args(["get", "mappers.c8y.smartrest.templates"])
+            .assert()
+            .success()
+            .stdout("env-a,env-b\n");
+    }
+}
+
 mod cross_config_defaults {
     use super::*;
 

@@ -55,19 +55,19 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Read a configuration value (with defaults and env vars applied)
+    /// Read an effective value (TOML, defaults, and environment overrides)
     Get { key: String },
-    /// Set a configuration value
+    /// Set a persistent TOML value (environment overrides are ignored)
     Set { key: String, value: String },
-    /// Unset a configuration value (remove from file)
+    /// Remove a value from TOML (environment overrides are ignored)
     Unset { key: String },
-    /// Append a value to a list configuration key
+    /// Append to a persisted TOML list (environment overrides are ignored)
     Add { key: String, value: String },
-    /// Remove a value from a list configuration key
+    /// Remove from a persisted TOML list (environment overrides are ignored)
     Remove { key: String, value: String },
-    /// List all configuration keys and their current values (with defaults)
+    /// List effective values (TOML, defaults, and environment overrides)
     List,
-    /// Show the full composed configuration (root + all mappers)
+    /// Show the effective composed configuration (root + all mappers)
     Show,
     /// Output available keys for shell tab completion
     Completions,
@@ -970,6 +970,73 @@ mod tests {
 
             let root_content = std::fs::read_to_string(dir.path().join("tedge.toml")).unwrap();
             assert!(!root_content.contains("test.com"));
+        }
+
+        #[test]
+        fn every_mutation_uses_persisted_values_instead_of_environment_overrides() {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(
+                dir.path().join("tedge.toml"),
+                "[device]\ntype = \"from-file\"\n\n[mqtt]\nport = 1883\n",
+            )
+            .unwrap();
+            let c8y_dir = dir.path().join("mappers").join("c8y");
+            std::fs::create_dir_all(&c8y_dir).unwrap();
+            std::fs::write(
+                c8y_dir.join("mapper.toml"),
+                "[smartrest]\ntemplates = [\"file-a\", \"file-b\"]\n",
+            )
+            .unwrap();
+            let env = EnvOverrides::from_pairs(vec![
+                ("TEDGE_MQTT_PORT".into(), "9999".into()),
+                ("TEDGE_DEVICE_TYPE".into(), "".into()),
+                ("TEDGE_C8Y_SMARTREST_TEMPLATES".into(), "env-a,env-b".into()),
+            ]);
+            let mut fed = build_federated(dir.path(), None, &env).unwrap();
+
+            assert_eq!(fed.read("mqtt.port").unwrap(), Some("9999".into()));
+            assert_eq!(
+                fed.read("device.type").unwrap(),
+                Some("thin-edge.io".into())
+            );
+            assert_eq!(
+                fed.read("mappers.c8y.smartrest.templates").unwrap(),
+                Some("env-a,env-b".into())
+            );
+
+            fed.mutate("device.id", Action::Set("temporary".into()))
+                .unwrap();
+            fed.mutate("device.id", Action::Unset).unwrap();
+            fed.mutate(
+                "mappers.c8y.smartrest.templates",
+                Action::Add("file-c".into()),
+            )
+            .unwrap();
+            fed.mutate(
+                "mappers.c8y.smartrest.templates",
+                Action::Remove("file-a".into()),
+            )
+            .unwrap();
+
+            let root: toml::Table = std::fs::read_to_string(dir.path().join("tedge.toml"))
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert_eq!(root["mqtt"]["port"].as_integer(), Some(1883));
+            assert_eq!(root["device"]["type"].as_str(), Some("from-file"));
+            assert!(root["device"].get("id").is_none());
+
+            let mapper: toml::Table = std::fs::read_to_string(c8y_dir.join("mapper.toml"))
+                .unwrap()
+                .parse()
+                .unwrap();
+            let templates: Vec<_> = mapper["smartrest"]["templates"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_str().unwrap())
+                .collect();
+            assert_eq!(templates, ["file-b", "file-c"]);
         }
 
         #[test]

@@ -18,6 +18,11 @@ pub enum Action {
 pub trait ConfigOps {
     fn get(&self, key: &str) -> Result<Option<String>, ConfigError>;
     fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError>;
+    /// Reloads the persisted configuration, applies `action`, and saves it.
+    ///
+    /// Any environment overrides previously applied to this source are
+    /// deliberately discarded before the mutation so they cannot affect the
+    /// value being changed or leak into the backing file.
     fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError>;
     fn entries(&self) -> Vec<KeyEntry>;
     /// The `from_root` references this source's schema declares.
@@ -86,8 +91,8 @@ where
         &self.manager
     }
 
-    fn save(&self) -> Result<(), ConfigError> {
-        let content = toml::to_string_pretty(&self.dto)
+    fn save(&self, dto: &T) -> Result<(), ConfigError> {
+        let content = toml::to_string_pretty(dto)
             .map_err(|e| ConfigError::IoError(format!("serialization error: {e}")))?;
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)
@@ -113,13 +118,16 @@ where
 
     fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError> {
         self.manager.check_read_only(key)?;
+        let mut dto = load_dto(&self.path)?;
         match action {
-            Action::Set(ref value) => self.manager.set(&mut self.dto, key, value)?,
-            Action::Unset => self.manager.unset(&mut self.dto, key)?,
-            Action::Add(ref value) => self.manager.add(&mut self.dto, key, value)?,
-            Action::Remove(ref value) => self.manager.remove(&mut self.dto, key, value)?,
+            Action::Set(ref value) => self.manager.set(&mut dto, key, value)?,
+            Action::Unset => self.manager.unset(&mut dto, key)?,
+            Action::Add(ref value) => self.manager.add(&mut dto, key, value)?,
+            Action::Remove(ref value) => self.manager.remove(&mut dto, key, value)?,
         }
-        self.save()
+        self.save(&dto)?;
+        self.dto = dto;
+        Ok(())
     }
 
     fn entries(&self) -> Vec<KeyEntry> {

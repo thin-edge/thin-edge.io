@@ -50,6 +50,29 @@ Cross-config defaults also work: a mapper's `device.cert_path` can fall back to 
 
 The CLI resolves `c8y.url` to `mappers.c8y.url` via a backward-compat alias layer, so existing user muscle memory works unchanged.
 
+## Environment variables: reads versus writes
+
+Environment variables are read-time overrides. The read-only `get`, `list`,
+and `show` commands display the effective configuration after TOML, defaults,
+and environment variables have been composed. This makes `get` useful for
+diagnosing the configuration seen by a running process:
+
+```bash
+TEDGE_MQTT_PORT=8883 cargo run -- --config-dir ./test-config get mqtt.port
+# 8883
+```
+
+Persistent commands have deliberately different semantics. `set`, `unset`,
+`add`, and `remove` reload the TOML file without environment overrides, apply
+the requested change, and write that result. An environment value is therefore
+never copied into TOML and does not become the starting value for `add` or
+`remove`. In the example below, only `device.type` is changed in the file;
+`TEDGE_MQTT_PORT` remains an environment-only override:
+
+```bash
+TEDGE_MQTT_PORT=8883 cargo run -- --config-dir ./test-config set device.type custom
+```
+
 ## How the macro works
 
 A config is defined with a lightweight DSL:
