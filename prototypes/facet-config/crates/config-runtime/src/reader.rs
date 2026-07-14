@@ -65,7 +65,9 @@ fn populate_fields<'f, Dto: for<'a> Facet<'a>>(
 
         match field_shape.def {
             Def::Option(_) => {
-                partial = populate_optional_field(partial, dto, defaults, root_resolver, &key)?;
+                unreachable!(
+                    "Reader type should not have Option<T> fields; the macro should be generating OptionalConfig<T> instead"
+                );
             }
             _ if is_optional_config(field_shape) => {
                 partial = populate_optional_config_field(
@@ -97,34 +99,6 @@ fn populate_fields<'f, Dto: for<'a> Facet<'a>>(
     }
 
     Ok(partial)
-}
-
-fn populate_optional_field<'f, Dto: for<'a> Facet<'a>>(
-    partial: Partial<'f>,
-    dto: &Dto,
-    defaults: &DefaultsRegistry,
-    root_resolver: RootResolver<'_>,
-    key: &str,
-) -> Result<Partial<'f>, ConfigError> {
-    let value = match config_get_with_defaults(dto, key, defaults, root_resolver) {
-        Ok(Some(v)) => Some(v),
-        Ok(None) => None,
-        Err(ConfigError::ReflectError(_)) => None,
-        Err(e) => return Err(e),
-    };
-
-    match value {
-        Some(v) => {
-            let partial = partial.begin_some().map_err(reflect_err)?;
-            match partial.parse_from_str(&v) {
-                Ok(partial) => Ok(partial.end().map_err(reflect_err)?),
-                Err(_) => Err(ConfigError::ParseError(format!(
-                    "Failed to parse value for optional field '{key}': {v}"
-                ))),
-            }
-        }
-        None => partial.set_default().map_err(reflect_err),
-    }
 }
 
 fn populate_optional_config_field<'f, Dto: for<'a> Facet<'a>>(
