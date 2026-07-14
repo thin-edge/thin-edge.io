@@ -101,6 +101,19 @@ is **who executes a service command, and how**.
 
 ## Design
 
+At a glance, four roles are involved:
+
+* **Service owner** (tedge-agent, a mapper, or a third-party daemon):
+  declares per service which commands it supports (a retained capability message).
+* **tedge-mapper-c8y**: converts between Cumulocity and thin-edge:
+  the capability → `c8y_SupportedServiceCommands` + supported operation (SmartREST `114`);
+  a `c8y_ServiceCommand` operation → a thin-edge command;
+  the command status → SmartREST `501`–`506`.
+* **tedge-agent**: executes the command with its workflow engine,
+  delegating to the new `tedge service` CLI.
+* **Service plugin** (per service type, optional):
+  executes the commands of services not managed by the init system (e.g. containers).
+
 ### Thin-edge interface (cloud-agnostic)
 
 **Capability** — declared by the *service owner* as a retained message:
@@ -132,6 +145,16 @@ is **who executes a service command, and how**.
 ```
 
 with the usual `init → executing → successful | failed` transitions published on the same topic.
+
+Two notes on this contract:
+
+* The action (`restart`) is a payload field, not part of the topic (like `cmd/restart`),
+  because supported commands are an open set:
+  a single, fixed operation name lets one workflow handle them all.
+  This also mirrors `c8y_ServiceCommand`, which carries the command inside the fragment.
+* `serviceName` and `serviceType` are duplicated into the payload
+  because workflow scripts can only access the topic and the payload
+  (see the execution section for how they are used).
 
 ### Cumulocity mapping
 
@@ -288,6 +311,71 @@ Why this shape:
   so the final success status reaches the cloud after the mapper is back.
 
 The workflow carries a timeout so that a hung backend surfaces as a clean failure rather than a stuck operation.
+
+### End-to-end examples
+
+All examples assume the main device with the default topic scheme.
+
+#### A systemd service with the standard commands
+
+`tedge-mapper-c8y` declares its own capability at startup (retained):
+
+```
+[te/device/main/service/tedge-mapper-c8y/cmd/service_command]
+{ "types": ["start", "stop", "restart", "enable", "disable"] }
+```
+
+The c8y mapper reacts to this capability message:
+
+* registers `c8y_ServiceCommand` as a supported operation of the service (SmartREST `114`);
+* sets `{"c8y_SupportedServiceCommands": ["START", "STOP", "RESTART", "ENABLE", "DISABLE"]}`
+  on the service's managed object.
+
+A user presses the RESTART button,
+and the mapper receives the `c8y_ServiceCommand` operation shown in the Background.
+It resolves the target entity from the external id,
+validates `restart` against the declared types,
+and publishes the command:
+
+```
+[te/device/main/service/tedge-mapper-c8y/cmd/service_command/c8y-mapper-123]
+{ "status": "init", "command": "restart", "serviceName": "tedge-mapper-c8y", "serviceType": "service" }
+```
+
+The `service_command` workflow of tedge-agent drives the command:
+status `executing` (the mapper reports `504`), then its script step runs:
+
+```
+script = "sudo -n tedge service ${.payload.command} ${.payload.serviceName} --service-type ${.payload.serviceType}"
+```
+
+which resolves to `sudo -n tedge service restart tedge-mapper-c8y --service-type service`.
+The type `service` routes to `system.toml`: `systemctl restart tedge-mapper-c8y`.
+Exit code `0` → status `successful` → the mapper reports `506`.
+(Since this restarts the mapper itself, the final status is reported after the mapper reconnects.)
+
+#### A container service with standard and custom commands
+
+tedge-container-plugin registers `nodered` with type `container` and declares:
+
+```
+[te/device/main/service/nodered/cmd/service_command]
+{ "types": ["start", "stop", "restart", "pause", "unpause"] }
+```
+
+A PAUSE operation becomes:
+
+```
+[te/device/main/service/nodered/cmd/service_command/c8y-mapper-124]
+{ "status": "init", "command": "pause", "serviceName": "nodered", "serviceType": "container" }
+```
+
+The same workflow script resolves to
+`sudo -n tedge service pause nodered --service-type container`,
+which executes `/usr/share/tedge/service-plugins/container pause nodered`.
+The plugin maps the command to its container engine (e.g. `docker pause`).
+A command the plugin does not support ends with the reserved exit code,
+and the workflow fails the command with a clear reason.
 
 ## Alternative considered: distributed executors
 
