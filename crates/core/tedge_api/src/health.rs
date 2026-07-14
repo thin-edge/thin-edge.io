@@ -4,7 +4,6 @@ use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::ServiceTopicId;
 use clock::Clock;
 use clock::WallClock;
-use log::error;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::Topic;
 use serde::Deserialize;
@@ -14,6 +13,7 @@ use std::fmt::Display;
 use std::process;
 use std::sync::Arc;
 use tedge_utils::timestamp::TimeFormat;
+use tracing::error;
 
 pub fn service_health_topic(
     mqtt_schema: &MqttSchema,

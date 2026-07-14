@@ -14,7 +14,6 @@ axum_tls = { workspace = true, features = ["error-matching"] }
 backoff = { workspace = true }
 camino = { workspace = true }
 certificate = { workspace = true, features = ["reqwest"] }
-log = { workspace = true }
 mime = { workspace = true }
 mime_guess = { workspace = true }
 reqwest = { workspace = true, features = [
@@ -25,6 +24,7 @@ reqwest = { workspace = true, features = [
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tokio-util = { workspace = true, features = ["codec"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

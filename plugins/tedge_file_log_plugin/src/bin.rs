@@ -9,6 +9,7 @@ use std::sync::Arc;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init;
 use time::OffsetDateTime;
+use tracing::error;
 
 #[derive(clap::Parser, Debug)]
 #[clap(
@@ -64,7 +65,7 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
         &cli.common.log_args,
         &cli.common.config_dir,
     ) {
-        log::error!("Can't enable logging due to error: {err}");
+        error!("Can't enable logging due to error: {err}");
         return Err(err.into());
     }
 
@@ -83,7 +84,7 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
                 Ok(())
             }
             Err(err) => {
-                log::error!("Failed to list log types: {err}");
+                error!("Failed to list log types: {err}");
                 Err(err.into())
             }
         },
@@ -96,7 +97,7 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
                 match parse_date(&since_str) {
                     Ok(date) => Some(date),
                     Err(err) => {
-                        log::error!("Invalid since date: {err}");
+                        error!("Invalid since date: {err}");
                         return Err(err);
                     }
                 }
@@ -108,7 +109,7 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
                 match parse_date(&until_str) {
                     Ok(date) => Some(date),
                     Err(err) => {
-                        log::error!("Invalid until date: {err}");
+                        error!("Invalid until date: {err}");
                         return Err(err);
                     }
                 }
@@ -130,7 +131,7 @@ pub fn run(cli: FileLogCli, plugin_config: TEdgeConfigView) -> anyhow::Result<()
                     Ok(())
                 }
                 Err(err) => {
-                    log::error!("Failed to get logs: {err}");
+                    error!("Failed to get logs: {err}");
                     Err(err.into())
                 }
             }

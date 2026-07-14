@@ -10,7 +10,7 @@ use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigSnapshotCmd;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_mqtt_ext::MqttMessage;
-use tracing::log::warn;
+use tracing::warn;
 
 impl OperationContext {
     /// Address received ThinEdge config_snapshot command. If its status is

@@ -11,10 +11,10 @@ repository = { workspace = true }
 
 [dependencies]
 async-trait = { workspace = true }
-log = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_utils = { workspace = true, features = ["fs-notify"] }
 tokio = { workspace = true, features = ["macros"] }
+tracing = { workspace = true }
 try-traits = { workspace = true }
 
 [dev-dependencies]

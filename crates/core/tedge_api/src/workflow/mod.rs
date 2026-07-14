@@ -11,7 +11,6 @@ use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
 use crate::script::ShellScript;
 use crate::substitution::Record;
-use ::log::info;
 pub use error::*;
 pub use handlers::*;
 use mqtt_channel::MqttMessage;
@@ -25,6 +24,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 pub use supervisor::*;
+use tracing::info;
 
 pub type OperationName = String;
 pub type OperationStep = String;

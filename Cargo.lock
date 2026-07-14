@@ -919,7 +919,6 @@ dependencies = [
  "async-trait",
  "c8y_api",
  "camino",
- "log",
  "nanoid",
  "serde",
  "serde_json",
@@ -1200,13 +1199,13 @@ dependencies = [
  "async-trait",
  "batcher",
  "clock",
- "log",
  "tedge_actors",
  "tedge_api",
  "tedge_mqtt_ext",
  "thiserror 2.0.12",
  "time",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1627,7 +1626,6 @@ dependencies = [
  "certificate",
  "http 1.3.1",
  "hyper 1.6.0",
- "log",
  "mockito",
  "nix",
  "rcgen",
@@ -1639,6 +1637,7 @@ dependencies = [
  "test-case",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2942,7 +2941,6 @@ dependencies = [
  "certificate",
  "fastrand",
  "futures",
- "log",
  "mqtt_tests",
  "rumqttc",
  "rustls-pki-types",
@@ -4914,7 +4912,6 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.6.0",
- "log",
  "path-clean",
  "plugin_sm",
  "proptest",
@@ -4973,7 +4970,6 @@ dependencies = [
  "assert_cmd",
  "camino",
  "clap",
- "log",
  "predicates",
  "serde",
  "tedge-write",
@@ -4984,6 +4980,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "toml 0.9.6",
+ "tracing",
 ]
 
 [[package]]
@@ -4998,7 +4995,6 @@ dependencies = [
  "easy_reader",
  "filetime",
  "glob",
- "log",
  "predicates",
  "rand 0.10.1",
  "regex",
@@ -5010,6 +5006,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.9.6",
+ "tracing",
 ]
 
 [[package]]
@@ -5178,7 +5175,6 @@ dependencies = [
  "download",
  "indexmap",
  "json-writer",
- "log",
  "maplit",
  "mockall",
  "mqtt_channel",
@@ -5194,6 +5190,7 @@ dependencies = [
  "time",
  "tokio",
  "toml 0.9.6",
+ "tracing",
  "walkdir",
 ]
 
@@ -5294,7 +5291,6 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "camino",
- "log",
  "serde",
  "serde_json",
  "tedge-write",
@@ -5323,13 +5319,13 @@ dependencies = [
  "async-trait",
  "certificate",
  "download",
- "log",
  "mockito",
  "reqwest",
  "tedge_actors",
  "tedge_test_utils",
  "tedge_utils",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5337,11 +5333,11 @@ name = "tedge_file_system_ext"
 version = "2.0.1"
 dependencies = [
  "async-trait",
- "log",
  "tedge_actors",
  "tedge_test_utils",
  "tedge_utils",
  "tokio",
+ "tracing",
  "try-traits",
 ]
 
@@ -5568,12 +5564,12 @@ dependencies = [
  "async-trait",
  "camino",
  "certificate",
- "log",
  "mockito",
  "reqwest",
  "tedge_actors",
  "tedge_test_utils",
  "tokio",
+ "tracing",
  "upload",
 ]
 
@@ -6231,7 +6227,6 @@ dependencies = [
  "camino",
  "certificate",
  "futures",
- "log",
  "mime",
  "mime_guess",
  "mockito",
@@ -6241,6 +6236,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
+ "tracing",
 ]
 
 [[package]]

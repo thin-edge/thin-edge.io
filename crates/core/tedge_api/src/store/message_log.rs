@@ -3,7 +3,6 @@
 //! The underlying file is a JSON lines file.
 use crate::mqtt_topics::is_entity_twin_topic;
 use indexmap::IndexMap;
-use log::warn;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::Topic;
 use serde_json::json;
@@ -15,6 +14,7 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use tracing::warn;
 
 const LOG_FILE_NAME: &str = "entity_store.jsonl";
 const LOG_FILE_TEMP_NAME: &str = "entity_store.jsonl.tmp";

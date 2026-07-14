@@ -12,6 +12,7 @@ use tedge_api::CommandLog;
 use tedge_api::LoggedCommand;
 use tedge_config::SudoCommandBuilder;
 use tokio::io::BufReader;
+use tracing::warn;
 
 pub const LIST: &str = "list";
 const GET: &str = "get";
@@ -278,7 +279,7 @@ impl ExternalPlugin {
             match serde_json::from_str(&json_str) {
                 Ok(value) => value,
                 Err(err) => {
-                    log::warn!("Plugin {} produced invalid JSON output: {}", self.name, err);
+                    warn!("Plugin {} produced invalid JSON output: {}", self.name, err);
                     Value::Null
                 }
             }

@@ -2,12 +2,12 @@ use crate::plugin::ExternalPlugin;
 use crate::plugin::LIST;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use log::error;
-use log::info;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tedge_config::SudoCommandBuilder;
 use tedge_config::SudoError;
+use tracing::error;
+use tracing::info;
 
 pub type PluginType = String;
 

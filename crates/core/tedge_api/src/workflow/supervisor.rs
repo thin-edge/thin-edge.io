@@ -1,9 +1,9 @@
 use crate::mqtt_topics::Channel;
 use crate::workflow::*;
-use ::log::info;
 use on_disk::OnDiskCommandBoard;
 use serde::Serialize;
 use std::string::ToString;
+use tracing::info;
 
 /// Dispatch actions to operation participants
 #[derive(Default)]

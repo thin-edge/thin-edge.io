@@ -1,8 +1,8 @@
-use log::warn;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
+use tracing::warn;
 
 #[derive(Clone, Deserialize, Debug, Eq, PartialEq, Default)]
 pub struct LogPluginConfig {

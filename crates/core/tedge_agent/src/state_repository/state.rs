@@ -1,7 +1,5 @@
 use crate::state_repository::error::StateError;
 use camino::Utf8PathBuf;
-use log::info;
-use log::warn;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::marker::PhantomData;
@@ -9,6 +7,8 @@ use tedge_utils::fs::atomically_write_file_async;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
 use tokio::fs;
+use tracing::info;
+use tracing::warn;
 
 /// Store the current state of an operation
 #[derive(Debug)]

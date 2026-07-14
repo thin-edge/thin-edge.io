@@ -1,7 +1,7 @@
 use crate::BridgeRule;
 use rumqttc::matches;
 use std::borrow::Cow;
-use tracing::log::warn;
+use tracing::warn;
 
 pub fn matches_ignore_dollar_prefix(topic: &str, filter: &str) -> bool {
     match (&topic[..1], &filter[..1]) {

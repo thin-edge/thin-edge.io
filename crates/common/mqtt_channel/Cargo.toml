@@ -13,7 +13,6 @@ async-trait = { workspace = true }
 certificate = { workspace = true }
 fastrand = { workspace = true }
 futures = { workspace = true }
-log = { workspace = true }
 rumqttc = { workspace = true }
 rustls-pki-types = { workspace = true }
 serde = { workspace = true }

@@ -1,6 +1,4 @@
 use camino::Utf8Path;
-use log::error;
-use log::warn;
 use serde::Deserialize;
 use std::borrow::Borrow;
 use std::collections::HashSet;
@@ -9,6 +7,8 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use tedge_config::SudoCommandBuilder;
 use tedge_utils::file::PermissionEntry;
+use tracing::error;
+use tracing::warn;
 
 /// Valid service actions in the context of configuration file management.
 /// Only the actions like and restart (and reload in future) are supported.

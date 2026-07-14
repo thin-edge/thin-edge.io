@@ -13,7 +13,6 @@ repository = { workspace = true }
 async-trait = { workspace = true }
 c8y_api = { workspace = true }
 camino = { workspace = true }
-log = { workspace = true }
 nanoid = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

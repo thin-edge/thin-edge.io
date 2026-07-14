@@ -26,7 +26,7 @@ use tedge_api::path::DataDir;
 use tedge_config::OptionalConfig;
 use tedge_utils::paths::ManagedDir;
 use tokio::net::TcpListener;
-use tracing::log::info;
+use tracing::info;
 
 pub struct HttpServerActor {
     file_transfer_dir: ManagedDir,

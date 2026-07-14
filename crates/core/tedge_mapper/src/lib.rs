@@ -34,7 +34,7 @@ use tedge_supervisor::UnitKind;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
 use tracing::error;
-use tracing::log::warn;
+use tracing::warn;
 
 /// Validates that a mapper name matches `[a-z][a-z0-9-]*` and does not start with `bridge-`.
 ///

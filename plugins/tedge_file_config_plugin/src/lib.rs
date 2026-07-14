@@ -9,8 +9,6 @@ use crate::error::PluginError;
 use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
-use log::debug;
-use log::info;
 use std::fs::File;
 use std::io::stdout;
 use std::io::BufReader;
@@ -21,6 +19,8 @@ use tedge_system_services::SystemServiceManager;
 use tedge_utils::atomic::MaybePermissions;
 use tedge_write::CopyOptions;
 use tedge_write::CreateDirsOptions;
+use tracing::debug;
+use tracing::info;
 
 pub struct FileConfigPlugin {
     config: PluginConfig,

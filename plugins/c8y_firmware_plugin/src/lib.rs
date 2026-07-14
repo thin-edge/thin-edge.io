@@ -14,7 +14,7 @@ use tedge_downloader_ext::DownloaderActor;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_signal_ext::SignalActor;
-use tracing::log::warn;
+use tracing::warn;
 
 const PLUGIN_NAME: &str = "c8y-firmware-plugin";
 

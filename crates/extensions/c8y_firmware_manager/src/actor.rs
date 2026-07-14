@@ -13,9 +13,6 @@ use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message_ids::FIRMWARE;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
-use log::error;
-use log::info;
-use log::warn;
 use nanoid::nanoid;
 use std::collections::HashMap;
 use std::fs;
@@ -28,6 +25,9 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_mqtt_ext::MqttMessage;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 fan_in_message_type!(FirmwareInput[MqttMessage, OperationOutcome] : Debug);
 

@@ -13,8 +13,6 @@ use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name_no_par
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::topic::C8yTopic;
 use camino::Utf8PathBuf;
-use log::error;
-use log::info;
 use sha256::digest;
 use sha256::try_digest;
 use std::fs;
@@ -34,6 +32,8 @@ use tedge_utils::file::move_file;
 use tedge_utils::file::FileError;
 use tedge_utils::file::PermissionEntry;
 use tokio::time::timeout;
+use tracing::error;
+use tracing::info;
 use tracing::Instrument;
 
 pub type IdDownloadResult = (String, DownloadResult);

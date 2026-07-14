@@ -4,7 +4,7 @@ use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigUpdateCmd;
 use tedge_mqtt_ext::MqttMessage;
-use tracing::log::warn;
+use tracing::warn;
 
 use super::error::OperationError;
 use super::EntityTarget;

@@ -19,10 +19,6 @@ use crate::mqtt_topics::MqttSchema;
 use crate::store::message_log::MessageLog;
 use crate::store::pending_entity_store::PendingEntityStore;
 use crate::store::pending_entity_store::RegisteredEntityData;
-use log::debug;
-use log::error;
-use log::info;
-use log::warn;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::QoS;
 use serde::Deserialize;
@@ -35,6 +31,10 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::mem;
 use std::path::Path;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 /// A store for topic-based entity metadata lookup.
 ///

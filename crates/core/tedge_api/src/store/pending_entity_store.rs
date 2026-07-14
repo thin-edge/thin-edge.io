@@ -3,9 +3,9 @@ use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::store::ring_buffer::RingBuffer;
-use log::error;
 use mqtt_channel::MqttMessage;
 use std::collections::HashMap;
+use tracing::error;
 
 /// A store for all the entities for which data messages are received before
 /// its registration message itself is received.
