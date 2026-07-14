@@ -164,7 +164,11 @@ This part deliberately reuses existing mapper mechanisms; no new concepts are in
     described under Security considerations;
   * `serviceName` is derived from the resolved entity topic id, not from the cloud payload
     (the cloud value may be a display name);
-    `serviceType` is taken from the entity's registered twin data, falling back to the payload value.
+    `serviceType` is taken from the service's registration data (its `type` property),
+    falling back to the payload value.
+    Declaring the service type at registration is optional today,
+    but effectively becomes mandatory for services using this feature:
+    a service registered without a type is dispatched as the default type `service` (init-managed).
 * **Status → Cumulocity.**
   The existing command-status mapping (SmartREST `501`–`506`) already supports service entities
   (status is published against the service's external id);
@@ -192,6 +196,13 @@ This requires a new subscription in tedge-agent, and its scope matters:
   every *other* custom workflow loaded on the agent would suddenly also fire for service-addressed commands —
   narrowing to the one operation confines the behavior change to this feature.
 
+This topic filter only works with the default topic scheme
+(`te/device/<device>/service/<service>`).
+The proper way to find "services of my device" is to use the entity store,
+as custom topic schemes keep the device–service relation only there.
+Still, the first iteration uses the topic filter as it is simple;
+custom topic schemes are not supported yet.
+
 The model is per-device, not centralized:
 a child device running its own tedge-agent executes the commands for its own services,
 using its own `system.toml`, its own `tedge` CLI/sudoers rule and its own service plugins —
@@ -203,18 +214,23 @@ The workflow's execution step delegates to a new CLI command:
 sudo -n tedge service <command> <service-name> [--service-type <type>]
 ```
 
-where `<command>` is a validated single token — `start`, `stop`, `restart` or a custom command name.
-`tedge service` dispatches on the service type:
+where `<command>` is a validated single token, e.g. `start`, `stop` or `restart`.
+Which commands are supported is decided by the backend,
+as `tedge service` dispatches on the service type:
 
 | service type          | backend                                                                 |
 | --------------------- | ----------------------------------------------------------------------- |
-| `service` (default)   | built-in init-system abstraction (`/etc/tedge/system.toml`): a command is supported if `system.toml` defines a command template for it — `start`, `stop`, `restart` out of the box, and custom commands (e.g. `reload`) by adding an entry to `system.toml` |
-| any other type        | **service plugin**: `/etc/tedge/service-plugins/<type> <command> <name>`; the command (standard or custom) is passed through, the plugin decides what it supports |
+| `service` (default)   | built-in init-system abstraction (`/etc/tedge/system.toml`): a command is supported if `system.toml` defines a command template for it — the standard commands out of the box, and custom commands (e.g. `reload`) by adding an entry to `system.toml` |
+| any other type        | **service plugin**: `/usr/share/tedge/service-plugins/<type> <command> <name>`; the command (standard or custom) is passed through, the plugin decides what it supports |
 | unsupported command / no plugin for the type | `tedge service` fails with a distinct exit code and a clear error message |
+
+Note: the current `system.toml` schema is fixed
+(unknown keys are rejected via `deny_unknown_fields`),
+so accepting additional custom command templates requires a small schema extension.
 
 **Service plugin contract** (new, intentionally minimal, mirroring the sm-plugins pattern):
 
-* an executable at `/etc/tedge/service-plugins/<service-type>`;
+* an executable at `/usr/share/tedge/service-plugins/<service-type>`;
 * invoked as `<plugin> <command> <service-name>`,
   where `<command>` is `start`, `stop`, `restart` or a plugin-defined custom command;
 * exit `0` on success; non-zero on failure with the reason on stderr;
@@ -223,7 +239,7 @@ where `<command>` is a validated single token — `start`, `stop`, `restart` or 
 **Example: tedge-container-plugin.**
 The plugin registers container services with types `container` and `container-group`
 and already exposes container lifecycle primitives through its CLI.
-Integration is two symlinks (`/etc/tedge/service-plugins/container`, `.../container-group`)
+Integration is two symlinks (`/usr/share/tedge/service-plugins/container`, `.../container-group`)
 onto a thin subcommand mapping `start|stop|restart <name>` to its existing container operations —
 no MQTT protocol to implement, no state machine, no operation handling code.
 It is also free to support custom commands of its own (e.g. `pause`, `unpause`),
@@ -377,7 +393,7 @@ instead of the cloud-agnostic capability/command interface.
   * the service type is validated (`[a-z0-9_-]+`)
     since it selects a file under the plugin directory (path-traversal guard);
   * all execution is argv-based; cloud-provided values are never interpolated into a shell.
-* **`/etc/tedge/service-plugins/` must be root-owned and not writable by the `tedge` user**
+* **`/usr/share/tedge/service-plugins/` must be root-owned and not writable by the `tedge` user**
   (packaging creates it `root:root 755`).
   Since `tedge service` runs as root,
   a tedge-writable plugin directory would be a trivial privilege escalation —
@@ -385,9 +401,7 @@ instead of the cloud-agnostic capability/command interface.
 
 ## Open questions
 
-1. Should `tedge service` also expose `enable|disable|status` (the init abstraction supports them)?
-   Proposal: not in v1 — keep the sudo-exposed surface minimal.
-2. Who declares the capability for init-managed services that are not owned by a thin-edge daemon (e.g. `mosquitto`)?
+1. Who declares the capability for init-managed services that are not owned by a thin-edge daemon (e.g. `mosquitto`)?
    With owner-declared capabilities,
    such services get no cloud action buttons even though the executor could handle them.
    A configuration-driven list is the likely shape.
