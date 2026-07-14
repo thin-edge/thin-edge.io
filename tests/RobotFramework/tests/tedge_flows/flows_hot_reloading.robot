@@ -92,5 +92,6 @@ Restore Flows Directory
     Stop Service    tedge-mapper-local
     # Only restore when the symlink is actually in place, so a failure before the
     # symlink is created never removes the real directory.
-    Execute Command    if [ -L /etc/tedge/mappers ]; then rm -f /etc/tedge/mappers && mv /data/tedge/mappers /etc/tedge/mappers; fi
+    Execute Command
+    ...    if [ -L /etc/tedge/mappers ]; then rm -f /etc/tedge/mappers && mv /data/tedge/mappers /etc/tedge/mappers; fi
     Start Service    tedge-mapper-local

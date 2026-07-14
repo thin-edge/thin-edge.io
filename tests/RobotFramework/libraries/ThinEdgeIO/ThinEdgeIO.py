@@ -591,16 +591,14 @@ class ThinEdgeIO(DeviceLibrary):
         """
 
         # pylint: disable=line-too-long
-        self.execute_command(
-            """
+        self.execute_command("""
             type -p curl >/dev/null || sudo apt install curl -y
             curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \\
             && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \\
             && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \\
             && sudo apt-get update \\
             && sudo apt-get -y install gh
-        """.lstrip()
-        )
+        """.lstrip())
 
         run_ids = []
         # Also support providing values via csv (e.g. when set from variables)
@@ -616,11 +614,9 @@ class ThinEdgeIO(DeviceLibrary):
         arch = arch_mapping.get(arch, arch)
 
         for i_run_id in run_ids:
-            self.execute_command(
-                f"""
+            self.execute_command(f"""
                 gh run download {i_run_id} -n debian-packages-{arch}-unknown-linux-gnu -R thin-edge/thin-edge.io
-            """.strip()
-            )
+            """.strip())
 
     #
     # Tedge commands
@@ -1284,7 +1280,8 @@ class ThinEdgeIO(DeviceLibrary):
             assert (
                 proc.returncode == 0
             ), f"Failed to add remote access PASSTHROUGH configuration.\n{output}"
-            time.sleep(2)   # Wait a bit for the configuration to be applied before returning
+            # Wait a bit for the configuration to be applied before returning
+            time.sleep(2)
             return output
 
     @keyword("Execute Remote Access Command")

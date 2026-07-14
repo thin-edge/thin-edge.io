@@ -336,7 +336,6 @@ Plugin dynamic filter addition
     ...    xyz_log::dummy_plugin
 
 Log operation shouldnt OOM on oversized output
-
     [Documentation]    Install a plugin that emits a very large logfile and verify all of its output is not loaded into
     ...                memory at once.
 
@@ -362,7 +361,9 @@ Log operation shouldnt OOM on oversized output
     Execute Command    ls /tmp/huge-plugin-pipe    retries=5    timeout=2
 
     ${tedge_agent_rss_bytes}=    Execute Command    cmd=ps -o rss= -C tedge-agent    strip=True
-    Should Be True    ${tedge_agent_rss_bytes} < 20000    tedge-agent used too much (${tedge_agent_rss_bytes}>20MB) memory
+    Should Be True
+    ...    ${tedge_agent_rss_bytes} < 20000
+    ...    tedge-agent used too much (${tedge_agent_rss_bytes}>20MB) memory
 
     # send message to plugin to exit
     Execute Command    echo done > /tmp/huge-plugin-pipe
