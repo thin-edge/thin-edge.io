@@ -279,12 +279,12 @@ fi
 
 case "${OSTYPE-}" in
 linux*)
-  if [ -n "$use_clang" ]; then
+  if [ -n "$use_clang" ] && command -V apt-get >/dev/null 2>&1; then
     ubuntu_codename=$(lsb_release --codename --short)
     llvm_version=20
     # Import GPG key
     # check if gpg file already exists and is identical
-    TMP_GPG_FILE=$(mktemp) 
+    TMP_GPG_FILE=$(mktemp)
     cat mk/llvm-snapshot.gpg.key | gpg --yes --dearmor -o "$TMP_GPG_FILE"
     if ! cmp --silent "$TMP_GPG_FILE" /usr/share/keyrings/llvm-snapshot.gpg; then
       sudo mkdir -p /usr/share/keyrings
