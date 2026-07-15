@@ -71,7 +71,9 @@ Dynamic plugin install and remove
     Operation Should Be SUCCESSFUL    ${operation}    timeout=30
 
     # Verify operation stdout is logged
-    ${operation_logfile}=    Execute Command    ls -t /var/log/tedge/agent/workflow-config_snapshot-* | head -1    strip=True
+    ${operation_logfile}=    Execute Command
+    ...    ls -t /var/log/tedge/agent/workflow-config_snapshot-* | head -1
+    ...    strip=True
     Execute Command    grep "Dummy content" ${operation_logfile}    exp_exit_code=0    retries=0    timeout=0
 
     ${config_url}=    Cumulocity.Create Inventory Binary
@@ -91,7 +93,6 @@ Dynamic plugin install and remove
     ...    failure_reason=.*Plugin not found.*
 
 Config operation shouldnt OOM on oversized output
-
     [Documentation]    Install a plugin that emits a very large config and verify all of its output is not loaded into
     ...                memory at once.
 
@@ -112,7 +113,9 @@ Config operation shouldnt OOM on oversized output
     Execute Command    ls /tmp/huge-config-plugin-pipe    retries=5    timeout=2
 
     ${tedge_agent_rss_bytes}=    Execute Command    cmd=ps -o rss= -C tedge-agent    strip=True
-    Should Be True    ${tedge_agent_rss_bytes} < 20000    tedge-agent used too much (${tedge_agent_rss_bytes}>20MB) memory
+    Should Be True
+    ...    ${tedge_agent_rss_bytes} < 20000
+    ...    tedge-agent used too much (${tedge_agent_rss_bytes}>20MB) memory
 
     # send message to plugin to exit
     Execute Command    echo done > /tmp/huge-config-plugin-pipe

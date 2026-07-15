@@ -32,7 +32,6 @@ Override Built-In Operation
     ...    message_pattern=.*successful.*
     ...    maximum=1
     Should Contain    ${software_list[0]}    "currentSoftwareList"
-    Should Contain    ${software_list[0]}    "mosquitto"
     Should Contain    ${software_list[0]}    "tedge"
     Should Contain    ${software_list[0]}    "postprocess"
     Should Contain    ${software_list[0]}    "done"

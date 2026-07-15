@@ -20,7 +20,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from paho.mqtt import matcher
 from robot.api.deco import keyword, library
 from robot.libraries.BuiltIn import BuiltIn
 from DeviceLibrary import DeviceLibrary, DeviceAdapter
@@ -78,7 +77,7 @@ class MQTTMessage:
         """Get the message timestamp as a datetime object"""
         return datetime.fromtimestamp(self.timestamp)
 
-    # {"tst":"2022-12-27T16:55:44.923776Z+0000","topic":"c8y/s/us","qos":0,"retain":0,"payloadlen":99,"payload":"119,c8y-bridge.conf,c8y-configuration-plugin,example,mosquitto.conf,tedge-mosquitto.conf,tedge.toml"}
+    # {"timestamp":"2022-12-27T16:55:44.923776Z+0000","topic":"c8y/s/us","qos":0,"retain":0,"payloadlen":99,"payload":"119,c8y-bridge.conf,c8y-configuration-plugin,example,mosquitto.conf,tedge-mosquitto.conf,tedge.toml"}
 
 
 def strip_scheme(url: Optional[str]) -> Optional[str]:
@@ -430,6 +429,15 @@ class ThinEdgeIO(DeviceLibrary):
         except Exception as ex:
             log.warning("Failed to retrieve logs. %s", ex, exc_info=True)
 
+        try:
+            log.info("mqtt-log:")
+            device.execute_command(
+                "mqtt-log --output ndjson | jq 'del(.timestamp_unix,.payload_encoding,.payload_json,.payload_base64)' || true",
+                shell=True,
+            )
+        except Exception as ex:
+            log.warning("Failed to retrieve logs. %s", ex, exc_info=True)
+
         log_output = super().get_logs(device.get_id(), date_from=date_from, show=False)
         if show:
             hide_sensitive = self._hide_sensitive_factory()
@@ -583,16 +591,14 @@ class ThinEdgeIO(DeviceLibrary):
         """
 
         # pylint: disable=line-too-long
-        self.execute_command(
-            """
+        self.execute_command("""
             type -p curl >/dev/null || sudo apt install curl -y
             curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \\
             && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \\
             && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \\
             && sudo apt-get update \\
             && sudo apt-get -y install gh
-        """.lstrip()
-        )
+        """.lstrip())
 
         run_ids = []
         # Also support providing values via csv (e.g. when set from variables)
@@ -608,11 +614,9 @@ class ThinEdgeIO(DeviceLibrary):
         arch = arch_mapping.get(arch, arch)
 
         for i_run_id in run_ids:
-            self.execute_command(
-                f"""
+            self.execute_command(f"""
                 gh run download {i_run_id} -n debian-packages-{arch}-unknown-linux-gnu -R thin-edge/thin-edge.io
-            """.strip()
-            )
+            """.strip())
 
     #
     # Tedge commands
@@ -695,6 +699,9 @@ class ThinEdgeIO(DeviceLibrary):
         message_pattern: Optional[str] = None,
         date_from: Optional[timestamp.Timestamp] = None,
         date_to: Optional[timestamp.Timestamp] = None,
+        minimum: Optional[int] = None,
+        maximum: Optional[int] = None,
+        message_type: Optional[str] = "publish_in",
         **kwargs,
     ) -> List[Dict[str, Any]]:
         """Match mqtt messages using different types of filters
@@ -703,45 +710,45 @@ class ThinEdgeIO(DeviceLibrary):
             topic (str): Filter by topic
 
         """
-        cmd = "journalctl -u mqtt-logger.service -n 1000 --output=cat"
+
+        cmd = "mqtt-log -n 10000 --output ndjson"
+
+        if message_type and message_type != "all":
+            for typeName in message_type.split(","):
+                cmd += f" --type '{typeName}'"
 
         if not date_from:
             date_from = self.test_start_time
 
         if date_from:
-            cmd += f" --since '@{timestamp.parse_timestamp(date_from).timestamp()}'"
+            cmd += f" --from '{timestamp.parse_timestamp(date_from).timestamp()}'"
 
         if date_to:
-            cmd += f" --until '@{timestamp.parse_timestamp(date_to).timestamp()}'"
+            cmd += f" --to '{timestamp.parse_timestamp(date_to).timestamp()}'"
+
+        if topic:
+            cmd += f" --topic '{topic}'"
+
+        if message_pattern:
+            cmd += f" --payload-matches '{message_pattern}'"
+
+        if minimum is not None:
+            cmd += f" --min-count '{minimum}'"
+
+        if maximum is not None:
+            cmd += f" --max-count '{maximum}'"
 
         output = self.execute_command(cmd, log_output=False, stdout=True, stderr=False)
 
         messages = []
-        message_pattern_re = None
-        if message_pattern:
-            message_pattern_re = re.compile(message_pattern, re.IGNORECASE)
-
         for line in output.splitlines():
             try:
                 message = json.loads(line)
-                if "message" in message:
-                    if message_pattern_re is None or message_pattern_re.match(
-                        message["message"]["payload"]
-                    ):
-                        messages.append(message)
+                messages.append(message)
             except Exception as ex:
                 log.debug("ignoring non-json entry. %s", ex)
 
-        mqtt_matcher = matcher.MQTTMatcher()
-        mqtt_matcher[topic] = True
-
-        matching = [
-            item
-            for item in messages
-            if not topic
-            or (topic and mqtt_topic_match(mqtt_matcher, item["message"]["topic"]))
-        ]
-        return matching
+        return messages
 
     #
     # Service Health Status
@@ -909,6 +916,7 @@ class ThinEdgeIO(DeviceLibrary):
         maximum: Optional[int] = None,
         message_pattern: Optional[str] = None,
         message_contains: Optional[str] = None,
+        message_type: Optional[str] = "publish_in",
         **kwargs,
     ) -> List[str]:
         # log.info("Checking mqtt messages for topic: %s", topic)
@@ -920,23 +928,17 @@ class ThinEdgeIO(DeviceLibrary):
             date_from=date_from,
             date_to=date_to,
             message_pattern=message_pattern,
+            minimum=minimum,
+            maximum=maximum,
+            message_type=message_type,
             **kwargs,
         )
 
         messages = [
-            bytes.fromhex(item["payload_hex"]).decode("utf8", errors="replace")
+            base64.b64decode(item["payload_base64"]).decode("utf8", errors="replace")
             for item in items
+            if "payload_base64" in item
         ]
-
-        if minimum is not None:
-            assert (
-                len(messages) >= minimum
-            ), f"Matching messages on topic '{topic}' is less than minimum.\nwanted: {minimum}\ngot: {len(messages)}\n\nmessages:\n{messages}"
-
-        if maximum is not None:
-            assert (
-                len(messages) <= maximum
-            ), f"Matching messages on topic '{topic}' is greater than maximum.\nwanted: {maximum}\ngot: {len(messages)}\n\nmessages:\n{messages}"
 
         return messages
 
@@ -950,24 +952,20 @@ class ThinEdgeIO(DeviceLibrary):
         items = self.mqtt_match_messages(
             topic=topic,
             date_from=date_from,
+            message_type="all",
             **kwargs,
         )
 
-        # hide sensitive information
-        # This is fragile and should be improved upon once a more suitable/robust method of logging and querying
-        # the mqtt messages is found.
         entries = []
         for item in items:
-            payload = bytes.fromhex(item["payload_hex"]).decode(
-                "utf8", errors="replace"
-            )
-            if item["message"]["topic"] == C8Y_TOKEN_TOPIC and payload.startswith(
-                "71,"
-            ):
-                payload = "71,<redacted>"
-            entries.append(
-                f'{item["message"]["tst"].replace("+0000", ""):32} {item["message"]["topic"]:70} {payload}'
-            )
+            # only log messages as they are received by the broker from clients
+            if "payload_base64" in item and item["type"] == "publish_in":
+                payload = base64.b64decode(item["payload_base64"]).decode(
+                    "utf8", errors="replace"
+                )
+                entries.append(
+                    f'{item["timestamp"].replace("+0000", ""):32} {item["topic"]:70} {payload}'
+                )
         log.info("---- mqtt messages ----\n%s", "\n".join(entries))
 
     @keyword("Should Have MQTT Messages")
@@ -980,6 +978,8 @@ class ThinEdgeIO(DeviceLibrary):
         message_contains: Optional[str] = None,
         minimum: int = 1,
         maximum: Optional[int] = None,
+        from_suite_startup: Optional[bool] = None,
+        message_type: Optional[str] = "publish_in",
         **kwargs,
     ) -> List[str]:
         """
@@ -997,6 +997,8 @@ class ThinEdgeIO(DeviceLibrary):
             message_contains (str, optional): Only include MQTT messages containing a given string
             minimum (int, optional): Minimum number of message to expect. Defaults to 1
             maximum (int, optional): Maximum number of message to expect. Defaults to None
+            message_type (str, optional): MQTT message type to filter by. Accepts csv of one of these values:
+                publish_in, publish_out, subscribe, connect. Defaults to 'publish_in'
 
         *Examples:*
 
@@ -1005,6 +1007,9 @@ class ThinEdgeIO(DeviceLibrary):
         | ${messages}= | `Should Have MQTT Message` | te/device/main/service/tedge-agent/status/health | minimum=1 | minimum=2 | message_contains="time" |
         | ${messages}= | `Should Have MQTT Message` | te/device/main/service/tedge-agent/status/health | minimum=1 | minimum=2 | message_pattern="value":\\s*\\d+ |
         """
+        if from_suite_startup:
+            date_from = self.suite_start_time
+
         result = self._assert_mqtt_topic_messages(
             topic,
             date_from=date_from,
@@ -1013,6 +1018,7 @@ class ThinEdgeIO(DeviceLibrary):
             maximum=maximum,
             message_pattern=message_pattern,
             message_contains=message_contains,
+            message_type=message_type,
             **kwargs,
         )
         return result
@@ -1274,7 +1280,8 @@ class ThinEdgeIO(DeviceLibrary):
             assert (
                 proc.returncode == 0
             ), f"Failed to add remote access PASSTHROUGH configuration.\n{output}"
-            time.sleep(2)   # Wait a bit for the configuration to be applied before returning
+            # Wait a bit for the configuration to be applied before returning
+            time.sleep(2)
             return output
 
     @keyword("Execute Remote Access Command")
@@ -1685,20 +1692,3 @@ class ThinEdgeIO(DeviceLibrary):
         assert all(entity["@topic-id"] != topic_id for entity in entities)
 
         return entities
-
-
-def mqtt_topic_match(m: matcher.MQTTMatcher, topic: str) -> bool:
-    """check if an MQTT topic matches
-
-    Args:
-        matcher (matcher.MQTTMatcher): MQTT pattern
-        topic (str): topic to match against
-
-    Returns:
-        bool: Topic matches the given pattern
-    """
-    try:
-        next(m.iter_match(topic))
-        return True
-    except StopIteration:
-        return False

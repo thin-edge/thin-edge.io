@@ -80,7 +80,8 @@ No TLS Setup
     ${PARENT_HOSTNAME}=    Execute Command    hostname    strip=${True}
 
     Execute Command    sudo tedge config set mqtt.bridge.built_in ${use_builtin_bridge}
-    Execute Command    mosquitto_passwd -c -b /etc/mosquitto/pwfile testuser testpassword
+    Execute Command
+    ...    mosquitto_passwd -c -b /etc/mosquitto/pwfile testuser testpassword && chown mosquitto:mosquitto /etc/mosquitto/pwfile
 
     Transfer To Device    ${CURDIR}/unencrypted-listener.conf    /etc/mosquitto/conf.d/
     Configure MQTT client    host=127.0.0.1    port=1884
@@ -104,7 +105,8 @@ TLS Setup
     ${PARENT_HOSTNAME}=    Execute Command    hostname    strip=${True}
 
     Execute Command    sudo tedge config set mqtt.bridge.built_in ${use_builtin_bridge}
-    Execute Command    mosquitto_passwd -c -b /etc/mosquitto/pwfile testuser testpassword
+    Execute Command
+    ...    mosquitto_passwd -c -b /etc/mosquitto/pwfile testuser testpassword && chown mosquitto:mosquitto /etc/mosquitto/pwfile
 
     Transfer To Device    ${CURDIR}/encrypted-listener.conf    /etc/mosquitto/conf.d/
     Configure MQTT client    host=127.0.0.1    port=8884
@@ -136,7 +138,8 @@ TLS and Client Cert Setup
     ${PARENT_HOSTNAME}=    Execute Command    hostname    strip=${True}
 
     Execute Command    sudo tedge config set mqtt.bridge.built_in ${use_builtin_bridge}
-    Execute Command    mosquitto_passwd -c -b /etc/mosquitto/pwfile testuser testpassword
+    Execute Command
+    ...    mosquitto_passwd -c -b /etc/mosquitto/pwfile testuser testpassword && chown mosquitto:mosquitto /etc/mosquitto/pwfile
 
     Transfer To Device    ${CURDIR}/cert-pass-listener.conf    /etc/mosquitto/conf.d/
     Configure MQTT client    host=127.0.0.1    port=8885

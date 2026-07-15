@@ -18,7 +18,8 @@ ${DEVICE_SN}    ${EMPTY}
 *** Test Cases ***
 Supported software types should not be declared during startup when disabled
     # explicitly reset c8y_SupportedSoftwareTypes if it has been already set on tedge startup
-    Execute Command    tedge mqtt pub c8y/inventory/managedObjects/update/${DEVICE_SN} '{"c8y_SupportedSoftwareTypes":null}'
+    Execute Command
+    ...    tedge mqtt pub c8y/inventory/managedObjects/update/${DEVICE_SN} '{"c8y_SupportedSoftwareTypes":null}'
     Managed Object Should Not Have Fragments    c8y_SupportedSoftwareTypes
 
     # check that the mapper doesn't send c8y_SupportedSoftwareTypes if it's disabled
@@ -45,7 +46,8 @@ Supported software types and c8y_SupportedSoftwareTypes should be declared durin
     [Documentation]    c8y_SupportedSoftwareTypes should be created if the relevant config is set to true #2654
 
     # explicitly reset c8y_SupportedSoftwareTypes if it has been already set on tedge startup
-    Execute Command    tedge mqtt pub c8y/inventory/managedObjects/update/${DEVICE_SN} '{"c8y_SupportedSoftwareTypes":null}'
+    Execute Command
+    ...    tedge mqtt pub c8y/inventory/managedObjects/update/${DEVICE_SN} '{"c8y_SupportedSoftwareTypes":null}'
     Managed Object Should Not Have Fragments    c8y_SupportedSoftwareTypes
 
     # check that the mapper sends c8y_SupportedSoftwareTypes if it's enabled

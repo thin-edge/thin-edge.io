@@ -357,19 +357,39 @@ Start Remote TLS Broker
     ...    cmd=openssl req -x509 -newkey rsa:2048 -keyout /tmp/tb-client.key -out /tmp/tb-client.crt -days 1 -nodes -subj "/CN=test-mapper" 2>/dev/null
     Execute Command    chmod 644 /tmp/tb-client.key
     # Write mosquitto config: server-only TLS, no client cert required, anonymous allowed
-    Execute Command
-    ...    sh -c 'echo listener 18883 > /tmp/tb.conf; echo certfile /tmp/tb-server.crt >> /tmp/tb.conf; echo keyfile /tmp/tb-server.key >> /tmp/tb.conf; echo allow_anonymous true >> /tmp/tb.conf; echo log_dest file /tmp/tb-mosquitto.log >> /tmp/tb.conf'
+    ${tls_conf}=    Catenate    SEPARATOR=\n
+    ...    listener 18883
+    ...    certfile /tmp/tb-server.crt
+    ...    keyfile /tmp/tb-server.key
+    ...    listener_allow_anonymous true
+    ...    log_dest file /tmp/tb-mosquitto.log
+    Execute Command    cmd=printf '%s\n' '${tls_conf}' > /tmp/tb.conf
     Execute Command    mosquitto -c /tmp/tb.conf -d
     Sleep    0.5s
     # Password broker on port 18884 — same TLS certs, username/password required, no anonymous
-    Execute Command    mosquitto_passwd -c -b /tmp/tb-passwd.txt testuser testpass
     Execute Command
-    ...    sh -c 'echo listener 18884 > /tmp/tb-passwd.conf; echo certfile /tmp/tb-server.crt >> /tmp/tb-passwd.conf; echo keyfile /tmp/tb-server.key >> /tmp/tb-passwd.conf; echo allow_anonymous false >> /tmp/tb-passwd.conf; echo password_file /tmp/tb-passwd.txt >> /tmp/tb-passwd.conf; echo log_dest file /tmp/tb-passwd-mosquitto.log >> /tmp/tb-passwd.conf'
+    ...    mosquitto_passwd -c -b /tmp/tb-passwd.txt testuser testpass && chown mosquitto:mosquitto /tmp/tb-passwd.txt
+
+    ${passwd_conf}=    Catenate    SEPARATOR=\n
+    ...    listener 18884
+    ...    certfile /tmp/tb-server.crt
+    ...    keyfile /tmp/tb-server.key
+    ...    listener_allow_anonymous false
+    ...    plugin /usr/lib/mosquitto/libmosquitto_password_file.so
+    ...    plugin_opt_password_file /tmp/tb-passwd.txt
+    ...    log_dest file /tmp/tb-passwd-mosquitto.log
+    Execute Command    cmd=printf '%s\n' '${passwd_conf}' > /tmp/tb-passwd.conf
     Execute Command    mosquitto -c /tmp/tb-passwd.conf -d
     Sleep    0.5s
     # Plain TCP broker on port 18885 — no TLS, password auth, for bridge.tls=off testing
-    Execute Command
-    ...    sh -c 'echo listener 18885 > /tmp/tb-notls.conf; echo allow_anonymous false >> /tmp/tb-notls.conf; echo password_file /tmp/tb-passwd.txt >> /tmp/tb-notls.conf; echo log_dest file /tmp/tb-notls-mosquitto.log >> /tmp/tb-notls.conf'
+    # load the password so file.
+    ${notls_conf}=    Catenate    SEPARATOR=\n
+    ...    listener 18885
+    ...    listener_allow_anonymous false
+    ...    plugin /usr/lib/mosquitto/libmosquitto_password_file.so
+    ...    plugin_opt_password_file /tmp/tb-passwd.txt
+    ...    log_dest file /tmp/tb-notls-mosquitto.log
+    Execute Command    cmd=printf '%s\n' '${notls_conf}' > /tmp/tb-notls.conf
     Execute Command    mosquitto -c /tmp/tb-notls.conf -d
     Sleep    0.5s
 

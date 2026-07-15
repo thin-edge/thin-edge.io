@@ -12,7 +12,7 @@ Test Tags           theme:c8y    theme:telemetry
 *** Test Cases ***
 Agent twin message published on startup
     ${expected_version}=    Execute Command    tedge --version | cut -d' ' -f2    strip=${True}
-    ${messages}=    Should Have MQTT Messages    te/device/main///twin/agent
+    ${messages}=    Should Have MQTT Messages    te/device/main///twin/agent    from_suite_startup=${True}
     Should Contain    ${messages[0]}    "name":"thin-edge.io"
     Should Contain    ${messages[0]}    "url":"https://thin-edge.io"
     Should Contain    ${messages[0]}    "version":"${expected_version}"

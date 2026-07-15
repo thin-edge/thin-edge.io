@@ -32,30 +32,27 @@ RUN apt-get -y update \
     # PKCS11 / cryptoki support
     gnutls-bin \
     softhsm2 \
-    # mosquitto (default version used by Debian, see below for more details)
-    mosquitto \
-    mosquitto-clients \
     # configure locales
     && echo "LANG=C.UTF-8" > /etc/default/locale
+
+# Setup community repository and install mosquitto and log plugin
+RUN \
+    keyring_location=/usr/share/keyrings/thinedge-community-archive-keyring.gpg \
+    && curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/community/gpg.2E65716592E5C6D4.key' |  gpg --dearmor >> ${keyring_location} \
+    && curl -1sLf 'https://dl.cloudsmith.io/public/thinedge/community/config.deb.txt?distro=debian&codename=any-version&component=main' > /etc/apt/sources.list.d/thinedge-community.list \
+    && chmod 644 ${keyring_location} \
+    && chmod 644 /etc/apt/sources.list.d/thinedge-community.list \
+    && apt-get update \
+    && apt-get install -y \
+        # mosquitto (default version used by Debian, see below for more details)
+        tedge-mosquitto-gnu \
+        mosquitto-log-plugin \
+        mosquitto-log-client
 
 # Since vim.tiny is installed, vi command runs it under the hood, but in compatibility mode.
 # Disabling this classic compatibility mode to make it more user friendly (like vim) enabling features like:
 # arrow keys support in insert mode, multiple undo levels, etc.
 RUN echo "set nocompatible" >> /root/.vimrc
-
-# Note: Avoid using mosquitto 2.0.18 due to a session persistence bug when using `per_listener_settings true
-# Only comment out the custom install logic to make it easier to re-enable once the bug is resolved
-# See https://github.com/thin-edge/thin-edge.io/issues/3185 for more details
-# Install more recent version of mosquitto >= 2.0.18 from debian backports to avoid mosquitto following bugs:
-# The mosquitto repo can't be used as it does not included builds for arm64/aarch64 (only amd64 and armhf)
-# * https://github.com/eclipse/mosquitto/issues/2604 (2.0.11)
-# * https://github.com/eclipse/mosquitto/issues/2634 (2.0.15)
-# * https://github.com/eclipse/mosquitto/issues/2618 (2.0.18)
-#RUN sh -c "echo 'deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/debian-bookworm-backports.list" \
-#    && apt-get update \
-#    && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install -t bookworm-backports \
-#        mosquitto \
-#        mosquitto-clients
 
 # Install gost used for http proxy tests
 RUN case "$(uname -m)" in \
@@ -87,10 +84,6 @@ COPY files/system.toml /etc/tedge/
 COPY files/tedge.toml /etc/tedge/tedge.toml
 COPY files/tedge-configuration-plugin.toml /etc/tedge/plugins/
 COPY files/packages/ /setup/packages/
-
-COPY files/mqtt-logger.service /etc/systemd/system/
-COPY files/mqtt-logger /usr/bin/
-RUN systemctl enable mqtt-logger.service
 
 # Custom mosquitto config
 COPY files/mosquitto.conf /etc/mosquitto/conf.d/

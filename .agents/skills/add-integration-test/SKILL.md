@@ -42,7 +42,7 @@ description: Write a Robot Framework integration test for thin-edge.io. Use when
 1. Fetch service logs using `journalctl`:
    - C8Y mapper: `journalctl -f -u tedge-mapper-c8y`
    - Tedge agent: `journalctl -f -u tedge-agent`
-   - Complete MQTT message trace: `journalctl -f -u mqtt-logger`
+   - Complete MQTT message trace: `mqtt-log --output ndjson`
 
 ## Notes
 

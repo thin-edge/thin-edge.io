@@ -76,6 +76,13 @@ ARCH=${ARCH:-}
 CONFIGURE_TEST_SETUP=${CONFIGURE_TEST_SETUP:-1}
 TEST_USER=${TEST_USER:-petertest}
 
+# package which contains mosquitto
+MOSQUITTO_PACKAGES=(
+    tedge-mosquitto-gnu
+    mosquitto-log-plugin
+    mosquitto-log-client
+)
+
 get_debian_arch() {
     arch=
     if command_exists dpkg; then
@@ -285,7 +292,7 @@ install_via_apt() {
     sudo apt-get update
 
     if ! command -v mosquitto >/dev/null 2>&1; then
-        sudo apt-get install -y mosquitto
+        sudo apt-get install -y "${MOSQUITTO_PACKAGES[@]}"
     fi
 
     if [ -n "$VERSION" ]; then
@@ -335,7 +342,7 @@ find_then_install_deb() {
 install_via_local_files() {
     if ! command_exists mosquitto; then
         sudo apt-get update
-        sudo apt-get install -y mosquitto
+        sudo apt-get install -y "${MOSQUITTO_PACKAGES[@]}"
     fi
 
     ARCH=$(get_debian_arch)
