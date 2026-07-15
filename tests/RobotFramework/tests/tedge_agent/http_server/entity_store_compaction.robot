@@ -20,10 +20,11 @@ Entity store log is compacted when redundancy threshold is exceeded
     ...    entries, which meets the compaction threshold. After compaction only one entry for
     ...    that topic is present in the file rather than 101.
     Write Entity Registration Many Times    compaction_count    101
-    ${count}=    Execute Command    grep -c "compaction_count" ${ENTITY_STORE}    strip=${True}
     # The compaction might trigger earlier than expected as services may have reregistered on startup,
     # but the count should be well below the threshold of 100 redundant entries
-    Should Be True    ${count} < 10
+
+    # do the comparison inside the command so grep is subject to retry if command completes before compaction
+    Execute Command    cmd=bash -c '[ $(grep -c "compaction_count" ${ENTITY_STORE}) -lt 10 ]'    strip=${True}
 
 Latest entity metadata is preserved after compaction
     [Documentation]    After compaction, entity metadata retains the most recently written
