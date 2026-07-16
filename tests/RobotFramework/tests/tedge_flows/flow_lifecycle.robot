@@ -153,12 +153,6 @@ Flow definition update changes processing behavior
     ...    message_contains="version":"v1"
     ...    date_from=${start}
 
-    # Brief settle: Get Unix Timestamp has 1-second granularity, so without this
-    # sleep the output message from the UPDATED_INPUT_TOPIC publish (which was
-    # confirmed above) can share the same second as the next ${start} and bleed
-    # into the negative assertion window, causing a spurious failure.
-    Execute Command    sleep 1
-
     # Messages on the original input topic must no longer be processed
     ${start}    Get Unix Timestamp
     Execute Command    tedge mqtt pub ${INPUT_TOPIC} '{}'
