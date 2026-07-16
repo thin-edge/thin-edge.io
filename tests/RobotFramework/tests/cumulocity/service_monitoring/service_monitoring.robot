@@ -147,6 +147,10 @@ tedge-mapper-c8y service tracks network connectivity with built-in bridge
 
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set mqtt.bridge.reconnect_policy.initial_interval 0s
+    # Use a short keep alive so Cumulocity detects the dropped cloud connection (and fires the
+    # mapper's last-will) well within the assertion timeout, instead of waiting ~1.5x the default
+    # 60s keep alive. Without this the "down" status races against the poll window.
+    Execute Command    tedge config set c8y.bridge.keepalive_interval 10s
     Execute Command    tedge reconnect c8y
 
     Device Should Exist    ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
