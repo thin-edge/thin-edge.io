@@ -77,6 +77,13 @@ Test if all c8y services using default service type when service type configured
     c8y-firmware-plugin
 
 Check health status of tedge-mapper-c8y service on broker stop start
+    Skip    Disabled due to lack of guarantees that the LWT message will be processed in time
+    # Note: This check can't be reliably done as it relies on the tedge-mapper publishing
+    # messages onto the broker as it is shutting down, so it can't ensure that the LWT message,
+    # along with the deliver back to the built-in bridge is done before the mosquitto service
+    # stops.
+    # FUTURE: Check if there could be a direct message sent to the built-in bridge half instead
+    # which doesn't rely on the local broker being available.
     Device Should Exist    ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
