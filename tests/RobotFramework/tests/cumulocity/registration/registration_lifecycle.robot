@@ -273,7 +273,6 @@ Register tedge-agent when tedge-mapper-c8y is not running #2389
     Should Have MQTT Messages    te/device/offlinechild1///cmd/restart/+
 
 Early data messages cached and processed
-    ${timestamp}=    Get Unix Timestamp
     ${prefix}=    Get Random Name
     Execute Command    sudo tedge config set agent.entity_store.auto_register false
     Restart Service    tedge-agent
