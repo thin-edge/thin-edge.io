@@ -332,7 +332,12 @@ The c8y mapper reacts to this capability message:
   on the service's managed object.
 
 A user presses the RESTART button,
-and the mapper receives the `c8y_ServiceCommand` operation shown in the Background.
+and the mapper receives the `c8y_ServiceCommand` operation:
+
+```
+{ "c8y_ServiceCommand": { "serviceType": "service", "serviceName": "tedge-mapper-c8y", "command": "RESTART" } }
+```
+
 It resolves the target entity from the external id,
 validates `restart` against the declared types,
 and publishes the command:
