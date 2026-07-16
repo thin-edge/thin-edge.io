@@ -134,6 +134,9 @@ Default plugin configuration
     Cumulocity.Set Device    ${DEVICE_SN}
     Cumulocity.Should Have Exact Supported Log Types    software-management
 
+    # Wait for a log file to exist before requesting it
+    Execute Command    cmd=grep -rq "software_list @ successful" /var/log/tedge/agent/
+
     ${start_timestamp}=    Get Current Date    UTC    -24 hours    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${end_timestamp}=    Get Current Date    UTC    +60 seconds    result_format=%Y-%m-%dT%H:%M:%S+0000
     ${operation}=    Create Log Request Operation
