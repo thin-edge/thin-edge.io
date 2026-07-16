@@ -37,7 +37,7 @@ impl FederatedConfig {
         if prefix.is_empty() {
             if let Some(dep) = dependencies.first() {
                 return Err(ConfigError::FromRootInRootConfig {
-                    key: dep.key.to_owned(),
+                    key: dep.key.clone().into_owned(),
                     root_key: dep.root_key.to_owned(),
                 });
             }

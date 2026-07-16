@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use facet::Facet;
 
 use crate::append_remove::AppendRemoveRegistry;
@@ -7,6 +9,7 @@ use crate::reflect::{
     config_add, config_get, config_remove, config_set, config_unset, list_key_entries, list_keys,
     ConfigError, KeyAliases, KeyEntry, ReadOnlyKeys,
 };
+use crate::schema::ConfigSchema;
 
 /// Facade over the config reflection/defaults/reader subsystems.
 ///
@@ -17,25 +20,22 @@ pub struct ConfigManager {
     append_remove: AppendRemoveRegistry,
     read_only: ReadOnlyKeys,
     aliases: KeyAliases,
-    examples: std::collections::HashMap<&'static str, &'static [&'static str]>,
+    examples: std::collections::HashMap<Cow<'static, str>, &'static [&'static str]>,
     env_prefix: Option<String>,
 }
 
 impl ConfigManager {
-    /// Creates a manager from the registries generated for a config schema.
-    pub fn new(
-        defaults: DefaultsRegistry,
-        append_remove: AppendRemoveRegistry,
-        read_only: ReadOnlyKeys,
-        aliases: KeyAliases,
-        examples: std::collections::HashMap<&'static str, &'static [&'static str]>,
-    ) -> Self {
+    /// Creates a manager from a schema defined by `define_config!`.
+    pub fn from_schema<S: ConfigSchema>(config_dir: &std::path::Path) -> Self {
+        let mut append_remove = AppendRemoveRegistry::new();
+        S::register_types(&mut append_remove);
         Self {
-            defaults,
+            defaults: DefaultsRegistry::new(S::defaults(config_dir))
+                .unwrap_or_else(|e| panic!("invalid defaults registry: {e}")),
             append_remove,
-            read_only,
-            aliases,
-            examples,
+            read_only: ReadOnlyKeys::new(S::read_only_keys()),
+            aliases: KeyAliases::new(S::aliases()),
+            examples: S::examples().into_iter().collect(),
             env_prefix: None,
         }
     }
@@ -139,8 +139,8 @@ impl ConfigManager {
     }
 
     /// Resolves a potentially-aliased key to the canonical key.
-    /// Returns (canonical_key, Some(deprecation_message)) if the key was aliased.
-    pub fn resolve_key(&self, key: &str) -> (String, Option<&'static str>) {
+    /// Returns (canonical_key, Some(deprecated_key)) if the key was aliased.
+    pub fn resolve_key(&self, key: &str) -> (String, Option<&str>) {
         self.aliases.resolve(key)
     }
 

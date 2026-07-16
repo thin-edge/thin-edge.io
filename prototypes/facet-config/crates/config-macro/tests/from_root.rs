@@ -25,13 +25,7 @@ mod root {
     }
 
     pub fn manager() -> ConfigManager {
-        ConfigManager::new(
-            build_defaults(std::path::Path::new("/nonexistent/tedge")),
-            build_registry(),
-            build_read_only_keys(),
-            build_aliases(),
-            build_examples(),
-        )
+        ConfigManager::from_schema::<RootConfig>(std::path::Path::new("/nonexistent/tedge"))
     }
 
     pub fn source() -> Box<dyn ops::ConfigOps> {
@@ -53,13 +47,7 @@ mod mapper {
     }
 
     pub fn manager() -> ConfigManager {
-        ConfigManager::new(
-            build_defaults(std::path::Path::new("/nonexistent/tedge")),
-            build_registry(),
-            build_read_only_keys(),
-            build_aliases(),
-            build_examples(),
-        )
+        ConfigManager::from_schema::<MapperConfig>(std::path::Path::new("/nonexistent/tedge"))
     }
 
     pub fn source() -> Box<dyn ops::ConfigOps> {
@@ -85,13 +73,9 @@ mod misspelled_mapper {
     }
 
     fn manager() -> ConfigManager {
-        ConfigManager::new(
-            build_defaults(std::path::Path::new("/nonexistent/tedge")),
-            build_registry(),
-            build_read_only_keys(),
-            build_aliases(),
-            build_examples(),
-        )
+        ConfigManager::from_schema::<MisspelledMapperConfig>(std::path::Path::new(
+            "/nonexistent/tedge",
+        ))
     }
 }
 

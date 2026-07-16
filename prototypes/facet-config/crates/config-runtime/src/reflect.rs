@@ -41,9 +41,10 @@ pub enum ConfigError {
 }
 
 /// A deprecated key name and the canonical key it now maps to.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeprecatedKey {
-    pub old: &'static str,
-    pub new: &'static str,
+    pub old: std::borrow::Cow<'static, str>,
+    pub new: std::borrow::Cow<'static, str>,
 }
 
 /// Runtime lookup for deprecated config key names.
@@ -52,7 +53,7 @@ pub struct KeyAliases {
 }
 
 /// Set of keys that can be read but not changed via normal config operations.
-pub struct ReadOnlyKeys(std::collections::HashSet<&'static str>);
+pub struct ReadOnlyKeys(std::collections::HashSet<std::borrow::Cow<'static, str>>);
 
 /// Information used to show a config key in help/list output:
 /// the key, generated docs, and example values.
@@ -69,10 +70,10 @@ impl KeyAliases {
     }
 
     /// Returns the canonical key and the deprecated key if a mapping was used.
-    pub fn resolve(&self, key: &str) -> (String, Option<&'static str>) {
+    pub fn resolve(&self, key: &str) -> (String, Option<&str>) {
         for alias in &self.aliases {
             if key == alias.old {
-                return (alias.new.to_owned(), Some(alias.old));
+                return (alias.new.clone().into_owned(), Some(alias.old.as_ref()));
             }
         }
         (key.to_owned(), None)
@@ -80,7 +81,7 @@ impl KeyAliases {
 }
 
 impl ReadOnlyKeys {
-    pub fn new(keys: impl IntoIterator<Item = &'static str>) -> Self {
+    pub fn new(keys: impl IntoIterator<Item = std::borrow::Cow<'static, str>>) -> Self {
         Self(keys.into_iter().collect())
     }
 
@@ -192,7 +193,7 @@ pub fn list_keys(shape: &'static Shape, prefix: &str) -> Vec<String> {
 pub fn list_key_entries(
     shape: &'static Shape,
     prefix: &str,
-    examples: &std::collections::HashMap<&'static str, &'static [&'static str]>,
+    examples: &std::collections::HashMap<std::borrow::Cow<'static, str>, &'static [&'static str]>,
 ) -> Vec<KeyEntry> {
     let mut entries = Vec::new();
     list_keys_recursive(shape, prefix, examples, &mut entries);
@@ -656,7 +657,7 @@ fn validate_key(shape: &'static Shape, key: &str) -> Result<(), ConfigError> {
 fn list_keys_recursive(
     shape: &'static Shape,
     prefix: &str,
-    examples: &std::collections::HashMap<&'static str, &'static [&'static str]>,
+    examples: &std::collections::HashMap<std::borrow::Cow<'static, str>, &'static [&'static str]>,
     entries: &mut Vec<KeyEntry>,
 ) {
     let fields = match get_struct_fields(shape) {

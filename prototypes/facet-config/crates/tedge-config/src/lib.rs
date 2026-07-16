@@ -46,14 +46,7 @@ facet_config_macro::define_config! {
 }
 
 pub fn config_manager(config_dir: &std::path::Path) -> ConfigManager {
-    ConfigManager::new(
-        build_defaults(config_dir),
-        build_registry(),
-        build_read_only_keys(),
-        build_aliases(),
-        build_examples(),
-    )
-    .with_env_prefix("TEDGE_")
+    ConfigManager::from_schema::<TEdgeConfig>(config_dir).with_env_prefix("TEDGE_")
 }
 
 pub fn source(

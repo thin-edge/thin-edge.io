@@ -1,13 +1,19 @@
+//! Implements `define_config!` by generating three related views of a config:
+//! a DTO for stored values, a reader for application code, and runtime schema
+//! information for defaults and config operations.
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::parse2;
 
 use input::Configuration;
+use model::Model;
 
 mod dto;
 pub mod input;
+mod model;
 mod reader;
-mod registries;
+mod schema;
 #[cfg(test)]
 mod test_utils;
 
@@ -17,15 +23,15 @@ pub fn generate_configuration(input: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error(),
     };
 
-    let root_name = config.name.to_string();
+    let model = Model::new(&config);
 
-    let dto_tokens = dto::generate_dto(&config, &root_name);
-    let reader_tokens = reader::generate_reader(&config, &root_name);
-    let registry_tokens = registries::generate_registries(&config);
+    let dto_tokens = dto::generate_dto(&model);
+    let reader_tokens = reader::generate_reader(&model);
+    let schema_tokens = schema::generate_schema(&model);
 
     quote! {
         #dto_tokens
         #reader_tokens
-        #registry_tokens
+        #schema_tokens
     }
 }

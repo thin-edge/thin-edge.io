@@ -1,65 +1,68 @@
-use heck::ToUpperCamelCase;
+//! Generates the form used to deserialize and edit stored configuration.
+//!
+//! Its fields are optional so stored values remain distinct from defaults.
+
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, quote_spanned};
+use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 
-use crate::input::{ConfigField, ConfigGroup, Configuration, FieldOrGroup};
+use crate::input::ConfigField;
+use crate::model::{GroupModel, ItemModel, Model};
 
-pub fn generate_dto(config: &Configuration, root_name: &str) -> TokenStream {
-    let root_ident = format_ident!("{root_name}ConfigDto", span = config.name.span());
-    let mut structs = Vec::new();
-
-    let fields = generate_group_fields(&config.groups, "", &mut structs);
-
-    structs.insert(
-        0,
-        quote! {
-            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
-            #[facet(type_tag = "config_group")]
-            pub struct #root_ident {
-                #(#fields)*
-            }
-        },
-    );
-
+pub fn generate_dto(model: &Model) -> TokenStream {
+    let structs = generate_group(&model.root);
     quote! { #(#structs)* }
 }
 
-pub(crate) fn struct_name_for_group(parent_prefix: &str, group_name: &str) -> String {
-    if parent_prefix.is_empty() {
-        group_name.to_upper_camel_case()
-    } else {
-        format!(
-            "{}{}",
-            parent_prefix.to_upper_camel_case(),
-            group_name.to_upper_camel_case()
-        )
-    }
-}
-
-fn generate_group_fields(
-    items: &syn::punctuated::Punctuated<FieldOrGroup, syn::Token![,]>,
-    parent_prefix: &str,
-    structs: &mut Vec<TokenStream>,
-) -> Vec<TokenStream> {
+fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
+    let mut nested = Vec::new();
     let mut fields = Vec::new();
-    for item in items {
+
+    for item in &group.items {
         match item {
-            FieldOrGroup::Field(f) => fields.push(generate_leaf_field(f)),
-            FieldOrGroup::Group(g) => {
-                let (field_token, nested_structs) = generate_group(g, parent_prefix);
-                fields.push(field_token);
-                structs.extend(nested_structs);
+            ItemModel::Field(f) => fields.push(generate_leaf_field(f.field)),
+            ItemModel::Group(child) => {
+                let ident = child.ident;
+                let ty = &child.group.dto_ident;
+                let doc_attrs = child.doc_attrs;
+                fields.push(quote! {
+                    #(#doc_attrs)*
+                    #[serde(default, skip_serializing_if = "Option::is_none")]
+                    pub #ident: Option<#ty>,
+                });
+                nested.extend(generate_group(&child.group));
+            }
+            ItemModel::External(ext) => {
+                let ident = &ext.ext.ident;
+                let ty = &ext.ext.ty;
+                let doc_attrs = &ext.ext.doc_attrs;
+                // Report an invalid external type at the caller's declaration.
+                let field_ty = quote_spanned! {ty.span()=> Option<<#ty as ConfigSchema>::Dto> };
+                fields.push(quote! {
+                    #(#doc_attrs)*
+                    #[serde(default, skip_serializing_if = "Option::is_none")]
+                    pub #ident: #field_ty,
+                });
             }
         }
     }
-    fields
+
+    let struct_ident = &group.dto_ident;
+    let mut structs = vec![quote! {
+        #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+        #[facet(type_tag = "config_group")]
+        pub struct #struct_ident {
+            #(#fields)*
+        }
+    }];
+    structs.extend(nested);
+    structs
 }
 
 fn generate_leaf_field(field: &ConfigField) -> TokenStream {
-    let ident = field.ident.as_ref().unwrap();
+    let ident = &field.ident;
     let ty = &field.ty;
-    let doc_attrs = &field.attrs;
+    let doc_attrs = &field.doc_attrs;
 
     let mut extra_attrs = Vec::new();
     if let Some(rename) = &field.rename {
@@ -76,44 +79,10 @@ fn generate_leaf_field(field: &ConfigField) -> TokenStream {
     }
 }
 
-fn generate_group(group: &ConfigGroup, parent_prefix: &str) -> (TokenStream, Vec<TokenStream>) {
-    let group_ident = &group.ident;
-    let base_name = struct_name_for_group(parent_prefix, &group.ident.to_string());
-    let struct_name = format!("{base_name}ConfigDto");
-    let struct_ident = format_ident!("{struct_name}", span = group.ident.span());
-    let doc_attrs = &group.doc_attrs;
-
-    let child_prefix = if parent_prefix.is_empty() {
-        group.ident.to_string()
-    } else {
-        format!("{parent_prefix}_{}", group.ident)
-    };
-
-    let mut nested_structs = Vec::new();
-    let fields = generate_group_fields(&group.contents, &child_prefix, &mut nested_structs);
-
-    let struct_def = quote! {
-        #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
-        #[facet(type_tag = "config_group")]
-        pub struct #struct_ident {
-            #(#fields)*
-        }
-    };
-
-    nested_structs.insert(0, struct_def);
-
-    let field_token = quote! {
-        #(#doc_attrs)*
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub #group_ident: Option<#struct_ident>,
-    };
-
-    (field_token, nested_structs)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::Configuration;
     use crate::test_utils::{ident_starts, position_of};
     use syn::parse_quote;
 
@@ -127,6 +96,10 @@ mod tests {
         );
     }
 
+    fn generate(config: &Configuration) -> TokenStream {
+        generate_dto(&Model::new(config))
+    }
+
     #[test]
     fn simple_group_with_leaf_fields() {
         let input: Configuration = parse_quote!(
@@ -137,7 +110,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_dto(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
             #[facet(type_tag = "config_group")]
@@ -168,7 +141,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_dto(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
             #[facet(type_tag = "config_group")]
@@ -208,7 +181,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_dto(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
             #[facet(type_tag = "config_group")]
@@ -251,7 +224,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_dto(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
             #[facet(type_tag = "config_group")]
@@ -280,7 +253,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_dto(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
             #[facet(type_tag = "config_group")]
@@ -301,6 +274,27 @@ mod tests {
     }
 
     #[test]
+    fn external_group_field_projects_the_schemas_dto_type() {
+        let input: Configuration = parse_quote!(
+            Mapper {
+                /// Device identity shared across mappers
+                device: extern shared::MapperDeviceConfig,
+            }
+        );
+        let generated = generate(&input);
+        let expected: TokenStream = parse_quote! {
+            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+            #[facet(type_tag = "config_group")]
+            pub struct MapperConfigDto {
+                /// Device identity shared across mappers
+                #[serde(default, skip_serializing_if = "Option::is_none")]
+                pub device: Option<<shared::MapperDeviceConfig as ConfigSchema>::Dto>,
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
     fn root_struct_ident_spans_the_config_name() {
         let src = "Mapper {
     mqtt: {
@@ -308,7 +302,7 @@ mod tests {
     },
 }";
         let input: Configuration = syn::parse_str(src).unwrap();
-        let generated = generate_dto(&input, &input.name.to_string());
+        let generated = generate(&input);
         assert_eq!(
             ident_starts(&generated, "MapperConfigDto"),
             vec![position_of(src, "Mapper")],
@@ -323,7 +317,7 @@ mod tests {
     },
 }";
         let input: Configuration = syn::parse_str(src).unwrap();
-        let generated = generate_dto(&input, &input.name.to_string());
+        let generated = generate(&input);
         let starts = ident_starts(&generated, "MqttConfigDto");
         let expected = position_of(src, "mqtt");
         // The ident appears both as the field type and the struct definition
@@ -339,9 +333,24 @@ mod tests {
     },
 }";
         let input: Configuration = syn::parse_str(src).unwrap();
-        let generated = generate_dto(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected = position_of(src, "u16");
         assert!(ident_starts(&generated, "Option").contains(&expected));
         assert_eq!(ident_starts(&generated, "u16"), vec![expected]);
+    }
+
+    #[test]
+    fn external_group_projection_spans_the_extern_type() {
+        let src = "Mapper {
+    device: extern MapperDeviceConfig,
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate(&input);
+        let expected = position_of(src, "MapperDeviceConfig");
+        assert_eq!(
+            ident_starts(&generated, "MapperDeviceConfig"),
+            vec![expected],
+        );
+        assert_eq!(ident_starts(&generated, "ConfigSchema"), vec![expected]);
     }
 }

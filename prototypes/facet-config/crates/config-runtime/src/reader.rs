@@ -242,8 +242,8 @@ mod tests {
     #[test]
     fn unset_field_falling_back_to_optional_key_reports_source_key() {
         let defaults = DefaultsRegistry::new(vec![FieldDefault {
-            key: "http",
-            spec: DefaultSpec::FromOptionalKey("url"),
+            key: "http".into(),
+            spec: DefaultSpec::FromOptionalKey("url".into()),
         }])
         .unwrap();
 

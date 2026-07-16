@@ -21,22 +21,8 @@ facet_config_macro::define_config! {
             use_operation_id: bool,
         },
 
-        device: {
-            /// Unique device identifier for this mapper
-            #[tedge_config(default(from_key_via(
-                key = "device.cert_path",
-                function = "certificate_common_name"
-            )))]
-            id: String,
-
-            /// Path to the device certificate
-            #[tedge_config(default(from_root = "device.cert_path"))]
-            cert_path: camino::Utf8PathBuf,
-
-            /// Path to the device private key
-            #[tedge_config(default(from_root = "device.key_path"))]
-            key_path: camino::Utf8PathBuf,
-        },
+        /// Identity of the device this mapper connects to Cumulocity
+        device: extern crate::shared::MapperDeviceConfig,
 
         proxy: {
             bind: {
@@ -82,13 +68,7 @@ facet_config_macro::define_config! {
 }
 
 pub fn config_manager(config_dir: &std::path::Path) -> ConfigManager {
-    ConfigManager::new(
-        build_defaults(config_dir),
-        build_registry(),
-        build_read_only_keys(),
-        build_aliases(),
-        build_examples(),
-    )
+    ConfigManager::from_schema::<C8yMapperConfig>(config_dir)
 }
 
 pub fn source(

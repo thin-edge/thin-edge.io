@@ -46,13 +46,7 @@ mod features {
     }
 
     pub fn manager() -> ConfigManager {
-        ConfigManager::new(
-            build_defaults(std::path::Path::new("/etc/tedge")),
-            build_registry(),
-            build_read_only_keys(),
-            build_aliases(),
-            build_examples(),
-        )
+        ConfigManager::from_schema::<FeaturesConfig>(std::path::Path::new("/etc/tedge"))
     }
 
     #[test]
@@ -140,7 +134,7 @@ mod broken {
     #[test]
     #[should_panic(expected = "invalid defaults registry")]
     fn required_fallback_to_a_defaultless_key_is_rejected_at_startup() {
-        build_defaults(std::path::Path::new("/etc/tedge"));
+        ConfigManager::from_schema::<BrokenConfig>(std::path::Path::new("/etc/tedge"));
     }
 }
 

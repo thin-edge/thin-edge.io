@@ -1,7 +1,9 @@
 use crate::reflect::{config_get, config_set, config_unset, ConfigError};
 use facet::Facet;
+use std::borrow::Cow;
 
 /// Describes how to produce a value when a config key is not set directly.
+#[derive(Debug)]
 pub enum DefaultSpec {
     /// A fixed default value stored as the same string accepted by `config set`.
     Value(String),
@@ -9,11 +11,11 @@ pub enum DefaultSpec {
     /// A fresh default computed each time the key is read.
     Function(fn() -> String),
 
-    /// A required fallback to another key in the same DTO.
-    FromKey(&'static str),
+    /// A required fallback to another key in the same schema.
+    FromKey(Cow<'static, str>),
 
-    /// An optional fallback to another key in the same DTO.
-    FromOptionalKey(&'static str),
+    /// An optional fallback to another key in the same schema.
+    FromOptionalKey(Cow<'static, str>),
 
     /// An optional fallback computed from another key's resolved value
     ///
@@ -25,11 +27,14 @@ pub enum DefaultSpec {
     /// The function only runs when the key is read, and its result is
     /// memoized per source value for the lifetime of the registry.
     FromKeyVia {
-        key: &'static str,
+        key: Cow<'static, str>,
         function: DeriveFn,
     },
 
     /// A fallback to a key owned by the root config.
+    ///
+    /// Unlike the same-schema fallbacks above, the key always names a key of
+    /// the root config, so mounting a schema under a prefix never rewrites it.
     FromRoot(&'static str),
 }
 
@@ -52,8 +57,9 @@ pub fn derive_to_string<T: std::fmt::Display>(
 type DerivedCache = std::collections::HashMap<(String, String), Result<Option<String>, String>>;
 
 /// Associates a config key with its defaulting rule.
+#[derive(Debug)]
 pub struct FieldDefault {
-    pub key: &'static str,
+    pub key: Cow<'static, str>,
     pub spec: DefaultSpec,
 }
 
@@ -71,9 +77,9 @@ pub type RootResolver<'a> = Option<&'a dyn Fn(&str) -> Result<Option<String>, Co
 
 /// A `from_root` reference declared by a config schema: `key` in the mounted
 /// config falls back to `root_key` in the root config.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootDependency {
-    pub key: &'static str,
+    pub key: Cow<'static, str>,
     pub root_key: &'static str,
 }
 
@@ -139,7 +145,7 @@ impl DefaultsRegistry {
             .iter()
             .filter_map(|d| match d.spec {
                 DefaultSpec::FromRoot(root_key) => Some(RootDependency {
-                    key: d.key,
+                    key: d.key.clone(),
                     root_key,
                 }),
                 _ => None,
@@ -167,7 +173,7 @@ impl DefaultsRegistry {
         }
         match self.get(key) {
             Some(DefaultSpec::Value(_) | DefaultSpec::Function(_)) => true,
-            Some(DefaultSpec::FromKey(source)) => self.is_resolvable(source, depth + 1),
+            Some(DefaultSpec::FromKey(source)) => self.is_resolvable(source.as_ref(), depth + 1),
             Some(
                 DefaultSpec::FromOptionalKey(_)
                 | DefaultSpec::FromRoot(_)
@@ -345,7 +351,7 @@ fn config_get_with_defaults_inner<T: for<'a> Facet<'a>>(
         DefaultSpec::FromKey(source_key) => {
             let resolved = config_get_with_defaults_inner(
                 dto,
-                source_key,
+                source_key.as_ref(),
                 defaults,
                 root_resolver,
                 depth + 1,
@@ -357,16 +363,20 @@ fn config_get_with_defaults_inner<T: for<'a> Facet<'a>>(
                 ))),
             }
         }
-        DefaultSpec::FromOptionalKey(source_key) => {
-            config_get_with_defaults_inner(dto, source_key, defaults, root_resolver, depth + 1)
-        }
+        DefaultSpec::FromOptionalKey(source_key) => config_get_with_defaults_inner(
+            dto,
+            source_key.as_ref(),
+            defaults,
+            root_resolver,
+            depth + 1,
+        ),
         DefaultSpec::FromKeyVia {
             key: source_key,
             function,
         } => {
             let resolved = config_get_with_defaults_inner(
                 dto,
-                source_key,
+                source_key.as_ref(),
                 defaults,
                 root_resolver,
                 depth + 1,
@@ -468,13 +478,13 @@ mod tests {
     fn from_key_via_resolves_source_through_its_own_default() {
         let defaults = DefaultsRegistry::new(vec![
             FieldDefault {
-                key: "source",
+                key: "source".into(),
                 spec: DefaultSpec::Value("fallback".into()),
             },
             FieldDefault {
-                key: "derived",
+                key: "derived".into(),
                 spec: DefaultSpec::FromKeyVia {
-                    key: "source",
+                    key: "source".into(),
                     function: uppercased,
                 },
             },
@@ -604,11 +614,11 @@ mod tests {
     fn root_dependencies_lists_only_from_root_specs() {
         let defaults = DefaultsRegistry::new(vec![
             FieldDefault {
-                key: "cert",
+                key: "cert".into(),
                 spec: DefaultSpec::FromRoot("device.cert_path"),
             },
             FieldDefault {
-                key: "port",
+                key: "port".into(),
                 spec: DefaultSpec::Value("1883".into()),
             },
         ])
@@ -616,7 +626,7 @@ mod tests {
         assert_eq!(
             defaults.root_dependencies(),
             vec![RootDependency {
-                key: "cert",
+                key: "cert".into(),
                 root_key: "device.cert_path",
             }]
         );
@@ -625,7 +635,7 @@ mod tests {
     #[test]
     fn validate_root_dependencies_rejects_unknown_root_key() {
         let deps = [RootDependency {
-            key: "device.cert_path",
+            key: "device.cert_path".into(),
             root_key: "device.certificate_path",
         }];
         let root_keys = vec!["device.cert_path".to_owned(), "device.id".to_owned()];
@@ -639,7 +649,7 @@ mod tests {
     #[test]
     fn validate_root_dependencies_accepts_known_root_keys() {
         let deps = [RootDependency {
-            key: "device.cert_path",
+            key: "device.cert_path".into(),
             root_key: "device.cert_path",
         }];
         let root_keys = vec!["device.cert_path".to_owned()];
@@ -699,7 +709,7 @@ mod tests {
 
     fn from_root_defaults() -> DefaultsRegistry {
         DefaultsRegistry::new(vec![FieldDefault {
-            key: "cert",
+            key: "cert".into(),
             spec: DefaultSpec::FromRoot("device.cert_path"),
         }])
         .unwrap()
@@ -707,9 +717,9 @@ mod tests {
 
     fn from_key_via_defaults(function: DeriveFn) -> DefaultsRegistry {
         DefaultsRegistry::new(vec![FieldDefault {
-            key: "derived",
+            key: "derived".into(),
             spec: DefaultSpec::FromKeyVia {
-                key: "source",
+                key: "source".into(),
                 function,
             },
         }])

@@ -15,6 +15,7 @@ mod manager;
 mod optional;
 mod reader;
 mod reflect;
+mod schema;
 mod templates_set;
 pub mod type_action;
 
@@ -37,5 +38,8 @@ pub use reader::build_reader_at;
 pub use reflect::{
     config_get, config_set, config_unset, list_key_entries, list_keys, ConfigError, DeprecatedKey,
     KeyAliases, KeyEntry, ReadOnlyKeys,
+};
+pub use schema::{
+    prefix_aliases, prefix_defaults, prefix_examples, prefix_keys, ConfigSchema, KeyExamples,
 };
 pub use templates_set::TemplatesSet;

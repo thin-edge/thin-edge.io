@@ -1,5 +1,8 @@
+//! Parses the declaration passed to `define_config!`.
+//!
+//! Generated names and complete config keys are added later by the model.
+
 use darling::FromAttributes;
-use darling::FromField;
 use darling::FromMeta;
 use syn::parse::Parse;
 use syn::punctuated::Punctuated;
@@ -16,6 +19,7 @@ pub struct Configuration {
 pub enum FieldOrGroup {
     Field(Box<ConfigField>),
     Group(ConfigGroup),
+    ExternalGroup(Box<ConfigExternalGroup>),
 }
 
 #[derive(Debug)]
@@ -25,21 +29,22 @@ pub struct ConfigGroup {
     pub contents: Punctuated<FieldOrGroup, Token![,]>,
 }
 
-#[derive(FromField, Debug)]
-#[darling(attributes(tedge_config), forward_attrs(doc))]
+#[derive(Debug)]
 pub struct ConfigField {
-    pub attrs: Vec<syn::Attribute>,
-    #[darling(default)]
+    pub doc_attrs: Vec<syn::Attribute>,
     pub readonly: bool,
-    #[darling(default)]
     pub rename: Option<String>,
-    #[darling(default)]
     pub deprecated_key: Option<String>,
-    #[darling(default)]
     pub default: Option<FieldDefault>,
-    #[darling(multiple, rename = "example")]
     pub examples: Vec<String>,
-    pub ident: Option<syn::Ident>,
+    pub ident: syn::Ident,
+    pub ty: syn::Type,
+}
+
+#[derive(Debug)]
+pub struct ConfigExternalGroup {
+    pub doc_attrs: Vec<syn::Attribute>,
+    pub ident: syn::Ident,
     pub ty: syn::Type,
 }
 
@@ -61,11 +66,31 @@ pub struct FromKeyVia {
     pub function: syn::Path,
 }
 
-/// Groups accept no `tedge_config` attributes; parsing this rejects any
-/// that are present with an error naming the unknown attribute
+#[derive(FromAttributes, Debug)]
+#[darling(attributes(tedge_config))]
+struct FieldAttributes {
+    #[darling(default)]
+    readonly: bool,
+    #[darling(default)]
+    rename: Option<String>,
+    #[darling(default)]
+    deprecated_key: Option<String>,
+    #[darling(default)]
+    default: Option<FieldDefault>,
+    #[darling(multiple, rename = "example")]
+    examples: Vec<String>,
+}
+
+// Empty by design: `tedge_config` options only apply to fields.
 #[derive(FromAttributes, Debug)]
 #[darling(attributes(tedge_config))]
 struct GroupAttributes {}
+
+// Empty by design: options belong where the external schema is declared,
+// not where it is reused.
+#[derive(FromAttributes, Debug)]
+#[darling(attributes(tedge_config))]
+struct ExternalGroupAttributes {}
 
 impl Parse for Configuration {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -79,51 +104,62 @@ impl Parse for Configuration {
 
 impl Parse for FieldOrGroup {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let fork = input.fork();
-        fork.call(Attribute::parse_outer)?;
-        fork.parse::<syn::Ident>()?;
-        fork.parse::<Token![:]>()?;
+        let attrs = input.call(Attribute::parse_outer)?;
+        let ident: syn::Ident = input.parse()?;
+        input.parse::<Token![:]>()?;
 
-        let lookahead = fork.lookahead1();
-        if lookahead.peek(syn::token::Brace) {
-            input.parse().map(Self::Group)
+        if input.peek(syn::token::Brace) {
+            let content;
+            syn::braced!(content in input);
+            parse_attributes::<GroupAttributes>(&attrs)?;
+            let contents = content.parse_terminated(<_>::parse, Token![,])?;
+            Ok(Self::Group(ConfigGroup {
+                doc_attrs: doc_attrs(attrs),
+                ident,
+                contents,
+            }))
+        } else if input.peek(Token![extern]) {
+            input.parse::<Token![extern]>()?;
+            let ty: syn::Type = input.parse()?;
+            parse_attributes::<ExternalGroupAttributes>(&attrs)?;
+            Ok(Self::ExternalGroup(Box::new(ConfigExternalGroup {
+                doc_attrs: doc_attrs(attrs),
+                ident,
+                ty,
+            })))
         } else {
-            input.parse().map(Self::Field)
+            let ty: syn::Type = input.parse()?;
+            let options = parse_attributes::<FieldAttributes>(&attrs)?;
+            Ok(Self::Field(Box::new(ConfigField {
+                doc_attrs: doc_attrs(attrs),
+                readonly: options.readonly,
+                rename: options.rename,
+                deprecated_key: options.deprecated_key,
+                default: options.default,
+                examples: options.examples,
+                ident,
+                ty,
+            })))
         }
     }
 }
 
-impl Parse for ConfigGroup {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let content;
-        let attrs = input.call(Attribute::parse_outer)?;
-        GroupAttributes::from_attributes(&attrs)
-            .map_err(|e| syn::Error::new(e.span(), e.to_string()))?;
-        let doc_attrs = attrs.into_iter().filter(is_doc_attr).collect();
-        let ident = input.parse()?;
-        let _colon: Token![:] = input.parse()?;
-        let _brace = syn::braced!(content in input);
-        let contents = content.parse_terminated(<_>::parse, Token![,])?;
-        Ok(ConfigGroup {
-            doc_attrs,
-            ident,
-            contents,
-        })
-    }
+fn parse_attributes<T: FromAttributes>(attrs: &[syn::Attribute]) -> syn::Result<T> {
+    T::from_attributes(attrs).map_err(|e| syn::Error::new(e.span(), e.to_string()))
 }
 
-impl Parse for ConfigField {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Self::from_field(&input.call(syn::Field::parse_named)?)
-            .map_err(|e| syn::Error::new(e.span(), e.to_string()))
-    }
+fn doc_attrs(attrs: Vec<syn::Attribute>) -> Vec<syn::Attribute> {
+    attrs
+        .into_iter()
+        .filter(|attr| attr.path().is_ident("doc"))
+        .collect()
 }
 
 impl ConfigField {
     pub fn config_name(&self) -> String {
         self.rename
             .clone()
-            .unwrap_or_else(|| self.ident.as_ref().unwrap().to_string())
+            .unwrap_or_else(|| self.ident.to_string())
     }
 }
 
@@ -133,8 +169,10 @@ impl ConfigGroup {
     }
 }
 
-fn is_doc_attr(attr: &syn::Attribute) -> bool {
-    attr.path().is_ident("doc")
+impl ConfigExternalGroup {
+    pub fn config_name(&self) -> String {
+        self.ident.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -229,6 +267,102 @@ mod tests {
     }
 
     #[test]
+    fn parse_external_group() {
+        let config: Configuration = parse_quote!(
+            Mapper {
+                device: extern MapperDeviceConfig,
+            }
+        );
+        match &config.groups[0] {
+            FieldOrGroup::ExternalGroup(g) => {
+                assert_eq!(g.ident, "device");
+                let expected: syn::Type = parse_quote!(MapperDeviceConfig);
+                assert_eq!(g.ty, expected);
+            }
+            other => panic!("expected external group, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_external_group_with_path_type() {
+        let config: Configuration = parse_quote!(
+            Mapper {
+                device: extern crate::shared::MapperDeviceConfig,
+            }
+        );
+        match &config.groups[0] {
+            FieldOrGroup::ExternalGroup(g) => {
+                let expected: syn::Type = parse_quote!(crate::shared::MapperDeviceConfig);
+                assert_eq!(g.ty, expected);
+            }
+            other => panic!("expected external group, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_external_group_nested_in_group() {
+        let config: Configuration = parse_quote!(
+            Mapper {
+                c8y: {
+                    device: extern MapperDeviceConfig,
+                },
+            }
+        );
+        match &config.groups[0] {
+            FieldOrGroup::Group(g) => {
+                assert!(matches!(&g.contents[0], FieldOrGroup::ExternalGroup(_)));
+            }
+            _ => panic!("expected group"),
+        }
+    }
+
+    #[test]
+    fn parse_external_group_doc_comments_preserved() {
+        let config: Configuration = parse_quote!(
+            Mapper {
+                /// Device identity shared across mappers
+                device: extern MapperDeviceConfig,
+            }
+        );
+        match &config.groups[0] {
+            FieldOrGroup::ExternalGroup(g) => {
+                assert_eq!(g.doc_attrs.len(), 1);
+                assert!(g.doc_attrs[0].path().is_ident("doc"));
+            }
+            other => panic!("expected external group, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn external_group_attributes_are_rejected() {
+        let err = syn::parse_str::<Configuration>(
+            "Mapper {
+                #[tedge_config(default(value = \"1883\"))]
+                device: extern MapperDeviceConfig,
+            }",
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("Unknown field: `default`"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn external_group_followed_by_braces_is_an_error() {
+        let err = syn::parse_str::<Configuration>(
+            "Mapper {
+                device: extern { id: String },
+            }",
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("expected"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
     fn group_attributes_are_rejected() {
         let err = syn::parse_str::<Configuration>(
             "Test {
@@ -258,8 +392,8 @@ mod tests {
         match &config.groups[0] {
             FieldOrGroup::Group(g) => match &g.contents[0] {
                 FieldOrGroup::Field(f) => {
-                    assert_eq!(f.attrs.len(), 1);
-                    assert!(f.attrs[0].path().is_ident("doc"));
+                    assert_eq!(f.doc_attrs.len(), 1);
+                    assert!(f.doc_attrs[0].path().is_ident("doc"));
                 }
                 _ => panic!("expected field"),
             },

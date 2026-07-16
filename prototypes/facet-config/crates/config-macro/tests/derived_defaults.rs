@@ -86,13 +86,7 @@ fn derivation_failure_names_the_key_source_and_reason() {
 }
 
 fn manager() -> ConfigManager {
-    ConfigManager::new(
-        build_defaults(std::path::Path::new("/etc/tedge")),
-        build_registry(),
-        build_read_only_keys(),
-        build_aliases(),
-        build_examples(),
-    )
+    ConfigManager::from_schema::<DerivedConfig>(std::path::Path::new("/etc/tedge"))
 }
 
 fn next_port(port: &str) -> Result<Option<u16>, String> {

@@ -1,53 +1,67 @@
+//! Generates the typed configuration returned to application code.
+//!
+//! Fields with guaranteed defaults are plain values. Other fields retain
+//! their key so an unset value can produce a useful error when accessed.
+
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, quote_spanned};
+use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 
-use crate::dto::struct_name_for_group;
-use crate::input::{ConfigField, ConfigGroup, Configuration, FieldDefault, FieldOrGroup};
+use crate::input::{ConfigField, FieldDefault};
+use crate::model::{GroupModel, ItemModel, Model};
 
-pub fn generate_reader(config: &Configuration, root_name: &str) -> TokenStream {
-    let root_ident = format_ident!("{root_name}Config", span = config.name.span());
-    let mut structs = Vec::new();
-
-    let fields = generate_reader_fields(&config.groups, "", &mut structs);
-
-    structs.insert(
-        0,
-        quote! {
-            #[derive(Debug, ::facet::Facet)]
-            #[facet(type_tag = "config_group")]
-            pub struct #root_ident {
-                #(#fields)*
-            }
-        },
-    );
-
+pub fn generate_reader(model: &Model) -> TokenStream {
+    let structs = generate_group(&model.root);
     quote! { #(#structs)* }
 }
 
-fn generate_reader_fields(
-    items: &syn::punctuated::Punctuated<FieldOrGroup, syn::Token![,]>,
-    parent_prefix: &str,
-    structs: &mut Vec<TokenStream>,
-) -> Vec<TokenStream> {
+fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
+    let mut nested = Vec::new();
     let mut fields = Vec::new();
-    for item in items {
+
+    for item in &group.items {
         match item {
-            FieldOrGroup::Field(f) => fields.push(generate_reader_leaf(f)),
-            FieldOrGroup::Group(g) => {
-                let (field_token, nested) = generate_reader_group(g, parent_prefix);
-                fields.push(field_token);
-                structs.extend(nested);
+            ItemModel::Field(f) => fields.push(generate_reader_leaf(f.field)),
+            ItemModel::Group(child) => {
+                let ident = child.ident;
+                let ty = &child.group.reader_ident;
+                let doc_attrs = child.doc_attrs;
+                fields.push(quote! {
+                    #(#doc_attrs)*
+                    pub #ident: #ty,
+                });
+                nested.extend(generate_group(&child.group));
+            }
+            ItemModel::External(ext) => {
+                let ident = &ext.ext.ident;
+                let ty = &ext.ext.ty;
+                let doc_attrs = &ext.ext.doc_attrs;
+                // Report an invalid external type at the caller's declaration.
+                let field_ty = quote_spanned! {ty.span()=> #ty };
+                fields.push(quote! {
+                    #(#doc_attrs)*
+                    pub #ident: #field_ty,
+                });
             }
         }
     }
-    fields
+
+    let struct_ident = &group.reader_ident;
+    let mut structs = vec![quote! {
+        #[derive(Debug, ::facet::Facet)]
+        #[facet(type_tag = "config_group")]
+        pub struct #struct_ident {
+            #(#fields)*
+        }
+    }];
+    structs.extend(nested);
+    structs
 }
 
 fn generate_reader_leaf(field: &ConfigField) -> TokenStream {
-    let ident = field.ident.as_ref().unwrap();
+    let ident = &field.ident;
     let ty = &field.ty;
-    let doc_attrs = &field.attrs;
+    let doc_attrs = &field.doc_attrs;
 
     let has_concrete_default = matches!(
         &field.default,
@@ -80,46 +94,10 @@ fn generate_reader_leaf(field: &ConfigField) -> TokenStream {
     }
 }
 
-fn generate_reader_group(
-    group: &ConfigGroup,
-    parent_prefix: &str,
-) -> (TokenStream, Vec<TokenStream>) {
-    let group_ident = &group.ident;
-    let base_name = struct_name_for_group(parent_prefix, &group.ident.to_string());
-    let struct_name = format!("{base_name}Config");
-    let struct_ident = format_ident!("{struct_name}", span = group.ident.span());
-    let doc_attrs = &group.doc_attrs;
-
-    let child_prefix = if parent_prefix.is_empty() {
-        group.ident.to_string()
-    } else {
-        format!("{parent_prefix}_{}", group.ident)
-    };
-
-    let mut nested_structs = Vec::new();
-    let fields = generate_reader_fields(&group.contents, &child_prefix, &mut nested_structs);
-
-    let struct_def = quote! {
-        #[derive(Debug, ::facet::Facet)]
-        #[facet(type_tag = "config_group")]
-        pub struct #struct_ident {
-            #(#fields)*
-        }
-    };
-
-    nested_structs.insert(0, struct_def);
-
-    let field_token = quote! {
-        #(#doc_attrs)*
-        pub #group_ident: #struct_ident,
-    };
-
-    (field_token, nested_structs)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::Configuration;
     use crate::test_utils::{ident_starts, position_of};
     use syn::parse_quote;
 
@@ -133,6 +111,10 @@ mod tests {
         );
     }
 
+    fn generate(config: &Configuration) -> TokenStream {
+        generate_reader(&Model::new(config))
+    }
+
     #[test]
     fn field_with_default_is_concrete_type() {
         let input: Configuration = parse_quote!(
@@ -143,7 +125,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_reader(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, ::facet::Facet)]
             #[facet(type_tag = "config_group")]
@@ -169,7 +151,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_reader(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, ::facet::Facet)]
             #[facet(type_tag = "config_group")]
@@ -199,7 +181,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_reader(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, ::facet::Facet)]
             #[facet(type_tag = "config_group")]
@@ -228,7 +210,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_reader(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, ::facet::Facet)]
             #[facet(type_tag = "config_group")]
@@ -261,7 +243,7 @@ mod tests {
                 },
             }
         );
-        let generated = generate_reader(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected: TokenStream = parse_quote! {
             #[derive(Debug, ::facet::Facet)]
             #[facet(type_tag = "config_group")]
@@ -280,6 +262,26 @@ mod tests {
     }
 
     #[test]
+    fn external_group_field_uses_the_schemas_reader_type() {
+        let input: Configuration = parse_quote!(
+            Mapper {
+                /// Device identity shared across mappers
+                device: extern shared::MapperDeviceConfig,
+            }
+        );
+        let generated = generate(&input);
+        let expected: TokenStream = parse_quote! {
+            #[derive(Debug, ::facet::Facet)]
+            #[facet(type_tag = "config_group")]
+            pub struct MapperConfig {
+                /// Device identity shared across mappers
+                pub device: shared::MapperDeviceConfig,
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
     fn root_struct_ident_spans_the_config_name() {
         let src = "Mapper {
     c8y: {
@@ -287,7 +289,7 @@ mod tests {
     },
 }";
         let input: Configuration = syn::parse_str(src).unwrap();
-        let generated = generate_reader(&input, &input.name.to_string());
+        let generated = generate(&input);
         assert_eq!(
             ident_starts(&generated, "MapperConfig"),
             vec![position_of(src, "Mapper")],
@@ -302,7 +304,7 @@ mod tests {
     },
 }";
         let input: Configuration = syn::parse_str(src).unwrap();
-        let generated = generate_reader(&input, &input.name.to_string());
+        let generated = generate(&input);
         let starts = ident_starts(&generated, "C8yConfig");
         let expected = position_of(src, "c8y");
         // The ident appears both as the field type and the struct definition
@@ -318,9 +320,22 @@ mod tests {
     },
 }";
         let input: Configuration = syn::parse_str(src).unwrap();
-        let generated = generate_reader(&input, &input.name.to_string());
+        let generated = generate(&input);
         let expected = position_of(src, "String");
         assert_eq!(ident_starts(&generated, "OptionalConfig"), vec![expected]);
         assert_eq!(ident_starts(&generated, "String"), vec![expected]);
+    }
+
+    #[test]
+    fn external_group_field_type_spans_the_extern_type() {
+        let src = "Mapper {
+    device: extern MapperDeviceConfig,
+}";
+        let input: Configuration = syn::parse_str(src).unwrap();
+        let generated = generate(&input);
+        assert_eq!(
+            ident_starts(&generated, "MapperDeviceConfig"),
+            vec![position_of(src, "MapperDeviceConfig")],
+        );
     }
 }

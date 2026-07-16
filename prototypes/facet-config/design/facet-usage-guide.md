@@ -58,13 +58,16 @@ facet_config_macro::define_config! {
 }
 ```
 
-Groups nest arbitrarily (`ident: { ... }`); leaves are `ident: Type`. Doc
-comments become the help text for `list` and shell completions.
+Groups nest arbitrarily (`ident: { ... }`); leaves are `ident: Type`; a schema
+defined by another `define_config!` invocation mounts as
+`ident: extern path::To::ReaderType` (see "Shared schemas"). Doc comments
+become the help text for `list` and shell completions.
 
 ## What the macro generates
 
-See `crates/config-macro-impl/src/{dto,reader,registries}.rs`. For the example
-above:
+See `crates/config-macro-impl/src/{dto,reader,schema}.rs`, all walking the
+intermediate model built in `model.rs` (which owns every computed struct name
+and dotted key). For the example above:
 
 **1. DTO structs** — `TEdgeConfigDto`, `DeviceConfigDto`, `MqttConfigDto`.
 Every leaf is `Option<T>`, every group field is `Option<GroupDto>`:
@@ -100,18 +103,23 @@ pub struct MqttConfig {
 Readers derive only `Facet` (they are never serialized) and are populated by
 one generic function, `build_reader` — not per-field codegen.
 
-**3. Registry functions** — module-level functions holding metadata as data:
+**3. A `ConfigSchema` impl** — one trait impl on the reader type, linking it
+to the DTO type and exposing the schema's metadata as plain data:
 
-| Function | Contents |
+| Item | Contents |
 |---|---|
-| `build_defaults(config_dir)` | `DefaultsRegistry`: dotted key → `DefaultSpec` |
-| `build_registry()` | `AppendRemoveRegistry`: one `register_append_remove::<T>()` per distinct leaf type |
-| `build_read_only_keys()` | `ReadOnlyKeys` — `HashSet` of dotted keys |
-| `build_aliases()` | `KeyAliases`: deprecated key → canonical key |
-| `build_examples()` | key → example strings |
+| `type Dto` | the matching DTO type (`TEdgeConfigDto`) |
+| `defaults(config_dir)` | `Vec<FieldDefault>`: dotted key → `DefaultSpec` |
+| `read_only_keys()` | dotted keys that refuse set/unset/add/remove |
+| `aliases()` | deprecated key → canonical key pairs |
+| `examples()` | key → example strings |
+| `register_types(registry)` | one `register_append_remove::<T>()` per distinct leaf type |
 
-A `ConfigManager` (`crates/config-runtime/src/manager.rs`) bundles these plus
-an optional env-var prefix and is the main runtime handle.
+Because everything hangs off the reader type, several `define_config!`
+invocations can share a module without colliding.
+`ConfigManager::from_schema::<TEdgeConfig>(config_dir)`
+(`crates/config-runtime/src/manager.rs`) builds the validated registries from
+this data and is the main runtime handle.
 
 ## Attribute reference
 
@@ -130,7 +138,9 @@ Everything lives under `#[tedge_config(...)]`, parsed by the macro itself
 | `default(from_key = "other.key")` | field | falls back to another key, which must itself resolve (validated at startup); concrete reader field |
 | `default(from_optional_key = "other.key")` | field | falls back only if the other key is set; reader field stays `Option<T>` |
 | `default(from_root = "device.cert_path")` | field | mapper config falls back to the root `tedge.toml`; reader field stays `Option<T>` |
-| `multi` | group | generates a `profiles: HashMap<String, …ProfileDto>` field (see Gotchas — currently unused) |
+
+Groups and `extern` mounts accept no `tedge_config` attributes; any present
+are rejected at compile time naming the unknown option.
 
 Notes:
 - All default values are **strings**, parsed through the same `FromStr` path
@@ -189,24 +199,85 @@ become `Some`/`None`. `build_reader_with_root` wires in a resolver for
 
 ```rust
 pub enum DefaultSpec {
-    Value(String),                 // default(value), default(from_config_dir)
-    Function(fn() -> String),      // default(function)
-    FromKey(&'static str),         // default(from_key)
-    FromOptionalKey(&'static str), // default(from_optional_key)
-    FromRoot(&'static str),        // default(from_root)
+    Value(String),                      // default(value), default(from_config_dir)
+    Function(fn() -> String),           // default(function)
+    FromKey(Cow<'static, str>),         // default(from_key)
+    FromOptionalKey(Cow<'static, str>), // default(from_optional_key)
+    FromKeyVia { .. },                  // default(from_key_via)
+    FromRoot(&'static str),             // default(from_root)
 }
 ```
 
-The registry validates itself on construction: a `from_key` chain that cannot
-terminate in a real value (or exceeds the cycle-guard depth) fails at startup.
-This is the runtime equivalent of the old macro's compile-time guarantee —
-equivalent in practice because tests and production construct the registry
-through the same entry point.
+Same-schema source keys (`FromKey`, `FromOptionalKey`, `FromKeyVia`) are
+`Cow<'static, str>` because mounting a shared schema rewrites them into the
+mounting schema's key space; `FromRoot` names a key of the root config, which
+no mount ever rewrites, so it stays `&'static str`.
+
+The registry validates itself on construction (inside
+`ConfigManager::from_schema`): a `from_key` chain that cannot terminate in a
+real value (or exceeds the cycle-guard depth) fails at startup. Validation
+runs on the fully mounted key set, so a dangling reference inside a shared
+schema is caught wherever that schema is used. This is the runtime equivalent
+of the old macro's compile-time guarantee — equivalent in practice because
+tests and production construct the registry through the same entry point.
+
+## Shared schemas (`extern` groups)
+
+A schema can mount another `define_config!` schema under one of its keys:
+
+```rust
+facet_config_macro::define_config! {
+    MapperDevice {
+        /// Unique device identifier for this mapper
+        #[tedge_config(default(from_key_via(key = "cert_path", function = "certificate_common_name")))]
+        id: String,
+
+        /// Path to the device certificate for this mapper
+        #[tedge_config(default(from_root = "device.cert_path"))]
+        cert_path: camino::Utf8PathBuf,
+    }
+}
+
+facet_config_macro::define_config! {
+    C8yMapper {
+        url: HostPort<HTTPS_PORT>,
+
+        /// Identity of the device this mapper connects to Cumulocity
+        device: extern MapperDeviceConfig,
+    }
+}
+```
+
+The `extern` type is the mounted schema's *reader* type — any path works, and
+a type that was not generated by `define_config!` fails to compile with a
+missing `ConfigSchema` impl reported against the `extern` line. The generated
+DTO embeds `Option<<MapperDeviceConfig as ConfigSchema>::Dto>`, the reader
+embeds `MapperDeviceConfig` directly, and the mounting schema's `ConfigSchema`
+impl extends its own metadata with the mounted schema's, remapped under the
+mount key by the `prefix_*` helpers in `config-runtime/src/schema.rs`.
+
+Key-space rules inside a shared schema:
+
+- `from_key`/`from_optional_key`/`from_key_via` name keys of the shared
+  schema itself (`cert_path` above) and are remapped at the mount point
+  (`device.cert_path` when mounted at `device`), so the schema works at any
+  mount key.
+- `from_root` names a key of the root tedge config and is never remapped.
+- There is currently no way for a shared schema to reference a key of the
+  schema that mounts it. A survey of the production `tedge_config.rs` found
+  no defaults that would need this; if it ever comes up, a marked absolute
+  reference (e.g. a `^`-prefixed key) can be added without disturbing the
+  relative-by-default semantics.
+
+`readonly`, `deprecated_key`, and `example` attributes inside the shared
+schema are remapped the same way, so a read-only key stays read-only at its
+mounted location and aliases resolve under the mount prefix.
 
 ## Environment variables
 
 `EnvOverrides` (`defaults.rs`) applies env vars onto the DTO after loading,
-before any read:
+before any effective read. Consequently, `get`, `list`, and `show` report the
+same environment-overlaid values that an application sees:
 
 - Prefix-stripped and lowercased: `TEDGE_MQTT_PORT` → `mqtt.port`. The
   underscore/dot ambiguity (`c8y_proxy_bind_port`) is resolved by trying
@@ -217,7 +288,12 @@ before any read:
   `TEDGE_C8Y_URL` (applies when no profile is selected) and
   `TEDGE_C8Y_PROFILES_PROD_URL` (applies under `--profile prod`).
 
-Env vars never persist: writes always reload the file fresh, mutate, and save.
+The persistent commands deliberately do not use that overlaid DTO. `set`,
+`unset`, `add`, and `remove` reload the DTO from TOML, apply the action, and
+save it. This prevents unrelated overrides (including empty overrides) from
+being persisted and ensures `add`/`remove` operate on the persisted value
+rather than an environment-provided value. A later `get` still applies the
+environment override, so its output can differ from the raw TOML by design.
 
 ## Multiple files (federated config)
 
@@ -257,10 +333,9 @@ comma-separated string.
 - Reader fields backed by `from_root`/`from_optional_key` are `Option<T>` —
   only `value`/`function`/`from_config_dir`/`from_key` defaults make a field
   concrete.
-- The `multi` group attribute (profiles as a `HashMap` within one file) is
-  implemented in the macro and runtime (`overlay_dto`) but unused by the CLI,
-  which realizes profiles as separate mount directories
-  (`mappers/c8y.prod/mapper.toml`).
+- Profiles are realized as separate mount directories
+  (`mappers/c8y.prod/mapper.toml`), not as a `HashMap` within one file; the
+  runtime's `overlay_dto` supports layering DTOs but no macro syntax uses it.
 - `build_reader` treats reflection errors on optional fields as `None`.
 - Keys match on the *renamed* field name (`device.type`, not `device.ty`) —
   the macro applies the rename to both facet and serde so the CLI and TOML

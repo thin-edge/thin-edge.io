@@ -586,7 +586,6 @@ mod tests {
                     "device.cert_path",
                     "device.id",
                     "device.key_path",
-                    "device.port",
                     "url",
                 ]
             );
@@ -890,8 +889,8 @@ mod tests {
         #[test]
         fn from_key_rejects_unresolvable_source() {
             let result = DefaultsRegistry::new(vec![FieldDefault {
-                key: "a",
-                spec: DefaultSpec::FromKey("b"),
+                key: "a".into(),
+                spec: DefaultSpec::FromKey("b".into()),
             }]);
             assert!(result.is_err());
         }

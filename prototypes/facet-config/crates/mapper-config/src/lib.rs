@@ -1,4 +1,5 @@
 pub mod c8y;
+pub mod shared;
 
 use facet_config_runtime::*;
 use std::fmt;
@@ -13,26 +14,8 @@ facet_config_macro::define_config! {
         #[tedge_config(example = "your-tenant.cumulocity.com")]
         url: HostPort<HTTPS_PORT>,
 
-        device: {
-            /// Unique device identifier for this mapper
-            #[tedge_config(default(from_key_via(
-                key = "device.cert_path",
-                function = "certificate_common_name"
-            )))]
-            id: String,
-
-            /// Path to the device certificate for this mapper
-            #[tedge_config(default(from_root = "device.cert_path"))]
-            cert_path: camino::Utf8PathBuf,
-
-            /// Path to the device private key for this mapper
-            #[tedge_config(default(from_root = "device.key_path"))]
-            key_path: camino::Utf8PathBuf,
-
-            ///A port
-            #[tedge_config(default(from_root = "device.port"))]
-            port: u16,
-        },
+        /// Identity of the device this mapper connects to the cloud
+        device: extern shared::MapperDeviceConfig,
     }
 }
 
@@ -191,13 +174,7 @@ pub fn builtin_profile(name: &str) -> Option<&str> {
 }
 
 pub fn config_manager(config_dir: &std::path::Path) -> ConfigManager {
-    ConfigManager::new(
-        build_defaults(config_dir),
-        build_registry(),
-        build_read_only_keys(),
-        build_aliases(),
-        build_examples(),
-    )
+    ConfigManager::from_schema::<MapperConfig>(config_dir)
 }
 
 /// Loads the mapper configuration as a `ConfigOps` so the CLI code can read the values dynamically
