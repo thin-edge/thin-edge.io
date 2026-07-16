@@ -17,6 +17,27 @@ spec:
       labels:
         app: mosquitto
     spec:
+      volumes:
+      - name: mosquitto-data-vol
+        persistentVolumeClaim:
+          claimName: {{ default (include "tedge.mosquitto.claimName" .) .Values.mosquitto.persistence.existingClaim }}
+{{- if .Values.mosquitto.persistence.chownData }}
+      initContainers:
+      # Ensure the hostPath-backed persistence directory is writable by the
+      # non-root mosquitto user (fsGroup does not apply to hostPath volumes).
+      - name: init-chown-data
+        image: ghcr.io/thin-edge/tedge-mosquitto:20260528.1607
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          runAsUser: 0
+        command:
+          - sh
+          - -c
+          - chown -R {{ .Values.mosquitto.persistence.uid }}:{{ .Values.mosquitto.persistence.gid }} {{ .Values.mosquitto.persistence.mountPath }}
+        volumeMounts:
+        - name: mosquitto-data-vol
+          mountPath: {{ .Values.mosquitto.persistence.mountPath | quote }}
+{{- end }}
       containers:
       - name: mosquitto
         image: ghcr.io/thin-edge/tedge-mosquitto:20260528.1607
@@ -24,6 +45,9 @@ spec:
         ports:
         - containerPort: 1883
           name: mqtt-svc
+        volumeMounts:
+        - name: mosquitto-data-vol
+          mountPath: {{ .Values.mosquitto.persistence.mountPath | quote }}
 
 ---
 

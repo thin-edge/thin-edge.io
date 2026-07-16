@@ -63,3 +63,35 @@ spec:
     requests:
       storage: {{ .Values.certs.size }}
 {{- end }}
+
+{{- if .Values.mosquitto.persistence.createPv }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "tedge.mosquitto.pvName" . | quote }}
+  labels:
+    storage: "tedge-mosquitto"
+spec:
+  capacity:
+    storage: {{ .Values.mosquitto.persistence.size }}
+  accessModes:
+    - {{ .Values.mosquitto.persistence.accessMode }}
+  hostPath:
+    path: {{ include "tedge.mosquitto.hostPath" . | quote }}
+    type: DirectoryOrCreate
+{{- end }}
+
+{{- if .Values.mosquitto.persistence.createClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "tedge.mosquitto.claimName" . | quote }}
+spec:
+  accessModes:
+    - {{ .Values.mosquitto.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.mosquitto.persistence.size }}
+{{- end }}

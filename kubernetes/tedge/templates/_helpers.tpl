@@ -86,6 +86,15 @@ installs are unchanged. Any of them can still be overridden via values.
 {{- define "tedge.certs.hostPath" -}}
 {{- .Values.certs.hostPath | default (printf "/data/%s-certs" .Release.Namespace) }}
 {{- end }}
+{{- define "tedge.mosquitto.claimName" -}}
+{{- .Values.mosquitto.persistence.claimName | default (printf "%s-mosquitto-pvc" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.mosquitto.pvName" -}}
+{{- .Values.mosquitto.persistence.pvName | default (printf "%s-mosquitto-pv" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.mosquitto.hostPath" -}}
+{{- .Values.mosquitto.persistence.hostPath | default (printf "/data/%s-mosquitto" .Release.Namespace) }}
+{{- end }}
 
 {{/*
 Create the name of the service account to use
