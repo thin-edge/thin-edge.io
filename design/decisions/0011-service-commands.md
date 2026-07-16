@@ -31,15 +31,15 @@ addressed to the service's external id:
 ```
 
 thin-edge.io already models services as first-class entities (`te/device/<device>/service/<service>`)
-with registration, twin data, telemetry and health monitoring —
-but acting on a service is not really supported today:
+with registration, twin data, telemetry and health monitoring.
+However, acting on a service is not really supported today:
 
 * **Capability declaration**: a user *can* declare `c8y_ServiceCommand` as a supported operation for a service
   by manually adding an operation file under `/etc/tedge/operations/c8y/<service-external-id>/`.
   However, unlike for the main device,
   changes in child-device and service operation directories are not tracked by inotify,
-  so the file is not picked up dynamically —
-  and the `c8y_SupportedServiceCommands` fragment still has to be set on the service's managed object by hand.
+  so the file is not picked up dynamically.
+  In addition, the `c8y_SupportedServiceCommands` fragment still has to be set on the service's managed object by hand.
 * **Execution**: tedge-agent's workflow engine currently does not react to *any* commands addressed to service entities,
   so there is no component that would carry out an operation targeting a service.
 
@@ -56,15 +56,15 @@ because **services on one device are owned by different daemons**:
    Only that daemon knows how to start/stop/restart them.
 
 Converting messages between the Cumulocity format and the thin-edge format
-is largely a matter of reusing existing mapper mechanisms;
-the open design question — and the core of this proposal —
+is largely a matter of reusing existing mapper mechanisms.
+The open design question, and the core of this proposal,
 is **who executes a service command, and how**.
 
 ## Goals
 
 * A **cloud-agnostic** thin-edge interface:
-  services declare a `service_command` capability and receive commands on the standard `te/.../cmd/...` topics;
-  the Cumulocity specifics live entirely in the c8y mapper.
+  services declare a `service_command` capability and receive commands on the standard `te/.../cmd/...` topics.
+  The Cumulocity specifics live entirely in the c8y mapper.
 * The standard commands `start`, `stop`, `restart`, plus **custom commands**:
   Cumulocity's specification allows arbitrary command names in `c8y_SupportedServiceCommands`,
   and a service owner can declare and handle its own.
@@ -79,19 +79,19 @@ is **who executes a service command, and how**.
    Once a Cumulocity operation is set to FAILED or SUCCESSFUL, its status can never change again.
    Therefore no component may report a failed/successful status
    for a command that another component might legitimately execute.
-   "Fail it with reason: not my service" is only safe when there is provably no other executor.
+   "Fail it with reason: not my service" is only safe when it is certain that no other executor exists.
 2. **The tedge-agent workflow engine has no per-entity scoping.**
-   A registered workflow reacts to the matching operation on every topic the agent subscribes to;
-   it cannot be restricted to services of a particular type,
+   A registered workflow reacts to the matching operation on every topic the agent subscribes to.
+   It cannot be restricted to services of a particular type,
    and workflow scripts have no access to entity registration data or to `system.toml`.
 3. **There is no existing third-party execution model to be compatible with.**
    tedge-container-plugin today has no operation handling at all:
    it does not subscribe to command topics, ships no workflow definitions and no Cumulocity operation handlers.
    Restarting a container from the cloud currently requires the generic shell-command operation.
-   Whatever convention this proposal defines *becomes* the third-party integration model.
-4. **A delegation precedent already exists**:
-   software management plugins (`/etc/tedge/sm-plugins/<type>`) —
-   external executables implementing a fixed CLI contract, invoked by tedge-agent.
+   Whatever convention this proposal defines becomes the third-party integration model.
+4. **A similar delegation pattern already exists**:
+   software management plugins (`/etc/tedge/sm-plugins/<type>`),
+   which are external executables implementing a fixed CLI contract, invoked by tedge-agent.
    tedge-container-plugin integrates with software management exactly this way,
    and it already has ready-to-use container start/stop/restart primitives in its CLI.
 5. **Privilege**: thin-edge packaging already grants the `tedge` user passwordless sudo
@@ -105,10 +105,10 @@ At a glance, four roles are involved:
 
 * **Service owner** (tedge-agent, a mapper, or a third-party daemon):
   declares per service which commands it supports (a retained capability message).
-* **tedge-mapper-c8y**: converts between Cumulocity and thin-edge:
-  the capability → `c8y_SupportedServiceCommands` + supported operation (SmartREST `114`);
-  a `c8y_ServiceCommand` operation → a thin-edge command;
-  the command status → SmartREST `501`–`506`.
+* **tedge-mapper-c8y**: converts between Cumulocity and thin-edge
+    * the capability → `c8y_SupportedServiceCommands` + supported operation (SmartREST `114`)
+    * a `c8y_ServiceCommand` operation → a thin-edge command;
+    * the command status → SmartREST `501`–`506`.
 * **tedge-agent**: executes the command with its workflow engine,
   delegating to the new `tedge service` CLI.
 * **Service plugin** (per service type, optional):
@@ -116,7 +116,7 @@ At a glance, four roles are involved:
 
 ### Thin-edge interface (cloud-agnostic)
 
-**Capability** — declared by the *service owner* as a retained message:
+**Capability**: declared by the *service owner* as a retained message:
 
 ```
 [te/device/main/service/tedge-mapper-c8y/cmd/service_command]
@@ -132,7 +132,7 @@ At a glance, four roles are involved:
   an owner may declare arbitrary custom command names (e.g. `flush-cache`) that its services support.
   A command name is a single token (no whitespace; see Security considerations).
 
-**Command** — the standard thin-edge command state machine on the target *service* topic:
+**Command**: the standard thin-edge command state machine on the target *service* topic:
 
 ```
 [te/device/main/service/tedge-mapper-c8y/cmd/service_command/<cmd-id>]
@@ -151,7 +151,7 @@ Two notes on this contract:
 * The action (`restart`) is a payload field, not part of the topic (like `cmd/restart`),
   because supported commands are an open set:
   a single, fixed operation name lets one workflow handle them all.
-  This also mirrors `c8y_ServiceCommand`, which carries the command inside the fragment.
+  This also matches `c8y_ServiceCommand`, which carries the command inside the fragment.
 * `serviceName` and `serviceType` are duplicated into the payload
   because workflow scripts can only access the topic and the payload
   (see the execution section for how they are used).
@@ -162,14 +162,14 @@ This part deliberately reuses existing mapper mechanisms; no new concepts are in
 
 * **Capability → Cumulocity.**
   When the mapper receives a `service_command` capability from a service entity, it:
-  1. registers `c8y_ServiceCommand` as a supported operation for that service —
+  1. registers `c8y_ServiceCommand` as a supported operation for that service,
      reusing the same mechanism that today registers `c8y_Restart`
      when a service declares a restart capability
      (per-entity operation registration + SmartREST `114`).
      This mechanism explicitly reloads the service's supported-operation set,
      so the inotify limitation for service operation directories (see Background) does not apply;
   2. sets the declared types as `{"c8y_SupportedServiceCommands": ["START", "STOP", ...]}`
-     (uppercased, following the Cumulocity convention) on the service's managed object —
+     (uppercased, following the Cumulocity convention) on the service's managed object,
      either via the `twin` topic of the service entity
      or by publishing an inventory update through the JSON over MQTT API;
      both existing mechanisms already address service managed objects.
@@ -177,13 +177,13 @@ This part deliberately reuses existing mapper mechanisms; no new concepts are in
      custom types are passed through unchanged apart from the case mapping.
 * **Operation → command.**
   The mapper natively understands the `c8y_ServiceCommand` fragment from the JSON-over-MQTT operation channel
-  (first-class, like `c8y_Restart` — *not* a shipped custom operation handler file):
+  (first-class, like `c8y_Restart`, *not* a shipped custom operation handler file):
   * the target entity is resolved from `externalSource.externalId`;
     unresolvable targets fail the cloud operation with a clear reason;
   * `command` is validated case-insensitively against the **types the service declared** in its capability
-    (standard and custom commands are handled uniformly);
+    (standard and custom commands are handled in the same way);
     an undeclared command fails the cloud operation.
-    In addition, the command must pass the syntactic single-token validation
+    In addition, the command must pass the single-token validation
     described under Security considerations;
   * `serviceName` is derived from the resolved entity topic id, not from the cloud payload
     (the cloud value may be a display name);
@@ -206,18 +206,18 @@ extended to also react to commands addressed to *services of its own device*
 (today it only reacts to commands addressed to the device itself).
 A `service_command` workflow is shipped with tedge-agent
 (user-overridable, like other built-in workflow definitions).
-It does **not** self-declare a capability on the main device —
-capability declaration belongs to service owners (see above).
+It does **not** self-declare a capability on the main device,
+because capability declaration belongs to service owners (see above).
 
-**Opening up the workflow engine — deliberately narrow.**
+**Opening up the workflow engine, deliberately narrow.**
 This requires a new subscription in tedge-agent, and its scope matters:
 
 * it covers only services of the agent's **own** device (`te/device/<own-device>/service/+/cmd/...`),
   never services of other devices;
 * it covers only the **`service_command` channel** (`.../cmd/service_command/+`), not all commands:
-  with a blanket subscription,
-  every *other* custom workflow loaded on the agent would suddenly also fire for service-addressed commands —
-  narrowing to the one operation confines the behavior change to this feature.
+  with a subscription to all commands,
+  every *other* custom workflow loaded on the agent would suddenly also fire for service-addressed commands.
+  Narrowing to the one operation confines the behavior change to this feature.
 
 This topic filter only works with the default topic scheme
 (`te/device/<device>/service/<service>`).
@@ -228,8 +228,8 @@ custom topic schemes are not supported yet.
 
 The model is per-device, not centralized:
 a child device running its own tedge-agent executes the commands for its own services,
-using its own `system.toml`, its own `tedge` CLI/sudoers rule and its own service plugins —
-nothing is looked up across devices.
+using its own `system.toml`, its own `tedge` CLI/sudoers rule and its own service plugins.
+Nothing is looked up across devices.
 
 The workflow's execution step delegates to a new CLI command:
 
@@ -243,7 +243,7 @@ as `tedge service` dispatches on the service type:
 
 | service type          | backend                                                                 |
 | --------------------- | ----------------------------------------------------------------------- |
-| `service` (default)   | built-in init-system abstraction (`/etc/tedge/system.toml`): a command is supported if `system.toml` defines a command template for it — the standard commands out of the box, and custom commands (e.g. `reload`) by adding an entry to `system.toml` |
+| `service` (default)   | built-in init-system abstraction (`/etc/tedge/system.toml`): a command is supported if `system.toml` defines a command template for it; the standard commands out of the box, and custom commands (e.g. `reload`) by adding an entry to `system.toml` |
 | any other type        | **service plugin**: `/usr/share/tedge/service-plugins/<type> <command> <name>`; the command (standard or custom) is passed through, the plugin decides what it supports |
 | unsupported command / no plugin for the type | `tedge service` fails with a distinct exit code and a clear error message |
 
@@ -263,18 +263,18 @@ so accepting additional custom command templates requires a small schema extensi
 The plugin registers container services with types `container` and `container-group`
 and already exposes container lifecycle primitives through its CLI.
 Integration is two symlinks (`/usr/share/tedge/service-plugins/container`, `.../container-group`)
-onto a thin subcommand mapping `start|stop|restart <name>` to its existing container operations —
+onto a thin subcommand mapping `start|stop|restart <name>` to its existing container operations:
 no MQTT protocol to implement, no state machine, no operation handling code.
 It is also free to support custom commands of its own (e.g. `pause`, `unpause`),
 declared in the capability of the services it registers.
 
 Why this shape:
 
-* **The command protocol admits only one state-machine driver per command topic anyway.**
+* **The command protocol allows only one state-machine driver per command topic anyway.**
   A command topic is a shared, retained state record:
   if two components reacted to the same command
   (e.g. the agent's workflow engine *and* an owner daemon),
-  they would publish conflicting state transitions on the same topic and corrupt each other —
+  they would publish conflicting state transitions on the same topic and corrupt each other,
   independently of who is "right".
   The workflow engine has no per-entity filtering,
   so once the agent subscribes, it drives the state machine for *every* service of its device.
@@ -289,18 +289,18 @@ Why this shape:
   failing with "no handler installed for service type `<type>`" is *correct*,
   not a race against the real owner (constraint 1).
 * The `tedge service` command is independently useful for operators:
-  an init-system-agnostic wrapper (`tedge service restart mosquitto`) that honors `system.toml` —
-  something that today requires knowing which init system the device uses.
+  an init-system-agnostic wrapper (`tedge service restart mosquitto`) that honors `system.toml`.
+  Today this requires knowing which init system the device uses.
 * It resolves two practical execution problems at once:
-  workflow scripts cannot read `system.toml`, and service actions need root —
+  workflow scripts cannot read `system.toml`, and service actions need root.
   `tedge` under `sudo -n` is already authorized by the shipped sudoers configuration (constraint 5),
   so no packaging change is needed.
 
 **Self-targeting services** (the executor acting on itself or its peers):
 
 * `restart` of **tedge-agent** itself must not run as a plain synchronous step:
-  the agent is killed mid-workflow and, on resume, the step would re-execute — a restart loop.
-  The shipped workflow instead uses the existing self-restart idiom
+  the agent is killed mid-workflow and, on resume, the step would re-execute: a restart loop.
+  The shipped workflow instead uses the existing self-restart pattern
   (detached background execution followed by an `await-agent-restart` state),
   the same pattern already documented for configuration self-update.
 * `stop` of **tedge-agent** is rejected with a clear failure reason:
@@ -389,15 +389,15 @@ tedge-agent handles only init-managed services;
 tedge-container-plugin (and any other owner daemon) subscribes to `.../cmd/service_command/+` for its services
 and drives the `init → executing → successful|failed` state machine itself.
 
-This is the philosophically cleanest model —
-the declarer of a capability is also its executor —
+This is the philosophically cleanest model
+(the declarer of a capability is also its executor)
 and the most flexible long-term (owners control execution semantics: async operations, progress reporting).
 It was not chosen for the first iteration because:
 
 1. **It requires "silently ignore" machinery in the agent.**
    Because cloud terminal states are final (constraint 1),
-   the agent must publish *nothing at all* for commands targeting services it does not own —
-   even an honest "failed: not my service" would permanently destroy the operation for the real owner.
+   the agent must publish *nothing at all* for commands targeting services it does not own.
+   Even an honest "failed: not my service" would permanently destroy the operation for the real owner.
    The workflow engine cannot do this today:
    it would need per-workflow target scoping informed by entity registration data (constraint 2),
    a new engine feature with its own design questions.
@@ -406,11 +406,11 @@ It was not chosen for the first iteration because:
    For tedge-container-plugin this is entirely new code (constraint 3),
    compared with two symlinks in the proposed model.
 3. **It has a bad failure mode.**
-   If the owner daemon is absent, mis-deployed or crashed,
-   its operations sit PENDING/EXECUTING in the cloud forever —
-   no other component is entitled to fail them.
+   If the owner daemon is absent, wrongly deployed or crashed,
+   its operations sit PENDING/EXECUTING in the cloud forever,
+   as no other component is entitled to fail them.
 
-The proposed model does not preclude moving to distributed executors later:
+The proposed model does not block moving to distributed executors later:
 if an owner needs execution semantics the central dispatch cannot provide,
 the follow-up work is type-scoped command dispatch in the agent (informed by the entity store),
 at which point that service type is removed from central dispatch.
@@ -418,12 +418,12 @@ The owner-declares-capability rule is chosen now precisely so that this evolutio
 
 ### Alternative for the executor: a built-in operation instead of a shipped workflow
 
-`service_command` could be implemented as a **built-in operation** of tedge-agent —
+`service_command` could be implemented as a **built-in operation** of tedge-agent,
 like software management,
 where a Rust actor spawns the external executables (sm-plugins) directly as child processes.
 Note that this is a smaller difference than it may appear:
 built-in operations are still supervised by the same workflow engine and need the same new subscription;
-the choice is only *what executes the action* —
+the choice is only *what executes the action*:
 a shipped workflow definition with a script step, or agent code.
 
 This proposal prefers the shipped workflow for the first iteration:
@@ -431,23 +431,23 @@ This proposal prefers the shipped workflow for the first iteration:
 * **The security-critical validation sits in `tedge service` either way.**
   The CLI is required regardless, as the privileged helper
   (the agent does not run as root; `sudo -n tedge` is already authorized).
-  A built-in operation would not remove that choke point —
+  A built-in operation would not remove that single validation point;
   it would only duplicate the validation in a second place.
 * **Transparency and customizability.**
   With a workflow definition,
-  the exact behavior is visible and adjustable on the device without recompiling —
+  the exact behavior is visible and adjustable on the device without recompiling,
   e.g. routing a particular custom command differently, or tightening the self-targeting rules.
   This matches the open-ended custom-command set.
 * **The hard case is already solved at the workflow level.**
-  Self-restart of tedge-agent uses an existing, documented workflow idiom
+  Self-restart of tedge-agent uses an existing, documented workflow pattern
   (detached background execution + `await-agent-restart`);
   a built-in operation would have to re-implement equivalent restart-persistence logic in code.
 * **Substantially less new agent code.**
   The agent-side logic is a thin dispatch that the CLI already implements.
 
-What a built-in operation would buy —
-validating the service type against the agent's own entity store rather than the mapper-provided payload value,
-and code-level self-restart handling —
+What a built-in operation would buy
+(validating the service type against the agent's own entity store rather than the mapper-provided payload value,
+and code-level self-restart handling)
 does not seem to justify a new actor,
 since the mapper already derives `serviceType` from its entity cache
 (registration truth, not the raw cloud payload) before creating the command.
@@ -476,9 +476,9 @@ instead of the cloud-agnostic capability/command interface.
   * the command is validated as a **single token**
     (non-empty, bounded length, `[A-Za-z0-9_-]+`, no leading `-`):
     no whitespace or shell metacharacters,
-    so a cloud-provided custom command cannot smuggle extra arguments or options
+    so a cloud-provided custom command cannot inject extra arguments or options
     into the init tool or a plugin.
-    Multi-word command strings are rejected —
+    Multi-word command strings are rejected:
     a custom command is a *name* the backend understands, not a command line to execute;
   * the service name is validated
     (non-empty, bounded length, `[A-Za-z0-9_.@-]+`, no leading `-`
@@ -489,8 +489,8 @@ instead of the cloud-agnostic capability/command interface.
 * **`/usr/share/tedge/service-plugins/` must be root-owned and not writable by the `tedge` user**
   (packaging creates it `root:root 755`).
   Since `tedge service` runs as root,
-  a tedge-writable plugin directory would be a trivial privilege escalation —
-  the same property the sudoers path restriction enforces for sm-plugins today.
+  a tedge-writable plugin directory would be a trivial privilege escalation.
+  This is the same property the sudoers path restriction enforces for sm-plugins today.
 
 ## Open questions
 
