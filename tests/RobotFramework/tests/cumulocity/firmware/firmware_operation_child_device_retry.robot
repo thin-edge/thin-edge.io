@@ -13,10 +13,10 @@ Test Tags           theme:c8y    theme:firmware
 Firmware plugin supports restart via service manager #1932
     ${binary_url}=    Cumulocity.Create Inventory Binary    firmware    binary    contents=content1
     Cumulocity.Set Device    ${CHILD_SN}
+
+    ${operation_start}=    ThinEdgeIO.Get Unix Timestamp
     Cumulocity.Install Firmware    firmware    1.0.0    ${binary_url}
 
-    # Wait for first message to be sent
-    ${operation_start}=    ThinEdgeIO.Get Unix Timestamp
     ThinEdgeIO.Set Device Context    ${DEVICE_SN}
     ThinEdgeIO.Should Have MQTT Messages
     ...    topic=tedge/${CHILD_SN}/commands/req/firmware_update
