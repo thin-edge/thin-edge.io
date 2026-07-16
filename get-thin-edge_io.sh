@@ -97,6 +97,28 @@ is_dry_run() {
 	fi
 }
 
+# Retry a command a few times with a linear backoff. Downloads from GitHub
+# releases are occasionally flaky (transient network errors, rate limiting),
+# so retrying makes the installer more reliable.
+# Usage: retry <command...>
+retry() {
+	max_attempts=5
+	attempt=1
+	delay=2
+	while true; do
+		if "$@"; then
+			return 0
+		fi
+		if [ "$attempt" -ge "$max_attempts" ]; then
+			return 1
+		fi
+		echo "Attempt ${attempt}/${max_attempts} failed, retrying in ${delay}s..." >&2
+		sleep "$delay"
+		attempt=$((attempt + 1))
+		delay=$((delay + 2))
+	done
+}
+
 check_prerequisites() {
     if ! command_exists dpkg; then
         fail 1 "Missing prerequisite: dpkg"
@@ -148,13 +170,19 @@ install_artifact() {
         mkdir -p "$TMPDIR"
     fi
 
-    # Prefer curl over wget as docs instruct the user to download this script using curl
+    # Prefer curl over wget as docs instruct the user to download this script using curl.
+    # Retry the download to tolerate transient network errors / rate limiting from GitHub.
+    # curl/wget native retry flags handle transient HTTP errors, and the retry wrapper
+    # additionally covers hard failures (e.g. connection reset) between attempts.
+    # $sh_c is preserved so dry-run (sh_c="echo") and privilege escalation still work.
     if command_exists curl; then
-        if ! (cd "$TMPDIR" && $sh_c "curl -fsSLO '$url'" >> "$LOGFILE" 2>&1 ); then
+        download_artifact() { (cd "$TMPDIR" && $sh_c "curl -fsSLO --retry 5 --retry-delay 2 --retry-connrefused '$url'" >> "$LOGFILE" 2>&1); }
+        if ! retry download_artifact; then
             fail 2 "Could not download package from url: $url"
         fi
     elif command_exists wget; then
-        if ! $sh_c "wget --quiet '$url' -P '$TMPDIR'" >> "$LOGFILE" 2>&1; then
+        download_artifact() { $sh_c "wget --quiet --tries=5 --waitretry=2 '$url' -P '$TMPDIR'" >> "$LOGFILE" 2>&1; }
+        if ! retry download_artifact; then
             fail 2 "Could not download package from url: $url"
         fi
     else
