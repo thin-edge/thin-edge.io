@@ -97,6 +97,36 @@ installs are unchanged. Any of them can still be overridden via values.
 {{- end }}
 
 {{/*
+Render the storageClassName line for a chart-managed PVC or PV.
+
+Takes a dict: "class" (the volume's storageClass value), "createPv" (whether
+the chart creates a matching static PV), "context" (the root context).
+
+- "-"          -> storageClassName: "" (classless static binding; disables
+                  dynamic provisioning and default-class injection)
+- "<name>"     -> storageClassName: "<name>"
+- "" / unset   -> when createPv: a namespace-scoped dedicated class name, so
+                  the PVC binds the chart's hostPath PV even on clusters with
+                  a default StorageClass (which would otherwise be injected
+                  into the PVC and trigger dynamic provisioning instead);
+                  when not createPv: omit the field entirely, so the cluster
+                  default class and dynamic provisioning apply.
+
+The dedicated class name is only a binding token: binding matches PV and PVC
+on the string, so no StorageClass object needs to exist.
+*/}}
+{{- define "tedge.storageClassName" -}}
+{{- $class := .class | default "" -}}
+{{- if eq $class "-" -}}
+storageClassName: ""
+{{- else if $class -}}
+storageClassName: {{ $class | quote }}
+{{- else if .createPv -}}
+storageClassName: {{ printf "%s-tedge-local" .context.Release.Namespace | quote }}
+{{- end -}}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "tedge.serviceAccountName" -}}

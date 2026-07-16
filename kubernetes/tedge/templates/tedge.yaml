@@ -35,6 +35,33 @@ spec:
         persistentVolumeClaim:
           claimName: {{ $defaultClaim }}
 
+{{- if .Values.persistence.chownData }}
+      initContainers:
+      # Ensure the mounted volumes are writable by the non-root tedge user
+      # (fsGroup ownership management does not apply to hostPath volumes, and
+      # DirectoryOrCreate creates the host directory owned by root).
+      - name: init-chown-data
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          runAsUser: 0
+        command:
+          - sh
+          - -ec
+          - |
+            chown -R {{ .Values.persistence.uid }}:{{ .Values.persistence.gid }} /data/tedge/agent
+{{- if ne .Values.certs.source "secret" }}
+            chown -R {{ .Values.persistence.uid }}:{{ .Values.persistence.gid }} {{ .Values.certs.mountPath }}
+{{- end }}
+        volumeMounts:
+        - name: tedge-data-vol
+          mountPath: /data/tedge/agent
+{{- if ne .Values.certs.source "secret" }}
+        - name: tedge-certs-vol
+          mountPath: {{ .Values.certs.mountPath }}
+{{- end }}
+{{- end }}
+
       containers:
       - name: tedge
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

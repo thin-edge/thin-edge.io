@@ -51,6 +51,16 @@ certs:
   # a pod is deleted or force-deleted out of band. Requires k8s >= 1.22 (GA in
   # 1.29); on older clusters set this back to ReadWriteOnce.
   accessMode: ReadWriteOncePod
+  # Storage class for the cert volume:
+  #   ""  (default) - with createPv=true, a dedicated namespace-scoped class name
+  #                   is used so the PVC statically binds the chart's hostPath PV
+  #                   (even on clusters with a default StorageClass); with
+  #                   createPv=false, the field is omitted so the cluster default
+  #                   class and dynamic provisioning apply.
+  #   "-"           - force storageClassName: "" (classless static binding).
+  #   "<name>"      - use that storage class. Set createPv=false to have it
+  #                   dynamically provisioned.
+  storageClass: ""
   # Host directory backing the cert PV. Leave empty to derive a namespace-scoped
   # path (e.g. /data/tedge-certs in namespace "tedge", /data/<namespace>-certs otherwise).
   hostPath: ""
@@ -90,9 +100,29 @@ persistence:
   # a pod is deleted or force-deleted out of band. Requires k8s >= 1.22 (GA in
   # 1.29); on older clusters set this back to ReadWriteOnce.
   accessMode: ReadWriteOncePod
+  # Storage class for the agent-data volume:
+  #   ""  (default) - with createPv=true, a dedicated namespace-scoped class name
+  #                   is used so the PVC statically binds the chart's hostPath PV
+  #                   (even on clusters with a default StorageClass); with
+  #                   createPv=false, the field is omitted so the cluster default
+  #                   class and dynamic provisioning apply.
+  #   "-"           - force storageClassName: "" (classless static binding).
+  #   "<name>"      - use that storage class. Set createPv=false to have it
+  #                   dynamically provisioned.
+  storageClass: ""
   # Host directory backing the agent-data PV. Leave empty to derive a
   # namespace-scoped path (e.g. /data/tedge in namespace "tedge", /data/<namespace> otherwise).
   hostPath: ""
+  # An init container chowns the mounted agent-data directory (and, in pvc
+  # mode, the certificate directory) to uid:gid on startup so the non-root
+  # tedge process can write to them. This is needed because fsGroup ownership
+  # management does not apply to hostPath volumes, and DirectoryOrCreate
+  # creates the host directory owned by root. Disable if your volumes are
+  # already writable by the tedge user. Defaults to the tedge user in the
+  # thin-edge.io container image.
+  chownData: true
+  uid: 1000
+  gid: 1000
 
 mosquitto:
   persistence:
@@ -117,6 +147,16 @@ mosquitto:
     # if a pod is deleted or force-deleted out of band. Requires k8s >= 1.22 (GA
     # in 1.29); on older clusters set this back to ReadWriteOnce.
     accessMode: ReadWriteOncePod
+    # Storage class for the mosquitto volume:
+    #   ""  (default) - with createPv=true, a dedicated namespace-scoped class name
+    #                   is used so the PVC statically binds the chart's hostPath PV
+    #                   (even on clusters with a default StorageClass); with
+    #                   createPv=false, the field is omitted so the cluster default
+    #                   class and dynamic provisioning apply.
+    #   "-"           - force storageClassName: "" (classless static binding).
+    #   "<name>"      - use that storage class. Set createPv=false to have it
+    #                   dynamically provisioned.
+    storageClass: ""
     # Host directory backing the mosquitto PV. Leave empty to derive a
     # namespace-scoped path (e.g. /data/tedge-mosquitto in namespace "tedge").
     hostPath: ""

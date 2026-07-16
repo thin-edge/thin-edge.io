@@ -10,6 +10,7 @@ spec:
     storage: {{ .Values.persistence.size }}
   accessModes:
     - {{ .Values.persistence.accessMode }}
+  {{ include "tedge.storageClassName" (dict "class" .Values.persistence.storageClass "createPv" true "context" $) }}
   hostPath:
     path: {{ include "tedge.persistence.hostPath" . | quote }}
     type: DirectoryOrCreate
@@ -27,6 +28,14 @@ metadata:
 spec:
   accessModes:
     - {{ .Values.persistence.accessMode }}
+  {{- with include "tedge.storageClassName" (dict "class" .Values.persistence.storageClass "createPv" .Values.persistence.createPv "context" $) }}
+  {{ . }}
+  {{- end }}
+  {{- if .Values.persistence.createPv }}
+  selector:
+    matchLabels:
+      storage: "tedge"
+  {{- end }}
   resources:
     requests:
       storage: {{ .Values.persistence.size }}
@@ -45,6 +54,7 @@ spec:
     storage: {{ .Values.certs.size }}
   accessModes:
     - {{ .Values.certs.accessMode }}
+  {{ include "tedge.storageClassName" (dict "class" .Values.certs.storageClass "createPv" true "context" $) }}
   hostPath:
     path: {{ include "tedge.certs.hostPath" . | quote }}
     type: DirectoryOrCreate
@@ -59,6 +69,14 @@ metadata:
 spec:
   accessModes:
     - {{ .Values.certs.accessMode }}
+  {{- with include "tedge.storageClassName" (dict "class" .Values.certs.storageClass "createPv" .Values.certs.createPv "context" $) }}
+  {{ . }}
+  {{- end }}
+  {{- if .Values.certs.createPv }}
+  selector:
+    matchLabels:
+      storage: "tedge-certs"
+  {{- end }}
   resources:
     requests:
       storage: {{ .Values.certs.size }}
@@ -77,6 +95,7 @@ spec:
     storage: {{ .Values.mosquitto.persistence.size }}
   accessModes:
     - {{ .Values.mosquitto.persistence.accessMode }}
+  {{ include "tedge.storageClassName" (dict "class" .Values.mosquitto.persistence.storageClass "createPv" true "context" $) }}
   hostPath:
     path: {{ include "tedge.mosquitto.hostPath" . | quote }}
     type: DirectoryOrCreate
@@ -91,6 +110,14 @@ metadata:
 spec:
   accessModes:
     - {{ .Values.mosquitto.persistence.accessMode }}
+  {{- with include "tedge.storageClassName" (dict "class" .Values.mosquitto.persistence.storageClass "createPv" .Values.mosquitto.persistence.createPv "context" $) }}
+  {{ . }}
+  {{- end }}
+  {{- if .Values.mosquitto.persistence.createPv }}
+  selector:
+    matchLabels:
+      storage: "tedge-mosquitto"
+  {{- end }}
   resources:
     requests:
       storage: {{ .Values.mosquitto.persistence.size }}

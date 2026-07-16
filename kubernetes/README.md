@@ -155,6 +155,45 @@ The Secret defaults to the name `tedge-certs`; override it with
 `certs.secretName` if you use a different name. You can also create the
 certificate key pair using a CA and openssl instead of the tedge CLI.
 
+## Storage
+
+By default the chart creates hostPath-backed PersistentVolumes for the agent
+data, the device certificate, and the mosquitto persistence DB, and binds its
+PersistentVolumeClaims to them statically. The PVs and PVCs share a dedicated,
+namespace-scoped `storageClassName` (a binding token only — no StorageClass
+object is created or needed) so that a cluster default StorageClass is not
+injected into the claims, which would send them to dynamic provisioning and
+leave the chart's PVs unbound. This setup suits a single-node cluster such as
+k3s.
+
+On multi-node or cloud clusters, hostPath volumes are not appropriate: nothing
+ties the pod to the node holding the data, so a rescheduled pod would start
+with an empty directory. Disable the chart-managed PVs and use dynamic
+provisioning instead:
+
+```sh
+helm upgrade --install tedge ./tedge \
+    --namespace tedge \
+    --set c8y.url=$C8Y_DOMAIN \
+    --set device.id=my-device-001 \
+    --set persistence.createPv=false \
+    --set certs.createPv=false \
+    --set mosquitto.persistence.createPv=false
+```
+
+With `createPv=false` the PVCs omit `storageClassName`, so the cluster's
+default StorageClass applies. Set `persistence.storageClass` (and
+`certs.storageClass`, `mosquitto.persistence.storageClass`) to pick a specific
+class instead, or to `"-"` to force a classless claim that binds statically to
+PVs you manage yourself. Note that the default `ReadWriteOncePod` access mode
+requires a provisioner that supports it — most cloud CSI drivers do, but the
+k3s `local-path` provisioner does not (override the `accessMode` values to
+`ReadWriteOnce` if you must dynamically provision with it).
+
+Note: `storageClassName` is immutable on a PVC, so changing these values on an
+existing install requires deleting the PVCs (and the pods using them) before
+running `helm upgrade`.
+
 ## Certificate renewal
 
 `tedge cert renew` re-uses the existing private key and requests a fresh
@@ -207,7 +246,9 @@ Key points about the deployment design are listed below:
   `tedge-cert-otp` Secret.
 * Agent data (and, in `pvc` mode, the certificate) is persisted on
   PersistentVolumeClaims. By default the chart also creates hostPath-backed
-  PersistentVolumes, which suits a single-node cluster.
+  PersistentVolumes bound statically to the claims via a dedicated storage
+  class name, which suits a single-node cluster; see [Storage](#storage) for
+  using dynamic provisioning instead.
 * The `tedge` pod reports `Ready` only once it holds a device certificate; in
   `pvc` mode a background loop in the container renews the certificate before it
   expires and signals the process to reload it.
