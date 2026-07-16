@@ -1,7 +1,7 @@
 paho-mqtt~=1.6.1
 python-dotenv~=1.2.2
 robotframework~=7.4.1
-robotframework-c8y @ git+https://github.com/thin-edge/robotframework-c8y.git@0.51.1
+robotframework-c8y @ git+https://github.com/thin-edge/robotframework-c8y.git@0.53.1
 robotframework-aws @ git+https://github.com/thin-edge/robotframework-aws.git@0.0.12
 robotframework-debuglibrary~=2.5.0
 robotframework-jsonlibrary~=0.5
