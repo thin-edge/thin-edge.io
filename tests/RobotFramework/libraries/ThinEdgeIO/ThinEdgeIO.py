@@ -337,6 +337,30 @@ class ThinEdgeIO(DeviceLibrary):
             "dpkg --print-architecture", strip=True, stdout=True, stderr=False
         )
 
+    @keyword("Get Unix Timestamp")
+    def get_unix_timestamp(self, milliseconds: bool = True) -> Union[int, float]:
+        """Get the unix timestamp of the device (number of seconds since 1970-01-01).
+
+        This overrides DeviceLibrary's keyword to default to sub-second precision.
+        The value is almost always used as a ``date_from`` checkpoint for the MQTT
+        assertion keywords. Those assertions filter the broker log (which records
+        nanosecond-resolution timestamps) with an *inclusive* lower bound, so a
+        checkpoint truncated to a whole second wrongly includes messages published
+        earlier in that same second, causing flaky failures (e.g. a negative
+        assertion finding a message that was actually published before the
+        checkpoint). Keeping sub-second precision makes the boundary exact.
+
+        On devices whose ``date`` does not support nanoseconds (e.g. busybox) the
+        parent implementation transparently falls back to whole seconds.
+
+        Args:
+            milliseconds (bool, optional): Include sub-second precision. Defaults to True.
+
+        Returns:
+            Union[int,float]: Number of seconds since unix epoch
+        """
+        return super().get_unix_timestamp(milliseconds=milliseconds)
+
     @keyword("Get Suite Logs")
     def get_suite_logs(self, name: Optional[str] = None, show=True):
         """Get device logs from the start of the suite.

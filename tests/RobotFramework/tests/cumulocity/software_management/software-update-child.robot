@@ -17,11 +17,13 @@ Supported software types should be declared during startup
     ...    minimum=1
     ...    maximum=1
     ...    message_contains="types":["apt","flow"]
+    ...    from_suite_startup=${True}
     Should Have MQTT Messages
     ...    topic=te/device/${CHILD_SN}///cmd/software_update
     ...    minimum=1
     ...    maximum=1
     ...    message_contains="types":["apt","flow"]
+    ...    from_suite_startup=${True}
 
 Software list should be populated during startup
     Cumulocity.Should Contain Supported Operations    c8y_SoftwareUpdate

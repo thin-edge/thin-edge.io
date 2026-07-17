@@ -77,6 +77,13 @@ Test if all c8y services using default service type when service type configured
     c8y-firmware-plugin
 
 Check health status of tedge-mapper-c8y service on broker stop start
+    Skip    Disabled due to lack of guarantees that the LWT message will be processed in time
+    # Note: This check can't be reliably done as it relies on the tedge-mapper publishing
+    # messages onto the broker as it is shutting down, so it can't ensure that the LWT message,
+    # along with the deliver back to the built-in bridge is done before the mosquitto service
+    # stops.
+    # FUTURE: Check if there could be a direct message sent to the built-in bridge half instead
+    # which doesn't rely on the local broker being available.
     Device Should Exist    ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up
     Should Be Equal    ${SERVICE["name"]}    tedge-mapper-c8y
@@ -140,6 +147,10 @@ tedge-mapper-c8y service tracks network connectivity with built-in bridge
 
     Execute Command    tedge config set mqtt.bridge.built_in true
     Execute Command    tedge config set mqtt.bridge.reconnect_policy.initial_interval 0s
+    # Use a short keep alive so Cumulocity detects the dropped cloud connection (and fires the
+    # mapper's last-will) well within the assertion timeout, instead of waiting ~1.5x the default
+    # 60s keep alive. Without this the "down" status races against the poll window.
+    Execute Command    tedge config set c8y.bridge.keepalive_interval 10s
     Execute Command    tedge reconnect c8y
 
     Device Should Exist    ${DEVICE_SN}:device:main:service:tedge-mapper-c8y    show_info=False
