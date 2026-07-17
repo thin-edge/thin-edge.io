@@ -2,6 +2,7 @@ use crate::HttpRequest;
 use crate::HttpResponse;
 use crate::HttpResult;
 use async_trait::async_trait;
+use http::HeaderValue;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt as _;
 use hyper::body::Bytes;
@@ -12,6 +13,8 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use rustls::ClientConfig;
 use tedge_actors::Server;
+
+use certificate::http_client::USER_AGENT;
 
 #[derive(Clone)]
 pub struct HttpService {
@@ -41,6 +44,12 @@ impl Server for HttpService {
     }
 
     async fn handle(&mut self, request: Self::Request) -> Self::Response {
+        let mut request = request;
+        request
+            .headers_mut()
+            .entry(http::header::USER_AGENT)
+            .or_insert_with(|| HeaderValue::from_static(USER_AGENT));
+
         Ok(HttpResponse {
             endpoint: request.uri().path().to_owned(),
             method: request.method().to_owned(),

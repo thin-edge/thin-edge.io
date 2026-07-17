@@ -308,6 +308,45 @@ mod tests {
     use tokio::sync::mpsc;
 
     #[tokio::test]
+    async fn upload_has_user_agent() {
+        let mut server = mockito::Server::new_async().await;
+        let _mock1 = server
+            .mock("PUT", "/some_file.txt")
+            .with_status(201)
+            .with_body_from_request(|r| {
+                let user_agent = r.header("user-agent")[0];
+                assert_eq!(
+                    user_agent.to_str().unwrap(),
+                    certificate::http_client::USER_AGENT
+                );
+                b"hello".to_vec()
+            })
+            .create();
+
+        let mut target_url = server.url();
+        target_url.push_str("/some_file.txt");
+
+        let url = UploadInfo::new(&target_url);
+
+        let ttd = TempTedgeDir::new();
+        ttd.file("file_upload.txt")
+            .with_raw_content("Hello, world!");
+
+        let mut uploader = Uploader::new(
+            ttd.utf8_path().join("file_upload.txt"),
+            None,
+            CloudHttpConfig::test_value(),
+        );
+        uploader.set_backoff(ExponentialBackoff {
+            current_interval: Duration::ZERO,
+            max_elapsed_time: Some(Duration::ZERO),
+            ..Default::default()
+        });
+
+        assert!(uploader.upload(&url).await.is_ok())
+    }
+
+    #[tokio::test]
     async fn upload_content_no_auth() {
         let mut server = mockito::Server::new_async().await;
         let _mock1 = server

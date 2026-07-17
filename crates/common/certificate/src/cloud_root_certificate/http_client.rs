@@ -31,7 +31,7 @@ impl CloudHttpConfig {
 
         HttpClientBuilder {
             builder,
-            user_agent: None,
+            user_agent: Some(USER_AGENT),
         }
     }
 }
@@ -77,7 +77,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[test_case::test_case(None, StatusCode::NOT_IMPLEMENTED)]
+    #[test_case::test_case(None, StatusCode::OK)]
     #[test_case::test_case(Some(true), StatusCode::OK)]
     #[test_case::test_case(Some(false), StatusCode::NOT_IMPLEMENTED)]
     async fn client_builder_sets_user_agent_by_default(
