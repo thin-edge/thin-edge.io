@@ -43,8 +43,11 @@ macro_rules! inc {
         })))
     };
     (suback) => {
+        inc!(suback(1))
+    };
+    (suback($pkid:expr)) => {
         Ok(Event::Incoming(Incoming::SubAck(SubAck {
-            pkid: 1,
+            pkid: $pkid,
             return_codes: vec![SubscribeReasonCode::Success(QoS::AtLeastOnce)],
         })))
     };
@@ -72,6 +75,9 @@ macro_rules! inc {
 macro_rules! out {
     (publish($pkid:expr)) => {
         Ok(Event::Outgoing(Outgoing::Publish($pkid)))
+    };
+    (subscribe($pkid:expr)) => {
+        Ok(Event::Outgoing(Outgoing::Subscribe($pkid)))
     };
 }
 
