@@ -6,8 +6,10 @@ Documentation       Smoke tests for the single-process supervisor (`tedge run al
 ...                 with the standalone components, that SIGUSR1 really restarts
 ...                 the mapper (proven via the mapper's health `time`, which is refreshed
 ...                 on every restart, while its pid stays put — only the supervised task
-...                 is rebuilt, not the process), and that an update requiring an agent
-...                 restart exits the whole process for the service manager to restart it.
+...                 is rebuilt, not the process), that an update requiring an agent
+...                 restart exits the whole process for the service manager to restart it,
+...                 and that the supervisor can host multiple mappers (c8y + a custom
+...                 flows-only mapper) simultaneously.
 ...
 ...                 The device is registered once for the suite, but each test gets a
 ...                 freshly started supervisor and tears it down again afterwards, so the
@@ -109,6 +111,61 @@ SIGUSR1 restarts the mapper
     # The agent was never targeted by SIGUSR1 and stayed up throughout.
     Service Health Status Should Be Up    tedge-agent
 
+Multiple mappers run under a single supervisor
+    [Documentation]    The supervisor can host the c8y mapper and a custom flows-only mapper
+    ...    simultaneously. Both report healthy and function independently: the c8y mapper
+    ...    keeps talking to Cumulocity while the custom mapper processes its flow messages.
+    [Setup]    Start Multi-Mapper Supervisor
+
+    # All three components come up healthy inside the one process.
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-agent
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-test-echo
+
+    # The c8y mapper keeps the device talking to Cumulocity.
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-bridge-c8y
+    External Identity Should Exist    ${DEVICE_SN}
+
+    # The custom mapper processes flow messages independently of the c8y mapper.
+    ${start}=    Get Unix Timestamp
+    Execute Command    tedge mqtt pub custom/test/in '{"value":42}'
+    ${output}=    Should Have MQTT Messages
+    ...    custom/test/out
+    ...    minimum=1
+    ...    date_from=${start}
+    Should Contain    ${output[0]}    42
+
+    [Teardown]    Stop Multi-Mapper Supervisor
+
+SIGUSR1 restarts all mappers under a multi-mapper supervisor
+    [Documentation]    SIGUSR1 restarts every mapper hosted by the supervisor. Both mappers
+    ...    get a fresh health `time` while the process pid stays the same, proving each
+    ...    mapper task was rebuilt independently without restarting the whole process.
+    [Setup]    Start Multi-Mapper Supervisor
+
+    # Baseline: capture health timestamps from both mappers.
+    ${c8y_before}=    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
+    ${echo_before}=    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-test-echo
+
+    Execute Command    cmd=systemctl kill --signal=SIGUSR1 tedge-run-all.service
+
+    # Both mappers were restarted (fresh health timestamps, same pid).
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Mapper Restarted Since    ${c8y_before}
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Custom Mapper Restarted Since    ${echo_before}
+
+    # The agent was never targeted by SIGUSR1 and stayed up throughout.
+    Service Health Status Should Be Up    tedge-agent
+
+    [Teardown]    Stop Multi-Mapper Supervisor
+
 
 *** Keywords ***
 Register Device
@@ -168,3 +225,29 @@ Stop Supervisor
     # next one. The device registration from the suite setup is left untouched.
     Execute Command    systemctl stop tedge-run-all.service    ignore_exit_code=${True}
     Get Logs
+
+Create Custom Echo Mapper
+    # Create a flows-only custom mapper that echoes messages from custom/test/in to
+    # custom/test/out. No cloud credentials needed — it runs purely locally.
+    Execute Command    mkdir -p /etc/tedge/mappers/test-echo/flows && chown -R tedge:tedge /etc/tedge/mappers/test-echo
+    Execute Command
+    ...    cmd=printf 'input.mqtt.topics = ["custom/test/in"]\nsteps = []\n\n[output.mqtt]\ntopic = "custom/test/out"\n' > /etc/tedge/mappers/test-echo/flows/echo.toml
+    Execute Command    chown tedge:tedge /etc/tedge/mappers/test-echo/flows/echo.toml
+
+Remove Custom Echo Mapper
+    Execute Command    rm -rf /etc/tedge/mappers/test-echo
+
+Start Multi-Mapper Supervisor
+    Create Custom Echo Mapper
+    Execute Command
+    ...    cmd=systemd-run --unit=tedge-run-all --collect -p User=tedge -p Group=tedge /usr/bin/tedge run all c8y test-echo
+
+Stop Multi-Mapper Supervisor
+    Stop Supervisor
+    Remove Custom Echo Mapper
+
+Custom Mapper Restarted Since
+    [Arguments]    ${before}
+    ${now}=    Service Health Status Should Be Up    tedge-mapper-test-echo
+    Should Be True    ${now["time"]} > ${before["time"]}
+    Should Be Equal As Integers    ${now["pid"]}    ${before["pid"]}
