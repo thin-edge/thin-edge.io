@@ -1,0 +1,174 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tedge
+{{- $defaultClaim := default (include "tedge.persistence.claimName" .) .Values.persistence.existingClaim }}
+spec:
+  replicas: 1
+  # Never run two tedge pods at once: they share the agent-data and cert PVCs,
+  # and concurrent access to those files risks corruption. Recreate terminates
+  # the old pod before starting the new one on upgrade (the default
+  # RollingUpdate would briefly run both).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tedge
+  template:
+    metadata:
+      labels:
+        app: tedge
+    spec:
+      # disable k8s automatic env variables that use TEDGE_* which
+      # causes warnings to be displayed when running tedge
+      enableServiceLinks: false
+      volumes:
+      - name: tedge-certs-vol
+{{- if eq .Values.certs.source "secret" }}
+        secret:
+          secretName: {{ .Values.certs.secretName }}
+{{- else }}
+        persistentVolumeClaim:
+          claimName: {{ include "tedge.certs.claimName" . }}
+{{- end }}
+      - name: tedge-data-vol
+        persistentVolumeClaim:
+          claimName: {{ $defaultClaim }}
+
+{{- if .Values.persistence.chownData }}
+      initContainers:
+      # Ensure the mounted volumes are writable by the non-root tedge user
+      # (fsGroup ownership management does not apply to hostPath volumes, and
+      # DirectoryOrCreate creates the host directory owned by root).
+      - name: init-chown-data
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          runAsUser: 0
+        command:
+          - sh
+          - -ec
+          - |
+            chown -R {{ .Values.persistence.uid }}:{{ .Values.persistence.gid }} /data/tedge/agent
+{{- if ne .Values.certs.source "secret" }}
+            chown -R {{ .Values.persistence.uid }}:{{ .Values.persistence.gid }} {{ .Values.certs.mountPath }}
+{{- end }}
+        volumeMounts:
+        - name: tedge-data-vol
+          mountPath: /data/tedge/agent
+{{- if ne .Values.certs.source "secret" }}
+        - name: tedge-certs-vol
+          mountPath: {{ .Values.certs.mountPath }}
+{{- end }}
+{{- end }}
+
+      containers:
+      - name: tedge
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command:
+          - sh
+          - -ec
+          - |
+{{- if eq .Values.certs.source "secret" }}
+            tedge cert show
+{{- else }}
+            if ! tedge cert show >/dev/null 2>&1; then
+              if [ -z "${DEVICE_ONE_TIME_PASSWORD:-}" ]; then
+                echo "ERROR: DEVICE_ONE_TIME_PASSWORD is not set; cannot download the device certificate" >&2
+                exit 1
+              fi
+              cert_download_device_id_args=""
+              if [ -n "${DEVICE_ID:-}" ]; then
+                cert_download_device_id_args="--device-id $DEVICE_ID"
+              fi
+              tedge cert download c8y $cert_download_device_id_args --one-time-password "$DEVICE_ONE_TIME_PASSWORD" --retry-every 10s
+            elif tedge cert needs-renewal c8y; then
+              tedge cert renew || true
+            fi
+            tedge cert show || true
+{{- end }}
+            tedge reconnect c8y
+{{- if and (ne .Values.certs.source "secret") .Values.certs.renewal.enabled }}
+            # Periodically renew the certificate in place. Runs in the same
+            # container, so only this pod ever writes to the cert PVC (works on
+            # single- and multi-node clusters, no kubectl/RBAC). On renewal,
+            # signal the main tedge process (PID 1, started by the exec below)
+            # with SIGHUP so it reloads the new certificate.
+            (
+              while true; do
+                sleep {{ .Values.certs.renewal.intervalSeconds }}
+                if tedge cert needs-renewal c8y; then
+                  echo "Renewing device certificate"
+                  tedge cert renew c8y && kill -HUP 1 || true
+                fi
+              done
+            ) &
+{{- end }}
+            exec tedge run all c8y
+
+        ports:
+        - containerPort: 8001
+          name: c8y-svc
+        - containerPort: 8000
+          name: fts-svc
+        # Ready once the device certificate is present, i.e. the device is
+        # registered with Cumulocity (the certificate is downloaded on success).
+        readinessProbe:
+          exec:
+            command: ["sh", "-c", "tedge cert show"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: tedge-certs-vol
+          mountPath: {{ .Values.certs.mountPath }}
+        - name: tedge-data-vol
+          mountPath: /data/tedge/agent
+        env:
+        - name: TEDGE_C8Y_URL
+          value: {{ required "A valid c8y.url is required!" .Values.c8y.url }}
+        - name: TEDGE_MQTT_CLIENT_HOST
+          value: "mqtt"        
+        - name: TEDGE_HTTP_CLIENT_HOST
+          value: "localhost"
+        - name: TEDGE_C8Y_PROXY_CLIENT_HOST
+          value: "localhost"
+        - name: TEDGE_SUDO_ENABLE
+          value: "false"
+        - name: HOST_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: TEDGE_DEVICE_CERT_PATH
+          value: {{ printf "%s/tedge-certificate.pem" .Values.certs.mountPath | quote }}
+        - name: TEDGE_DEVICE_KEY_PATH
+          value: {{ printf "%s/tedge-private-key.pem" .Values.certs.mountPath | quote }}
+{{- if .Values.device.id }}
+        - name: DEVICE_ID
+          value: {{ .Values.device.id | quote }}
+{{- end }}
+{{- if ne .Values.certs.source "secret" }}
+        - name: DEVICE_ONE_TIME_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "tedge.otpSecretName" . }}
+              key: one-time-password
+{{- end }}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: tedge
+spec:
+  selector:
+    app: tedge
+  ports:
+    - name: c8y
+      port: 8001
+      targetPort: c8y-svc
+
+    - name: fts
+      port: 8000
+      targetPort: fts-svc

@@ -51,6 +51,82 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Name of the chart-managed Secret holding the Cumulocity one-time password.
+*/}}
+{{- define "tedge.otpSecretName" -}}
+tedge-cert-otp
+{{- end }}
+
+{{/*
+Names and hostPaths for the agent-data and certificate volumes.
+
+PersistentVolumes are cluster-scoped, and the hostPath backing them is a shared
+host directory, so both must be unique per install — otherwise a second release
+in another namespace collides on the PV name and, worse, shares the same host
+files (risking corruption). These default to namespace-scoped values, matching
+the "one namespace per device" model; for the documented namespace "tedge" they
+resolve to the historical fixed names (tedge-pv, /data/tedge, ...), so existing
+installs are unchanged. Any of them can still be overridden via values.
+*/}}
+{{- define "tedge.persistence.claimName" -}}
+{{- .Values.persistence.claimName | default (printf "%s-pvc" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.persistence.pvName" -}}
+{{- .Values.persistence.pvName | default (printf "%s-pv" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.persistence.hostPath" -}}
+{{- .Values.persistence.hostPath | default (printf "/data/%s" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.certs.claimName" -}}
+{{- .Values.certs.persistentVolumeClaim | default (printf "%s-certs-pvc" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.certs.pvName" -}}
+{{- .Values.certs.pvName | default (printf "%s-certs-pv" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.certs.hostPath" -}}
+{{- .Values.certs.hostPath | default (printf "/data/%s-certs" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.mosquitto.claimName" -}}
+{{- .Values.mosquitto.persistence.claimName | default (printf "%s-mosquitto-pvc" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.mosquitto.pvName" -}}
+{{- .Values.mosquitto.persistence.pvName | default (printf "%s-mosquitto-pv" .Release.Namespace) }}
+{{- end }}
+{{- define "tedge.mosquitto.hostPath" -}}
+{{- .Values.mosquitto.persistence.hostPath | default (printf "/data/%s-mosquitto" .Release.Namespace) }}
+{{- end }}
+
+{{/*
+Render the storageClassName line for a chart-managed PVC or PV.
+
+Takes a dict: "class" (the volume's storageClass value), "createPv" (whether
+the chart creates a matching static PV), "context" (the root context).
+
+- "-"          -> storageClassName: "" (classless static binding; disables
+                  dynamic provisioning and default-class injection)
+- "<name>"     -> storageClassName: "<name>"
+- "" / unset   -> when createPv: a namespace-scoped dedicated class name, so
+                  the PVC binds the chart's hostPath PV even on clusters with
+                  a default StorageClass (which would otherwise be injected
+                  into the PVC and trigger dynamic provisioning instead);
+                  when not createPv: omit the field entirely, so the cluster
+                  default class and dynamic provisioning apply.
+
+The dedicated class name is only a binding token: binding matches PV and PVC
+on the string, so no StorageClass object needs to exist.
+*/}}
+{{- define "tedge.storageClassName" -}}
+{{- $class := .class | default "" -}}
+{{- if eq $class "-" -}}
+storageClassName: ""
+{{- else if $class -}}
+storageClassName: {{ $class | quote }}
+{{- else if .createPv -}}
+storageClassName: {{ printf "%s-tedge-local" .context.Release.Namespace | quote }}
+{{- end -}}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "tedge.serviceAccountName" -}}

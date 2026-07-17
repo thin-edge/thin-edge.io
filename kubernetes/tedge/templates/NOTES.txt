@@ -1,0 +1,42 @@
+thin-edge.io has been installed.
+
+  Release:   {{ .Release.Name }}
+  Namespace: {{ .Release.Namespace }}
+{{- if .Values.device.id }}
+  Device id: {{ .Values.device.id }}
+{{- end }}
+{{- $dep := lookup "apps/v1" "Deployment" .Release.Namespace "tedge" }}
+{{- if $dep }}
+{{- $ready := 0 }}
+{{- if $dep.status }}{{ $ready = int (default 0 $dep.status.readyReplicas) }}{{ end }}
+{{- if gt $ready 0 }}
+  Registered: yes (the tedge deployment is ready and has a device certificate)
+{{- else }}
+  Registered: not yet (the tedge deployment has no device certificate)
+{{- end }}
+{{- end }}
+
+{{- if eq .Values.certs.source "secret" }}
+
+The device certificate is mounted read-only from the Secret "{{ .Values.certs.secretName }}".
+The container does not download or renew it.
+{{- else }}
+{{- $otpSecret := include "tedge.otpSecretName" . }}
+{{- $host := .Values.c8y.url }}
+{{- $id := .Values.device.id }}
+{{- $ns := .Release.Namespace }}
+
+The device certificate is downloaded at startup using a Cumulocity one-time
+password, stored in the Secret "{{ $otpSecret }}".
+{{- if .Values.certs.oneTimePassword }} (You set this value via certs.oneTimePassword.){{ end }}
+
+If the device is not registered yet, retrieve the one-time password:
+
+  kubectl get secret {{ $otpSecret }} -n {{ $ns }} -o jsonpath="{.data['one-time-password']}" | base64 -d; echo
+{{- if $id }}
+
+Or print the full Cumulocity device-registration URL:
+
+  OTP=$(kubectl get secret {{ $otpSecret }} -n {{ $ns }} -o jsonpath="{.data['one-time-password']}" | base64 -d); printf "\n\thttps://{{ $host }}/apps/devicemanagement/index.html#/deviceregistration?externalId={{ $id }}&one-time-password=$OTP\n\n"
+{{- end }}
+{{- end }}

@@ -1,27 +1,124 @@
+{{- if .Values.persistence.createPv }}
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: "tedge-pv"
+  name: {{ include "tedge.persistence.pvName" . | quote }}
   labels:
     storage: "tedge"
 spec:
   capacity:
-    storage: 100Mi
+    storage: {{ .Values.persistence.size }}
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.persistence.accessMode }}
+  {{ include "tedge.storageClassName" (dict "class" .Values.persistence.storageClass "createPv" true "context" $) }}
   hostPath:
-    path: "/data/tedge"
+    path: {{ include "tedge.persistence.hostPath" . | quote }}
     type: DirectoryOrCreate
+{{- end }}
 
+{{- if .Values.persistence.createClaim }}
+{{- if .Values.persistence.createPv }}
 ---
+{{- end }}
 
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: "tedge-pvc"
+  name: {{ include "tedge.persistence.claimName" . | quote }}
 spec:
   accessModes:
-    - ReadWriteOnce
+    - {{ .Values.persistence.accessMode }}
+  {{- with include "tedge.storageClassName" (dict "class" .Values.persistence.storageClass "createPv" .Values.persistence.createPv "context" $) }}
+  {{ . }}
+  {{- end }}
+  {{- if .Values.persistence.createPv }}
+  selector:
+    matchLabels:
+      storage: "tedge"
+  {{- end }}
   resources:
     requests:
-      storage: 100Mi
+      storage: {{ .Values.persistence.size }}
+{{- end }}
+
+{{- if and (eq .Values.certs.source "pvc") .Values.certs.createPv }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "tedge.certs.pvName" . | quote }}
+  labels:
+    storage: "tedge-certs"
+spec:
+  capacity:
+    storage: {{ .Values.certs.size }}
+  accessModes:
+    - {{ .Values.certs.accessMode }}
+  {{ include "tedge.storageClassName" (dict "class" .Values.certs.storageClass "createPv" true "context" $) }}
+  hostPath:
+    path: {{ include "tedge.certs.hostPath" . | quote }}
+    type: DirectoryOrCreate
+{{- end }}
+
+{{- if and (eq .Values.certs.source "pvc") .Values.certs.createClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "tedge.certs.claimName" . | quote }}
+spec:
+  accessModes:
+    - {{ .Values.certs.accessMode }}
+  {{- with include "tedge.storageClassName" (dict "class" .Values.certs.storageClass "createPv" .Values.certs.createPv "context" $) }}
+  {{ . }}
+  {{- end }}
+  {{- if .Values.certs.createPv }}
+  selector:
+    matchLabels:
+      storage: "tedge-certs"
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.certs.size }}
+{{- end }}
+
+{{- if .Values.mosquitto.persistence.createPv }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "tedge.mosquitto.pvName" . | quote }}
+  labels:
+    storage: "tedge-mosquitto"
+spec:
+  capacity:
+    storage: {{ .Values.mosquitto.persistence.size }}
+  accessModes:
+    - {{ .Values.mosquitto.persistence.accessMode }}
+  {{ include "tedge.storageClassName" (dict "class" .Values.mosquitto.persistence.storageClass "createPv" true "context" $) }}
+  hostPath:
+    path: {{ include "tedge.mosquitto.hostPath" . | quote }}
+    type: DirectoryOrCreate
+{{- end }}
+
+{{- if .Values.mosquitto.persistence.createClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "tedge.mosquitto.claimName" . | quote }}
+spec:
+  accessModes:
+    - {{ .Values.mosquitto.persistence.accessMode }}
+  {{- with include "tedge.storageClassName" (dict "class" .Values.mosquitto.persistence.storageClass "createPv" .Values.mosquitto.persistence.createPv "context" $) }}
+  {{ . }}
+  {{- end }}
+  {{- if .Values.mosquitto.persistence.createPv }}
+  selector:
+    matchLabels:
+      storage: "tedge-mosquitto"
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.mosquitto.persistence.size }}
+{{- end }}

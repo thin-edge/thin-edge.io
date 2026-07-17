@@ -1,12 +1,177 @@
-# Default values for tedge.
+# Default values for the thin-edge.io chart.
 image:
-  repository: ghcr.io/thin-edge/tedge
+  repository: ghcr.io/thin-edge/tedge-main
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: "latest"
 
 c8y:
+  # Cumulocity URL (the MQTT endpoint of your tenant). Required.
   url: ""
+
+device:
+  # Device external id used for Cumulocity registration.
+  id: ""
+
+# Device certificate configuration.
+#
+# By default the chart uses "pvc" mode: the certificate is stored on a writable
+# volume and downloaded at startup using a one-time password. This is the
+# recommended flow as it does not require creating the certificate beforehand.
+certs:
+  # Where device certificates are sourced from:
+  #   pvc    - certificate lives on a writable volume; startup downloads it
+  #            (using a one-time password) or renews it as needed (default)
+  #   secret - certificate is mounted read-only from a pre-created Secret
+  source: pvc
+
+  # One-time password used by `tedge cert download c8y` (pvc mode). It is stored
+  # in a chart-managed Secret named "tedge-cert-otp". Leave empty to generate a
+  # random password (preserved across `helm upgrade`) that you can retrieve from
+  # the post-install notes, or set it to pin a specific value.
+  oneTimePassword: ""
+
+  # Name of the Secret holding the certificate/key (only used when source=secret).
+  secretName: tedge-certs
+
+  # Persistence for the certificate (only used when source=pvc).
+  # Leave the name/hostPath fields empty to derive namespace-scoped defaults (so
+  # installs in different namespaces don't collide on the cluster-scoped PV or
+  # share a hostPath); for namespace "tedge" they resolve to the historical values.
+  persistentVolumeClaim: ""
+  # Create a dedicated cert PersistentVolumeClaim.
+  createClaim: true
+  # Create a dedicated cert hostPath-backed PersistentVolume.
+  createPv: true
+  pvName: ""
+  size: 100Mi
+  # ReadWriteOncePod lets Kubernetes enforce that only one pod ever mounts this
+  # volume (the scheduler holds a replacement pod as Pending until the previous
+  # one releases it), guarding the cert files against concurrent writers even if
+  # a pod is deleted or force-deleted out of band. Requires k8s >= 1.22 (GA in
+  # 1.29); on older clusters set this back to ReadWriteOnce.
+  accessMode: ReadWriteOncePod
+  # Storage class for the cert volume:
+  #   ""  (default) - with createPv=true, a dedicated namespace-scoped class name
+  #                   is used so the PVC statically binds the chart's hostPath PV
+  #                   (even on clusters with a default StorageClass); with
+  #                   createPv=false, the field is omitted so the cluster default
+  #                   class and dynamic provisioning apply.
+  #   "-"           - force storageClassName: "" (classless static binding).
+  #   "<name>"      - use that storage class. Set createPv=false to have it
+  #                   dynamically provisioned.
+  storageClass: ""
+  # Host directory backing the cert PV. Leave empty to derive a namespace-scoped
+  # path (e.g. /data/tedge-certs in namespace "tedge", /data/<namespace>-certs otherwise).
+  hostPath: ""
+
+  # Path inside the container where the certificate and key are mounted.
+  mountPath: /etc/tedge/device-certs
+
+  # Periodic certificate renewal (only used when source=pvc). The tedge
+  # container runs a background loop that renews the certificate in place on the
+  # PVC before it expires, then signals the main tedge process (SIGHUP) to
+  # reload it. Because it runs inside the same pod, only that pod ever writes to
+  # the cert volume (no second pod, so no multi-node mount issues, and no
+  # kubectl/RBAC). Not applicable to source=secret (Secret is read-only).
+  renewal:
+    enabled: true
+    # How often (seconds) the container checks whether the certificate needs renewal.
+    intervalSeconds: 86400
+
+persistence:
+  # Existing PVC to use for agent data. If set, it is used instead of a chart-managed PVC.
+  existingClaim: ""
+  # The name/hostPath fields below default to namespace-scoped values when left
+  # empty, so installs in different namespaces don't collide on the cluster-scoped
+  # PV or share a hostPath. For namespace "tedge" they resolve to the historical
+  # fixed values (tedge-pvc, tedge-pv, /data/tedge).
+  # Name used for the chart-managed PVC when createClaim=true.
+  claimName: ""
+  # Create a PersistentVolumeClaim resource as part of this chart.
+  createClaim: true
+  # Create a hostPath-backed PersistentVolume resource as part of this chart.
+  createPv: true
+  pvName: ""
+  size: 100Mi
+  # ReadWriteOncePod lets Kubernetes enforce that only one pod ever mounts this
+  # volume (the scheduler holds a replacement pod as Pending until the previous
+  # one releases it), guarding the agent data against concurrent writers even if
+  # a pod is deleted or force-deleted out of band. Requires k8s >= 1.22 (GA in
+  # 1.29); on older clusters set this back to ReadWriteOnce.
+  accessMode: ReadWriteOncePod
+  # Storage class for the agent-data volume:
+  #   ""  (default) - with createPv=true, a dedicated namespace-scoped class name
+  #                   is used so the PVC statically binds the chart's hostPath PV
+  #                   (even on clusters with a default StorageClass); with
+  #                   createPv=false, the field is omitted so the cluster default
+  #                   class and dynamic provisioning apply.
+  #   "-"           - force storageClassName: "" (classless static binding).
+  #   "<name>"      - use that storage class. Set createPv=false to have it
+  #                   dynamically provisioned.
+  storageClass: ""
+  # Host directory backing the agent-data PV. Leave empty to derive a
+  # namespace-scoped path (e.g. /data/tedge in namespace "tedge", /data/<namespace> otherwise).
+  hostPath: ""
+  # An init container chowns the mounted agent-data directory (and, in pvc
+  # mode, the certificate directory) to uid:gid on startup so the non-root
+  # tedge process can write to them. This is needed because fsGroup ownership
+  # management does not apply to hostPath volumes, and DirectoryOrCreate
+  # creates the host directory owned by root. Disable if your volumes are
+  # already writable by the tedge user. Defaults to the tedge user in the
+  # thin-edge.io container image.
+  chownData: true
+  uid: 1000
+  gid: 1000
+
+mosquitto:
+  persistence:
+    # Existing PVC to use for the mosquitto persistence DB. If set, it is used
+    # instead of a chart-managed PVC.
+    existingClaim: ""
+    # The name/hostPath fields below default to namespace-scoped values when left
+    # empty, so installs in different namespaces don't collide on the
+    # cluster-scoped PV or share a hostPath. For namespace "tedge" they resolve
+    # to tedge-mosquitto-pvc, tedge-mosquitto-pv, /data/tedge-mosquitto.
+    # Name used for the chart-managed PVC when createClaim=true.
+    claimName: ""
+    # Create a PersistentVolumeClaim resource as part of this chart.
+    createClaim: true
+    # Create a hostPath-backed PersistentVolume resource as part of this chart.
+    createPv: true
+    pvName: ""
+    size: 100Mi
+    # ReadWriteOncePod lets Kubernetes enforce that only one pod ever mounts this
+    # volume (the scheduler holds a replacement pod as Pending until the previous
+    # one releases it), guarding the mosquitto DB against concurrent writers even
+    # if a pod is deleted or force-deleted out of band. Requires k8s >= 1.22 (GA
+    # in 1.29); on older clusters set this back to ReadWriteOnce.
+    accessMode: ReadWriteOncePod
+    # Storage class for the mosquitto volume:
+    #   ""  (default) - with createPv=true, a dedicated namespace-scoped class name
+    #                   is used so the PVC statically binds the chart's hostPath PV
+    #                   (even on clusters with a default StorageClass); with
+    #                   createPv=false, the field is omitted so the cluster default
+    #                   class and dynamic provisioning apply.
+    #   "-"           - force storageClassName: "" (classless static binding).
+    #   "<name>"      - use that storage class. Set createPv=false to have it
+    #                   dynamically provisioned.
+    storageClass: ""
+    # Host directory backing the mosquitto PV. Leave empty to derive a
+    # namespace-scoped path (e.g. /data/tedge-mosquitto in namespace "tedge").
+    hostPath: ""
+    # Path inside the container where mosquitto stores its persistence DB
+    # (matches the broker's persistence_location).
+    mountPath: /mosquitto/data
+    # An init container chowns the mounted persistence directory to uid:gid on
+    # startup so a non-root mosquitto process can write to it. This is needed
+    # because fsGroup ownership management does not apply to hostPath volumes,
+    # and DirectoryOrCreate creates the host directory owned by root. Disable if
+    # your image runs mosquitto as root. Defaults to the mosquitto user in the
+    # eclipse-mosquitto base image.
+    chownData: true
+    uid: 1883
+    gid: 1883
 
 services:
   mqtt:
