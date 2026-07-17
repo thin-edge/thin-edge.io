@@ -890,6 +890,7 @@ dependencies = [
  "axum_tls",
  "c8y_api",
  "camino",
+ "certificate",
  "env_logger",
  "futures",
  "http-body 1.0.1",
@@ -5395,6 +5396,7 @@ name = "tedge_http_ext"
 version = "2.0.1"
 dependencies = [
  "async-trait",
+ "certificate",
  "http 1.3.1",
  "http-body-util",
  "hyper 1.6.0",

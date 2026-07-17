@@ -37,12 +37,8 @@ impl C8yAuthProxyBuilder {
         config: &TEdgeConfig,
         c8y: &C8yMapperConfig,
     ) -> anyhow::Result<Self> {
-        let reqwest_client = config
-            .cloud_root_certs()
-            .await?
-            .client_builder()
-            .build()
-            .expect("Valid reqwest client builder configuration");
+        let reqwest_client =
+            super::server::remote_reqwest_client(&config.cloud_root_certs().await?);
         let auth_retriever = C8yAuthRetriever::from_tedge_config(config, c8y)?;
         let app_data = AppData {
             is_https: true,
