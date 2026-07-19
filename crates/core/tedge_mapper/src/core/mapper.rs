@@ -6,12 +6,14 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::mqtt_topics::ServiceTopicId;
 use tedge_config::TEdgeConfig;
+use tedge_config_ext::ConfigPublisherBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
 
 pub async fn start_basic_actors(
     mapper_name: &str,
     config: &TEdgeConfig,
+    exposed_config: Vec<(String, Option<String>)>,
 ) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
     let mut runtime = Runtime::new();
 
@@ -24,12 +26,13 @@ pub async fn start_basic_actors(
     let mut mqtt_actor = get_mqtt_actor(&session_name, config).await?;
 
     //Instantiate health monitor actor
+    let service_topic_id = ServiceTopicId::new(
+        device_topic_id
+            .default_service_for_device(mapper_name)
+            .unwrap(),
+    );
     let service = Service {
-        service_topic_id: ServiceTopicId::new(
-            device_topic_id
-                .default_service_for_device(mapper_name)
-                .unwrap(),
-        ),
+        service_topic_id: service_topic_id.clone(),
         device_topic_id: DeviceTopicId::new(device_topic_id.clone()),
     };
     let mqtt_schema = MqttSchema::with_root(config.mqtt.topic_root.clone());
@@ -40,9 +43,17 @@ pub async fn start_basic_actors(
         &config.service,
     );
 
+    let config_publisher = ConfigPublisherBuilder::new(
+        mqtt_schema,
+        service_topic_id,
+        exposed_config,
+        &mut mqtt_actor,
+    );
+
     // Note: signal handling is deliberately *not* spawned here. `start_basic_actors`
     // is part of the rebuildable `build()` path; the supervisor owns signals centrally.
     runtime.spawn(health_actor).await?;
+    runtime.spawn(config_publisher).await?;
     Ok((runtime, mqtt_actor))
 }
 
