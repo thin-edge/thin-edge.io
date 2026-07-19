@@ -49,10 +49,10 @@
 
 ## 8. Agent HTTP read view
 
-- [ ] 8.1 Add `GET /te/v1/entities/<service>/config` and `GET /te/v1/entities/<service>/config/<key>` routes, modeled on the existing twin-data routes
-- [ ] 8.2 Return a JSON object for the whole-config view and a plain value for a single key; reject writes on `config` paths
-- [ ] 8.3 Return `404 Not Found` for both non-exposed and non-existent keys, indistinguishably
-- [ ] 8.4 Test both routes: object response, single-value response, 404 for a non-exposed key, 404 for an unknown entity, rejected write
+- [x] 8.1 Add `GET /te/v1/entities/<service>/config` and `GET /te/v1/entities/<service>/config/<key>` routes, modeled on the existing twin-data routes
+- [x] 8.2 Return a JSON object for the whole-config view and a plain value for a single key; reject writes on `config` paths
+- [x] 8.3 Return `404 Not Found` for both non-exposed and non-existent keys, indistinguishably
+- [x] 8.4 Test both routes: object response, single-value response, 404 for a non-exposed key, 404 for an unknown entity, rejected write
 
 ## 9. End-to-end tests
 

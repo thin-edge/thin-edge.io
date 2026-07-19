@@ -3,6 +3,7 @@ use futures::channel::mpsc;
 use futures::StreamExt as _;
 use serde_json::Map;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use tedge_actors::LoggingSender;
 use tedge_actors::MappingSender;
 use tedge_actors::MessageSink;
@@ -38,6 +39,8 @@ pub enum EntityStoreRequest {
     SetTwinFragment(EntityTwinMessage),
     GetTwinFragments(EntityTopicId),
     SetTwinFragments(EntityTopicId, Map<String, Value>),
+    GetConfig(EntityTopicId),
+    GetConfigValue(EntityTopicId, String),
 }
 
 #[derive(Debug)]
@@ -52,6 +55,8 @@ pub enum EntityStoreResponse {
     SetTwinFragment(Result<bool, entity_store::Error>),
     GetTwinFragments(Result<Map<String, Value>, entity_store::Error>),
     SetTwinFragments(Result<(), entity_store::Error>),
+    GetConfig(Result<BTreeMap<String, String>, entity_store::Error>),
+    GetConfigValue(Option<String>),
 }
 
 pub struct EntityStoreServer {
@@ -165,6 +170,14 @@ impl Server for EntityStoreServer {
             EntityStoreRequest::MqttMessage(mqtt_message) => {
                 self.process_mqtt_message(mqtt_message).await;
                 EntityStoreResponse::Ok
+            }
+            EntityStoreRequest::GetConfig(topic_id) => {
+                let res = self.entity_store.get_config(&topic_id);
+                EntityStoreResponse::GetConfig(res.cloned())
+            }
+            EntityStoreRequest::GetConfigValue(topic_id, key) => {
+                let value = self.entity_store.get_config_value(&topic_id, &key);
+                EntityStoreResponse::GetConfigValue(value.cloned())
             }
         }
     }
