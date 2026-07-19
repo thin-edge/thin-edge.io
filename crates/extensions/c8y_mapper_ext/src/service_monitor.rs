@@ -78,6 +78,7 @@ mod tests {
     use super::*;
     use crate::converter::CumulocityConverter;
     use serde_json::Map;
+    use std::collections::BTreeMap;
     use tedge_api::entity::EntityMetadata;
     use tedge_api::entity::EntityType;
     use tedge_api::mqtt_topics::MqttSchema;
@@ -208,6 +209,7 @@ mod tests {
                 parent,
                 health_endpoint: None,
                 twin_data: Map::new(),
+                config: BTreeMap::new(),
             },
         );
 
@@ -301,6 +303,7 @@ mod tests {
                 parent,
                 health_endpoint: None,
                 twin_data: Map::new(),
+                config: BTreeMap::new(),
             },
         );
 

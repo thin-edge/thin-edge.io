@@ -4,6 +4,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::str::FromStr;
 use thiserror::Error;
@@ -72,6 +73,11 @@ pub struct EntityMetadata {
 
     #[serde(skip)]
     pub twin_data: Map<String, JsonValue>,
+
+    /// Exposable configuration values collected from this entity's own retained
+    /// `config/<key>` MQTT topics, keyed by configuration key.
+    #[serde(skip)]
+    pub config: BTreeMap<String, String>,
 }
 
 impl EntityMetadata {
@@ -83,6 +89,7 @@ impl EntityMetadata {
             parent: None,
             health_endpoint: None,
             twin_data: Map::new(),
+            config: BTreeMap::new(),
         }
     }
 
@@ -110,6 +117,7 @@ impl EntityMetadata {
             parent: None,
             health_endpoint: None,
             twin_data: Map::new(),
+            config: BTreeMap::new(),
         }
     }
 
@@ -122,6 +130,7 @@ impl EntityMetadata {
             parent: Some(EntityTopicId::default_main_device()),
             health_endpoint: None,
             twin_data: Map::new(),
+            config: BTreeMap::new(),
         })
     }
 
