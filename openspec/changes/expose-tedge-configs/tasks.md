@@ -24,11 +24,11 @@
 
 ## 4. Shared retained-config publisher
 
-- [ ] 4.1 Add a new extensions crate with a builder/actor that publishes a set of (key, optional value) pairs as retained messages under a given service topic, publishing an empty payload for unset values
-- [ ] 4.2 Subscribe the actor to its own service's `config/+` (one wildcard, not per-key) and reconcile each message against expected state (`Some(value)` for an exposed+set key, absent otherwise): payload ≠ expected value (including empty) → republish; expected absent + non-empty payload → clear; payload matches expected → no-op
-- [ ] 4.3 Unit-test the publisher against a captured MQTT message box
-- [ ] 4.4 Unit-test tamper correction: a divergent value on an owned key republishes; an empty payload on an owned+set key also republishes (empty must not wipe an owned value); the actor's own matching echo does not
-- [ ] 4.5 Unit-test stale-key clearing: a retained message for a key not in the exposed set (renamed/removed/demoted) is cleared; a key still in the set is untouched; an empty payload on an absent key does not clear (no clear-echo loop)
+- [x] 4.1 Add a new extensions crate with a builder/actor that publishes a set of (key, optional value) pairs as retained messages under a given service topic, publishing an empty payload for unset values
+- [x] 4.2 Subscribe the actor to its own service's `config/+` (one wildcard, not per-key) and reconcile each message against expected state (`Some(value)` for an exposed+set key, absent otherwise): payload ≠ expected value (including empty) → republish; expected absent + non-empty payload → clear; payload matches expected → no-op
+- [x] 4.3 Unit-test the publisher against a captured MQTT message box
+- [x] 4.4 Unit-test tamper correction: a divergent value on an owned key republishes; an empty payload on an owned+set key also republishes (empty must not wipe an owned value); the actor's own matching echo does not
+- [x] 4.5 Unit-test stale-key clearing: a retained message for a key not in the exposed set (renamed/removed/demoted) is cleared; a key still in the set is untouched; an empty payload on an absent key does not clear (no clear-echo loop)
 
 ## 5. Agent publishes its own configuration
 

@@ -56,6 +56,7 @@ tedge-write = { path = "crates/core/tedge_write" }
 tedge_actors = { path = "crates/core/tedge_actors" }
 tedge_api = { path = "crates/core/tedge_api" }
 tedge_config = { path = "crates/common/tedge_config" }
+tedge_config_ext = { path = "crates/extensions/tedge_config_ext" }
 tedge_config_macros = { path = "crates/common/tedge_config_macros" }
 tedge_config_macros-impl = { path = "crates/common/tedge_config_macros/impl" }
 tedge_config_manager = { path = "crates/extensions/tedge_config_manager" }

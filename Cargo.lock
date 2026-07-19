@@ -5237,6 +5237,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tedge_config_ext"
+version = "2.0.1"
+dependencies = [
+ "async-trait",
+ "tedge_actors",
+ "tedge_api",
+ "tedge_mqtt_ext",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tedge_config_macros"
 version = "2.0.1"
 dependencies = [
