@@ -3,10 +3,10 @@
 
 ## 1. Macro: `exposable` attribute
 
-- [ ] 1.1 Add `#[darling(default)] exposable: bool` to `ConfigurableField` in `tedge_config_macros/impl/src/input/parse.rs`
-- [ ] 1.2 Thread `exposable` through `ReadOnlyField`/`ReadWriteField` and their accessor in `tedge_config_macros/impl/src/input/validate.rs`
-- [ ] 1.3 Add `exposable` to `ConfigurationKey` in `tedge_config_macros/impl/src/query.rs`, populate it in `enum_variant`, and generate `ReadableKey::is_exposable()` in `keys_enum`, cloning the `help()` pattern
-- [ ] 1.4 Add macro tests covering a plain exposable field, a profiled/multi-group exposable field, and an unmarked field
+- [x] 1.1 Add `#[darling(default)] exposable: bool` to `ConfigurableField` in `tedge_config_macros/impl/src/input/parse.rs`
+- [x] 1.2 Thread `exposable` through `ReadOnlyField`/`ReadWriteField` and their accessor in `tedge_config_macros/impl/src/input/validate.rs`
+- [x] 1.3 Add `exposable` to `ConfigurationKey` in `tedge_config_macros/impl/src/query.rs`, populate it in `enum_variant`, and generate `ReadableKey::is_exposable()` in `keys_enum`, cloning the `help()` pattern
+- [x] 1.4 Add macro tests covering a plain exposable field, a profiled/multi-group exposable field, and an unmarked field
 
 ## 2. Allowlist marking and collection helper
 
