@@ -32,8 +32,8 @@
 
 ## 5. Agent publishes its own configuration
 
-- [ ] 5.1 Compute the agent's exposed core config (including CLI-effective `mqtt.topic_root`/`mqtt.device_topic_id`) in `tedge_agent`'s startup config assembly
-- [ ] 5.2 Spawn the shared publisher for the agent's service topic alongside the existing twin-manager actor
+- [x] 5.1 Compute the agent's exposed core config (including CLI-effective `mqtt.topic_root`/`mqtt.device_topic_id`) in `tedge_agent`'s startup config assembly
+- [x] 5.2 Spawn the shared publisher for the agent's service topic alongside the existing twin-manager actor
 
 ## 6. Mappers publish their own cloud configuration
 
