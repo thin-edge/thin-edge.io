@@ -222,6 +222,86 @@ async fn clear_entity_twin_data() {
     assert_eq!(entity.twin_data.get("x"), None);
 }
 
+#[tokio::test]
+async fn config_value_ingested_from_mqtt() {
+    let handle = entity::server("device-under-test");
+    let mut entity_store = handle.entity_store;
+
+    entity_store
+        .process_mqtt_message(
+            MqttMessage::from(("te/device/main///config/device.id", "my-device")).with_retain(),
+        )
+        .await;
+
+    let topic_id = "device/main//".parse::<EntityTopicId>().unwrap();
+    assert_eq!(
+        entity_store.get(&topic_id).unwrap().config.get("device.id"),
+        Some(&"my-device".to_string())
+    );
+}
+
+#[tokio::test]
+async fn empty_payload_clears_config_value() {
+    let handle = entity::server("device-under-test");
+    let mut entity_store = handle.entity_store;
+
+    entity_store
+        .process_mqtt_message(
+            MqttMessage::from(("te/device/main///config/device.id", "my-device")).with_retain(),
+        )
+        .await;
+    let topic_id = "device/main//".parse::<EntityTopicId>().unwrap();
+    assert_eq!(
+        entity_store.get(&topic_id).unwrap().config.get("device.id"),
+        Some(&"my-device".to_string())
+    );
+
+    entity_store
+        .process_mqtt_message(
+            MqttMessage::from(("te/device/main///config/device.id", "")).with_retain(),
+        )
+        .await;
+    assert_eq!(
+        entity_store.get(&topic_id).unwrap().config.get("device.id"),
+        None
+    );
+}
+
+#[tokio::test]
+async fn deregistering_entity_clears_retained_config_topics() {
+    let handle = entity::server("device-under-test");
+    let (mut entity_store, mut mqtt_input, mut mqtt_output) =
+        (handle.entity_store, handle.mqtt_input, handle.mqtt_output);
+
+    entity::create_entity(
+        &mut entity_store,
+        "device/child0//",
+        EntityType::ChildDevice,
+        None,
+    )
+    .await
+    .unwrap();
+    mqtt_output.skip(1).await; // Skip the registration message
+
+    // Simulate a retained config value published by the entity's owning component
+    mqtt_input
+        .send(MqttMessage::from(("te/device/child0///config/device.id", "child-0")).with_retain())
+        .await
+        .unwrap();
+    mqtt_output.skip(1).await;
+
+    entity::delete_entity(&mut entity_store, "device/child0//")
+        .await
+        .unwrap();
+
+    mqtt_output
+        .assert_received([
+            MqttMessage::from(("te/device/child0///config/device.id", "")).with_retain(),
+            MqttMessage::from(("te/device/child0//", "")).with_retain(),
+        ])
+        .await;
+}
+
 proptest! {
     //#![proptest_config(proptest::prelude::ProptestConfig::with_cases(1000))]
     #[test]

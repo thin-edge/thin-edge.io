@@ -42,10 +42,10 @@
 
 ## 7. Agent aggregates retained config over MQTT
 
-- [ ] 7.1 Subscribe the entity store to the new config channel filter
-- [ ] 7.2 Ingest `config/<key>` messages into the entity store, treating an empty payload as removal
-- [ ] 7.3 Clear retained config topics for a service when it is deregistered
-- [ ] 7.4 Test ingestion, empty-payload removal, and deregistration cleanup
+- [x] 7.1 Subscribe the entity store to the new config channel filter
+- [x] 7.2 Ingest `config/<key>` messages into the entity store, treating an empty payload as removal
+- [x] 7.3 Clear retained config topics for a service when it is deregistered
+- [x] 7.4 Test ingestion, empty-payload removal, and deregistration cleanup
 
 ## 8. Agent HTTP read view
 
