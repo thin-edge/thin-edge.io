@@ -10,10 +10,10 @@
 
 ## 2. Allowlist marking and collection helper
 
-- [ ] 2.1 Mark every ✓ setting from the allowlist table in this change's `design.md` with `#[tedge_config(exposable)]` in `tedge_config`'s `define_tedge_config!`
-- [ ] 2.2 Add `exposed_core_config()` and `exposed_cloud_config(cloud, profile)` helpers (new `tedge_toml/config_exposure.rs`) returning key→value pairs, with `None` for unset exposable keys
-- [ ] 2.3 Unit-test the helpers: core excludes cloud keys; cloud helper strips the cloud/profile prefix; profile keys route to the right profile; secrets never appear; unset exposable keys yield `None`; the `c8y.entity_store.*` deprecated-alias keys are excluded (agent-owned, not mapper-owned)
-- [ ] 2.4 Add a forward-guarding test: a fixed list of known-secret keys (`device.key_pin`, `device.key_uri`, `cryptoki.pin`, `proxy.password`, credential/key file paths, per-cloud `device.key_*`) all report `is_exposable() == false`, so marking one exposable fails CI (no value masking exists; the allowlist is the only safeguard)
+- [x] 2.1 Mark every ✓ setting from the allowlist table in this change's `design.md` with `#[tedge_config(exposable)]` in `tedge_config`'s `define_tedge_config!`
+- [x] 2.2 Add `exposed_core_config()` and `exposed_cloud_config(cloud, profile)` helpers (new `tedge_toml/config_exposure.rs`) returning key→value pairs, with `None` for unset exposable keys
+- [x] 2.3 Unit-test the helpers: core excludes cloud keys; cloud helper strips the cloud/profile prefix; profile keys route to the right profile; secrets never appear; unset exposable keys yield `None`; the `c8y.entity_store.*` deprecated-alias keys are excluded (agent-owned, not mapper-owned)
+- [x] 2.4 Add a forward-guarding test: a fixed list of known-secret keys (`device.key_pin`, `device.key_uri`, `cryptoki.pin`, `proxy.password`, credential/key file paths, per-cloud `device.key_*`) all report `is_exposable() == false`, so marking one exposable fails CI (no value masking exists; the allowlist is the only safeguard)
 
 ## 3. `tedge_api`: config channel and entity store
 
