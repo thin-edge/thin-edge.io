@@ -46,8 +46,13 @@ impl TEdgeComponent for AzureMapper {
         let az_config = tedge_config.mapper_config::<AzMapperSpecificConfig>(&self.profile)?;
         let prefix = &az_config.bridge.topic_prefix;
         let az_mapper_name = format!("tedge-mapper-{prefix}");
+        let exposed_config = tedge_config::tedge_toml::exposed_cloud_config(
+            &tedge_config,
+            tedge_config::models::CloudType::Az,
+            self.profile.as_ref(),
+        )?;
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(&az_mapper_name, &tedge_config).await?;
+            start_basic_actors(&az_mapper_name, &tedge_config, exposed_config).await?;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
 
         if tedge_config.mqtt.bridge.built_in {

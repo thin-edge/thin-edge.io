@@ -37,8 +37,8 @@
 
 ## 6. Mappers publish their own cloud configuration
 
-- [ ] 6.1 Extend the mapper startup helper that already spawns the health monitor to also spawn the shared config publisher
-- [ ] 6.2 Pass each mapper's own exposed cloud config (profile-aware) from the c8y, aws, and az mapper `build()` entry points
+- [x] 6.1 Extend the mapper startup helper that already spawns the health monitor to also spawn the shared config publisher
+- [x] 6.2 Pass each mapper's own exposed cloud config (profile-aware) from the c8y, aws, and az mapper `build()` entry points
 
 ## 7. Agent aggregates retained config over MQTT
 

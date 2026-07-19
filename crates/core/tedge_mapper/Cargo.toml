@@ -32,6 +32,7 @@ strum = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
+tedge_config_ext = { workspace = true }
 tedge_downloader_ext = { workspace = true }
 tedge_file_system_ext = { workspace = true }
 tedge_flows = { workspace = true }
