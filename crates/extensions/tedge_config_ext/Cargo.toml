@@ -1,0 +1,24 @@
+[package]
+name = "tedge_config_ext"
+description = "thin-edge extension publishing a component's own exposable configuration values over MQTT"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+tedge_actors = { workspace = true }
+tedge_api = { workspace = true }
+tedge_mqtt_ext = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tedge_actors = { workspace = true, features = ["test-helpers"] }
+
+[lints]
+workspace = true
