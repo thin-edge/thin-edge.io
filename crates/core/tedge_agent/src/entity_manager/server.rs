@@ -240,14 +240,26 @@ impl EntityStoreServer {
             }
         }
 
-        if let Channel::EntityTwinData { fragment_key } = channel {
-            let fragment_value = if message.payload().is_empty() {
-                Value::Null
-            } else {
-                serde_json::from_slice(message.payload_bytes())?
-            };
-            let twin_message = EntityTwinMessage::new(topic_id, fragment_key, fragment_value);
-            self.entity_store.update_twin_fragment(twin_message)?;
+        match channel {
+            Channel::EntityTwinData { fragment_key } => {
+                let fragment_value = if message.payload().is_empty() {
+                    Value::Null
+                } else {
+                    serde_json::from_slice(message.payload_bytes())?
+                };
+                let twin_message = EntityTwinMessage::new(topic_id, fragment_key, fragment_value);
+                self.entity_store.update_twin_fragment(twin_message)?;
+            }
+            Channel::Config { key } => {
+                if message.payload().is_empty() {
+                    self.entity_store.clear_config_value(&topic_id, &key)?;
+                } else {
+                    let value = message.payload_str().unwrap_or_default().to_string();
+                    self.entity_store
+                        .ingest_config_value(&topic_id, key, value)?;
+                }
+            }
+            _ => {}
         }
 
         Ok(())
@@ -351,6 +363,7 @@ impl EntityStoreServer {
                 ChannelFilter::AlarmMetadata,
                 ChannelFilter::Alarm,
                 ChannelFilter::EntityTwinData,
+                ChannelFilter::Config,
                 ChannelFilter::AnyCommand,
                 ChannelFilter::AnyCommandMetadata,
                 ChannelFilter::Health,
@@ -435,6 +448,7 @@ pub fn subscriptions(mqtt_schema: &MqttSchema) -> TopicFilter {
     for channel_filter in [
         ChannelFilter::EntityMetadata,
         ChannelFilter::EntityTwinData,
+        ChannelFilter::Config,
         ChannelFilter::Measurement,
         ChannelFilter::MeasurementMetadata,
         ChannelFilter::Event,
