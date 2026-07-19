@@ -601,6 +601,7 @@ fn keys_enum(
         Some(c) => quote!(Some(#c)),
         None => quote!(None),
     });
+    let exposable = configuration_key.iter().map(|k| k.exposable);
 
     let max_profile_count = configuration_key.iter().map(|k| k.field_names.len()).max();
 
@@ -671,6 +672,16 @@ fn keys_enum(
                 match self {
                     #(
                         Self::#match_shape => #doc_comment,
+                    )*
+                    #uninhabited_catch_all
+                }
+            }
+
+            /// Whether this configuration key may be published or served to external clients
+            pub fn is_exposable(&self) -> bool {
+                match self {
+                    #(
+                        Self::#match_shape => #exposable,
                     )*
                     #uninhabited_catch_all
                 }
@@ -976,6 +987,7 @@ struct ConfigurationKey {
 
     insert_profiles: Vec<(syn::Pat, syn::Expr)>,
     doc_comment: Option<String>,
+    exposable: bool,
 }
 
 fn ident_for(segments: &VecDeque<&FieldOrGroup>) -> syn::Ident {
@@ -1091,6 +1103,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             formatters,
             insert_profiles,
             doc_comment: segments.iter().last().unwrap().doc(),
+            exposable: segments.iter().last().unwrap().field().unwrap().exposable(),
         }
     } else {
         ConfigurationKey {
@@ -1106,6 +1119,7 @@ fn enum_variant(segments: &VecDeque<&FieldOrGroup>) -> ConfigurationKey {
             )],
             insert_profiles: vec![],
             doc_comment: segments.iter().last().unwrap().doc(),
+            exposable: segments.iter().last().unwrap().field().unwrap().exposable(),
         }
     }
 }
@@ -1817,6 +1831,90 @@ mod tests {
         }
 
         impl_block
+    }
+
+    #[test]
+    fn is_exposable_is_true_for_a_plain_exposable_field() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                #[tedge_config(exposable)]
+                id: String,
+            }
+        );
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter());
+        let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "is_exposable");
+
+        let expected = parse_quote! {
+            impl ReadableKey {
+                pub fn is_exposable(&self) -> bool {
+                    match self {
+                        Self::DeviceId => true,
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_block)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn is_exposable_is_true_for_a_profiled_exposable_field() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                #[tedge_config(exposable)]
+                url: String,
+            }
+        );
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter());
+        let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "is_exposable");
+
+        let expected = parse_quote! {
+            impl ReadableKey {
+                pub fn is_exposable(&self) -> bool {
+                    match self {
+                        Self::C8yUrl(_) => true,
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_block)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn is_exposable_is_false_for_an_unmarked_field() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                key_path: String,
+            }
+        );
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let config_keys = configuration_strings(paths.iter());
+        let impl_block = retain_fn(keys_enum_impl_block(&config_keys), "is_exposable");
+
+        let expected = parse_quote! {
+            impl ReadableKey {
+                pub fn is_exposable(&self) -> bool {
+                    match self {
+                        Self::DeviceKeyPath => false,
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&parse_quote!(#impl_block)),
+            prettyplease::unparse(&expected)
+        );
     }
 
     fn retain_fn(mut impl_block: ItemImpl, fn_name: &str) -> ItemImpl {
