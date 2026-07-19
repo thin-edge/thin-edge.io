@@ -17,10 +17,10 @@
 
 ## 3. `tedge_api`: config channel and entity store
 
-- [ ] 3.1 Add `Channel::Config { key }` (parse/serialize/`ChannelFilter`) to `tedge_api/src/mqtt_topics.rs`, mirroring `EntityTwinData`
-- [ ] 3.2 Add a `config: BTreeMap<String, String>` map to `EntityMetadata`, parallel to `twin_data`, excluded from serialization
-- [ ] 3.3 Add entity-store accessors for MQTT ingestion, not an external write API: ingest/clear one config value, read one or all values, with the same key-validation as twin fragments. Name them as ingestion primitives (`ingest_config_value`/`clear_config_value`/`get_config`), not a mutation surface
-- [ ] 3.4 Unit-test channel round-tripping and the new entity-store accessors, including empty-payload-as-removal
+- [x] 3.1 Add `Channel::Config { key }` (parse/serialize/`ChannelFilter`) to `tedge_api/src/mqtt_topics.rs`, mirroring `EntityTwinData`
+- [x] 3.2 Add a `config: BTreeMap<String, String>` map to `EntityMetadata`, parallel to `twin_data`, excluded from serialization
+- [x] 3.3 Add entity-store accessors for MQTT ingestion, not an external write API: ingest/clear one config value, read one or all values, with the same key-validation as twin fragments. Name them as ingestion primitives (`ingest_config_value`/`clear_config_value`/`get_config`), not a mutation surface
+- [x] 3.4 Unit-test channel round-tripping and the new entity-store accessors, including empty-payload-as-removal
 
 ## 4. Shared retained-config publisher
 

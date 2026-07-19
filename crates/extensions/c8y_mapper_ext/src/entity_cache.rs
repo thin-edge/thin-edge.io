@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
@@ -233,6 +234,7 @@ impl EntityCache {
             parent,
             health_endpoint: entity.health_endpoint,
             twin_data: entity.twin_data,
+            config: BTreeMap::new(),
         };
 
         self.entities.insert(
@@ -281,6 +283,7 @@ impl EntityCache {
                 .clone()
                 .or_else(|| existing_entity.health_endpoint.clone()),
             twin_data: existing_entity.twin_data.clone(),
+            config: existing_entity.config.clone(),
         };
 
         if existing_entity == updated_entity {
@@ -551,6 +554,7 @@ impl From<FlowContextEntity> for CloudEntityMetadata {
             external_id: Some(external_id.clone()),
             health_endpoint: context.health_endpoint,
             twin_data,
+            config: BTreeMap::new(),
         };
 
         CloudEntityMetadata::new(external_id, metadata)
