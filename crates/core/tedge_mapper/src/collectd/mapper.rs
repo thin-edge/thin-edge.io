@@ -36,7 +36,7 @@ impl TEdgeComponent for CollectdMapper {
         _config_dir: &TedgePaths,
     ) -> Result<Runtime, anyhow::Error> {
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(COLLECTD_MAPPER_NAME, &tedge_config).await?;
+            start_basic_actors(COLLECTD_MAPPER_NAME, &tedge_config, Vec::new()).await?;
 
         let input_topic = CollectdMapper::input_topics();
         let output_topic = CollectdMapper::output_topic();

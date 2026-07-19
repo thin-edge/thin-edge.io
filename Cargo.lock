@@ -5056,6 +5056,7 @@ dependencies = [
  "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "tedge_config_ext",
  "tedge_downloader_ext",
  "tedge_file_system_ext",
  "tedge_flows",
