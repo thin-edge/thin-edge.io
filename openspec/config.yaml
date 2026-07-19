@@ -9,6 +9,15 @@ schema: spec-driven
 #     We use conventional commits
 #     Domain: e-commerce platform
 
+context: |
+  Writing style (all artifacts): plain, direct English.
+  Use semantic line breaks.
+  Short declarative sentences.
+  Bullets over prose.
+  No hedging or filler.
+  Avoid restating well known MQTT and thin-edge concepts.
+  State each requirement/decision and its reason; skip elaboration.
+
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
 # Example:
