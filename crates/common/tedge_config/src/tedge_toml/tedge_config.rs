@@ -6,6 +6,10 @@ use version::TEdgeTomlVersion;
 mod append_remove;
 pub use append_remove::AppendRemoveItem;
 
+mod config_exposure;
+pub use config_exposure::exposed_cloud_config;
+pub use config_exposure::exposed_core_config;
+
 pub mod mapper_config;
 
 use super::models::auth_method::AuthMethod;
@@ -467,6 +471,7 @@ define_tedge_config! {
         /// unique and is derived from the device certificate.
         #[tedge_config(reader(function = "device_id", private))]
         #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
+        #[tedge_config(exposable)]
         #[doku(as = "String")]
         id: Result<String, ReadError>,
 
@@ -555,6 +560,7 @@ define_tedge_config! {
         /// The default device type
         #[tedge_config(example = "thin-edge.io", default(value = "thin-edge.io"))]
         #[tedge_config(rename = "type")]
+        #[tedge_config(exposable)]
         ty: String,
     },
 
@@ -599,6 +605,7 @@ define_tedge_config! {
         #[tedge_config(example = "your-tenant.cumulocity.com")]
         // Config consumers should use `c8y.http`/`c8y.mqtt` as appropriate, hence this field is private
         #[tedge_config(reader(private))]
+        #[tedge_config(exposable)]
         url: ConnectUrl,
 
         /// The path where Cumulocity root certificate(s) are stored
@@ -609,6 +616,7 @@ define_tedge_config! {
         /// The authentication method used to connect Cumulocity
         #[tedge_config(note = "In the auto mode, basic auth is used if c8y.credentials_path is set")]
         #[tedge_config(example = "certificate", example = "basic", example = "auto", default(variable = AuthMethod::Certificate))]
+        #[tedge_config(exposable)]
         auth_method: AuthMethod,
 
         /// The path where Cumulocity username/password are stored
@@ -622,6 +630,7 @@ define_tedge_config! {
             #[tedge_config(reader(function = "c8y_device_id"))]
             #[tedge_config(default(from_optional_key = "device.id"))]
             #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
+            #[tedge_config(exposable)]
             #[doku(as = "String")]
             id: Result<String, ReadError>,
 
@@ -657,6 +666,7 @@ define_tedge_config! {
         smartrest: {
             /// Set of SmartREST template IDs the device should subscribe to
             #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
+            #[tedge_config(exposable)]
             templates: TemplatesSet,
 
             /// Switch using 501-503 (without operation ID) or 504-506 (with operation ID) SmartREST messages for operation status update
@@ -673,51 +683,62 @@ define_tedge_config! {
         smartrest1: {
             /// Set of SmartREST 1.0 template IDs the device should subscribe to
             #[tedge_config(example = "templateId1,templateId2", default(function = "TemplatesSet::default"))]
+            #[tedge_config(exposable)]
             templates: TemplatesSet,
         },
 
         /// HTTP Endpoint for the Cumulocity tenant, with optional port.
         #[tedge_config(example = "http.your-tenant.cumulocity.com:1234")]
         #[tedge_config(default(from_optional_key = "c8y.url"))]
+        #[tedge_config(exposable)]
         http: HostPort<HTTPS_PORT>,
 
         /// MQTT Endpoint for the Cumulocity tenant, with optional port.
         #[tedge_config(example = "mqtt.your-tenant.cumulocity.com:1234")]
         #[tedge_config(default(from_optional_key = "c8y.url"))]
+        #[tedge_config(exposable)]
         mqtt: HostPort<MQTT_TLS_PORT>,
 
         /// Set of MQTT topics the Cumulocity mapper should subscribe to
         #[tedge_config(example = "te/+/+/+/+/a/+,te/+/+/+/+/m/+,te/+/+/+/+/m/+/meta,te/+/+/+/+/e/+")]
         #[tedge_config(default(value = "te/+/+/+/+,te/+/+/+/+/twin/+,te/+/+/+/+/m/+,te/+/+/+/+/m/+/meta,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health"))]
+        #[tedge_config(exposable)]
         topics: TemplatesSet,
 
         enable: {
             /// Enable log_upload feature
             #[tedge_config(example = "true", default(value = true), deprecated_name = "log_management")]
+            #[tedge_config(exposable)]
             log_upload: bool,
 
             /// Enable config_snapshot feature
             #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
             config_snapshot: bool,
 
             /// Enable config_update feature
             #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
             config_update: bool,
 
             /// Enable firmware_update feature
             #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
             firmware_update: bool,
 
             /// Enable device_profile feature
             #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
             device_profile: bool,
 
             /// Enable device restart feature
             #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
             device_restart: bool,
 
             /// Enable software update feature
             #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
             software_update: bool,
         },
 
@@ -725,6 +746,7 @@ define_tedge_config! {
             mqtt: {
                 /// The maximum message payload size that can be mapped to the cloud via MQTT
                 #[tedge_config(example = "16184", default(function = "c8y_mqtt_payload_limit"))]
+                #[tedge_config(exposable)]
                 max_payload_size: MqttPayloadLimit,
             }
         },
@@ -745,12 +767,14 @@ define_tedge_config! {
                 /// mapper.
                 #[tedge_config(default(value = "127.0.0.1"))]
                 #[tedge_config(example = "127.0.0.1", example = "192.168.1.2", example = "tedge-hostname")]
+                #[tedge_config(exposable)]
                 host: Arc<str>,
 
                 /// The port number on the remote host on which the local Cumulocity HTTP Proxy is running, used by the
                 /// Cumulocity mapper.
                 #[tedge_config(example = "8001")]
                 #[tedge_config(default(from_key = "c8y.proxy.bind.port"))]
+                #[tedge_config(exposable)]
                 port: u16,
             },
 
@@ -780,6 +804,7 @@ define_tedge_config! {
             /// if this is set to "c8y", then messages published to `c8y/s/us` will be
             /// forwarded to Cumulocity on the `s/us` topic
             #[tedge_config(example = "c8y", default(function = "c8y_topic_prefix"))]
+            #[tedge_config(exposable)]
             topic_prefix: TopicPrefix,
 
             /// The amount of time after which the bridge should send a ping if no other traffic has occurred
@@ -830,11 +855,13 @@ define_tedge_config! {
         mqtt_service: {
             /// Whether to connect to the MQTT service endpoint or not
             #[tedge_config(example = "true", default(value = false))]
+            #[tedge_config(exposable)]
             enabled: bool,
 
             /// Set of MQTT topics the bridge should subscribe to on the Cumulocity MQTT service endpoint
             #[tedge_config(example = "incoming/topic,another/topic,test/topic")]
             #[tedge_config(default(function = "TemplatesSet::default"))]
+            #[tedge_config(exposable)]
             topics: TemplatesSet,
         }
     },
@@ -858,6 +885,7 @@ define_tedge_config! {
 
         /// Endpoint URL of Azure IoT tenant
         #[tedge_config(example = "myazure.azure-devices.net")]
+        #[tedge_config(exposable)]
         url: ConnectUrl,
 
         /// The path where Azure IoT root certificate(s) are stored
@@ -871,6 +899,7 @@ define_tedge_config! {
             #[tedge_config(reader(function = "az_device_id"))]
             #[tedge_config(default(from_optional_key = "device.id"))]
             #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
+            #[tedge_config(exposable)]
             #[doku(as = "String")]
             id: Result<String, ReadError>,
 
@@ -927,6 +956,7 @@ define_tedge_config! {
             /// if this is set to "az", then messages published to `az/twin/GET/#` will be
             /// forwarded to Azure on the `$iothub/twin/GET/#` topic
             #[tedge_config(example = "az", default(function = "az_topic_prefix"))]
+            #[tedge_config(exposable)]
             topic_prefix: TopicPrefix,
 
             /// The amount of time after which the bridge should send a ping if no other traffic has occurred
@@ -937,6 +967,7 @@ define_tedge_config! {
         /// Set of MQTT topics the Azure IoT mapper should subscribe to
         #[tedge_config(example = "te/+/+/+/+/a/+,te/+/+/+/+/m/+,te/+/+/+/+/e/+")]
         #[tedge_config(default(value = "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health"))]
+        #[tedge_config(exposable)]
         topics: TemplatesSet,
     },
 
@@ -958,6 +989,7 @@ define_tedge_config! {
 
         /// Endpoint URL of AWS IoT tenant
         #[tedge_config(example = "your-endpoint.amazonaws.com")]
+        #[tedge_config(exposable)]
         url: ConnectUrl,
 
         /// The path where AWS IoT root certificate(s) are stored
@@ -971,6 +1003,7 @@ define_tedge_config! {
             #[tedge_config(reader(function = "aws_device_id"))]
             #[tedge_config(default(from_optional_key = "device.id"))]
             #[tedge_config(example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665")]
+            #[tedge_config(exposable)]
             #[doku(as = "String")]
             id: Result<String, ReadError>,
 
@@ -1018,6 +1051,7 @@ define_tedge_config! {
             mqtt: {
                 /// The maximum message payload size that can be mapped to the cloud via MQTT
                 #[tedge_config(example = "131072", default(function = "aws_mqtt_payload_limit"))]
+                #[tedge_config(exposable)]
                 max_payload_size: MqttPayloadLimit,
             }
         },
@@ -1027,6 +1061,7 @@ define_tedge_config! {
             /// if this is set to "aws", then messages published to `aws/shadow/#` will be
             /// forwarded to AWS on the `$aws/things/shadow/#` topic
             #[tedge_config(example = "aws", default(function = "aws_topic_prefix"))]
+            #[tedge_config(exposable)]
             topic_prefix: TopicPrefix,
 
 
@@ -1038,6 +1073,7 @@ define_tedge_config! {
         /// Set of MQTT topics the AWS IoT mapper should subscribe to
         #[tedge_config(example = "te/+/+/+/+/a/+,te/+/+/+/+/m/+,te/+/+/+/+/e/+")]
         #[tedge_config(default(value = "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health"))]
+        #[tedge_config(exposable)]
         topics: TemplatesSet,
     },
 
@@ -1045,12 +1081,14 @@ define_tedge_config! {
         /// MQTT topic root
         #[tedge_config(default(value = "te"))]
         #[tedge_config(example = "te")]
+        #[tedge_config(exposable)]
         topic_root: String,
 
         /// The device MQTT topic identifier
         #[tedge_config(default(function = "EntityTopicId::default_main_device"))]
         #[tedge_config(example = "device/main//")]
         #[tedge_config(example = "device/child_001//")]
+        #[tedge_config(exposable)]
         #[doku(as = "String")]
         device_topic_id: EntityTopicId,
 
@@ -1075,10 +1113,12 @@ define_tedge_config! {
         client: {
             /// The host that the thin-edge MQTT client should connect to
             #[tedge_config(example = "127.0.0.1", default(value = "127.0.0.1"))]
+            #[tedge_config(exposable)]
             host: String,
 
             /// The port that the thin-edge MQTT client should connect to
             #[tedge_config(default(from_key = "mqtt.bind.port"))]
+            #[tedge_config(exposable)]
             #[doku(as = "u16")]
             port: NonZeroU16,
 
@@ -1187,11 +1227,13 @@ define_tedge_config! {
         client: {
             /// The port number on the remote host on which the File Transfer Service HTTP server is running
             #[tedge_config(example = "8000", default(value = 8000u16))]
+            #[tedge_config(exposable)]
             port: u16,
 
             /// The address of the host on which the File Transfer Service HTTP server is running
             #[tedge_config(default(value = "127.0.0.1"))]
             #[tedge_config(example = "127.0.0.1", example = "192.168.1.2", example = "tedge-hostname")]
+            #[tedge_config(exposable)]
             host: Arc<str>,
 
             auth: {
@@ -1231,20 +1273,24 @@ define_tedge_config! {
         enable: {
             /// Determines if tedge-agent should enable config_update operation
             #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
             config_update: bool,
 
             /// Determines if tedge-agent should enable config_snapshot operation
             #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
             config_snapshot: bool,
 
             /// Determines if tedge-agent should enable log_upload operation
             #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
             log_upload: bool,
         },
 
         entity_store: {
             /// Enable auto registration feature
             #[tedge_config(example = "true", default(value = true), deprecated_key = "c8y.entity_store.auto_register")]
+            #[tedge_config(exposable)]
             auto_register: bool,
 
             /// When set to `false`, the entity store is persisted and restored over agent restarts.
