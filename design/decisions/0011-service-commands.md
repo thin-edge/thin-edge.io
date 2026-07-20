@@ -63,48 +63,22 @@ is **who executes a service command, and how**.
 ## Goals
 
 * A **cloud-agnostic** thin-edge interface:
-  services declare a `service_command` capability and receive commands on the standard `te/.../cmd/...` topics.
+  services declare which commands they support and receive commands on the standard `te/.../cmd/...` topics.
   The Cumulocity specifics live entirely in the c8y mapper.
-* The standard commands `start`, `stop`, `restart`, plus **custom commands**:
-  Cumulocity's specification allows arbitrary command names in `c8y_SupportedServiceCommands`,
-  and a service owner can declare and handle its own.
+* Support the standard commands `start`, `stop`, `restart`, plus **custom commands**:
+  Cumulocity allows arbitrary command names in `c8y_SupportedServiceCommands`,
+  and a service owner can define its own.
 * Works both for init-managed services and for services owned by third-party daemons,
-  **without conflicting executors**.
-* Ownership is respected: only the owner of a service declares what that service supports.
+  without conflicting executors.
+* Ownership is respected:
+  what a service supports reflects what its owner can actually execute.
 * No broadening of the privileged surface beyond what thin-edge packaging already grants.
-
-## Constraints that shape the design
-
-1. **Cloud terminal states are final.**
-   Once a Cumulocity operation is set to FAILED or SUCCESSFUL, its status can never change again.
-   Therefore no component may report a failed/successful status
-   for a command that another component might legitimately execute.
-   "Fail it with reason: not my service" is only safe when it is certain that no other executor exists.
-2. **The tedge-agent workflow engine has no per-entity scoping.**
-   A registered workflow reacts to the matching operation on every topic the agent subscribes to.
-   It cannot be restricted to services of a particular type,
-   and workflow scripts have no access to entity registration data or to `system.toml`.
-3. **There is no existing third-party execution model to be compatible with.**
-   tedge-container-plugin today has no operation handling at all:
-   it does not subscribe to command topics, ships no workflow definitions and no Cumulocity operation handlers.
-   Restarting a container from the cloud currently requires the generic shell-command operation.
-   Whatever convention this proposal defines becomes the third-party integration model.
-4. **A similar delegation pattern already exists**:
-   software management plugins (`/etc/tedge/sm-plugins/<type>`),
-   which are external executables implementing a fixed CLI contract, invoked by tedge-agent.
-   tedge-container-plugin integrates with software management exactly this way,
-   and it already has ready-to-use container start/stop/restart primitives in its CLI.
-5. **Privilege**: thin-edge packaging already grants the `tedge` user passwordless sudo
-   for `/usr/bin/tedge` (among a small set of paths).
-   `systemctl` is *not* whitelisted,
-   and the `system.toml` service-manager abstraction is only usable from the `tedge` CLI today.
 
 ## Design
 
 At a glance, four roles are involved:
 
-* **Service owner** (tedge-agent, a mapper, or a third-party daemon):
-  declares per service which commands it supports (a retained capability message).
+* **Service owner** (tedge-agent, a mapper, or a third-party daemon)
 * **tedge-mapper-c8y**: converts between Cumulocity and thin-edge
     * the capability → `c8y_SupportedServiceCommands` + supported operation (SmartREST `114`)
     * a `c8y_ServiceCommand` operation → a thin-edge command;
@@ -114,28 +88,22 @@ At a glance, four roles are involved:
 * **Service plugin** (per service type, optional):
   executes the commands of services not managed by the init system (e.g. containers).
 
-### Thin-edge interface (cloud-agnostic)
+### thin-edge interface (Open decisions)
 
-**Capability**: declared by the *service owner* as a retained message:
+#### Command shape: one-command vs per-command vs mixed
 
+How is a service command addressed on the `te/.../cmd/...` topics?
+There are three options:
+
+##### Proposal 1: One command `cmd/service_command`
+Capability: `te/device/<device>/service/<service>/cmd/service_command`.
+```json
+{
+    "commands": ["start", "restart", "stop", "custom"]
+}
 ```
-[te/device/main/service/tedge-mapper-c8y/cmd/service_command]
-{ "types": ["start", "stop", "restart"] }
-```
-
-* `tedge-agent` and the mappers declare it for their own service entity at startup,
-  alongside their existing service registration / health announcement.
-* A third-party daemon declares it for each service it owns (it already registers those entities).
-* The payload key `types` follows the existing capability conventions (config types, log types).
-* `types` is an open set:
-  besides the standard `start`, `stop`, `restart`,
-  an owner may declare arbitrary custom command names (e.g. `flush-cache`) that its services support.
-  A command name is a single token (no whitespace; see Security considerations).
-
-**Command**: the standard thin-edge command state machine on the target *service* topic:
-
-```
-[te/device/main/service/tedge-mapper-c8y/cmd/service_command/<cmd-id>]
+Command: `te/device/<device>/service/<service>/cmd/service_command/<cmd-id>`
+```json
 {
   "status": "init",
   "command": "restart",
@@ -143,20 +111,63 @@ At a glance, four roles are involved:
   "serviceType": "service"
 }
 ```
+* All supported commands are included in the service's metadata payload.
+* A single workflow handles every service command in `service_command.toml`.
+* The single command model can limit the commands being executed in parallel.
+* (c8y) The c8y mapper copies the declared commands straight into `c8y_SupportedServiceCommands`.
 
-with the usual `init → executing → successful | failed` transitions published on the same topic.
+##### Proposal 2: Per command `cmd/start`, `cmd/stop`, `cmd/restart`, `cmd/<custom>`
+Capability: `te/device/<device>/service/<service>/cmd/<start|stop|restart|custom>`
+```json
+{}
+```
+Command: `te/device/<device>/service/<service>/cmd/restart/<cmd-id>`
+```json
+{
+  "status": "init",
+  "serviceName": "tedge-mapper-c8y",
+  "serviceType": "service"
+}
+```
+* This is arguably the more natural thin-edge API, and allows a distinct workflow per command.
+* It needs the workflow engine to scope workflows by entity type,
+  so that a service `restart` does not also trigger the device reboot workflow.
+* (c8y) The c8y mapper has to aggregate an open set of `cmd/<x>` topics into one `c8y_SupportedServiceCommands` list.
 
-Two notes on this contract:
+##### Proposal 3: Mix of above
+* Use the basic set (`start`, `stop`, `restart`, `enable`, `disable`) under `cmd/service_command`.
+* Custom commands have their own `cmd/<custom>`.
+* (c8y) This still needs the aggregation logic same as per-command model.
 
-* The action (`restart`) is a payload field, not part of the topic (like `cmd/restart`),
-  because supported commands are an open set:
-  a single, fixed operation name lets one workflow handle them all.
-  This also matches `c8y_ServiceCommand`, which carries the command inside the fragment.
-* `serviceName` and `serviceType` are duplicated into the payload
-  because workflow scripts can only access the topic and the payload
-  (see the execution section for how they are used).
+##### Proposal 1-3 Common open questions
+`serviceName` is still to be decided:
+* service's name? e.g. `nodered`
+* service's external ID? e.g. `tedge_7fe9b92c:device:main:service:nodered`
+* topic ID? e.g. `device/main/service/nodered`
+* or do we even need it at all?
 
-### Cumulocity mapping
+#### Capability declaration: Push model vs Pull model
+
+A service's supported commands are published as a retained capability message on its `cmd` topic.
+Who publishes it?
+
+##### Proposal A: Push-model
+The service owner publishes it itself.
+
+* `tedge-agent` and the mappers declare it for their own service entity at startup,
+  alongside their existing service registration / health announcement.
+* A third-party daemon declares it for each service it owns (it already registers those entities).
+
+##### Proposal B: Pull-model
+`tedge-agent` publishes it on the owner's behalf.
+* For init-managed services: it derives the commands from what `system.toml` defines.
+  * Problem: How to limit supported commands for some services?
+  For example, cloud mappers should not allow `stop`,
+  otherwise the cloud connection would be lost.
+* For other types: it queries the service plugin when the service registers.
+(e.g. invoking `/user/share/tedge/service-plugins/<plugin> list`)
+
+### Cumulocity mapping (will be updated depending on the command shape decision)
 
 This part deliberately reuses existing mapper mechanisms; no new concepts are introduced.
 
@@ -199,7 +210,7 @@ This part deliberately reuses existing mapper mechanisms; no new concepts are in
 * The feature is gated by a `c8y.enable.service_command` setting,
   following the existing `c8y.enable.*` pattern (default: enabled).
 
-### Execution: central executor with pluggable dispatch
+### Execution: central executor with pluggable dispatch (will be updated depending on the command shape decision)
 
 **Exactly one executor per device**: the tedge-agent workflow engine,
 extended to also react to commands addressed to *services of its own device*
