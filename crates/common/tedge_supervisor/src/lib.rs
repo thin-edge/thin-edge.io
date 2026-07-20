@@ -2,8 +2,8 @@
 //!
 //! Serves two execution modes:
 //!
-//! - **Multi-unit** (`tedge run all`): hosts the agent and a mapper inside one process
-//!   so no external init system is required.
+//! - **Multi-unit** (`tedge run all`): hosts the agent and one or more mappers inside
+//!   one process so no external init system is required.
 //! - **Single-unit** (standalone `tedge-agent`, `tedge-mapper`): wraps one component
 //!   with the same signal handling and SIGHUP log-level reloading, but leaves crash
 //!   recovery to the init system: the first unit failure exits the process, exactly
@@ -55,6 +55,18 @@ use tracing::Instrument;
 pub enum UnitKind {
     Agent,
     Mapper,
+}
+
+/// How the supervisor manages its units' lifecycle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SupervisorMode {
+    /// Multi-unit mode (`tedge run all`): crashed units are rebuilt in-process
+    /// under a bounded backoff, and SIGUSR1 restarts all mapper units.
+    MultiUnit,
+    /// Standalone mode (`tedge-agent`, `tedge-mapper`): the first unit failure
+    /// exits the process so the init system can restart it. SIGUSR1 is ignored
+    /// because restarts are the init system's responsibility.
+    Standalone,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -164,10 +176,7 @@ pub struct Supervisor {
     /// Refreshes log levels on SIGHUP; `None` when an override fixes them (see
     /// [`Command::ReloadLogLevels`]).
     log_reload: Option<LogLevelReloadHandle>,
-    /// Whether a failed unit is rebuilt in-process. Standalone processes disable
-    /// this and leave crash recovery to the init system instead: the first unit
-    /// failure exits the process.
-    restart_on_crash: bool,
+    mode: SupervisorMode,
     /// The failure the run loop exits with once every unit has drained.
     failure: Option<anyhow::Error>,
 }
@@ -190,16 +199,13 @@ impl Supervisor {
             // shorter internal cleanup timeout.
             drain_timeout: Duration::from_secs(75),
             log_reload: None,
-            restart_on_crash: true,
+            mode: SupervisorMode::MultiUnit,
             failure: None,
         }
     }
 
-    /// Sets whether a failed unit is rebuilt in-process (the default). When disabled,
-    /// the first unit failure exits the process instead, leaving crash recovery to
-    /// the init system.
-    pub fn with_restart_on_crash(mut self, restart_on_crash: bool) -> Self {
-        self.restart_on_crash = restart_on_crash;
+    pub fn with_mode(mut self, mode: SupervisorMode) -> Self {
+        self.mode = mode;
         self
     }
 
@@ -224,7 +230,7 @@ impl Supervisor {
     ) -> anyhow::Result<()> {
         Supervisor::new(vec![Unit::new(name, kind, factory, lock)])
             .with_log_reload(log_reload)
-            .with_restart_on_crash(false)
+            .with_mode(SupervisorMode::Standalone)
             .run()
             .await
     }
@@ -268,7 +274,7 @@ impl Supervisor {
                 self.running += 1;
                 info!(component = %name, "started");
             }
-            Err(err) if self.restart_on_crash => {
+            Err(err) if self.mode == SupervisorMode::MultiUnit => {
                 error!(component = %self.units[id].name, "failed to build: {err:#}");
                 self.schedule_restart_or_give_up(id);
             }
@@ -370,7 +376,7 @@ impl Supervisor {
                     )
                     .await;
                 }
-                Err(err) if self.restart_on_crash => {
+                Err(err) if self.mode == SupervisorMode::MultiUnit => {
                     error!(component = %name, "crashed: {err}");
                     self.schedule_restart_or_give_up(id);
                 }
@@ -426,6 +432,10 @@ impl Supervisor {
     }
 
     async fn restart_mappers(&mut self) {
+        if self.mode == SupervisorMode::Standalone {
+            info!("SIGUSR1: ignored (standalone process; restart via the service manager instead)");
+            return;
+        }
         info!("SIGUSR1: restarting all mapper components");
         self.restart_units(|unit| unit.kind == UnitKind::Mapper)
             .await;
@@ -932,7 +942,7 @@ mod tests {
             clean_exit_factory(builds.clone()),
             policy,
         )];
-        let supervisor = Supervisor::new(units).with_restart_on_crash(false);
+        let supervisor = Supervisor::new(units).with_mode(SupervisorMode::Standalone);
         let handle = tokio::spawn(supervisor.run_loop());
 
         timeout(Duration::from_secs(5), handle)
@@ -1083,7 +1093,7 @@ mod tests {
             crashing_factory(builds.clone()),
             policy,
         )];
-        let supervisor = Supervisor::new(units).with_restart_on_crash(false);
+        let supervisor = Supervisor::new(units).with_mode(SupervisorMode::Standalone);
         let handle = tokio::spawn(supervisor.run_loop());
 
         let result = timeout(Duration::from_secs(5), handle)
@@ -1112,7 +1122,7 @@ mod tests {
             failing_build_factory(builds.clone()),
             policy,
         )];
-        let supervisor = Supervisor::new(units).with_restart_on_crash(false);
+        let supervisor = Supervisor::new(units).with_mode(SupervisorMode::Standalone);
         let handle = tokio::spawn(supervisor.run_loop());
 
         let result = timeout(Duration::from_secs(5), handle)
@@ -1141,7 +1151,7 @@ mod tests {
             restart_required_factory(builds.clone()),
             policy,
         )];
-        let supervisor = Supervisor::new(units).with_restart_on_crash(false);
+        let supervisor = Supervisor::new(units).with_mode(SupervisorMode::Standalone);
         let handle = tokio::spawn(supervisor.run_loop());
 
         let result = timeout(Duration::from_secs(5), handle)
@@ -1261,6 +1271,40 @@ mod tests {
             builds.load(Ordering::SeqCst),
             1,
             "RestartMappers must not restart an agent-only supervisor"
+        );
+
+        commands.send(Command::ShutdownAll).await.unwrap();
+        timeout(Duration::from_secs(5), handle)
+            .await
+            .expect("supervisor should exit after shutdown")
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn restart_mappers_is_ignored_in_standalone_mode() {
+        let builds = Arc::new(AtomicUsize::new(0));
+        let policy = test_policy(1000);
+
+        let units = vec![make_unit(
+            "mapper",
+            UnitKind::Mapper,
+            healthy_factory(builds.clone()),
+            policy,
+        )];
+        let supervisor = Supervisor::new(units).with_mode(SupervisorMode::Standalone);
+        let commands = supervisor.commands();
+        let handle = tokio::spawn(supervisor.run_loop());
+
+        wait_until(|| builds.load(Ordering::SeqCst) == 1, "the mapper to start").await;
+
+        commands.send(Command::RestartMappers).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        assert_eq!(
+            builds.load(Ordering::SeqCst),
+            1,
+            "RestartMappers must be ignored in standalone mode"
         );
 
         commands.send(Command::ShutdownAll).await.unwrap();

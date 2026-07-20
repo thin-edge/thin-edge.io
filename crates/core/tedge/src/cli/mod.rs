@@ -65,7 +65,7 @@ pub struct TEdgeCli {
 
 #[derive(clap::Parser, Debug)]
 pub enum Component {
-    /// Run the agent and a mapper together under a single-process supervisor
+    /// Run the agent and mappers together under a single-process supervisor
     #[clap(hide = true)]
     All(crate::supervisor::RunAllOpt),
 

@@ -226,6 +226,89 @@ impl MapperName {
             MapperName::UserDefined(_) => "tedge-mapper",
         }
     }
+
+    /// Parses a `cloud[@profile]` string into a `MapperName`
+    pub fn parse_cli_arg(arg: &str) -> anyhow::Result<Self> {
+        let (cloud, profile) = match arg.split_once('@') {
+            Some((cloud, profile)) => (cloud, Some(profile.parse::<ProfileName>()?)),
+            None => (arg, None),
+        };
+        match cloud {
+            #[cfg(feature = "c8y")]
+            "c8y" => Ok(MapperName::C8y { profile }),
+            #[cfg(not(feature = "c8y"))]
+            "c8y" => anyhow::bail!("c8y mapper support is not compiled into this build"),
+            #[cfg(feature = "aws")]
+            "aws" => Ok(MapperName::Aws { profile }),
+            #[cfg(not(feature = "aws"))]
+            "aws" => anyhow::bail!("aws mapper support is not compiled into this build"),
+            #[cfg(feature = "azure")]
+            "az" => Ok(MapperName::Az { profile }),
+            #[cfg(not(feature = "azure"))]
+            "az" => anyhow::bail!("az mapper support is not compiled into this build"),
+            "collectd" => {
+                anyhow::ensure!(
+                    profile.is_none(),
+                    "collectd mapper does not support profiles"
+                );
+                Ok(MapperName::Collectd)
+            }
+            other => {
+                anyhow::ensure!(
+                    profile.is_none(),
+                    "user-defined mapper '{other}' does not support profiles"
+                );
+                validate_mapper_name(other)?;
+                Ok(MapperName::UserDefined(vec![other.to_string()]))
+            }
+        }
+    }
+}
+
+/// Returns all `MapperName`s whose cloud URL is configured in `tedge.toml`,
+/// plus any user-defined mappers discovered under the `mappers/` directory
+pub async fn configured_mappers(config: &TEdgeConfig) -> Vec<MapperName> {
+    let mut mappers = Vec::new();
+
+    #[cfg(feature = "c8y")]
+    {
+        use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
+        for (_, profile) in config.all_mapper_configs::<C8yMapperSpecificConfig>() {
+            mappers.push(MapperName::C8y { profile });
+        }
+    }
+
+    #[cfg(feature = "azure")]
+    {
+        use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
+        for (_, profile) in config.all_mapper_configs::<AzMapperSpecificConfig>() {
+            mappers.push(MapperName::Az { profile });
+        }
+    }
+
+    #[cfg(feature = "aws")]
+    {
+        use tedge_config::tedge_toml::mapper_config::AwsMapperSpecificConfig;
+        for (_, profile) in config.all_mapper_configs::<AwsMapperSpecificConfig>() {
+            mappers.push(MapperName::Aws { profile });
+        }
+    }
+
+    let mappers_dir = config.root_dir().join("mappers");
+    let builtin_prefixes = ["c8y", "aws", "az", "collectd"];
+    for (name, _) in custom::config::scan_mappers_shallow(mappers_dir.as_ref()).await {
+        let base = name.split_once('.').map_or(name.as_str(), |(base, _)| base);
+        if builtin_prefixes.contains(&base) {
+            continue;
+        }
+        if let Err(err) = validate_mapper_name(&name) {
+            warn!("Skipping mapper directory '{name}': {err}");
+            continue;
+        }
+        mappers.push(MapperName::UserDefined(vec![name]));
+    }
+
+    mappers
 }
 
 pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<()> {
@@ -455,6 +538,124 @@ mod tests {
         fn user_defined_display() {
             let name = MapperName::UserDefined(vec!["thingsboard".to_string()]);
             assert_eq!(name.to_string(), "tedge-mapper-thingsboard");
+        }
+    }
+
+    mod parse_spec {
+        use super::*;
+
+        #[test]
+        fn cloud_without_profile() {
+            let name = MapperName::parse_cli_arg("c8y").unwrap();
+            assert_eq!(name.to_string(), "tedge-mapper-c8y");
+        }
+
+        #[test]
+        fn cloud_with_profile() {
+            let name = MapperName::parse_cli_arg("c8y@secondary").unwrap();
+            assert_eq!(name.to_string(), "tedge-mapper-c8y@secondary");
+        }
+
+        #[test]
+        fn user_defined_mapper() {
+            let name = MapperName::parse_cli_arg("thingsboard").unwrap();
+            assert_eq!(name.to_string(), "tedge-mapper-thingsboard");
+        }
+
+        #[test]
+        fn collectd_rejects_profile() {
+            let err = MapperName::parse_cli_arg("collectd@foo").unwrap_err();
+            assert!(
+                format!("{err}").contains("does not support profiles"),
+                "unexpected error: {err}"
+            );
+        }
+
+        #[test]
+        fn user_defined_mapper_rejects_profile() {
+            let err = MapperName::parse_cli_arg("thingsboard@prod").unwrap_err();
+            assert!(
+                format!("{err}").contains("does not support profiles"),
+                "unexpected error: {err}"
+            );
+        }
+
+        #[test]
+        fn empty_spec_is_rejected() {
+            assert!(MapperName::parse_cli_arg("").is_err());
+        }
+
+        #[test]
+        fn empty_profile_is_rejected() {
+            assert!(MapperName::parse_cli_arg("c8y@").is_err());
+        }
+
+        #[test]
+        fn flag_like_spec_is_rejected() {
+            let err = MapperName::parse_cli_arg("--debug").unwrap_err();
+            assert!(
+                format!("{err}").contains("Invalid mapper name"),
+                "unexpected error: {err}"
+            );
+        }
+    }
+
+    mod configured_mappers {
+        use super::*;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        #[tokio::test]
+        async fn includes_clouds_with_configured_urls() {
+            let ttd = TempTedgeDir::new();
+            ttd.dir("mappers")
+                .dir("c8y")
+                .file("mapper.toml")
+                .with_toml_content(toml::toml! {
+                    url = "example.com"
+                });
+
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+            assert_eq!(mapper_names(&config).await, ["tedge-mapper-c8y"]);
+        }
+
+        #[tokio::test]
+        async fn includes_user_defined_mapper_directories() {
+            let ttd = TempTedgeDir::new();
+            ttd.dir("mappers").dir("thingsboard");
+
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+            assert_eq!(mapper_names(&config).await, ["tedge-mapper-thingsboard"]);
+        }
+
+        #[tokio::test]
+        async fn skips_builtin_mapper_directories_including_profile_variants() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.dir("mappers");
+            mappers_dir.dir("c8y");
+            mappers_dir.dir("c8y.secondary");
+            mappers_dir.dir("collectd");
+
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+            assert_eq!(mapper_names(&config).await, Vec::<String>::new());
+        }
+
+        #[tokio::test]
+        async fn skips_directories_with_invalid_mapper_names() {
+            let ttd = TempTedgeDir::new();
+            let mappers_dir = ttd.dir("mappers");
+            mappers_dir.dir("thingsboard.bak");
+            mappers_dir.dir("My-Mapper");
+
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+            assert_eq!(mapper_names(&config).await, Vec::<String>::new());
+        }
+
+        async fn mapper_names(config: &TEdgeConfig) -> Vec<String> {
+            configured_mappers(config)
+                .await
+                .iter()
+                .map(MapperName::to_string)
+                .collect()
         }
     }
 
