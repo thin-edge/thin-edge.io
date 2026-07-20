@@ -56,8 +56,8 @@
 
 ## 9. End-to-end tests
 
-- [ ] 9.1 Add a Robot Framework suite verifying the agent's retained config topics and HTTP routes, including that secret settings never appear
-- [ ] 9.2 Extend the suite to cover a bootstrapped c8y mapper's retained config topics and HTTP routes
+- [x] 9.1 Add a Robot Framework suite verifying the agent's retained config topics and HTTP routes, including that secret settings never appear
+- [x] 9.2 Extend the suite to cover a bootstrapped c8y mapper's retained config topics and HTTP routes
 
 ## 10. Documentation
 
