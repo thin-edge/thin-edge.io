@@ -158,7 +158,7 @@ jobs:
       - name: Install tools
         run: just install-tools
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version-file: 'tests/.python-version'
           cache: 'pip'

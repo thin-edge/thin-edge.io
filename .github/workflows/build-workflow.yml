@@ -309,7 +309,7 @@ jobs:
           echo 'CA_KEY="${{ secrets.CA_KEY || '' }}"' >> .env
           echo 'CA_PUB="${{ secrets.CA_PUB || '' }}"' >> .env
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version-file: 'tests/.python-version'
           cache: 'pip'
@@ -382,7 +382,7 @@ jobs:
         uses: actions/checkout@v7
 
       # Setup python required by cloudsmith cli
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version-file: 'tests/.python-version'
 
@@ -575,7 +575,7 @@ jobs:
         with:
           fetch-depth: 0
       # Setup python required by cloudsmith cli
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version-file: 'tests/.python-version'
       # Install nfpm used to for linux packaging
