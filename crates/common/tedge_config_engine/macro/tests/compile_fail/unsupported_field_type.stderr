@@ -1,0 +1,22 @@
+error[E0277]: the trait bound `char: AppendRemoveItem` is not satisfied
+  --> tests/compile_fail/unsupported_field_type.rs:10:24
+   |
+10 |             separator: char,
+   |                        ^^^^ the trait `AppendRemoveItem` is not implemented for `char`
+   |
+   = help: the following other types implement trait `AppendRemoveItem`:
+             NonZero<u16>
+             bool
+             camino::Utf8PathBuf
+             std::net::IpAddr
+             std::string::String
+             u16
+             u64
+note: required by a bound in `tedge_config_engine::register_append_remove`
+  --> $WORKSPACE/crates/common/tedge_config_engine/src/append_remove.rs
+   |
+   | pub fn register_append_remove<T>(registry: &mut AppendRemoveRegistry)
+   |        ---------------------- required by a bound in this function
+   | where
+   |     T: for<'a> Facet<'a> + AppendRemoveItem + FromStr + std::fmt::Display + 'static,
+   |                            ^^^^^^^^^^^^^^^^ required by this bound in `register_append_remove`
