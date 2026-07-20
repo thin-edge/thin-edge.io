@@ -61,5 +61,5 @@
 
 ## 10. Documentation
 
-- [ ] 10.1 Document the `config` MQTT channel in the MQTT topic reference
-- [ ] 10.2 Document the two `config` HTTP routes in the entity HTTP API reference
+- [x] 10.1 Document the `config` MQTT channel in the MQTT topic reference
+- [x] 10.2 Document the two `config` HTTP routes in the entity HTTP API reference
