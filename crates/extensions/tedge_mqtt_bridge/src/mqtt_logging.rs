@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::time::Duration;
 
 use bytes::Bytes;
 use rumqttc::AsyncClient;
@@ -30,8 +31,21 @@ pub struct LoggingAsyncClient {
 impl LoggingAsyncClient {
     /// Creates a new `LoggingAsyncClient` and `LoggingEventLoop`, setting up the
     /// internal channel for communication and storing the log prefix.
-    pub fn new(options: MqttOptions, cap: usize, log_prefix: String) -> (Self, LoggingEventLoop) {
-        let (client, eventloop) = AsyncClient::new(options, cap);
+    ///
+    /// When `connection_timeout` is set, it overrides rumqttc's default connection timeout. This is
+    /// used for the cloud connection, whose TLS handshake can be slow when signing with an HSM/TPM.
+    pub fn new(
+        options: MqttOptions,
+        cap: usize,
+        log_prefix: String,
+        connection_timeout: Option<Duration>,
+    ) -> (Self, LoggingEventLoop) {
+        let (client, mut eventloop) = AsyncClient::new(options, cap);
+        if let Some(connection_timeout) = connection_timeout {
+            eventloop
+                .network_options
+                .set_connection_timeout(connection_timeout.as_secs());
+        }
         let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
 
         (
@@ -169,5 +183,39 @@ impl MqttEvents for LoggingEventLoop {
 
     fn set_pending(&mut self, requests: Vec<Request>) {
         self.inner.pending = requests.into_iter().collect();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_options() -> MqttOptions {
+        MqttOptions::new("test-client", "localhost", 1883)
+    }
+
+    #[test]
+    fn applies_connection_timeout_when_set() {
+        let (_client, eventloop) = LoggingAsyncClient::new(
+            dummy_options(),
+            10,
+            "cloud".into(),
+            Some(Duration::from_secs(60)),
+        );
+        assert_eq!(eventloop.inner.network_options().connection_timeout(), 60);
+    }
+
+    #[test]
+    fn keeps_default_connection_timeout_when_unset() {
+        // Baseline: the default connection timeout of an untouched rumqttc event loop.
+        let (_client, default_eventloop) = AsyncClient::new(dummy_options(), 10);
+        let default_timeout = default_eventloop.network_options().connection_timeout();
+
+        let (_client, eventloop) =
+            LoggingAsyncClient::new(dummy_options(), 10, "local".into(), None);
+        assert_eq!(
+            eventloop.inner.network_options().connection_timeout(),
+            default_timeout
+        );
     }
 }
