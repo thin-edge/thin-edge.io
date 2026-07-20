@@ -488,6 +488,69 @@ Remove all of the child device's twin data using a single request.
 curl -f -X DELETE http://localhost:8000/te/v1/entities/device/child01///twin
 ```
 
+## Get exposed configuration
+
+Each entity that owns `tedge_config` settings (e.g. `tedge-agent`, or a cloud mapper such as
+`tedge-mapper-c8y`) publishes any setting explicitly marked exposable as a retained `config` MQTT
+message under its own service topic (see the [MQTT API reference](../../references/mqtt-api.md#configuration)).
+The agent collects these as an ordinary MQTT subscriber and serves them as a read-only view over HTTP.
+
+This view is read-only: `PUT`, `PATCH`, and `DELETE` on a `config` resource path are rejected.
+Configuration can only be changed by its owning component, via `tedge config set` and a restart.
+
+A configuration key that is not marked exposable and a key that does not exist at all are
+indistinguishable here: both return `404 Not Found`, so the response reveals nothing about which
+non-exposed settings exist.
+
+### Get a single configuration value
+
+**Endpoint**
+
+```
+GET /te/v1/entities/{topic-id}/config/{key}
+```
+
+**Response status codes**
+
+* 200: OK
+* 404: Not Found (the key is not exposed, or does not exist)
+
+#### Example: Get the agent's device.id setting
+
+```sh
+curl http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config/device.id
+```
+
+```text title="Response"
+my-device-01
+```
+
+### Get all exposed configuration
+
+**Endpoint**
+
+```
+GET /te/v1/entities/{topic-id}/config
+```
+
+**Response status codes**
+
+* 200: OK
+* 404: Not Found
+
+#### Example: Get all of a c8y mapper's exposed configuration
+
+```sh
+curl http://localhost:8000/te/v1/entities/device/main/service/tedge-mapper-c8y/config
+```
+
+```json title="Response"
+{
+    "url": "example.cumulocity.com",
+    "device.id": "my-device-01"
+}
+```
+
 ## Query entities
 
 Get a list of entities which match given filter criteria.
