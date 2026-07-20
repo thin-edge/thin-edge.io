@@ -28,6 +28,17 @@ pub trait TedgeP11Service: Send + Sync {
 
     /// Generate a new keypair, saving the private key on the token and returning the public key as PEM.
     fn create_key(&self, request: CreateKeyRequest) -> anyhow::Result<CreateKeyResponse>;
+
+    /// Initialize a token in a slot so that it can be used to store keys.
+    ///
+    /// This performs the full PKCS #11 initialization sequence: `C_InitToken` (which sets the
+    /// Security Officer PIN and the token label) followed by a Security Officer login and
+    /// `C_InitPIN` (which sets the user PIN used by all other operations).
+    ///
+    /// If the target slot is not specified, the single slot holding an uninitialized token is
+    /// selected automatically. The operation is idempotent: if a token with the requested label is
+    /// already initialized with a user PIN, it is left untouched and its URI is returned.
+    fn init_token(&self, request: InitTokenRequest) -> anyhow::Result<InitTokenResponse>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,6 +124,24 @@ pub struct CreateKeyRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateKeyResponse {
     pub pem: String,
+    pub uri: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InitTokenRequest {
+    /// Token label (CKA_LABEL) to assign to the initialized token.
+    pub label: String,
+    /// Security Officer PIN used by `C_InitToken`. If not set, the user PIN is used as the SO PIN.
+    pub so_pin: Option<SecretString>,
+    /// User PIN set on the token via `C_InitPIN`. If not set, the configured PIN is used.
+    pub pin: Option<SecretString>,
+    /// Slot id to initialize. If not set, the single slot with an uninitialized token is selected.
+    pub slot: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InitTokenResponse {
+    /// URI identifying the initialized token.
     pub uri: String,
 }
 

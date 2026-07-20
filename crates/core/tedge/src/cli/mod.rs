@@ -27,6 +27,7 @@ mod connect;
 mod diag;
 mod disconnect;
 mod flows;
+mod hsm;
 mod http;
 mod init;
 pub mod log;
@@ -124,6 +125,10 @@ pub enum TEdgeOpt {
     /// Configure Thin Edge.
     #[clap(subcommand)]
     Config(config::ConfigCmd),
+
+    /// Manage PKCS #11 (HSM/TPM) tokens and keys
+    #[clap(subcommand)]
+    Hsm(hsm::TEdgeHsmCli),
 
     /// Connect to cloud provider
     ///
@@ -236,6 +241,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Upload(opt) => opt.build_command(config).await,
             TEdgeOpt::Cert(opt) => opt.build_command(config).await,
             TEdgeOpt::Config(opt) => opt.build_command(config).await,
+            TEdgeOpt::Hsm(opt) => opt.build_command(config).await,
             TEdgeOpt::Connect(opt) => opt.build_command(config).await,
             TEdgeOpt::Diag(opt) => opt.build_command(config).await,
             TEdgeOpt::Disconnect(opt) => opt.build_command(config).await,

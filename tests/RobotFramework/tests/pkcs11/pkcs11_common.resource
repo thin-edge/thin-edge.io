@@ -10,7 +10,7 @@ Library             ThinEdgeIO
 *** Variables ***
 ${DEVICE_SN}                ${EMPTY}    # should be set in setup of test suites
 
-# if `False`, PKCS11 operations like creating keys, will use new tedge features, e.g. `tedge cert create-key-hsm`.
+# if `False`, PKCS11 operations like creating keys, will use new tedge features, e.g. `tedge hsm create-key`.
 # if `True`, `p11tool` will be used instead
 ${PKCS11_USE_P11TOOL}       ${False}
 
@@ -77,7 +77,7 @@ Set up new PKCS11 RSA keypair
         ...    cmd=p11tool --set-pin=123456 --login --generate-privkey rsa --bits ${bits} --label ${label} "pkcs11:token=tedge"
     ELSE
         Execute Command
-        ...    cmd=tedge cert create-key-hsm --type rsa --bits ${bits} --label "${label}" "pkcs11:token=tedge"
+        ...    cmd=tedge hsm create-key --type rsa --bits ${bits} --label "${label}" "pkcs11:token=tedge"
     END
 
     VAR    ${key_uri}=    pkcs11:token=tedge;object=${label}
@@ -96,7 +96,7 @@ Set up new PKCS11 ECDSA keypair
         ...    cmd=p11tool --set-pin=123456 --login --generate-privkey ecdsa --curve sec${curve}r1 --label ${label} "pkcs11:token=tedge"
     ELSE
         Execute Command
-        ...    cmd=tedge cert create-key-hsm --type ecdsa --curve ${curve} --label "${label}" "pkcs11:token=tedge"
+        ...    cmd=tedge hsm create-key --type ecdsa --curve ${curve} --label "${label}" "pkcs11:token=tedge"
     END
 
     VAR    ${key_uri}=    pkcs11:token=tedge;object=${label}

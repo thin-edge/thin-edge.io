@@ -79,6 +79,7 @@ use cryptoki::object::ObjectClass;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use cryptoki::slot::Slot;
 use cryptoki::slot::SlotInfo;
 use cryptoki::slot::TokenInfo;
 use rsa::pkcs1::EncodeRsaPublicKey;
@@ -103,6 +104,8 @@ use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
 use crate::service::CreateKeyResponse;
+use crate::service::InitTokenRequest;
+use crate::service::InitTokenResponse;
 use crate::service::SecretString;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
@@ -221,6 +224,123 @@ impl TedgeP11Service for Cryptoki {
         let pem = session.export_public_key_pem(key)?;
         let uri = session.export_object_uri(key)?;
         Ok(CreateKeyResponse { pem, uri })
+    }
+
+    #[instrument(skip_all)]
+    fn init_token(&self, request: InitTokenRequest) -> anyhow::Result<InitTokenResponse> {
+        let label = request.label;
+        // The user PIN is the one used by all subsequent operations. The SO PIN is only needed to
+        // initialize the token; when not provided we reuse the user PIN, which works out of the box
+        // for tokens that don't enforce distinct PINs (e.g. SoftHSM2).
+        let user_pin = request.pin.unwrap_or_else(|| self.config.pin.clone());
+        let so_pin = request.so_pin.unwrap_or_else(|| user_pin.clone());
+
+        // Refresh the slot list before inspecting the token state.
+        let _ = self.reinit();
+
+        let token_info = {
+            let context = match self.context.lock() {
+                Ok(c) => c,
+                Err(e) => e.into_inner(),
+            };
+
+            let slots = context
+                .get_slots_with_token()
+                .context("Failed to list slots with a token")?;
+
+            // Idempotency: if a token with this label is already initialized with a user PIN, leave
+            // it untouched and return its URI.
+            for slot in &slots {
+                let info = context
+                    .get_token_info(*slot)
+                    .context("Failed to get token info")?;
+                if info.token_initialized() && info.user_pin_initialized() && info.label() == label
+                {
+                    debug!(
+                        slot = slot.id(),
+                        %label, "Token is already initialized, skipping initialization"
+                    );
+                    return Ok(InitTokenResponse {
+                        uri: export_session_uri(&info),
+                    });
+                }
+            }
+
+            // Resolve the slot to initialize.
+            let slot = match request.slot {
+                Some(id) => {
+                    let slot =
+                        Slot::try_from(id).with_context(|| format!("Invalid slot id {id}"))?;
+                    let info = context
+                        .get_token_info(slot)
+                        .with_context(|| format!("No token present in slot {id}"))?;
+                    // Never reinitialize an already-initialized token: C_InitToken would erase it.
+                    anyhow::ensure!(
+                        !info.token_initialized(),
+                        "Slot {id} already holds an initialized token (label '{}'). \
+                         Refusing to reinitialize it as this would erase its contents.",
+                        info.label()
+                    );
+                    slot
+                }
+                None => {
+                    let uninitialized: Vec<Slot> = slots
+                        .iter()
+                        .copied()
+                        .filter(|s| {
+                            context
+                                .get_token_info(*s)
+                                .map(|i| !i.token_initialized())
+                                .unwrap_or(false)
+                        })
+                        .collect();
+                    match uninitialized.as_slice() {
+                        [] => anyhow::bail!(
+                            "No uninitialized token was found. Ensure the HSM is connected and \
+                             exposes a slot with an uninitialized token, or pass an explicit slot."
+                        ),
+                        [slot] => *slot,
+                        many => {
+                            let ids: Vec<u64> = many.iter().map(|s| s.id()).collect();
+                            anyhow::bail!(
+                                "Found multiple uninitialized slots ({ids:?}). \
+                                 Please select one explicitly using the slot argument."
+                            );
+                        }
+                    }
+                }
+            };
+
+            debug!(slot = slot.id(), %label, "Initializing token");
+
+            let so_auth = AuthPin::from(so_pin.clone());
+            context
+                .init_token(slot, &so_auth, &label)
+                .context("Failed to initialize the token (C_InitToken)")?;
+
+            // Set the user PIN: open a RW session, log in as Security Officer, then C_InitPIN.
+            let session = context
+                .open_rw_session(slot)
+                .context("Failed to open a read-write session after initializing the token")?;
+            session
+                .login(UserType::So, Some(&so_auth))
+                .context("Failed to log in as Security Officer")?;
+            session
+                .init_pin(&AuthPin::from(user_pin))
+                .context("Failed to set the user PIN (C_InitPIN)")?;
+            drop(session);
+
+            context
+                .get_token_info(slot)
+                .context("Failed to read token info after initialization")?
+        };
+
+        // Refresh the slot list; some libraries (e.g. SoftHSM2) renumber slots after init.
+        let _ = self.reinit();
+
+        Ok(InitTokenResponse {
+            uri: export_session_uri(&token_info),
+        })
     }
 }
 

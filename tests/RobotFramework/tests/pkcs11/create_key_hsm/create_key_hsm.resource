@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation       Tests for the `tedge cert create-key-hsm` command.
+Documentation       Tests for the `tedge hsm create-key` command.
 
 Resource            ../pkcs11_common.resource
 
@@ -53,7 +53,7 @@ Show connected initialized tokens when token argument is not provided
     # unset key_uri so there there's no hint where to generate the keypair
     Execute Command    cmd=tedge config unset device.key_uri
     ${stderr}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key
+    ...    cmd=tedge hsm create-key --type ecdsa --label my-key
     ...    strip=True
     ...    stdout=False
     ...    stderr=True
@@ -64,14 +64,14 @@ Show connected initialized tokens when token argument is not provided
 
 Set key ID using --id flag
     ${output}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "${TOKEN_URI}"
+    ...    cmd=tedge hsm create-key --type ecdsa --label my-key --id 010203 "${TOKEN_URI}"
     ...    strip=True
     ...    stdout=False
     ...    stderr=True
     Should Contain    ${output}    id=%01%02%03
 
     ${output}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --type ecdsa --label my-key --id 010203 "${TOKEN_URI}"
+    ...    cmd=tedge hsm create-key --type ecdsa --label my-key --id 010203 "${TOKEN_URI}"
     ...    strip=True
     ...    stdout=False
     ...    stderr=True
@@ -80,7 +80,7 @@ Set key ID using --id flag
 
 Provide PIN using --pin flag
     ${output}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --label my-key --pin 000000 "${TOKEN_URI}"
+    ...    cmd=tedge hsm create-key --label my-key --pin 000000 "${TOKEN_URI}"
     ...    strip=True
     ...    stdout=False
     ...    stderr=True
@@ -89,17 +89,32 @@ Provide PIN using --pin flag
 
 Save public key to file using --outfile-pubkey flag
     ${output}=    Execute Command
-    ...    cmd=tedge cert create-key-hsm --label my-key --outfile-pubkey pubkey.pem "${TOKEN_URI}"
+    ...    cmd=tedge hsm create-key --label my-key --outfile-pubkey pubkey.pem "${TOKEN_URI}"
     ...    strip=True
     ...    stdout=False
     ...    stderr=True
     ${pubkey}=    Execute Command    cat pubkey.pem    strip=True
     Should Contain    ${output}    ${pubkey}
 
+Deprecated cert create-key-hsm alias still works
+    [Documentation]    `tedge cert create-key-hsm` is kept as a hidden deprecated alias for
+    ...    `tedge hsm create-key`, so existing scripts keep working.
+    ${output}=    Execute Command
+    ...    cmd=tedge cert create-key-hsm --type ecdsa --label deprecated-alias-key "${TOKEN_URI}"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${output}    deprecated
+    Should Contain    ${output}    New keypair was successfully created.
+
+    ${privkeys}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "${TOKEN_URI}"
+    Should Contain    ${privkeys}    Label: deprecated-alias-key
+
 Create private key
     [Arguments]    ${type}    ${label}    ${bits}=${EMPTY}    ${curve}=${EMPTY}    ${p11tool_keytype}=${EMPTY}
     # create the private key on token and write CSR to device.csr_path
-    ${command}=    Set Variable    tedge cert create-key-hsm --label ${label} --type ${type} "${TOKEN_URI}"
+    ${command}=    Set Variable    tedge hsm create-key --label ${label} --type ${type} "${TOKEN_URI}"
     IF    $bits
         ${command}=    Set Variable    ${command} --bits ${bits}
     END

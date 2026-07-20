@@ -523,6 +523,12 @@ module_path = """#;
         ) -> anyhow::Result<tedge_p11::service::CreateKeyResponse> {
             unimplemented!()
         }
+        fn init_token(
+            &self,
+            _: tedge_p11::service::InitTokenRequest,
+        ) -> anyhow::Result<tedge_p11::service::InitTokenResponse> {
+            unimplemented!()
+        }
     }
 
     /// Belt-and-suspenders for the hybrid approach: even if `flock` silently no-ops (so the lock is

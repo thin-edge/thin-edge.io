@@ -13,6 +13,8 @@ use crate::pkcs11::SigScheme;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
+use crate::service::InitTokenRequest;
+use crate::service::InitTokenResponse;
 use crate::service::SecretString;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
@@ -68,6 +70,17 @@ impl TedgeP11Service for TedgeP11Client {
         _request: CreateKeyRequest,
     ) -> anyhow::Result<crate::service::CreateKeyResponse> {
         self.create_key(_request)
+    }
+
+    fn init_token(&self, request: InitTokenRequest) -> anyhow::Result<InitTokenResponse> {
+        let request = Frame1::InitTokenRequest(request);
+        let response = self.do_request(request)?;
+
+        let Frame1::InitTokenResponse(response) = response else {
+            bail!("protocol error: bad response, expected init_token, received: {response:?}");
+        };
+
+        Ok(response)
     }
 
     fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
