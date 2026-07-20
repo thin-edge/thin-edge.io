@@ -1,26 +1,25 @@
-use std::borrow::Cow;
-
-use facet::Facet;
+use facet::{Facet, Shape};
 
 use crate::append_remove::AppendRemoveRegistry;
 use crate::defaults::{config_get_with_defaults, DefaultsRegistry, EnvOverrides, RootDependency};
 use crate::reader::build_reader_at;
 use crate::reflect::{
-    config_add, config_get, config_remove, config_set, config_unset, list_key_entries, list_keys,
-    ConfigError, KeyAliases, KeyEntry, ReadOnlyKeys,
+    check_read_only, config_add, config_get, config_remove, config_set, config_unset,
+    list_key_entries, list_keys, ConfigError, KeyAliases, KeyEntry,
 };
 use crate::schema::ConfigSchema;
 
 /// Facade over the config reflection/defaults/reader subsystems.
 ///
-/// Holds the registries (defaults, append-remove rules, read-only keys, aliases)
-/// and exposes high-level operations on any DTO that implements `Facet`.
+/// Holds the registries (defaults, append-remove rules, aliases) and exposes
+/// high-level operations on any DTO that implements `Facet`. Read-only checks
+/// and example values are read directly from facet attributes on the DTO shape
+/// at the point of use.
 pub struct ConfigManager {
     defaults: DefaultsRegistry,
     append_remove: AppendRemoveRegistry,
-    read_only: ReadOnlyKeys,
     aliases: KeyAliases,
-    examples: std::collections::HashMap<Cow<'static, str>, &'static [&'static str]>,
+    dto_shape: &'static Shape,
     env_prefix: Option<String>,
 }
 
@@ -33,9 +32,8 @@ impl ConfigManager {
             defaults: DefaultsRegistry::new(S::defaults(config_dir))
                 .unwrap_or_else(|e| panic!("invalid defaults registry: {e}")),
             append_remove,
-            read_only: ReadOnlyKeys::new(S::read_only_keys()),
-            aliases: KeyAliases::new(S::aliases()),
-            examples: S::examples().into_iter().collect(),
+            aliases: KeyAliases::from_shape(<S::Dto as Facet>::SHAPE),
+            dto_shape: <S::Dto as Facet>::SHAPE,
             env_prefix: None,
         }
     }
@@ -111,9 +109,9 @@ impl ConfigManager {
         config_remove(dto, key, value, &self.append_remove)
     }
 
-    /// Returns an error if `key` is marked read-only.
+    /// Returns an error if `key` is marked read-only via `tedge::readonly`.
     pub fn check_read_only(&self, key: &str) -> Result<(), ConfigError> {
-        self.read_only.check(key)
+        check_read_only(self.dto_shape, key)
     }
 
     /// Returns the `from_root` references declared by this schema.
@@ -151,7 +149,7 @@ impl ConfigManager {
 
     /// Lists all config keys with their help text and example values.
     pub fn key_entries<T: for<'a> Facet<'a>>(&self) -> Vec<KeyEntry> {
-        list_key_entries(T::SHAPE, "", &self.examples)
+        list_key_entries(T::SHAPE, "")
     }
 
     /// Merges non-None fields from `overlay` onto a clone of `base`.

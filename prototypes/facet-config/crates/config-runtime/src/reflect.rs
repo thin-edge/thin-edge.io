@@ -1,4 +1,5 @@
 use crate::append_remove::AppendRemoveRegistry;
+use crate::attrs;
 use facet::{Def, Facet, MapDef, Shape, Type, UserType};
 use facet_reflect::{Partial, Peek};
 
@@ -43,29 +44,31 @@ pub enum ConfigError {
 /// A deprecated key name and the canonical key it now maps to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeprecatedKey {
-    pub old: std::borrow::Cow<'static, str>,
-    pub new: std::borrow::Cow<'static, str>,
+    pub old: String,
+    pub new: String,
 }
 
 /// Runtime lookup for deprecated config key names.
+///
+/// Built by walking the DTO shape tree and collecting `tedge::deprecated_key`
+/// facet attributes.
 pub struct KeyAliases {
     aliases: Vec<DeprecatedKey>,
 }
-
-/// Set of keys that can be read but not changed via normal config operations.
-pub struct ReadOnlyKeys(std::collections::HashSet<std::borrow::Cow<'static, str>>);
 
 /// Information used to show a config key in help/list output:
 /// the key, generated docs, and example values.
 pub struct KeyEntry {
     pub key: String,
     pub doc: &'static [&'static str],
-    pub examples: &'static [&'static str],
+    pub examples: Vec<&'static str>,
 }
 
 impl KeyAliases {
-    /// Creates an alias table from generated schema data.
-    pub fn new(aliases: Vec<DeprecatedKey>) -> Self {
+    /// Builds the alias table by walking the DTO shape tree.
+    pub fn from_shape(shape: &'static Shape) -> Self {
+        let mut aliases = Vec::new();
+        collect_aliases(shape, "", &mut aliases);
         Self { aliases }
     }
 
@@ -73,25 +76,22 @@ impl KeyAliases {
     pub fn resolve(&self, key: &str) -> (String, Option<&str>) {
         for alias in &self.aliases {
             if key == alias.old {
-                return (alias.new.clone().into_owned(), Some(alias.old.as_ref()));
+                return (alias.new.clone(), Some(&alias.old));
             }
         }
         (key.to_owned(), None)
     }
 }
 
-impl ReadOnlyKeys {
-    pub fn new(keys: impl IntoIterator<Item = std::borrow::Cow<'static, str>>) -> Self {
-        Self(keys.into_iter().collect())
-    }
-
-    pub fn check(&self, key: &str) -> Result<(), ConfigError> {
-        if self.0.contains(key) {
-            Err(ConfigError::ReadOnly(key.to_owned()))
-        } else {
-            Ok(())
+/// Returns an error if the field at `key` is marked read-only via `tedge::readonly`.
+pub fn check_read_only(shape: &'static Shape, key: &str) -> Result<(), ConfigError> {
+    let field = find_leaf_field(shape, key);
+    if let Some(field) = field {
+        if field.has_attr(Some(attrs::NS), "readonly") {
+            return Err(ConfigError::ReadOnly(key.to_owned()));
         }
     }
+    Ok(())
 }
 
 /// Reads an explicitly-set config value by dotted key, without applying defaults.
@@ -183,20 +183,18 @@ where
 
 /// Lists assignable dotted config keys such as `mqtt.port`.
 pub fn list_keys(shape: &'static Shape, prefix: &str) -> Vec<String> {
-    list_key_entries(shape, prefix, &Default::default())
+    list_key_entries(shape, prefix)
         .into_iter()
         .map(|e| e.key)
         .collect()
 }
 
 /// Lists config keys with their help text and example values.
-pub fn list_key_entries(
-    shape: &'static Shape,
-    prefix: &str,
-    examples: &std::collections::HashMap<std::borrow::Cow<'static, str>, &'static [&'static str]>,
-) -> Vec<KeyEntry> {
+///
+/// Examples are read from `tedge::example` facet attributes on each field.
+pub fn list_key_entries(shape: &'static Shape, prefix: &str) -> Vec<KeyEntry> {
     let mut entries = Vec::new();
-    list_keys_recursive(shape, prefix, examples, &mut entries);
+    list_keys_recursive(shape, prefix, &mut entries);
     entries
 }
 
@@ -649,15 +647,83 @@ fn find_leaf_shape_parts(shape: &'static Shape, parts: &[&str]) -> Option<&'stat
     }
 }
 
+/// Finds the facet `Field` descriptor for the leaf at the end of a dotted key.
+fn find_leaf_field(shape: &'static Shape, key: &str) -> Option<&'static facet::Field> {
+    let parts: Vec<&str> = key.split('.').collect();
+    find_leaf_field_parts(shape, &parts)
+}
+
+fn find_leaf_field_parts(
+    shape: &'static Shape,
+    parts: &[&str],
+) -> Option<&'static facet::Field> {
+    let (&part, rest) = parts.split_first()?;
+
+    let fields = get_struct_fields(shape)?;
+    let field = fields.iter().find(|f| field_key_name(f) == part)?;
+
+    if rest.is_empty() {
+        Some(field)
+    } else {
+        let field_shape = field.shape();
+        let inner = if let Def::Option(opt_def) = field_shape.def {
+            opt_def.t
+        } else {
+            field_shape
+        };
+        find_leaf_field_parts(inner, rest)
+    }
+}
+
 fn validate_key(shape: &'static Shape, key: &str) -> Result<(), ConfigError> {
     find_leaf_shape(shape, key).ok_or_else(|| ConfigError::UnknownKey(key.to_owned()))?;
     Ok(())
 }
 
+/// Reads `tedge::example` attributes from a field, returning the example values.
+fn field_examples(field: &facet::Field) -> Vec<&'static str> {
+    field
+        .attributes
+        .iter()
+        .filter(|a| a.ns == Some(attrs::NS) && a.key == "example")
+        .filter_map(|a| a.get_as::<&str>().copied())
+        .collect()
+}
+
+/// Walks the DTO shape tree collecting `tedge::deprecated_key` aliases.
+fn collect_aliases(shape: &'static Shape, prefix: &str, aliases: &mut Vec<DeprecatedKey>) {
+    let fields = match get_struct_fields(shape) {
+        Some(f) => f,
+        None => return,
+    };
+
+    for field in fields {
+        let field_key = dotted_key(prefix, field_key_name(field));
+
+        let inner_shape = if let Def::Option(opt_def) = field.shape().def {
+            opt_def.t
+        } else {
+            field.shape()
+        };
+
+        if matches!(inner_shape.def, Def::Map(_)) {
+            continue;
+        } else if is_config_group(inner_shape) {
+            collect_aliases(inner_shape, &field_key, aliases);
+        } else if let Some(attr) = field.get_attr(Some(attrs::NS), "deprecated_key") {
+            if let Some(&old_key) = attr.get_as::<&str>() {
+                aliases.push(DeprecatedKey {
+                    old: old_key.to_owned(),
+                    new: field_key,
+                });
+            }
+        }
+    }
+}
+
 fn list_keys_recursive(
     shape: &'static Shape,
     prefix: &str,
-    examples: &std::collections::HashMap<std::borrow::Cow<'static, str>, &'static [&'static str]>,
     entries: &mut Vec<KeyEntry>,
 ) {
     let fields = match get_struct_fields(shape) {
@@ -677,17 +743,76 @@ fn list_keys_recursive(
         if matches!(inner_shape.def, Def::Map(_)) {
             continue;
         } else if is_config_group(inner_shape) {
-            list_keys_recursive(inner_shape, &field_key, examples, entries);
+            list_keys_recursive(inner_shape, &field_key, entries);
         } else {
-            let field_examples = examples
-                .get(field_key.as_str())
-                .copied()
-                .unwrap_or_default();
             entries.push(KeyEntry {
                 key: field_key,
                 doc: field.doc,
-                examples: field_examples,
+                examples: field_examples(field),
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Default, Facet, Clone, serde::Serialize, serde::Deserialize)]
+    #[facet(type_tag = "config_group")]
+    struct PlainDto {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mqtt: Option<MqttDto>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        device: Option<DeviceDto>,
+    }
+
+    #[derive(Default, Facet, Clone, serde::Serialize, serde::Deserialize)]
+    #[facet(type_tag = "config_group")]
+    struct MqttDto {
+        port: Option<u16>,
+        external_port: Option<u16>,
+    }
+
+    #[derive(Default, Facet, Clone, serde::Serialize, serde::Deserialize)]
+    #[facet(type_tag = "config_group")]
+    struct DeviceDto {
+        id: Option<String>,
+        name: Option<String>,
+    }
+
+    #[test]
+    fn non_readonly_field_passes() {
+        assert!(check_read_only(PlainDto::SHAPE, "mqtt.port").is_ok());
+    }
+
+    #[test]
+    fn no_aliases_for_plain_fields() {
+        let aliases = KeyAliases::from_shape(PlainDto::SHAPE);
+        assert_eq!(
+            aliases.resolve("mqtt.port"),
+            ("mqtt.port".to_owned(), None)
+        );
+    }
+
+    #[test]
+    fn field_without_examples_has_empty_list() {
+        let entries = list_key_entries(PlainDto::SHAPE, "");
+        let name = entries.iter().find(|e| e.key == "device.name").unwrap();
+        assert!(name.examples.is_empty());
+    }
+
+    #[test]
+    fn list_keys_enumerates_leaves() {
+        let keys = list_keys(PlainDto::SHAPE, "");
+        assert_eq!(
+            keys,
+            vec![
+                "mqtt.port",
+                "mqtt.external_port",
+                "device.id",
+                "device.name",
+            ]
+        );
     }
 }

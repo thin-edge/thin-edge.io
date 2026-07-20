@@ -8,6 +8,7 @@
 //! connector configs mounted below keys like `mappers.c8y.*`.
 
 mod append_remove;
+pub mod attrs;
 mod cert;
 mod defaults;
 mod host_port;
@@ -36,10 +37,8 @@ pub use optional::{ConfigNotSet, OptionalConfig};
 pub use reader::build_reader;
 pub use reader::build_reader_at;
 pub use reflect::{
-    config_get, config_set, config_unset, list_key_entries, list_keys, ConfigError, DeprecatedKey,
-    KeyAliases, KeyEntry, ReadOnlyKeys,
+    check_read_only, config_get, config_set, config_unset, list_key_entries, list_keys,
+    ConfigError, DeprecatedKey, KeyAliases, KeyEntry,
 };
-pub use schema::{
-    prefix_aliases, prefix_defaults, prefix_examples, prefix_keys, ConfigSchema, KeyExamples,
-};
+pub use schema::{prefix_defaults, ConfigSchema};
 pub use templates_set::TemplatesSet;

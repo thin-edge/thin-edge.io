@@ -2,7 +2,9 @@
 //! config operations.
 //!
 //! External groups contribute their own information under the key where they
-//! are reused.
+//! are reused. Read-only markers, deprecated key aliases, and example values
+//! are now facet attributes on the DTO fields (see `dto.rs`) and discovered
+//! at runtime via shape-tree walks instead of codegen tables.
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
@@ -16,9 +18,6 @@ pub fn generate_schema(model: &Model) -> TokenStream {
     let reader_ident = &model.root.reader_ident;
     let dto_ident = &model.root.dto_ident;
     let defaults_fn = generate_defaults(model);
-    let read_only_fn = generate_read_only_keys(model);
-    let aliases_fn = generate_aliases(model);
-    let examples_fn = generate_examples(model);
     let register_types_fn = generate_register_types(model);
 
     quote! {
@@ -26,9 +25,6 @@ pub fn generate_schema(model: &Model) -> TokenStream {
             type Dto = #dto_ident;
 
             #defaults_fn
-            #read_only_fn
-            #aliases_fn
-            #examples_fn
             #register_types_fn
         }
     }
@@ -83,100 +79,10 @@ fn generate_defaults(model: &Model) -> TokenStream {
         })
         .collect();
 
-    let body = chained_vec(
-        quote!(FieldDefault),
-        &entries,
-        model.root.externals(),
-        |ty| quote! { <#ty as ConfigSchema>::defaults(config_dir) },
-        quote!(prefix_defaults),
-    );
+    let body = chained_defaults(&entries, model.root.externals());
 
     quote! {
         fn defaults(config_dir: &std::path::Path) -> Vec<FieldDefault> {
-            #body
-        }
-    }
-}
-
-fn generate_read_only_keys(model: &Model) -> TokenStream {
-    let entries: Vec<TokenStream> = model
-        .root
-        .fields()
-        .into_iter()
-        .filter(|f| f.field.readonly)
-        .map(|f| {
-            let key = &f.key;
-            quote! { #key.into(), }
-        })
-        .collect();
-
-    let body = chained_vec(
-        quote!(std::borrow::Cow<'static, str>),
-        &entries,
-        model.root.externals(),
-        |ty| quote! { <#ty as ConfigSchema>::read_only_keys() },
-        quote!(prefix_keys),
-    );
-
-    quote! {
-        fn read_only_keys() -> Vec<std::borrow::Cow<'static, str>> {
-            #body
-        }
-    }
-}
-
-fn generate_aliases(model: &Model) -> TokenStream {
-    let entries: Vec<TokenStream> = model
-        .root
-        .fields()
-        .into_iter()
-        .filter_map(|f| {
-            let old_key = f.field.deprecated_key.as_ref()?;
-            let new_key = &f.key;
-            Some(quote! {
-                DeprecatedKey { old: #old_key.into(), new: #new_key.into() },
-            })
-        })
-        .collect();
-
-    let body = chained_vec(
-        quote!(DeprecatedKey),
-        &entries,
-        model.root.externals(),
-        |ty| quote! { <#ty as ConfigSchema>::aliases() },
-        quote!(prefix_aliases),
-    );
-
-    quote! {
-        fn aliases() -> Vec<DeprecatedKey> {
-            #body
-        }
-    }
-}
-
-fn generate_examples(model: &Model) -> TokenStream {
-    let entries: Vec<TokenStream> = model
-        .root
-        .fields()
-        .into_iter()
-        .filter(|f| !f.field.examples.is_empty())
-        .map(|f| {
-            let key = &f.key;
-            let examples = &f.field.examples;
-            quote! { (#key.into(), [#(#examples),*].as_slice()), }
-        })
-        .collect();
-
-    let body = chained_vec(
-        quote!(KeyExamples),
-        &entries,
-        model.root.externals(),
-        |ty| quote! { <#ty as ConfigSchema>::examples() },
-        quote!(prefix_examples),
-    );
-
-    quote! {
-        fn examples() -> Vec<KeyExamples> {
             #body
         }
     }
@@ -211,12 +117,9 @@ fn generate_register_types(model: &Model) -> TokenStream {
     }
 }
 
-fn chained_vec(
-    item_ty: TokenStream,
+fn chained_defaults(
     entries: &[TokenStream],
     externals: Vec<&ExternalModel>,
-    call: impl Fn(&syn::Type) -> TokenStream,
-    prefix_fn: TokenStream,
 ) -> TokenStream {
     if externals.is_empty() {
         return quote! { vec![ #(#entries)* ] };
@@ -224,11 +127,12 @@ fn chained_vec(
     let extends = externals.into_iter().map(|ext| {
         let prefix = &ext.prefix;
         let ty = &ext.ext.ty;
-        let call = call(ty);
-        quote_spanned! {ty.span()=> items.extend(#prefix_fn(#prefix, #call)); }
+        quote_spanned! {ty.span()=>
+            items.extend(prefix_defaults(#prefix, <#ty as ConfigSchema>::defaults(config_dir)));
+        }
     });
     quote! {
-        let mut items: Vec<#item_ty> = vec![ #(#entries)* ];
+        let mut items: Vec<FieldDefault> = vec![ #(#entries)* ];
         #(#extends)*
         items
     }
@@ -270,15 +174,6 @@ mod tests {
                 type Dto = MapperConfigDto;
 
                 fn defaults(config_dir: &std::path::Path) -> Vec<FieldDefault> {
-                    vec![]
-                }
-                fn read_only_keys() -> Vec<std::borrow::Cow<'static, str>> {
-                    vec![]
-                }
-                fn aliases() -> Vec<DeprecatedKey> {
-                    vec![]
-                }
-                fn examples() -> Vec<KeyExamples> {
                     vec![]
                 }
                 fn register_types(registry: &mut AppendRemoveRegistry) {
@@ -539,138 +434,6 @@ mod tests {
             }
         };
         assert_eq(&defaults_fn(&input), &expected);
-    }
-
-    #[test]
-    fn readonly_fields_collected() {
-        let input: Configuration = parse_quote!(
-            Test {
-                c8y: {
-                    proxy: {
-                        #[tedge_config(readonly)]
-                        port: u16,
-                    },
-                },
-            }
-        );
-        let generated = generate_read_only_keys(&Model::new(&input));
-        let expected: TokenStream = parse_quote! {
-            fn read_only_keys() -> Vec<std::borrow::Cow<'static, str>> {
-                vec!["c8y.proxy.port".into(),]
-            }
-        };
-        assert_eq(&generated, &expected);
-    }
-
-    #[test]
-    fn external_schema_read_only_keys_are_remapped() {
-        let input: Configuration = parse_quote!(
-            Test {
-                device: extern MapperDeviceConfig,
-            }
-        );
-        let generated = generate_read_only_keys(&Model::new(&input));
-        let expected: TokenStream = parse_quote! {
-            fn read_only_keys() -> Vec<std::borrow::Cow<'static, str>> {
-                let mut items: Vec<std::borrow::Cow<'static, str>> = vec![];
-                items.extend(prefix_keys(
-                    "device",
-                    <MapperDeviceConfig as ConfigSchema>::read_only_keys(),
-                ));
-                items
-            }
-        };
-        assert_eq(&generated, &expected);
-    }
-
-    #[test]
-    fn deprecated_keys_collected() {
-        let input: Configuration = parse_quote!(
-            Test {
-                mqtt: {
-                    #[tedge_config(deprecated_key = "mqtt.external.port")]
-                    port: u16,
-                },
-            }
-        );
-        let generated = generate_aliases(&Model::new(&input));
-        let expected: TokenStream = parse_quote! {
-            fn aliases() -> Vec<DeprecatedKey> {
-                vec![
-                    DeprecatedKey { old: "mqtt.external.port".into(), new: "mqtt.port".into() },
-                ]
-            }
-        };
-        assert_eq(&generated, &expected);
-    }
-
-    #[test]
-    fn external_schema_aliases_are_remapped() {
-        let input: Configuration = parse_quote!(
-            Test {
-                device: extern MapperDeviceConfig,
-            }
-        );
-        let generated = generate_aliases(&Model::new(&input));
-        let expected: TokenStream = parse_quote! {
-            fn aliases() -> Vec<DeprecatedKey> {
-                let mut items: Vec<DeprecatedKey> = vec![];
-                items.extend(prefix_aliases(
-                    "device",
-                    <MapperDeviceConfig as ConfigSchema>::aliases(),
-                ));
-                items
-            }
-        };
-        assert_eq(&generated, &expected);
-    }
-
-    #[test]
-    fn examples_collected_for_fields() {
-        let input: Configuration = parse_quote!(
-            Test {
-                c8y: {
-                    #[tedge_config(example = "your-tenant.cumulocity.com")]
-                    url: String,
-                },
-                device: {
-                    #[tedge_config(example = "my-device", example = "AINA123")]
-                    id: String,
-                    name: String,
-                },
-            }
-        );
-        let generated = generate_examples(&Model::new(&input));
-        let expected: TokenStream = parse_quote! {
-            fn examples() -> Vec<KeyExamples> {
-                vec![
-                    ("c8y.url".into(), ["your-tenant.cumulocity.com"].as_slice()),
-                    ("device.id".into(), ["my-device", "AINA123"].as_slice()),
-                ]
-            }
-        };
-        assert_eq(&generated, &expected);
-    }
-
-    #[test]
-    fn external_schema_examples_are_remapped() {
-        let input: Configuration = parse_quote!(
-            Test {
-                device: extern MapperDeviceConfig,
-            }
-        );
-        let generated = generate_examples(&Model::new(&input));
-        let expected: TokenStream = parse_quote! {
-            fn examples() -> Vec<KeyExamples> {
-                let mut items: Vec<KeyExamples> = vec![];
-                items.extend(prefix_examples(
-                    "device",
-                    <MapperDeviceConfig as ConfigSchema>::examples(),
-                ));
-                items
-            }
-        };
-        assert_eq(&generated, &expected);
     }
 
     #[test]

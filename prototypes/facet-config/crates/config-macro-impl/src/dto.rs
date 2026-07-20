@@ -1,6 +1,10 @@
 //! Generates the form used to deserialize and edit stored configuration.
 //!
 //! Its fields are optional so stored values remain distinct from defaults.
+//! Read-only markers, deprecated key aliases, and example values are emitted
+//! as facet attributes (`tedge::readonly`, `tedge::deprecated_key`,
+//! `tedge::example`) so the runtime discovers them via shape-tree walks
+//! instead of explicit codegen tables.
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
@@ -68,6 +72,15 @@ fn generate_leaf_field(field: &ConfigField) -> TokenStream {
     if let Some(rename) = &field.rename {
         extra_attrs.push(quote! { #[facet(rename = #rename)] });
         extra_attrs.push(quote! { #[serde(rename = #rename)] });
+    }
+    if field.readonly {
+        extra_attrs.push(quote! { #[facet(tedge::readonly)] });
+    }
+    if let Some(deprecated_key) = &field.deprecated_key {
+        extra_attrs.push(quote! { #[facet(tedge::deprecated_key = #deprecated_key)] });
+    }
+    for example in &field.examples {
+        extra_attrs.push(quote! { #[facet(tedge::example = #example)] });
     }
 
     let field_ty = quote_spanned! {ty.span()=> Option<#ty> };
@@ -289,6 +302,94 @@ mod tests {
                 /// Device identity shared across mappers
                 #[serde(default, skip_serializing_if = "Option::is_none")]
                 pub device: Option<<shared::MapperDeviceConfig as ConfigSchema>::Dto>,
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn readonly_field_gets_facet_attr() {
+        let input: Configuration = parse_quote!(
+            Test {
+                mqtt: {
+                    #[tedge_config(readonly)]
+                    port: u16,
+                },
+            }
+        );
+        let generated = generate(&input);
+        let expected: TokenStream = parse_quote! {
+            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+            #[facet(type_tag = "config_group")]
+            pub struct TestConfigDto {
+                #[serde(default, skip_serializing_if = "Option::is_none")]
+                pub mqtt: Option<MqttConfigDto>,
+            }
+
+            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+            #[facet(type_tag = "config_group")]
+            pub struct MqttConfigDto {
+                #[facet(tedge::readonly)]
+                pub port: Option<u16>,
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn deprecated_key_field_gets_facet_attr() {
+        let input: Configuration = parse_quote!(
+            Test {
+                mqtt: {
+                    #[tedge_config(deprecated_key = "mqtt.external.port")]
+                    port: u16,
+                },
+            }
+        );
+        let generated = generate(&input);
+        let expected: TokenStream = parse_quote! {
+            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+            #[facet(type_tag = "config_group")]
+            pub struct TestConfigDto {
+                #[serde(default, skip_serializing_if = "Option::is_none")]
+                pub mqtt: Option<MqttConfigDto>,
+            }
+
+            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+            #[facet(type_tag = "config_group")]
+            pub struct MqttConfigDto {
+                #[facet(tedge::deprecated_key = "mqtt.external.port")]
+                pub port: Option<u16>,
+            }
+        };
+        assert_eq(&generated, &expected);
+    }
+
+    #[test]
+    fn example_fields_get_facet_attrs() {
+        let input: Configuration = parse_quote!(
+            Test {
+                device: {
+                    #[tedge_config(example = "my-device", example = "AINA123")]
+                    id: String,
+                },
+            }
+        );
+        let generated = generate(&input);
+        let expected: TokenStream = parse_quote! {
+            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+            #[facet(type_tag = "config_group")]
+            pub struct TestConfigDto {
+                #[serde(default, skip_serializing_if = "Option::is_none")]
+                pub device: Option<DeviceConfigDto>,
+            }
+
+            #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+            #[facet(type_tag = "config_group")]
+            pub struct DeviceConfigDto {
+                #[facet(tedge::example = "my-device")]
+                #[facet(tedge::example = "AINA123")]
+                pub id: Option<String>,
             }
         };
         assert_eq(&generated, &expected);

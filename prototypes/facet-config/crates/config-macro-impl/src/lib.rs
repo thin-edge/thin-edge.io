@@ -29,9 +29,26 @@ pub fn generate_configuration(input: TokenStream) -> TokenStream {
     let reader_tokens = reader::generate_reader(&model);
     let schema_tokens = schema::generate_schema(&model);
 
+    let mod_name = quote::format_ident!(
+        "__tedge_generated_{}",
+        config.name.to_string().to_lowercase()
+    );
+    let re_exports: Vec<_> = model
+        .root
+        .all_idents()
+        .into_iter()
+        .map(|id| quote! { pub use #mod_name::#id; })
+        .collect();
+
     quote! {
-        #dto_tokens
-        #reader_tokens
-        #schema_tokens
+        mod #mod_name {
+            use super::*;
+            use ::facet_config_runtime as tedge;
+
+            #dto_tokens
+            #reader_tokens
+            #schema_tokens
+        }
+        #(#re_exports)*
     }
 }

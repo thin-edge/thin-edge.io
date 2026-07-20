@@ -81,6 +81,17 @@ impl<'a> GroupModel<'a> {
         externals
     }
 
+    /// All generated struct idents (DTO + reader) in the tree.
+    pub fn all_idents(&self) -> Vec<&syn::Ident> {
+        let mut idents = vec![&self.dto_ident, &self.reader_ident];
+        for item in &self.items {
+            if let ItemModel::Group(child) = item {
+                idents.extend(child.group.all_idents());
+            }
+        }
+        idents
+    }
+
     fn collect<'m>(
         &'m self,
         fields: &mut Vec<&'m FieldModel<'a>>,
