@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "crates/common/*",
+    "crates/common/tedge_config_engine/macro",
+    "crates/common/tedge_config_engine/macro_impl",
     "crates/core/*",
     "crates/extensions/*",
     "crates/tests/*",
@@ -56,6 +58,9 @@ tedge-write = { path = "crates/core/tedge_write" }
 tedge_actors = { path = "crates/core/tedge_actors" }
 tedge_api = { path = "crates/core/tedge_api" }
 tedge_config = { path = "crates/common/tedge_config" }
+tedge_config_engine = { path = "crates/common/tedge_config_engine" }
+tedge_config_engine-impl = { path = "crates/common/tedge_config_engine/macro_impl" }
+tedge_config_engine-macro = { path = "crates/common/tedge_config_engine/macro" }
 tedge_config_macros = { path = "crates/common/tedge_config_macros" }
 tedge_config_macros-impl = { path = "crates/common/tedge_config_macros/impl" }
 tedge_config_manager = { path = "crates/extensions/tedge_config_manager" }
@@ -104,7 +109,7 @@ axum-server = { version = "0.7.1", features = ["tls-rustls-no-provider"] }
 backoff = { version = "0.4", features = ["tokio"] }
 base64 = "0.22"
 bytes = "1.11"
-camino = "1.1"
+camino = "1.2"
 cap = "0.1"
 chumsky = "0.12"
 clap = { version = "4.5", features = [
@@ -121,6 +126,8 @@ darling = "0.21"
 doku = "0.21"
 easy_reader = "0.5"
 env_logger = "0.11"
+facet = { version = "0.50.0-rc.5", features = ["camino", "net", "nonzero"] }
+facet-reflect = "0.50.0-rc.5"
 fastrand = "2.0"
 figment = { version = "0.10" }
 filetime = "0.2"

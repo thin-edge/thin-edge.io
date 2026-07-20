@@ -1,0 +1,5 @@
+error: Unknown field: `read_only`. Did you mean `readonly`?
+ --> tests/compile_fail/unknown_field_attribute.rs:7:28
+  |
+7 |             #[tedge_config(read_only)]
+  |                            ^^^^^^^^^

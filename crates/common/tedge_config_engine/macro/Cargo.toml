@@ -1,0 +1,25 @@
+[package]
+name = "tedge_config_engine-macro"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+tedge_config_engine-impl = { workspace = true }
+
+[dev-dependencies]
+facet = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tedge_config_engine = { workspace = true }
+toml = { workspace = true }
+trybuild = "1"
+
+[lints]
+workspace = true
