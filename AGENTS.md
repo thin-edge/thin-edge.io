@@ -11,7 +11,7 @@ thin-edge.io is an open-source, cloud-agnostic edge framework for resource-const
 - MQTT as the primary inter-process communication mechanism
 - Plugin system for extensibility
 - Designed for resource-constrained devices (low RAM, embedded Linux)
-- Minimum Rust version: 1.85
+- Minimum Rust version: 1.92
 
 ## Common Commands
 
