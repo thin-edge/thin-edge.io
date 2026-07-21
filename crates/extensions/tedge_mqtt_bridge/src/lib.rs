@@ -71,6 +71,14 @@ pub use persist::BridgeConfigVisitor;
 
 const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
 
+/// Connection timeout for the cloud bridge connection.
+///
+/// This must be generous enough to accommodate a slow TLS handshake when the client private key is
+/// held on an HSM/TPM: signing the `CertificateVerify` (and reading the key type beforehand) can
+/// take several seconds on slow tokens, and rumqttc's default connection timeout (5s) is not enough,
+/// causing the connection attempt to abort with `NetworkTimeout` before the handshake completes.
+const CLOUD_CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
+
 macro_rules! log_event {
     // Default case - log as info
     ($prefix:ident, $fmt:literal $($args:tt)*) => {
@@ -151,9 +159,15 @@ impl MqttBridgeActorBuilder {
         let in_flight: u16 = 100;
         cloud_config.set_inflight(in_flight * 5);
         let (local_client, local_event_loop) =
-            LoggingAsyncClient::new(local_config, in_flight.into(), "local".into());
-        let (cloud_client, cloud_event_loop) =
-            LoggingAsyncClient::new(cloud_config, in_flight.into(), "cloud".into());
+            LoggingAsyncClient::new(local_config, in_flight.into(), "local".into(), None);
+        // The cloud connection may sign the TLS handshake using a key on an HSM/TPM, which can be
+        // slow, so give it a longer connection timeout than rumqttc's default (see the constant).
+        let (cloud_client, cloud_event_loop) = LoggingAsyncClient::new(
+            cloud_config,
+            in_flight.into(),
+            "cloud".into(),
+            Some(CLOUD_CONNECTION_TIMEOUT),
+        );
 
         let local_topics: Vec<_> = rules
             .local_subscriptions()
