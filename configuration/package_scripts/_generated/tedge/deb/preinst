@@ -7,9 +7,7 @@ command_exists() {
 
 group_exists() {
     name="$1"
-    if command_exists id; then
-        id -g "$name" >/dev/null 2>&1
-    elif command_exists getent; then
+    if command_exists getent; then
         getent group "$name" >/dev/null 2>&1
     else
         # Fallback to plain grep, as busybox does not have getent
