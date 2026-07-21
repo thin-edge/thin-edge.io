@@ -305,7 +305,9 @@ case "$ACTION" in
             echo "Using Token URL: $TOKEN_URL" >&2
         fi
 
-        systemctl enable tedge-p11-server.socket ||:
+        if command -V systemctl >/dev/null 2>&1; then
+            systemctl enable tedge-p11-server.socket ||:
+        fi
 
         find_pkcs11_module
         configure_tedge
