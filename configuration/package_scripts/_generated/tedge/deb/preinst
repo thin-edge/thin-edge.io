@@ -77,9 +77,18 @@ fi
 if [ "$TEDGE_USER" = "tedge" ]; then
     if ! user_exists tedge; then
         if command_exists useradd; then
-            useradd --system --no-create-home --shell /sbin/nologin --gid "$TEDGE_GROUP" "$TEDGE_USER"
+            if group_exists "$TEDGE_GROUP"; then
+                useradd --system --no-create-home --shell /sbin/nologin --gid "$TEDGE_GROUP" "$TEDGE_USER"
+            else
+                useradd --system --no-create-home --shell /sbin/nologin "$TEDGE_USER"
+            fi
+            
         elif command_exists adduser; then
-            adduser -g "" -H -D tedge -G tedge
+            if group_exists "$TEDGE_GROUP"; then
+                adduser -g "" -H -D "$TEDGE_USER" -G "$TEDGE_GROUP"
+            else
+                adduser -g "" -H -D "$TEDGE_USER"
+            fi
         else
             echo "WARNING: Could not create user: tedge" >&2
         fi
