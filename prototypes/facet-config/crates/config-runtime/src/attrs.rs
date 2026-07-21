@@ -15,6 +15,9 @@ facet::define_attr_grammar! {
         /// Marks a field as read-only (cannot be changed via `config set`).
         Readonly,
 
+        /// Marks the root DTO struct of a `define_config!` invocation.
+        SchemaRoot,
+
         /// Maps a deprecated key name to this field's canonical key.
         DeprecatedKey(&'static str),
 

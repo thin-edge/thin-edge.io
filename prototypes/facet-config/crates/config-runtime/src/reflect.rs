@@ -68,7 +68,11 @@ impl KeyAliases {
     /// Builds the alias table by walking the DTO shape tree.
     pub fn from_shape(shape: &'static Shape) -> Self {
         let mut aliases = Vec::new();
-        collect_aliases(shape, "", &mut aliases);
+        let ctx = AliasWalkContext {
+            walk: "",
+            schema_root: "",
+        };
+        collect_aliases(shape, &ctx, &mut aliases);
         Self { aliases }
     }
 
@@ -690,15 +694,30 @@ fn field_examples(field: &facet::Field) -> Vec<&'static str> {
         .collect()
 }
 
+/// Tracks key prefixes during the shape-tree walk in [`collect_aliases`].
+///
+/// `walk` is the full dotted prefix accumulated field by field.
+/// `schema_root` is the prefix at which the current `define_config!`
+/// schema was entered — deprecated key values are full paths within
+/// their own schema and need this prefix to become absolute.
+struct AliasWalkContext<'a> {
+    walk: &'a str,
+    schema_root: &'a str,
+}
+
 /// Walks the DTO shape tree collecting `tedge::deprecated_key` aliases.
-fn collect_aliases(shape: &'static Shape, prefix: &str, aliases: &mut Vec<DeprecatedKey>) {
+fn collect_aliases(
+    shape: &'static Shape,
+    ctx: &AliasWalkContext<'_>,
+    aliases: &mut Vec<DeprecatedKey>,
+) {
     let fields = match get_struct_fields(shape) {
         Some(f) => f,
         None => return,
     };
 
     for field in fields {
-        let field_key = dotted_key(prefix, field_key_name(field));
+        let field_key = dotted_key(ctx.walk, field_key_name(field));
 
         let inner_shape = if let Def::Option(opt_def) = field.shape().def {
             opt_def.t
@@ -709,16 +728,32 @@ fn collect_aliases(shape: &'static Shape, prefix: &str, aliases: &mut Vec<Deprec
         if matches!(inner_shape.def, Def::Map(_)) {
             continue;
         } else if is_config_group(inner_shape) {
-            collect_aliases(inner_shape, &field_key, aliases);
+            let schema_root = if is_schema_root(inner_shape) {
+                &field_key
+            } else {
+                ctx.schema_root
+            };
+            let child = AliasWalkContext {
+                walk: &field_key,
+                schema_root,
+            };
+            collect_aliases(inner_shape, &child, aliases);
         } else if let Some(attr) = field.get_attr(Some(attrs::NS), "deprecated_key") {
             if let Some(&old_key) = attr.get_as::<&str>() {
                 aliases.push(DeprecatedKey {
-                    old: old_key.to_owned(),
+                    old: dotted_key(ctx.schema_root, old_key),
                     new: field_key,
                 });
             }
         }
     }
+}
+
+fn is_schema_root(shape: &Shape) -> bool {
+    shape
+        .attributes
+        .iter()
+        .any(|a| a.ns == Some(attrs::NS) && a.key == "schema_root")
 }
 
 fn list_keys_recursive(

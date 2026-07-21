@@ -129,8 +129,8 @@ mod external_schema {
     fn aliases_are_found_via_shape_tree() {
         let aliases = KeyAliases::from_shape(host_shape());
         assert_eq!(
-            aliases.resolve("identifier"),
-            ("device.url".to_owned(), Some("identifier"))
+            aliases.resolve("device.identifier"),
+            ("device.url".to_owned(), Some("device.identifier"))
         );
     }
 

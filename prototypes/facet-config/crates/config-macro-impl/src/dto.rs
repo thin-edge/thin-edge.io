@@ -13,12 +13,18 @@ use syn::spanned::Spanned;
 use crate::input::ConfigField;
 use crate::model::{GroupModel, ItemModel, Model};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GroupKind {
+    SchemaRoot,
+    Nested,
+}
+
 pub fn generate_dto(model: &Model) -> TokenStream {
-    let structs = generate_group(&model.root);
+    let structs = generate_group(&model.root, GroupKind::SchemaRoot);
     quote! { #(#structs)* }
 }
 
-fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
+fn generate_group(group: &GroupModel, kind: GroupKind) -> Vec<TokenStream> {
     let mut nested = Vec::new();
     let mut fields = Vec::new();
 
@@ -34,7 +40,7 @@ fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
                     #[serde(default, skip_serializing_if = "Option::is_none")]
                     pub #ident: Option<#ty>,
                 });
-                nested.extend(generate_group(&child.group));
+                nested.extend(generate_group(&child.group, GroupKind::Nested));
             }
             ItemModel::External(ext) => {
                 let ident = &ext.ext.ident;
@@ -51,10 +57,14 @@ fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
         }
     }
 
+    let schema_root_attr = (kind == GroupKind::SchemaRoot)
+        .then(|| quote! { #[facet(tedge::schema_root)] });
+
     let struct_ident = &group.dto_ident;
     let mut structs = vec![quote! {
         #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
         #[facet(type_tag = "config_group")]
+        #schema_root_attr
         pub struct #struct_ident {
             #(#fields)*
         }
