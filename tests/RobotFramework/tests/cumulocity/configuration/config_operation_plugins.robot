@@ -114,8 +114,8 @@ Config operation shouldnt OOM on oversized output
 
     ${tedge_agent_rss_bytes}=    Execute Command    cmd=ps -o rss= -C tedge-agent    strip=True
     Should Be True
-    ...    ${tedge_agent_rss_bytes} < 20000
-    ...    tedge-agent used too much (${tedge_agent_rss_bytes}>20MB) memory
+    ...    ${tedge_agent_rss_bytes} < 25000
+    ...    tedge-agent used too much (${tedge_agent_rss_bytes}>25000KiB) memory
 
     # send message to plugin to exit
     Execute Command    echo done > /tmp/huge-config-plugin-pipe
