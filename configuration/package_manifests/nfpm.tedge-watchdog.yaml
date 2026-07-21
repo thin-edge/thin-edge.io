@@ -70,3 +70,10 @@ overrides:
       postinstall: configuration/package_scripts/_generated/tedge-watchdog/deb/postinst
       preremove: configuration/package_scripts/_generated/tedge-watchdog/deb/prerm
       postremove: configuration/package_scripts/_generated/tedge-watchdog/deb/postrm
+
+  ipk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-watchdog/ipk/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-watchdog/ipk/postinst
+      preremove: configuration/package_scripts/_generated/tedge-watchdog/ipk/prerm
+      postremove: configuration/package_scripts/_generated/tedge-watchdog/ipk/postrm

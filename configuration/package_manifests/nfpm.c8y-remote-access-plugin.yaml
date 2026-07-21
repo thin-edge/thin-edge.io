@@ -83,3 +83,10 @@ overrides:
       postinstall: configuration/package_scripts/_generated/c8y-remote-access-plugin/deb/postinst
       preremove: configuration/package_scripts/_generated/c8y-remote-access-plugin/deb/prerm
       postremove: configuration/package_scripts/_generated/c8y-remote-access-plugin/deb/postrm
+
+  ipk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/c8y-remote-access-plugin/ipk/preinst
+      postinstall: configuration/package_scripts/_generated/c8y-remote-access-plugin/ipk/postinst
+      preremove: configuration/package_scripts/_generated/c8y-remote-access-plugin/ipk/prerm
+      postremove: configuration/package_scripts/_generated/c8y-remote-access-plugin/ipk/postrm

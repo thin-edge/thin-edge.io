@@ -2,7 +2,8 @@
     "types": [
         "apk",
         "deb",
-        "rpm"
+        "rpm",
+        "ipk"
     ],
     "packages": {
         "tedge": {},

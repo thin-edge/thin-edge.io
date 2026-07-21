@@ -58,3 +58,10 @@ overrides:
       postinstall: configuration/package_scripts/_generated/c8y-firmware-plugin/deb/postinst
       preremove: configuration/package_scripts/_generated/c8y-firmware-plugin/deb/prerm
       postremove: configuration/package_scripts/_generated/c8y-firmware-plugin/deb/postrm
+
+  ipk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/c8y-firmware-plugin/ipk/preinst
+      postinstall: configuration/package_scripts/_generated/c8y-firmware-plugin/ipk/postinst
+      preremove: configuration/package_scripts/_generated/c8y-firmware-plugin/ipk/prerm
+      postremove: configuration/package_scripts/_generated/c8y-firmware-plugin/ipk/postrm

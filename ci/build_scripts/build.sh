@@ -66,6 +66,8 @@ Flags:
     --deb-arch <string>     Override the architecture used for the deb package
     --rpm-arch <string>     Override the architecture used for the rpm package
     --apk-arch <string>     Override the architecture used for the apk package
+    --ipk-arch <string>     Override the architecture used for the ipk package
+                            e.g. OpenWRT/opkg feeds mandate values such as 'aarch64_cortex-a53'
 
 Env:
     GIT_SEMVER      Use a custom version when building the packages. Only use for dev/testing purposes!
@@ -95,6 +97,9 @@ Examples:
     export GIT_SEMVER=0.9.0-experiment-0.1
     $0
     # Build using an manual version
+
+    $0 aarch64-unknown-linux-musl --package-types ipk --ipk-arch aarch64_cortex-a53
+    # Build only the ipk packages using an OpenWRT specific architecture
 EOF
 }
 
@@ -149,7 +154,7 @@ do
             PACKAGE_ARGS+=("$1" "$2")
             shift
             ;;
-        --deb-arch|--rpm-arch|--apk-arch)
+        --deb-arch|--rpm-arch|--apk-arch|--ipk-arch)
             PACKAGE_ARGS+=("$1" "$2")
             shift
             ;;

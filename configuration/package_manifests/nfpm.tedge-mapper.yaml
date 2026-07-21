@@ -265,3 +265,10 @@ overrides:
       postinstall: configuration/package_scripts/_generated/tedge-mapper/deb/postinst
       preremove: configuration/package_scripts/_generated/tedge-mapper/deb/prerm
       postremove: configuration/package_scripts/_generated/tedge-mapper/deb/postrm
+
+  ipk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-mapper/ipk/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-mapper/ipk/postinst
+      preremove: configuration/package_scripts/_generated/tedge-mapper/ipk/prerm
+      postremove: configuration/package_scripts/_generated/tedge-mapper/ipk/postrm
