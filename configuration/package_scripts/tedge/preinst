@@ -7,9 +7,7 @@ command_exists() {
 
 group_exists() {
     name="$1"
-    if command_exists id; then
-        id -g "$name" >/dev/null 2>&1
-    elif command_exists getent; then
+    if command_exists getent; then
         getent group "$name" >/dev/null 2>&1
     else
         # Fallback to plain grep, as busybox does not have getent
@@ -77,9 +75,18 @@ fi
 if [ "$TEDGE_USER" = "tedge" ]; then
     if ! user_exists tedge; then
         if command_exists useradd; then
-            useradd --system --no-create-home --shell /sbin/nologin --gid "$TEDGE_GROUP" "$TEDGE_USER"
+            if group_exists "$TEDGE_GROUP"; then
+                useradd --system --no-create-home --shell /sbin/nologin --gid "$TEDGE_GROUP" "$TEDGE_USER"
+            else
+                useradd --system --no-create-home --shell /sbin/nologin "$TEDGE_USER"
+            fi
+            
         elif command_exists adduser; then
-            adduser -g "" -H -D tedge -G tedge
+            if group_exists "$TEDGE_GROUP"; then
+                adduser -g "" -H -D "$TEDGE_USER" -G "$TEDGE_GROUP"
+            else
+                adduser -g "" -H -D "$TEDGE_USER"
+            fi
         else
             echo "WARNING: Could not create user: tedge" >&2
         fi
