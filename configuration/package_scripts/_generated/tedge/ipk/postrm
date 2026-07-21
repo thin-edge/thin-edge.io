@@ -1,0 +1,117 @@
+#!/bin/sh
+set -e
+
+command_exists() {
+    command -V "$1" >/dev/null 2>&1
+}
+
+group_exists() {
+    name="$1"
+    if command_exists id; then
+        id -g "$name" >/dev/null 2>&1
+    elif command_exists getent; then
+        getent group "$name" >/dev/null 2>&1
+    else
+        # Fallback to plain grep, as busybox does not have getent
+        grep -q "^${name}:" /etc/group
+    fi
+}
+
+user_exists() {
+    name="$1"
+    if command_exists id; then
+        id -u "$name" >/dev/null 2>&1
+    elif command_exists getent; then
+        getent passwd "$name" >/dev/null 2>&1
+    else
+        # Fallback to plain grep, as busybox does not have getent
+        grep -q "^${name}:" /etc/passwd
+    fi
+}
+
+remove_user_tedge() {
+    if user_exists tedge; then
+        if command_exists userdel; then
+            userdel tedge
+        elif command_exists deluser; then
+            deluser tedge
+        else
+            echo "WARNING: Could not delete group: tedge" >&2
+        fi
+    fi
+}
+
+remove_tedge_group() {
+    if group_exists tedge; then
+        if command_exists groupdel; then
+            groupdel tedge
+        elif command_exists delgroup; then
+            delgroup tedge
+        else
+            echo "WARNING: Could not delete group: tedge" >&2
+        fi
+    fi
+}
+
+remove_sudoers_file() {
+    if [ -f "/etc/sudoers.d/tedge" ]; then
+        rm /etc/sudoers.d/tedge
+    fi
+
+    if [ -f "/etc/sudoers.d/tedge-nopasswd" ]; then
+        rm /etc/sudoers.d/tedge-nopasswd
+    fi
+}
+
+purge_configs() {
+    if [ -d "/etc/tedge" ]; then
+        rm -rf /etc/tedge
+    fi
+}
+
+remove_mosquitto_edit() {
+    if [ -f "/etc/mosquitto/mosquitto.conf" ]; then
+        sed -i '/include_dir \/etc\/tedge\/mosquitto-conf/d' /etc/mosquitto/mosquitto.conf
+    fi
+}
+
+remove_apparmor_edit() {
+    APPARMOR_LOCAL_MOSQUITTO=/etc/apparmor.d/local/mosquitto
+    if [ -f "$APPARMOR_LOCAL_MOSQUITTO" ]; then
+        sed -i '/# BEGIN tedge/,/# END tedge/d' "$APPARMOR_LOCAL_MOSQUITTO"
+        # Remove the file entirely if nothing else was in it
+        if ! grep -qv '^[[:space:]]*$' "$APPARMOR_LOCAL_MOSQUITTO" 2>/dev/null; then
+            rm -f "$APPARMOR_LOCAL_MOSQUITTO"
+        fi
+        if [ -x /usr/sbin/apparmor_parser ] && [ -d /sys/kernel/security/apparmor ]; then
+            if [ -f /etc/apparmor.d/mosquitto ]; then
+                apparmor_parser -r /etc/apparmor.d/mosquitto || true
+            fi
+        fi
+    fi
+}
+
+purge_var_log() {
+    if [ -d "/var/log/tedge" ]; then
+        rm -rf /var/log/tedge
+    fi
+}
+
+remove_shell_completion_scripts() {
+    rm -f /usr/share/zsh/vendor-completions/_tedge
+    rm -f /usr/share/bash-completion/completions/tedge
+    rm -f /usr/share/fish/completions/tedge.fish
+}
+
+case "$1" in
+    purge)
+        remove_user_tedge
+        remove_tedge_group
+        remove_mosquitto_edit
+        remove_apparmor_edit
+        remove_sudoers_file
+        purge_configs
+        purge_var_log
+        remove_shell_completion_scripts
+    ;;
+esac
