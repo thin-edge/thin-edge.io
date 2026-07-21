@@ -39,11 +39,18 @@ Flags:
     --help|-h   Show this help
     --version <string>      Use a specific version
     --output <path>         Output directory where the packages will be written to
-    --types <csv_string>    CSV list of packages types. Accepted values: deb, rpm, apk, tarball
+    --package-types <csv_string>    CSV list of packages types. Accepted values: deb, rpm, apk, ipk, tarball
+                                    Alias: --types
+    --deb-arch <string>     Override the architecture used for the deb package
+    --rpm-arch <string>     Override the architecture used for the rpm package
+    --apk-arch <string>     Override the architecture used for the apk package
     --clean                 Clean the output directory before writing any packages to it
 
 Env:
     GIT_SEMVER      Use a custom version when building the packages. Only use for dev/testing purposes!
+    DEB_ARCH        Override the architecture used for the deb package (same as --deb-arch)
+    RPM_ARCH        Override the architecture used for the rpm package (same as --rpm-arch)
+    APK_ARCH        Override the architecture used for the apk package (same as --apk-arch)
 
 Examples:
     $0 build aarch64-unknown-linux-musl tedge tedge-agent tedge-mapper
@@ -70,6 +77,12 @@ PACKAGES=()
 COMMAND=
 PACKAGE_TYPES=
 
+# Package architecture overrides (per package type). If empty, the architecture
+# is derived from the given rust target, see get_package_arch()
+DEB_ARCH="${DEB_ARCH:-}"
+RPM_ARCH="${RPM_ARCH:-}"
+APK_ARCH="${APK_ARCH:-}"
+
 while [ $# -gt 0 ]
 do
     case "$1" in
@@ -81,8 +94,20 @@ do
             VERSION="$2"
             shift
             ;;
-        --types)
+        --package-types|--types)
             PACKAGE_TYPES="$2"
+            shift
+            ;;
+        --deb-arch)
+            DEB_ARCH="$2"
+            shift
+            ;;
+        --rpm-arch)
+            RPM_ARCH="$2"
+            shift
+            ;;
+        --apk-arch)
+            APK_ARCH="$2"
             shift
             ;;
         --clean)
@@ -158,21 +183,22 @@ build_package() {
     # * arm6 => armhf
     # * arm7 => armhf
     if [[ "$PACKAGE_TYPES" =~ deb ]]; then
-        if [ "$package_arch" == "arm6" ]; then
+        if [ "$package_arch" == "arm6" ] && [ -z "$DEB_ARCH" ]; then
             env GIT_SEMVER="${DEB_VERSION:-$GIT_SEMVER}" nfpm "${COMMON_ARGS[@]}" --packager deb --target "${OUTPUT_DIR}/${name}_${GIT_SEMVER}_armv6.deb"
         else
-            env GIT_SEMVER="${DEB_VERSION:-$GIT_SEMVER}" nfpm "${COMMON_ARGS[@]}" --packager deb
+            env GIT_SEMVER="${DEB_VERSION:-$GIT_SEMVER}" PKG_ARCH="${DEB_ARCH:-$package_arch}" nfpm "${COMMON_ARGS[@]}" --packager deb
         fi
     fi
 
     # RPM for CentOS/RHEL/RockyLinux
     if [[ "$PACKAGE_TYPES" =~ rpm ]]; then
-        env GIT_SEMVER="${RPM_VERSION:-$GIT_SEMVER}" nfpm "${COMMON_ARGS[@]}" --packager rpm
+        env GIT_SEMVER="${RPM_VERSION:-$GIT_SEMVER}" PKG_ARCH="${RPM_ARCH:-$package_arch}" nfpm "${COMMON_ARGS[@]}" --packager rpm
     fi
 
     # Alpine
     if [[ "$PACKAGE_TYPES" =~ apk ]]; then
-        env GIT_SEMVER="${APK_VERSION:-$GIT_SEMVER}" RELEASE="r0" nfpm "${COMMON_ARGS[@]}" --packager apk
+        env GIT_SEMVER="${APK_VERSION:-$GIT_SEMVER}" PKG_ARCH="${APK_ARCH:-$package_arch}" RELEASE="r0" nfpm "${COMMON_ARGS[@]}" --packager apk
+    fi
     fi
 }
 
