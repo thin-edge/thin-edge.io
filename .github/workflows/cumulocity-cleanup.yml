@@ -1,0 +1,32 @@
+name: Cumulocity-cleanup
+# Cleanup any Cumulocity resources
+on:
+  # trigger manually
+  workflow_dispatch:
+  # run automatically daily at 23:00 UTC
+  schedule:
+  - cron: "0 23 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Cleanup
+    if: github.repository == 'thin-edge/thin-edge.io'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - uses: reubenmiller/setup-go-c8y-cli@main
+      - name: Delete old certificates
+        run: |
+          echo "Deleting test certificates older than 1 day"
+          c8y devicemanagement certificates list -n --includeAll --filter "notBefore olderthan 1d" --filter "name match (TST|ci_).+" | c8y devicemanagement certificates delete
+          
+          echo "Deleting expired certificates"
+          c8y devicemanagement certificates list -n --includeAll --filter "notAfter olderthan now" | c8y devicemanagement certificates delete
+        env:
+          C8Y_HOST: '${{ secrets.C8Y_BASEURL }}'
+          C8Y_USER: '${{ secrets.C8Y_USER }}'
+          C8Y_PASSWORD: '${{ secrets.C8Y_PASSWORD }}'
