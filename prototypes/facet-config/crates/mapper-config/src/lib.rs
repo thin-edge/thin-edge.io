@@ -109,9 +109,14 @@ impl CloudSchema {
         self,
         config_dir: &std::path::Path,
         name: &str,
+        profile: Option<&str>,
         root: &dyn facet_config_runtime::ops::ConfigOps,
     ) -> Result<LoadedMapper, facet_config_runtime::ConfigError> {
-        let path = mapper_toml_path(config_dir, name);
+        let dir_name = match profile {
+            Some(p) => format!("{name}.{p}"),
+            None => name.to_owned(),
+        };
+        let path = mapper_toml_path(config_dir, &dir_name);
         let root_keys: Vec<String> = root.entries().into_iter().map(|e| e.key).collect();
         let resolve_root = |key: &str| root.read(key, None);
         match self {
@@ -129,6 +134,7 @@ impl CloudSchema {
                         ops.dto(),
                         Some(&resolve_root),
                         name,
+                        profile,
                     )?;
                 Ok(LoadedMapper::C8y(config))
             }
@@ -145,6 +151,7 @@ impl CloudSchema {
                         ops.dto(),
                         Some(&resolve_root),
                         name,
+                        profile,
                     )?;
                 Ok(LoadedMapper::Custom(config))
             }
@@ -186,18 +193,23 @@ pub fn source(
     CloudSchema::resolve(config_dir, name).source(config_dir, name, env)
 }
 
-/// Loads the mapper configuration as as a struct so the code can read the values directly
+/// Loads the mapper configuration as a struct so the code can read the values directly
 ///
+/// `name` is the base cloud name (e.g. `"c8y"`).
+/// `profile` selects a named profile (e.g. `Some("staging")` loads from the
+/// `c8y.staging` mapper directory).
 /// `root` is the root config the mapper's `from_root` defaults fall back to.
-/// Requiring it here means a mapper config cannot be loaded without a root
-/// config, and its `from_root` references are validated against the root
-/// schema before any value is read
 pub fn load(
     config_dir: &std::path::Path,
     name: &str,
+    profile: Option<&str>,
     root: &dyn facet_config_runtime::ops::ConfigOps,
 ) -> Result<LoadedMapper, facet_config_runtime::ConfigError> {
-    CloudSchema::resolve(config_dir, name).load(config_dir, name, root)
+    let dir_name = match profile {
+        Some(p) => format!("{name}.{p}"),
+        None => name.to_owned(),
+    };
+    CloudSchema::resolve(config_dir, &dir_name).load(config_dir, name, profile, root)
 }
 
 /// Rewrites a mapper's TOML file under the schema selected by its current

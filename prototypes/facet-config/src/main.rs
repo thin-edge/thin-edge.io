@@ -491,7 +491,7 @@ mod tests {
         fn reader_returns_default_values_when_unset() {
             let mgr = root_mgr();
             let dto = tedge_config::TEdgeConfigDto::default();
-            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "").unwrap();
+            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "", None).unwrap();
 
             assert_eq!(config.mqtt.port, 1883);
             assert_eq!(config.mqtt.host, "localhost");
@@ -502,7 +502,7 @@ mod tests {
         fn reader_returns_none_for_optional_unset_fields() {
             let mgr = root_mgr();
             let dto = tedge_config::TEdgeConfigDto::default();
-            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "").unwrap();
+            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "", None).unwrap();
 
             assert!(config.device.id.or_none().is_none());
         }
@@ -514,7 +514,7 @@ mod tests {
             mgr.set(&mut dto, "mqtt.port", "9999").unwrap();
             mgr.set(&mut dto, "device.id", "my-device").unwrap();
 
-            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "").unwrap();
+            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "", None).unwrap();
 
             assert_eq!(config.mqtt.port, 9999);
             assert_eq!(
@@ -527,7 +527,7 @@ mod tests {
         fn unset_optional_field_error_names_the_key() {
             let mgr = root_mgr();
             let dto = tedge_config::TEdgeConfigDto::default();
-            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "").unwrap();
+            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "", None).unwrap();
 
             let err = config.device.id.or_config_not_set().unwrap_err();
             assert!(err
@@ -541,7 +541,7 @@ mod tests {
             let mgr = root_mgr();
             let mut dto = tedge_config::TEdgeConfigDto::default();
             mgr.set(&mut dto, "device.id", "my-device").unwrap();
-            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "").unwrap();
+            let config: tedge_config::TEdgeConfig = mgr.build_reader(&dto, None, "", None).unwrap();
 
             assert_eq!(config.device.id.key(), "device.id");
         }
@@ -688,7 +688,7 @@ mod tests {
             let mgr = c8y_mgr();
             let dto = mapper_config::c8y::C8yMapperConfigDto::default();
             let config: mapper_config::c8y::C8yMapperConfig =
-                mgr.build_reader(&dto, Some(&unset_root), "").unwrap();
+                mgr.build_reader(&dto, Some(&unset_root), "", None).unwrap();
 
             assert_eq!(config.proxy.bind.port, 8001);
         }
@@ -698,7 +698,7 @@ mod tests {
             let mgr = mapper_mgr();
             let dto = mapper_config::MapperConfigDto::default();
             let config: mapper_config::MapperConfig =
-                mgr.build_reader(&dto, Some(&unset_root), "").unwrap();
+                mgr.build_reader(&dto, Some(&unset_root), "", None).unwrap();
 
             assert!(config.url.or_none().is_none());
         }
@@ -710,7 +710,7 @@ mod tests {
             mgr.set(&mut dto, "url", "example.com").unwrap();
 
             let config: mapper_config::MapperConfig =
-                mgr.build_reader(&dto, Some(&unset_root), "").unwrap();
+                mgr.build_reader(&dto, Some(&unset_root), "", None).unwrap();
 
             assert_eq!(config.url.or_none().unwrap().to_string(), "example.com:443");
         }
@@ -720,7 +720,7 @@ mod tests {
             let mgr = c8y_mgr();
             let dto = mapper_config::c8y::C8yMapperConfigDto::default();
             let config: mapper_config::c8y::C8yMapperConfig =
-                mgr.build_reader(&dto, Some(&unset_root), "").unwrap();
+                mgr.build_reader(&dto, Some(&unset_root), "", None).unwrap();
 
             assert_eq!(config.proxy.client.port, 8001);
         }
@@ -1337,6 +1337,7 @@ mod tests {
                         })
                     }),
                     "",
+                    None,
                 )
                 .unwrap();
 
@@ -1367,6 +1368,7 @@ mod tests {
                         })
                     }),
                     "",
+                    None,
                 )
                 .unwrap();
 
@@ -1396,7 +1398,7 @@ mod tests {
             let mgr = c8y_mgr();
             let dto = mapper_config::c8y::C8yMapperConfigDto::default();
             let err = mgr
-                .build_reader::<_, mapper_config::c8y::C8yMapperConfig>(&dto, None, "")
+                .build_reader::<_, mapper_config::c8y::C8yMapperConfig>(&dto, None, "", None)
                 .unwrap_err();
             assert!(
                 err.to_string().contains("no root config was supplied"),
@@ -1409,7 +1411,7 @@ mod tests {
             let mgr = c8y_mgr();
             let dto = mapper_config::c8y::C8yMapperConfigDto::default();
             let config: mapper_config::c8y::C8yMapperConfig =
-                mgr.build_reader(&dto, Some(&unset_root), "").unwrap();
+                mgr.build_reader(&dto, Some(&unset_root), "", None).unwrap();
 
             assert_eq!(config.device.cert_path.key(), "device.cert_path");
         }
@@ -1429,6 +1431,7 @@ mod tests {
                         })
                     }),
                     "",
+                    None,
                 )
                 .unwrap();
 
@@ -1463,7 +1466,7 @@ mod tests {
             std::fs::create_dir_all(&mapper_dir).unwrap();
             std::fs::write(mapper_dir.join("mapper.toml"), "cloud_type = \"c8y\"\n").unwrap();
 
-            let loaded = mapper_config::load(dir.path(), "mycloud", root(&dir).as_ref()).unwrap();
+            let loaded = mapper_config::load(dir.path(), "mycloud", None, root(&dir).as_ref()).unwrap();
             assert!(
                 matches!(loaded, mapper_config::LoadedMapper::C8y(_)),
                 "expected C8y variant, got {loaded:?}"
@@ -1477,7 +1480,7 @@ mod tests {
             std::fs::create_dir_all(&mapper_dir).unwrap();
             std::fs::write(mapper_dir.join("mapper.toml"), "").unwrap();
 
-            let loaded = mapper_config::load(dir.path(), "foo", root(&dir).as_ref()).unwrap();
+            let loaded = mapper_config::load(dir.path(), "foo", None, root(&dir).as_ref()).unwrap();
             assert!(
                 matches!(loaded, mapper_config::LoadedMapper::Custom(_)),
                 "expected Custom variant, got {loaded:?}"
@@ -1492,7 +1495,7 @@ mod tests {
             std::fs::write(mapper_dir.join("mapper.toml"), "cloud_type = \"c8y\"\n").unwrap();
 
             let mapper_config::LoadedMapper::C8y(config) =
-                mapper_config::load(dir.path(), "mycloud", root(&dir).as_ref()).unwrap()
+                mapper_config::load(dir.path(), "mycloud", None, root(&dir).as_ref()).unwrap()
             else {
                 panic!("expected C8y variant");
             };
@@ -1507,7 +1510,7 @@ mod tests {
             std::fs::write(mapper_dir.join("mapper.toml"), "").unwrap();
 
             let mapper_config::LoadedMapper::Custom(config) =
-                mapper_config::load(dir.path(), "foo", root(&dir).as_ref()).unwrap()
+                mapper_config::load(dir.path(), "foo", None, root(&dir).as_ref()).unwrap()
             else {
                 panic!("expected Custom variant");
             };
@@ -1521,7 +1524,7 @@ mod tests {
             std::fs::create_dir_all(&mapper_dir).unwrap();
             std::fs::write(mapper_dir.join("mapper.toml"), "").unwrap();
 
-            let loaded = mapper_config::load(dir.path(), "c8y", root(&dir).as_ref()).unwrap();
+            let loaded = mapper_config::load(dir.path(), "c8y", None, root(&dir).as_ref()).unwrap();
             assert!(
                 matches!(loaded, mapper_config::LoadedMapper::C8y(_)),
                 "expected C8y variant for builtin name, got {loaded:?}"
@@ -1536,13 +1539,42 @@ mod tests {
             std::fs::write(mapper_dir.join("mapper.toml"), "").unwrap();
 
             let mapper_config::LoadedMapper::C8y(config) =
-                mapper_config::load(dir.path(), "c8y", root(&dir).as_ref()).unwrap()
+                mapper_config::load(dir.path(), "c8y", None, root(&dir).as_ref()).unwrap()
             else {
                 panic!("expected C8y variant");
             };
             let err = config.url.or_config_not_set().unwrap_err();
             assert!(err.to_string().contains("A value for 'c8y.url' is missing"));
             assert!(err.to_string().contains("tedge config set c8y.url"));
+        }
+
+        #[test]
+        fn profiled_mapper_error_includes_profile() {
+            let dir = tempfile::TempDir::new().unwrap();
+            let mapper_dir = dir.path().join("mappers").join("c8y.staging");
+            std::fs::create_dir_all(&mapper_dir).unwrap();
+            std::fs::write(mapper_dir.join("mapper.toml"), "").unwrap();
+
+            let mapper_config::LoadedMapper::C8y(config) = mapper_config::load(
+                dir.path(),
+                "c8y",
+                Some("staging"),
+                root(&dir).as_ref(),
+            )
+            .unwrap()
+            else {
+                panic!("expected C8y variant");
+            };
+            let err = config.url.or_config_not_set().unwrap_err();
+            let msg = err.to_string();
+            assert!(
+                msg.contains("A value for 'c8y.url' is missing (profile 'staging')"),
+                "unexpected error: {msg}"
+            );
+            assert!(
+                msg.contains("--profile staging"),
+                "expected --profile hint: {msg}"
+            );
         }
 
         fn root(dir: &tempfile::TempDir) -> Box<dyn facet_config_runtime::ops::ConfigOps> {

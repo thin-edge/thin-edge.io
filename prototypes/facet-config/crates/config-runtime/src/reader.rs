@@ -15,16 +15,18 @@ pub fn build_reader<Dto: for<'a> Facet<'a>, Reader: for<'a> Facet<'a>>(
     defaults: &DefaultsRegistry,
     root_resolver: RootResolver<'_>,
 ) -> Result<Reader, ConfigError> {
-    build_reader_at(dto, defaults, root_resolver, "")
+    build_reader_at(dto, defaults, root_resolver, "", None)
 }
 
 /// Builds a reader with [OptionalConfig](crate::OptionalConfig) keys shown under
-/// `display_prefix`, such as `mappers.c8y.`.
+/// `display_prefix` (e.g. `"c8y"`), with an optional `profile` attached to
+/// each [OptionalConfig](crate::OptionalConfig) for user-facing messages.
 pub fn build_reader_at<Dto: for<'a> Facet<'a>, Reader: for<'a> Facet<'a>>(
     dto: &Dto,
     defaults: &DefaultsRegistry,
     root_resolver: RootResolver<'_>,
     display_prefix: &str,
+    profile: Option<&str>,
 ) -> Result<Reader, ConfigError> {
     let partial =
         Partial::alloc::<Reader>().map_err(|e| ConfigError::ReflectError(format!("{e}")))?;
@@ -36,6 +38,7 @@ pub fn build_reader_at<Dto: for<'a> Facet<'a>, Reader: for<'a> Facet<'a>>(
         root_resolver,
         "",
         display_prefix,
+        profile,
     )?;
     let heap_value = partial.build().map_err(reflect_err)?;
     heap_value
@@ -51,6 +54,7 @@ fn populate_fields<'f, Dto: for<'a> Facet<'a>>(
     root_resolver: RootResolver<'_>,
     prefix: &str,
     display_prefix: &str,
+    profile: Option<&str>,
 ) -> Result<Partial<'f>, ConfigError> {
     let fields = get_struct_fields(struct_shape)
         .ok_or_else(|| ConfigError::ReflectError("Reader type is not a struct".into()))?;
@@ -77,6 +81,7 @@ fn populate_fields<'f, Dto: for<'a> Facet<'a>>(
                     root_resolver,
                     &key,
                     display_prefix,
+                    profile,
                 )?;
             }
             _ if is_config_group(field_shape) => {
@@ -88,6 +93,7 @@ fn populate_fields<'f, Dto: for<'a> Facet<'a>>(
                     root_resolver,
                     &key,
                     display_prefix,
+                    profile,
                 )?;
             }
             _ => {
@@ -108,6 +114,7 @@ fn populate_optional_config_field<'f, Dto: for<'a> Facet<'a>>(
     root_resolver: RootResolver<'_>,
     key: &str,
     display_prefix: &str,
+    profile: Option<&str>,
 ) -> Result<Partial<'f>, ConfigError> {
     let value = match config_get_with_defaults(dto, key, defaults, root_resolver) {
         Ok(Some(v)) => Some(v),
@@ -115,6 +122,8 @@ fn populate_optional_config_field<'f, Dto: for<'a> Facet<'a>>(
         Err(ConfigError::ReflectError(_)) => None,
         Err(e) => return Err(e),
     };
+
+    let profile_value: Option<String> = profile.map(str::to_owned);
 
     match value {
         Some(v) => {
@@ -129,18 +138,26 @@ fn populate_optional_config_field<'f, Dto: for<'a> Facet<'a>>(
                 ))
             })?;
             let partial = partial.end().map_err(reflect_err)?;
-            let partial = partial.begin_field("key").map_err(reflect_err)?;
-            let partial = partial.set(display_key).map_err(reflect_err)?;
-            partial.end().map_err(reflect_err)
+            let partial = set_string_field(partial, "key", display_key)?;
+            set_string_field(partial, "profile", profile_value)
         }
         None => {
             let display_key = dotted_key(display_prefix, presentation_key(defaults, key));
             let partial = partial.select_variant_named("Empty").map_err(reflect_err)?;
-            let partial = partial.begin_field("key").map_err(reflect_err)?;
-            let partial = partial.set(display_key).map_err(reflect_err)?;
-            partial.end().map_err(reflect_err)
+            let partial = set_string_field(partial, "key", display_key)?;
+            set_string_field(partial, "profile", profile_value)
         }
     }
+}
+
+fn set_string_field<'f, T: facet::Facet<'f>>(
+    partial: Partial<'f>,
+    name: &str,
+    value: T,
+) -> Result<Partial<'f>, ConfigError> {
+    let partial = partial.begin_field(name).map_err(reflect_err)?;
+    let partial = partial.set(value).map_err(reflect_err)?;
+    partial.end().map_err(reflect_err)
 }
 
 /// Resolves the key a user should set to give a field a value, following any
@@ -234,9 +251,42 @@ mod tests {
             url: Some("example.com".into()),
             ..<_>::default()
         };
-        let reader: TestReader = build_reader_at(&dto, &no_defaults(), None, "c8y").unwrap();
+        let reader: TestReader = build_reader_at(&dto, &no_defaults(), None, "c8y", None).unwrap();
         assert_eq!(reader.url.key(), "c8y.url");
         assert_eq!(reader.device.id.key(), "c8y.device.id");
+    }
+
+    #[test]
+    fn profiled_reader_stores_profile_separately() {
+        let dto = TestDto {
+            url: Some("example.com".into()),
+            ..<_>::default()
+        };
+        let reader: TestReader =
+            build_reader_at(&dto, &no_defaults(), None, "c8y", Some("staging")).unwrap();
+        assert_eq!(reader.url.key(), "c8y.url");
+        assert_eq!(reader.url.profile(), Some("staging"));
+        assert_eq!(reader.url.display_key(), "c8y.url (profile 'staging')");
+        assert_eq!(reader.device.id.key(), "c8y.device.id");
+        assert_eq!(reader.device.id.profile(), Some("staging"));
+    }
+
+    #[test]
+    fn profiled_unset_field_error_includes_profile() {
+        let dto = TestDto::default();
+        let reader: TestReader =
+            build_reader_at(&dto, &no_defaults(), None, "c8y", Some("staging")).unwrap();
+        let err = reader.url.or_config_not_set().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("c8y.url"), "expected key in error: {msg}");
+        assert!(
+            msg.contains("(profile 'staging')"),
+            "expected profile in error: {msg}"
+        );
+        assert!(
+            msg.contains("--profile staging"),
+            "expected --profile hint in error: {msg}"
+        );
     }
 
     #[test]

@@ -89,7 +89,7 @@ mod features {
     fn unset_optional_key_reader_field_names_the_source_key() {
         let mgr = manager();
         let dto = FeaturesConfigDto::default();
-        let config: FeaturesConfig = mgr.build_reader(&dto, None, "").unwrap();
+        let config: FeaturesConfig = mgr.build_reader(&dto, None, "", None).unwrap();
         assert_eq!(config.c8y.http.key(), "c8y.url");
     }
 

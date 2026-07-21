@@ -11,6 +11,11 @@ facet_config_macro::define_config! {
         #[tedge_config(example = "your-tenant.cumulocity.com")]
         url: HostPort<HTTPS_PORT>,
 
+        /// Endpoint URL of Cumulocity tenant
+        #[tedge_config(example = "your-tenant.cumulocity.com")]
+        #[tedge_config(default(from_optional_key = "url"))]
+        http: HostPort<HTTPS_PORT>,
+
         smartrest: {
             /// SmartREST template IDs the device should subscribe to
             #[tedge_config(example = "templateId1,templateId2", default(value = ""))]

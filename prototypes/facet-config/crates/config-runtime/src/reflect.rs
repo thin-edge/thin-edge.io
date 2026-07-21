@@ -657,10 +657,7 @@ fn find_leaf_field(shape: &'static Shape, key: &str) -> Option<&'static facet::F
     find_leaf_field_parts(shape, &parts)
 }
 
-fn find_leaf_field_parts(
-    shape: &'static Shape,
-    parts: &[&str],
-) -> Option<&'static facet::Field> {
+fn find_leaf_field_parts(shape: &'static Shape, parts: &[&str]) -> Option<&'static facet::Field> {
     let (&part, rest) = parts.split_first()?;
 
     let fields = get_struct_fields(shape)?;
@@ -756,11 +753,7 @@ fn is_schema_root(shape: &Shape) -> bool {
         .any(|a| a.ns == Some(attrs::NS) && a.key == "schema_root")
 }
 
-fn list_keys_recursive(
-    shape: &'static Shape,
-    prefix: &str,
-    entries: &mut Vec<KeyEntry>,
-) {
+fn list_keys_recursive(shape: &'static Shape, prefix: &str, entries: &mut Vec<KeyEntry>) {
     let fields = match get_struct_fields(shape) {
         Some(f) => f,
         None => return,
@@ -824,10 +817,7 @@ mod tests {
     #[test]
     fn no_aliases_for_plain_fields() {
         let aliases = KeyAliases::from_shape(PlainDto::SHAPE);
-        assert_eq!(
-            aliases.resolve("mqtt.port"),
-            ("mqtt.port".to_owned(), None)
-        );
+        assert_eq!(aliases.resolve("mqtt.port"), ("mqtt.port".to_owned(), None));
     }
 
     #[test]

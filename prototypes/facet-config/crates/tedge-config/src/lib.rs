@@ -73,7 +73,7 @@ pub fn load(
         eprintln!("Warning: {warning}");
     }
     ops.manager()
-        .build_reader::<TEdgeConfigDto, TEdgeConfig>(ops.dto(), None, "")
+        .build_reader::<TEdgeConfigDto, TEdgeConfig>(ops.dto(), None, "", None)
 }
 
 const EXCLUDED_ENV_PREFIXES: &[&str] = &[

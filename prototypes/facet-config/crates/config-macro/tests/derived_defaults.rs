@@ -62,7 +62,7 @@ fn explicitly_set_value_wins_over_the_derived_default() {
 fn reader_parses_the_derived_value_into_the_field_type() {
     let mgr = manager();
     let dto = DerivedConfigDto::default();
-    let config: DerivedConfig = mgr.build_reader(&dto, None, "").unwrap();
+    let config: DerivedConfig = mgr.build_reader(&dto, None, "", None).unwrap();
     assert_eq!(config.mqtt.tls_port.or_none(), Some(&1884u16));
 }
 

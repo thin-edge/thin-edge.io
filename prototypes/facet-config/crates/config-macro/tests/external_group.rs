@@ -181,7 +181,7 @@ mod readers {
         let mut dto = schemas::MapperConfigDto::default();
         mgr.set(&mut dto, "device.name", "my-device").unwrap();
         let resolve = |_: &str| Ok(Some("/root/cert.pem".to_owned()));
-        let config: schemas::MapperConfig = mgr.build_reader(&dto, Some(&resolve), "").unwrap();
+        let config: schemas::MapperConfig = mgr.build_reader(&dto, Some(&resolve), "", None).unwrap();
         assert_eq!(config.device.id.or_none(), Some(&"MY-DEVICE".to_string()));
         assert_eq!(config.device.port, 1738);
         assert_eq!(config.device.key_path, "/root/cert.pem");

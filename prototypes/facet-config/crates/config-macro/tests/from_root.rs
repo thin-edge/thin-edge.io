@@ -137,7 +137,7 @@ mod reading_from_root_keys {
         let mgr = mapper::manager();
         let dto = mapper::MapperConfigDto::default();
         let config: mapper::MapperConfig =
-            mgr.build_reader(&dto, Some(&root_with_cert), "").unwrap();
+            mgr.build_reader(&dto, Some(&root_with_cert), "", None).unwrap();
         assert_eq!(
             config.device.cert_path.or_none(),
             Some(&"/root/cert.pem".to_string())
@@ -149,7 +149,7 @@ mod reading_from_root_keys {
         let mgr = mapper::manager();
         let dto = mapper::MapperConfigDto::default();
         let err = mgr
-            .build_reader::<_, mapper::MapperConfig>(&dto, None, "")
+            .build_reader::<_, mapper::MapperConfig>(&dto, None, "", None)
             .unwrap_err();
         assert_eq!(
             err.to_string(),

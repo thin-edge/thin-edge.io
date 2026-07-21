@@ -169,15 +169,17 @@ impl ConfigManager {
     ///
     /// `root_resolver` resolves cross-config references (e.g. a c8y mapper DTO falling back to
     /// `device.cert_path` from the root config when its own value is unset).
-    /// `display_prefix` is prepended to keys in error messages (e.g. `"mappers.c8y."`)
+    /// `display_prefix` is prepended to keys in error messages (e.g. `"c8y"`)
     /// — pass `""` when no prefix is needed.
+    /// `profile` is attached to [OptionalConfig](crate::OptionalConfig) values for user-facing messages.
     pub fn build_reader<Dto: for<'a> Facet<'a>, Reader: for<'a> Facet<'a>>(
         &self,
         dto: &Dto,
         root_resolver: crate::defaults::RootResolver<'_>,
         display_prefix: &str,
+        profile: Option<&str>,
     ) -> Result<Reader, ConfigError> {
-        build_reader_at(dto, &self.defaults, root_resolver, display_prefix)
+        build_reader_at(dto, &self.defaults, root_resolver, display_prefix, profile)
     }
 
     /// Applies environment variable overrides to the DTO using the configured prefix.
