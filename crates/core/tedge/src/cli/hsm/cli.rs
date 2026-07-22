@@ -1,5 +1,6 @@
 use tedge_config::TEdgeConfig;
 
+use super::change_pin::ChangePinArgs;
 use super::create_key::CreateKeyArgs;
 use super::init_token::InitArgs;
 use super::list_tokens::ListTokensArgs;
@@ -51,6 +52,22 @@ pub enum TEdgeHsmCli {
     /// `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting
     /// for that cloud, e.g. `create-key c8y` will write to `c8y.device.key_uri`.
     CreateKey(CreateKeyArgs),
+
+    /// Change or reset the user PIN of a PKCS #11 token.
+    ///
+    /// By default the current user PIN is changed to a new one. The token is auto-discovered when
+    /// no URI is given: the single initialized token is selected; if several exist, pass a PKCS #11
+    /// URI that identifies one.
+    ///
+    /// If the token's current user PIN is unknown or the token is locked out, pass `--reset` along
+    /// with the Security Officer PIN to reset the user PIN instead.
+    ///
+    /// On success, `device.cryptoki.pin` in tedge config is updated to the new PIN so the PKCS #11
+    /// provider keeps working. Restart tedge-p11-server afterwards for the change to take effect.
+    ///
+    /// PINs not passed as flags are prompted for interactively, keeping them out of the shell
+    /// history.
+    ChangePin(ChangePinArgs),
 }
 
 #[async_trait::async_trait]
@@ -60,6 +77,7 @@ impl BuildCommand for TEdgeHsmCli {
             TEdgeHsmCli::Init(args) => args.build_command(config),
             TEdgeHsmCli::ListTokens(args) => args.build_command(config),
             TEdgeHsmCli::CreateKey(args) => args.build_command(config),
+            TEdgeHsmCli::ChangePin(args) => args.build_command(config),
         }
     }
 }

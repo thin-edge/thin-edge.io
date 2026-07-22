@@ -10,6 +10,8 @@ use tracing::trace;
 use super::connection::Connection;
 use super::connection::Frame1;
 use crate::pkcs11::SigScheme;
+use crate::service::ChangePinRequest;
+use crate::service::ChangePinResponse;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
@@ -101,6 +103,17 @@ impl TedgeP11Service for TedgeP11Client {
 
         let Frame1::ListTokensResponse(response) = response else {
             bail!("protocol error: bad response, expected list_tokens, received: {response:?}");
+        };
+
+        Ok(response)
+    }
+
+    fn change_pin(&self, request: ChangePinRequest) -> anyhow::Result<ChangePinResponse> {
+        let request = Frame1::ChangePinRequest(request);
+        let response = self.do_request(request)?;
+
+        let Frame1::ChangePinResponse(response) = response else {
+            bail!("protocol error: bad response, expected change_pin, received: {response:?}");
         };
 
         Ok(response)

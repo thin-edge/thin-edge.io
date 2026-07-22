@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::service::ChangePinRequest;
+use crate::service::ChangePinResponse;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
@@ -36,6 +38,8 @@ pub enum Frame1 {
     InitTokenResponse(InitTokenResponse),
     ListTokensRequest,
     ListTokensResponse(ListTokensResponse),
+    ChangePinRequest(ChangePinRequest),
+    ChangePinResponse(ChangePinResponse),
 }
 
 /// An error that can be returned to the client by the server.
@@ -309,6 +313,52 @@ mod tests {
                     initialized: true,
                     uri: "u".to_string(),
                 }],
+            })
+        );
+    }
+
+    #[test]
+    fn test_deserialize_change_pin_request() {
+        let input = vec![
+            18, 1, 1, 117, 2, 110, 112, 1, 2, 111, 112, 1, 2, 115, 111, 1,
+        ];
+        let frame: Frame1 = postcard::from_bytes(&input).unwrap();
+        assert_eq!(
+            frame,
+            Frame1::ChangePinRequest(ChangePinRequest {
+                uri: Some("u".to_string()),
+                new_pin: SecretString::new("np".to_string()),
+                old_pin: Some(SecretString::new("op".to_string())),
+                so_pin: Some(SecretString::new("so".to_string())),
+                reset: true,
+            })
+        );
+    }
+
+    #[test]
+    fn test_deserialize_change_pin_request_defaults() {
+        let input = vec![18, 0, 2, 110, 112, 0, 0, 0];
+        let frame: Frame1 = postcard::from_bytes(&input).unwrap();
+        assert_eq!(
+            frame,
+            Frame1::ChangePinRequest(ChangePinRequest {
+                uri: None,
+                new_pin: SecretString::new("np".to_string()),
+                old_pin: None,
+                so_pin: None,
+                reset: false,
+            })
+        );
+    }
+
+    #[test]
+    fn test_deserialize_change_pin_response() {
+        let input = vec![19, 1, 117];
+        let frame: Frame1 = postcard::from_bytes(&input).unwrap();
+        assert_eq!(
+            frame,
+            Frame1::ChangePinResponse(ChangePinResponse {
+                uri: "u".to_string(),
             })
         );
     }

@@ -34,6 +34,14 @@ pub trait TedgeP11Service: Send + Sync {
     /// no PIN or login is required.
     fn list_tokens(&self) -> anyhow::Result<ListTokensResponse>;
 
+    /// Change or reset the user PIN of an initialized PKCS #11 token.
+    ///
+    /// By default the current user PIN is changed to a new one (`C_SetPIN`). When
+    /// [`ChangePinRequest::reset`] is set, the user PIN is instead reset using the Security Officer
+    /// PIN (`C_InitPIN`), which is the recovery path when the current user PIN is unknown or the
+    /// token is locked out.
+    fn change_pin(&self, request: ChangePinRequest) -> anyhow::Result<ChangePinResponse>;
+
     /// Generate a new keypair, saving the private key on the token and returning the public key as PEM.
     fn create_key(&self, request: CreateKeyRequest) -> anyhow::Result<CreateKeyResponse>;
 
@@ -132,6 +140,31 @@ pub struct CreateKeyRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateKeyResponse {
     pub pem: String,
+    pub uri: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChangePinRequest {
+    /// URI selecting the token whose user PIN to change (matched by its `token`/`serial`
+    /// attributes). If `None`, the single initialized token is selected; if several exist the
+    /// operation fails asking for a URI that identifies one.
+    pub uri: Option<String>,
+    /// The new user PIN to set on the token.
+    pub new_pin: SecretString,
+    /// The current user PIN, used for a normal change (`C_SetPIN`). If `None`, the PIN configured
+    /// for the service is used. Ignored when `reset` is set.
+    pub old_pin: Option<SecretString>,
+    /// The Security Officer PIN. Required when `reset` is set; used to reset the user PIN via
+    /// `C_InitPIN`.
+    pub so_pin: Option<SecretString>,
+    /// When true, reset the user PIN using the Security Officer PIN (`C_InitPIN`) instead of
+    /// changing it with the current user PIN (`C_SetPIN`).
+    pub reset: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChangePinResponse {
+    /// URI identifying the token whose PIN was changed.
     pub uri: String,
 }
 

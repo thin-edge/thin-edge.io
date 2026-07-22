@@ -1,5 +1,6 @@
 pub use self::cli::TEdgeHsmCli;
 
+mod change_pin;
 mod cli;
 mod create_key;
 mod init_token;
