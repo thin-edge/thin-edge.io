@@ -386,7 +386,7 @@ fn existing_key_uri(token_uri: &str, label: &str, id: Option<&[u8]>) -> String {
 
 /// Percent-encodes a PKCS #11 URI attribute value (RFC 7512), encoding any character that is not
 /// unreserved so the value survives round-tripping through the URI parser.
-fn encode_uri_attr(value: &str) -> String {
+pub(crate) fn encode_uri_attr(value: &str) -> String {
     let mut encoded = String::with_capacity(value.len());
     for &byte in value.as_bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
@@ -400,7 +400,7 @@ fn encode_uri_attr(value: &str) -> String {
 
 /// Parses id provided as a sequence of bytes encoded as pair of hex digits without `0x` prefix, optionally separated by
 /// spaces.
-fn parse_id(id_hexstr: &str) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn parse_id(id_hexstr: &str) -> anyhow::Result<Vec<u8>> {
     let id_hexstr = id_hexstr.trim();
 
     anyhow::ensure!(!id_hexstr.is_empty(), "ID must not be empty");

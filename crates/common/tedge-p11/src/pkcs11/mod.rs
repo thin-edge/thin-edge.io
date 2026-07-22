@@ -106,6 +106,8 @@ use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
 use crate::service::CreateKeyResponse;
+use crate::service::DeleteKeyRequest;
+use crate::service::DeleteKeyResponse;
 use crate::service::InitTokenRequest;
 use crate::service::InitTokenResponse;
 use crate::service::ListTokensResponse;
@@ -346,6 +348,57 @@ impl TedgeP11Service for Cryptoki {
         Ok(ChangePinResponse {
             uri: export_session_uri(&info),
         })
+    }
+
+    #[instrument(skip_all)]
+    fn delete_key(&self, request: DeleteKeyRequest) -> anyhow::Result<DeleteKeyResponse> {
+        let params = SessionParams {
+            uri: Some(request.uri),
+            pin: request.pin,
+        };
+        // Destroying objects requires a read-write session, and private objects require a login;
+        // open_session_rw provides both.
+        let session = self.open_session_rw(&params)?;
+
+        // Require a specific selector so a whole token's contents can never be wiped by accident.
+        anyhow::ensure!(
+            session.uri_attributes.object.is_some() || session.uri_attributes.id.is_some(),
+            "Refusing to delete: the key must be identified by a label and/or id. Provide a label \
+             (and optionally an id), or a URI that selects an object."
+        );
+
+        let mut template = vec![Attribute::Token(true)];
+        if let Some(object) = &session.uri_attributes.object {
+            template.push(Attribute::Label(object.as_bytes().to_vec()));
+        }
+        if let Some(id) = &session.uri_attributes.id {
+            template.push(Attribute::Id(id.clone()));
+        }
+
+        // Matches both the private and public key objects that share the label/id.
+        let objects = session
+            .session
+            .find_objects(&template)
+            .context("Failed to find key objects to delete")?;
+        anyhow::ensure!(
+            !objects.is_empty(),
+            "No matching key objects were found on the token for the given selector."
+        );
+
+        let mut deleted = Vec::with_capacity(objects.len());
+        for object in objects {
+            // Read the URI before destroying the object so it can be reported back.
+            let uri = session
+                .export_object_uri(object)
+                .unwrap_or_else(|_| "<unknown object>".to_string());
+            session
+                .session
+                .destroy_object(object)
+                .with_context(|| format!("Failed to destroy object {uri}"))?;
+            deleted.push(uri);
+        }
+
+        Ok(DeleteKeyResponse { deleted })
     }
 
     fn create_key(&self, request: CreateKeyRequest) -> anyhow::Result<CreateKeyResponse> {

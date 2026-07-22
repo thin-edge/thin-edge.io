@@ -526,6 +526,12 @@ module_path = """#;
         ) -> anyhow::Result<tedge_p11::service::ChangePinResponse> {
             unimplemented!()
         }
+        fn delete_key(
+            &self,
+            _: tedge_p11::service::DeleteKeyRequest,
+        ) -> anyhow::Result<tedge_p11::service::DeleteKeyResponse> {
+            unimplemented!()
+        }
         fn create_key(
             &self,
             _: tedge_p11::service::CreateKeyRequest,

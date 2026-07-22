@@ -42,6 +42,13 @@ pub trait TedgeP11Service: Send + Sync {
     /// token is locked out.
     fn change_pin(&self, request: ChangePinRequest) -> anyhow::Result<ChangePinResponse>;
 
+    /// Delete key objects from a token.
+    ///
+    /// Every token object matching the selector in [`DeleteKeyRequest::uri`] (both the private and
+    /// public key objects sharing the label/id) is destroyed. The selector must identify a key by
+    /// object (label) and/or id; deleting all objects on a token is not supported.
+    fn delete_key(&self, request: DeleteKeyRequest) -> anyhow::Result<DeleteKeyResponse>;
+
     /// Generate a new keypair, saving the private key on the token and returning the public key as PEM.
     fn create_key(&self, request: CreateKeyRequest) -> anyhow::Result<CreateKeyResponse>;
 
@@ -141,6 +148,22 @@ pub struct CreateKeyRequest {
 pub struct CreateKeyResponse {
     pub pem: String,
     pub uri: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeleteKeyRequest {
+    /// URI selecting the key object(s) to delete. Must include an object (label) and/or id so the
+    /// selection is specific; deleting an entire token's contents is not supported.
+    pub uri: String,
+    /// PIN for logging into the token (required to destroy private objects). If `None`, the
+    /// configured PIN is used.
+    pub pin: Option<SecretString>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeleteKeyResponse {
+    /// URIs of the objects that were destroyed.
+    pub deleted: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

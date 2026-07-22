@@ -15,6 +15,8 @@ use crate::service::ChangePinResponse;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
+use crate::service::DeleteKeyRequest;
+use crate::service::DeleteKeyResponse;
 use crate::service::InitTokenRequest;
 use crate::service::InitTokenResponse;
 use crate::service::ListTokensResponse;
@@ -114,6 +116,17 @@ impl TedgeP11Service for TedgeP11Client {
 
         let Frame1::ChangePinResponse(response) = response else {
             bail!("protocol error: bad response, expected change_pin, received: {response:?}");
+        };
+
+        Ok(response)
+    }
+
+    fn delete_key(&self, request: DeleteKeyRequest) -> anyhow::Result<DeleteKeyResponse> {
+        let request = Frame1::DeleteKeyRequest(request);
+        let response = self.do_request(request)?;
+
+        let Frame1::DeleteKeyResponse(response) = response else {
+            bail!("protocol error: bad response, expected delete_key, received: {response:?}");
         };
 
         Ok(response)

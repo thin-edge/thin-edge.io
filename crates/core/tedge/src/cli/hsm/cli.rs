@@ -2,6 +2,7 @@ use tedge_config::TEdgeConfig;
 
 use super::change_pin::ChangePinArgs;
 use super::create_key::CreateKeyArgs;
+use super::delete_key::DeleteKeyArgs;
 use super::init_token::InitArgs;
 use super::list_tokens::ListTokensArgs;
 use crate::command::BuildCommand;
@@ -68,6 +69,16 @@ pub enum TEdgeHsmCli {
     /// PINs not passed as flags are prompted for interactively, keeping them out of the shell
     /// history.
     ChangePin(ChangePinArgs),
+
+    /// Delete a key from a PKCS #11 token.
+    ///
+    /// The key is selected by `--label` and/or `--id` (as used with `create-key`), or by a full key
+    /// URI. Both the private and public key objects sharing the label/id are destroyed.
+    ///
+    /// This is destructive and irreversible. Unless `--force` is given, the command prompts for
+    /// confirmation and refuses to delete a key that is referenced by the device's configured
+    /// `key_uri`, since that would break the cloud connection.
+    DeleteKey(DeleteKeyArgs),
 }
 
 #[async_trait::async_trait]
@@ -78,6 +89,7 @@ impl BuildCommand for TEdgeHsmCli {
             TEdgeHsmCli::ListTokens(args) => args.build_command(config),
             TEdgeHsmCli::CreateKey(args) => args.build_command(config),
             TEdgeHsmCli::ChangePin(args) => args.build_command(config),
+            TEdgeHsmCli::DeleteKey(args) => args.build_command(config),
         }
     }
 }

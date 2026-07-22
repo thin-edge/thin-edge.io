@@ -70,7 +70,8 @@ impl TedgeP11Server {
             | Frame1::GetTokensUrisResponse(_)
             | Frame1::InitTokenResponse { .. }
             | Frame1::ListTokensResponse { .. }
-            | Frame1::ChangePinResponse { .. } => {
+            | Frame1::ChangePinResponse { .. }
+            | Frame1::DeleteKeyResponse { .. } => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -129,6 +130,11 @@ impl TedgeP11Server {
                 .service
                 .change_pin(request)
                 .map(Frame1::ChangePinResponse),
+
+            Frame1::DeleteKeyRequest(request) => self
+                .service
+                .delete_key(request)
+                .map(Frame1::DeleteKeyResponse),
         };
 
         match response {
@@ -202,6 +208,10 @@ mod tests {
         }
 
         fn change_pin(&self, _request: ChangePinRequest) -> anyhow::Result<ChangePinResponse> {
+            todo!()
+        }
+
+        fn delete_key(&self, _request: DeleteKeyRequest) -> anyhow::Result<DeleteKeyResponse> {
             todo!()
         }
 

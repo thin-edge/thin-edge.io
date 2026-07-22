@@ -7,6 +7,8 @@ use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
 use crate::service::CreateKeyResponse;
+use crate::service::DeleteKeyRequest;
+use crate::service::DeleteKeyResponse;
 use crate::service::InitTokenRequest;
 use crate::service::InitTokenResponse;
 use crate::service::ListTokensResponse;
@@ -40,6 +42,8 @@ pub enum Frame1 {
     ListTokensResponse(ListTokensResponse),
     ChangePinRequest(ChangePinRequest),
     ChangePinResponse(ChangePinResponse),
+    DeleteKeyRequest(DeleteKeyRequest),
+    DeleteKeyResponse(DeleteKeyResponse),
 }
 
 /// An error that can be returned to the client by the server.
@@ -359,6 +363,31 @@ mod tests {
             frame,
             Frame1::ChangePinResponse(ChangePinResponse {
                 uri: "u".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_deserialize_delete_key_request() {
+        let input = vec![20, 1, 117, 1, 1, 112];
+        let frame: Frame1 = postcard::from_bytes(&input).unwrap();
+        assert_eq!(
+            frame,
+            Frame1::DeleteKeyRequest(DeleteKeyRequest {
+                uri: "u".to_string(),
+                pin: Some(SecretString::new("p".to_string())),
+            })
+        );
+    }
+
+    #[test]
+    fn test_deserialize_delete_key_response() {
+        let input = vec![21, 2, 1, 97, 1, 98];
+        let frame: Frame1 = postcard::from_bytes(&input).unwrap();
+        assert_eq!(
+            frame,
+            Frame1::DeleteKeyResponse(DeleteKeyResponse {
+                deleted: vec!["a".to_string(), "b".to_string()],
             })
         );
     }
