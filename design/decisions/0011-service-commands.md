@@ -88,7 +88,7 @@ At a glance, four roles are involved:
 * **Service plugin** (per service type, optional):
   executes the commands of services not managed by the init system (e.g. containers).
 
-### thin-edge interface (Open decisions)
+### thin-edge interface
 
 
 #### Command shape: per-command model (`cmd/start`, `cmd/stop`, `cmd/restart`, `cmd/<custom>`)
@@ -114,34 +114,28 @@ A service command is addressed as below:
   -> Add `type = "service"` filter in the workflow definition.
 * (c8y) The c8y mapper has to aggregate an open set of `cmd/<x>` topics into one `c8y_SupportedServiceCommands` list.
 
+##### JSON field
+* `status`: the states used by workflow
+* `command`: the command parsed from cloud operation (lower-case)
+* `serviceName`: the service's name parsed from cloud operation (e.g. `tedge-mapper-c8y`)
+* `serviceType`: the service's type. Key to select a right service plugin (e.g. `service`, `container`)
 
-##### Open questions
-`serviceName` is still to be decided:
-* service's name? e.g. `nodered`
-* service's external ID? e.g. `tedge_7fe9b92c:device:main:service:nodered`
-* topic ID? e.g. `device/main/service/nodered`
-* or do we even need it at all?
+##### (c8y) Aggregation of capabilities
 
-#### Capability declaration: Push model vs Pull model
+* On mapper restart, the retained `cmd/<x>` messages replay,
+  so the mapper rebuilds the full set and no capability is lost.
+* A capability is removed when its `cmd/<x>` topic is cleared (retained empty message).
+  The mapper drops it from the set and re-publishes the reduced `c8y_SupportedServiceCommands` array.
 
-A service's supported commands are published as a retained capability message on its `cmd` topic.
-Who publishes it?
+#### Capability declaration: Who publishes it?
 
-##### Proposal A: Push-model
-The service owner publishes it itself.
+There are two options: push-model and pull-model.
+* **Push-model**: The service owner publishes their capabilities.
+* **Pull-model**: `tedge-agent` discovers the capabilities of the supported service types and publishes them.
 
-* `tedge-agent` and the mappers declare it for their own service entity at startup,
-  alongside their existing service registration / health announcement.
-* A third-party daemon declares it for each service it owns (it already registers those entities).
+For the first iteration, push-model is selected as the scope is limited to already registered service entities like `tedge-agent`.
+The pull-model design is described in the Future Consideration section.
 
-##### Proposal B: Pull-model
-`tedge-agent` publishes it on the owner's behalf.
-* For init-managed services: it derives the commands from what `system.toml` defines.
-  * Problem: How to limit supported commands for some services?
-  For example, cloud mappers should not allow `stop`,
-  otherwise the cloud connection would be lost.
-* For other types: it queries the service plugin when the service registers.
-(e.g. invoking `/usr/share/tedge/service-plugins/<plugin> list`)
 
 ### Cumulocity mapping
 
@@ -152,7 +146,7 @@ This part deliberately reuses existing mapper mechanisms; no new concepts are in
   1. registers `c8y_ServiceCommand` as a supported operation for that service,
      reusing the same mechanism used today for other supported operations.
   2. aggregates all capabilities and sets them as `{"c8y_SupportedServiceCommands": ["START", "STOP", ...]}`
-     (uppercased, following the Cumulocity convention) on the service's managed object,
+     (uppercase, following the Cumulocity convention) on the service's managed object,
      by publishing an inventory update through the JSON over MQTT API.
      Since Cumulocity accepts arbitrary command names,
      custom names are passed through unchanged apart from the case mapping.
@@ -233,6 +227,8 @@ so accepting additional custom command templates requires a small schema extensi
   where `<command>` is `start`, `stop`, `restart` or a plugin-defined custom command.
 * exit `0` on success; non-zero on failure with the reason on stderr;
 * a reserved exit code for "command not supported for this type".
+* custom command names must be lowercase-safe, because the operation name is used in the topic.
+  For example, `myCommand` must be accepted as `mycommand`.
 
 #### Examples
 * `sudo tedge service restart collectd --service-type service`
@@ -274,8 +270,10 @@ so accepting additional custom command templates requires a small schema extensi
   The shipped workflow instead uses the existing self-restart pattern
   (detached background execution followed by an `await-agent-restart` state),
   the same pattern already documented for configuration self-update.
-* `stop` of **tedge-agent** and **tedge-mapper-c8y** is rejected with a clear failure reason:
-  a stopped agent can never report completion, so the operation would hang in the cloud forever.
+* `stop` of **tedge-agent** (the executor) and of any **cloud mapper** (e.g. tedge-mapper-c8y)
+  is rejected with a clear failure reason.
+  A stopped executor cannot report completion, and a stopped mapper loses the cloud connection,
+  so the operation would hang in the cloud forever.
 
 The workflow carries a timeout so that a hung backend surfaces as a clean failure rather than a stuck operation.
 
@@ -332,7 +330,7 @@ Topic: `te/device/main/service/collectd/cmd/restart/c8y-mapper-123`
 }
 ```
 
-Then, `restart` workflow of tedge-agent drives the command.
+Then the `restart` workflow of tedge-agent drives the command.
 
 File: `/etc/tedge/operations/restart.toml`
 ```toml
@@ -348,7 +346,7 @@ type = "service"
   on_success = "run"
 
 [run]
-  script = "sudo -n tedge service ${.payload.command} ${.payload.serviceName} --service-type ${.payload.serviceType}"
+  script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type ${.payload.serviceType}"
   on_success = "successful"
   on_error = { status = "failed", reason = "Command returned a non-zero exit code" }
 
@@ -427,7 +425,7 @@ type = "service"
   on_success = "run"
 
 [run]
-  script = "sudo -n tedge service ${.payload.command} ${.payload.serviceName} --service-type ${.payload.serviceType}"
+  script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type ${.payload.serviceType}"
   on_success = "successful"
   on_error = { status = "failed", reason = "Command returned a non-zero exit code" }
 
@@ -497,7 +495,8 @@ Command: `te/device/<device>/service/<service>/cmd/service_command/<cmd-id>`
 
 * All supported commands are included in the service's metadata payload.
 * A single workflow handles every service command in `service_command.toml`.
-* The single command model can limit the commands being executed in parallel.
+* The single command channel serializes commands per service:
+  only one service command can run at a time.
 * (c8y) The c8y mapper copies the declared commands straight into `c8y_SupportedServiceCommands`.
 
 ### Alternative for executor: no workflow
@@ -515,7 +514,7 @@ This is not selected, because:
 ### Alternative for the c8y mapper part: custom operation handler files
 
 Instead of native mapper support, using a custom operation handler file.
-Since a service has to declare not only `c8y_SupportedOperation`, 
+Since a service has to declare not only `c8y_SupportedOperations`, 
 but also `c8y_SupportedServiceCommands`, this model makes it difficult.
 
 Also, note that dynamic reloading of custom operation handlers files of child devices/services is disabled.
@@ -555,9 +554,30 @@ input.serviceName = "${.payload.c8y_ServiceCommand.serviceName}"
   a tedge-writable plugin directory would be a trivial privilege escalation.
   This is the same property the sudoers path restriction enforces for sm-plugins today.
 
-## Open questions
+## Future consideration
 
-1. Who declares the capability for init-managed services that are not owned by a thin-edge daemon (e.g. `mosquitto`)?
-   With owner-declared capabilities,
-   such services get no cloud action buttons even though the executor could handle them.
-   A configuration-driven list is the likely shape.
+### Service capability discovery: Mix of push-model and pull-model
+
+For a better user experience, tedge-agent should be able to discover service capabilities
+and even register them with thin-edge.
+
+Below is a rough sketch of what we could support:
+* Introduce `list` subcommand to service plugin.
+  * `tedge-agent` queries the service plugin when the service registers.
+(e.g. invoking `/usr/share/tedge/service-plugins/<plugin> list`)
+  * If `list` is not implemented, this indicates the service will declare their capabilities on their own.
+  * `list` does registration as well.
+* For a newly installed service, use `sync` to reload the list.
+
+### Filter the capability to declare to cloud
+
+Today, every `te/device/<device>/service/<service>/cmd/+` topic is treated as a capability
+declared to the cloud.
+If a user wants to limit which capabilities are declared, how do we support that?
+
+### Workflow file naming collision
+
+Today a workflow is stored in `/etc/tedge/operations/<operation>.toml`.
+The new `type` field lets a device `restart` and a service `restart` coexist as separate workflows,
+but two files named `restart.toml` cannot live in the same directory.
+How the agent names these files on disk is still open.
