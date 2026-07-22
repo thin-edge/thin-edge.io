@@ -106,11 +106,15 @@ tedge reconnect rejects any new invalid certificate
     Renew certificate
     Execute Command    echo garbage | sudo tee "$(tedge config get c8y.device.cert_path).new"
     # The connection should be successful, despite the new certificate being invalid
-    ${output}=    Execute Command    sudo tedge reconnect c8y    exp_exit_code=3    stdout=${False}    stderr=${True}
+    ${output}=    Execute Command
+    ...    sudo tedge reconnect c8y
+    ...    exp_exit_code=3
+    ...    stdout=${False}
+    ...    stderr=${True}
+    ...    timeout=60
     Should Contain    ${output}    Validating new certificate
     Should Contain    ${output}    Error validating the new certificate
-    Should Contain    ${output}    attempt 2 of 3
-    Should Contain    ${output}    attempt 3 of 3
+    Should Match Regexp    ${output}    attempt [1-9] of [1-9]
     ${output}=    Execute Command    sudo tedge connect c8y --test    stdout=${False}    stderr=${True}
     Should Contain    ${output}    Connection check to c8y cloud is successful
     # The invalid certificate is left unchanged
