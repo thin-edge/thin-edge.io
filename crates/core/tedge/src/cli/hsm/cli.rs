@@ -2,6 +2,7 @@ use tedge_config::TEdgeConfig;
 
 use super::create_key::CreateKeyArgs;
 use super::init_token::InitArgs;
+use super::list_tokens::ListTokensArgs;
 use crate::command::BuildCommand;
 use crate::command::Command;
 use crate::ConfigError;
@@ -21,6 +22,16 @@ pub enum TEdgeHsmCli {
     /// The resulting token URI is printed to stdout, so it can be captured in scripts:
     /// `URI=$(tedge hsm init)`.
     Init(InitArgs),
+
+    /// List the PKCS #11 tokens available to the HSM.
+    ///
+    /// Every slot that holds a token is listed with its slot id, label, initialization state, and
+    /// its PKCS #11 URI. Both initialized and uninitialized tokens are shown, so a slot waiting for
+    /// `tedge hsm init` is visible too. The printed URI can be passed to other commands, e.g. to
+    /// select a specific token with `tedge hsm create-key <URI>`.
+    ///
+    /// Only public token metadata is read, so no PIN is required.
+    ListTokens(ListTokensArgs),
 
     /// Generate a new keypair on the PKCS #11 token and select it to be used.
     ///
@@ -47,6 +58,7 @@ impl BuildCommand for TEdgeHsmCli {
     async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
             TEdgeHsmCli::Init(args) => args.build_command(config),
+            TEdgeHsmCli::ListTokens(args) => args.build_command(config),
             TEdgeHsmCli::CreateKey(args) => args.build_command(config),
         }
     }

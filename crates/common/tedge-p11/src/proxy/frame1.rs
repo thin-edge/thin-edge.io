@@ -7,6 +7,7 @@ use crate::service::CreateKeyRequest;
 use crate::service::CreateKeyResponse;
 use crate::service::InitTokenRequest;
 use crate::service::InitTokenResponse;
+use crate::service::ListTokensResponse;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
@@ -33,6 +34,8 @@ pub enum Frame1 {
     GetTokensUrisResponse(Vec<String>),
     InitTokenRequest(InitTokenRequest),
     InitTokenResponse(InitTokenResponse),
+    ListTokensRequest,
+    ListTokensResponse(ListTokensResponse),
 }
 
 /// An error that can be returned to the client by the server.
@@ -50,6 +53,7 @@ mod tests {
     use crate::pkcs11::SigScheme;
     use crate::service::SignatureAlgorithm;
     use crate::service::SignatureScheme;
+    use crate::service::TokenDetails;
     use crate::SecretString;
 
     use super::*;
@@ -276,6 +280,35 @@ mod tests {
             frame,
             Frame1::InitTokenResponse(InitTokenResponse {
                 uri: "u".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn test_deserialize_list_tokens_request() {
+        let input = vec![16];
+        let frame: Frame1 = postcard::from_bytes(&input).unwrap();
+        assert_eq!(frame, Frame1::ListTokensRequest);
+    }
+
+    #[test]
+    fn test_deserialize_list_tokens_response() {
+        let input = vec![
+            17, 1, 1, 2, 116, 107, 1, 109, 2, 109, 102, 1, 115, 1, 1, 117,
+        ];
+        let frame: Frame1 = postcard::from_bytes(&input).unwrap();
+        assert_eq!(
+            frame,
+            Frame1::ListTokensResponse(ListTokensResponse {
+                tokens: vec![TokenDetails {
+                    slot: 1,
+                    label: "tk".to_string(),
+                    model: "m".to_string(),
+                    manufacturer: "mf".to_string(),
+                    serial: "s".to_string(),
+                    initialized: true,
+                    uri: "u".to_string(),
+                }],
             })
         );
     }

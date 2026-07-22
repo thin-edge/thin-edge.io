@@ -68,7 +68,8 @@ impl TedgeP11Server {
             | Frame1::Pong
             | Frame1::CreateKeyResponse { .. }
             | Frame1::GetTokensUrisResponse(_)
-            | Frame1::InitTokenResponse { .. } => {
+            | Frame1::InitTokenResponse { .. }
+            | Frame1::ListTokensResponse { .. } => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -120,6 +121,8 @@ impl TedgeP11Server {
                 .service
                 .init_token(request)
                 .map(Frame1::InitTokenResponse),
+
+            Frame1::ListTokensRequest => self.service.list_tokens().map(Frame1::ListTokensResponse),
         };
 
         match response {
@@ -185,6 +188,10 @@ mod tests {
         }
 
         fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
+            todo!()
+        }
+
+        fn list_tokens(&self) -> anyhow::Result<ListTokensResponse> {
             todo!()
         }
 

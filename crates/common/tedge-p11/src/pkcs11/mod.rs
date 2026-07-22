@@ -106,10 +106,12 @@ use crate::service::CreateKeyRequest;
 use crate::service::CreateKeyResponse;
 use crate::service::InitTokenRequest;
 use crate::service::InitTokenResponse;
+use crate::service::ListTokensResponse;
 use crate::service::SecretString;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
 use crate::service::TedgeP11Service;
+use crate::service::TokenDetails;
 
 mod signing;
 pub use signing::Pkcs11Signer;
@@ -211,6 +213,40 @@ impl TedgeP11Service for Cryptoki {
             .collect();
 
         Ok(uris)
+    }
+
+    fn list_tokens(&self) -> anyhow::Result<ListTokensResponse> {
+        // Refresh the slot list so recently attached/initialized tokens are visible.
+        let _ = self.reinit();
+        let context = match self.context.lock() {
+            Ok(c) => c,
+            Err(e) => e.into_inner(),
+        };
+        let slots = context
+            .get_slots_with_token()
+            .context("Failed to list slots with a token")?;
+
+        let mut tokens = Vec::with_capacity(slots.len());
+        for slot in slots {
+            let info = match context.get_token_info(slot) {
+                Ok(info) => info,
+                Err(e) => {
+                    error!(?e, slot = slot.id(), "Failed to get_token_info for slot");
+                    continue;
+                }
+            };
+            tokens.push(TokenDetails {
+                slot: slot.id(),
+                label: info.label().to_string(),
+                model: info.model().to_string(),
+                manufacturer: info.manufacturer_id().to_string(),
+                serial: info.serial_number().to_string(),
+                initialized: info.token_initialized(),
+                uri: export_session_uri(&info),
+            });
+        }
+
+        Ok(ListTokensResponse { tokens })
     }
 
     fn create_key(&self, request: CreateKeyRequest) -> anyhow::Result<CreateKeyResponse> {

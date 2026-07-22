@@ -26,6 +26,14 @@ pub trait TedgeP11Service: Send + Sync {
 
     fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>>;
 
+    /// List every slot that holds a token, along with the token's metadata and URI.
+    ///
+    /// Unlike [`get_tokens_uris`](Self::get_tokens_uris), which only returns the URIs of
+    /// initialized tokens, this reports every token present (initialized or not) so uninitialized
+    /// slots waiting for `tedge hsm init` are visible too. It reads only public token metadata, so
+    /// no PIN or login is required.
+    fn list_tokens(&self) -> anyhow::Result<ListTokensResponse>;
+
     /// Generate a new keypair, saving the private key on the token and returning the public key as PEM.
     fn create_key(&self, request: CreateKeyRequest) -> anyhow::Result<CreateKeyResponse>;
 
@@ -124,6 +132,30 @@ pub struct CreateKeyRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateKeyResponse {
     pub pem: String,
+    pub uri: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListTokensResponse {
+    pub tokens: Vec<TokenDetails>,
+}
+
+/// Public metadata describing a single PKCS #11 token present in a slot.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenDetails {
+    /// Slot id holding the token.
+    pub slot: u64,
+    /// Token label (CKA_LABEL). Empty for tokens that have not been initialized.
+    pub label: String,
+    /// Token model as reported by the module.
+    pub model: String,
+    /// Token manufacturer as reported by the module.
+    pub manufacturer: String,
+    /// Token serial number as reported by the module.
+    pub serial: String,
+    /// Whether the token has been initialized (`C_InitToken` has run).
+    pub initialized: bool,
+    /// PKCS #11 URI selecting this token, suitable for use with other `tedge hsm` commands.
     pub uri: String,
 }
 

@@ -15,6 +15,7 @@ use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
 use crate::service::InitTokenRequest;
 use crate::service::InitTokenResponse;
+use crate::service::ListTokensResponse;
 use crate::service::SecretString;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
@@ -92,6 +93,17 @@ impl TedgeP11Service for TedgeP11Client {
         };
 
         Ok(uris)
+    }
+
+    fn list_tokens(&self) -> anyhow::Result<ListTokensResponse> {
+        let request = Frame1::ListTokensRequest;
+        let response = self.do_request(request)?;
+
+        let Frame1::ListTokensResponse(response) = response else {
+            bail!("protocol error: bad response, expected list_tokens, received: {response:?}");
+        };
+
+        Ok(response)
     }
 }
 

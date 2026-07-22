@@ -517,6 +517,9 @@ module_path = """#;
         fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
             unimplemented!()
         }
+        fn list_tokens(&self) -> anyhow::Result<tedge_p11::service::ListTokensResponse> {
+            unimplemented!()
+        }
         fn create_key(
             &self,
             _: tedge_p11::service::CreateKeyRequest,
