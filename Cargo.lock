@@ -5102,6 +5102,7 @@ dependencies = [
  "anyhow",
  "camino",
  "clap",
+ "flockfile",
  "rustls",
  "sd-listen-fds",
  "serde",

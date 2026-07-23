@@ -15,11 +15,15 @@ use std::os::unix::net::UnixListener;
 use std::sync::Arc;
 
 use anyhow::Context;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use clap::crate_version;
 use clap::Parser;
+use flockfile::Flockfile;
+use flockfile::FlockfileError;
 use serde::Deserialize;
 use tedge_p11::CryptokiConfigDirect;
+use tedge_p11::TedgeP11Client;
 use tedge_p11::TedgeP11Server;
 use tokio::signal::unix::SignalKind;
 use tracing::debug;
@@ -258,7 +262,8 @@ async fn main() -> anyhow::Result<()> {
 
     info!(?cryptoki_config, "Using cryptoki configuration");
 
-    // make sure that if we bind to unix socket in the program, it's removed on exit
+    // make sure that if we bind to unix socket in the program, it's removed on exit, and that the
+    // socket lock (if any) is held for the whole lifetime of the server
     let (listener, _drop_guard) = {
         let mut systemd_listeners = sd_listen_fds::get()
             .context("Failed to obtain activated sockets from systemd")?
@@ -282,9 +287,11 @@ async fn main() -> anyhow::Result<()> {
                         ))?;
                 }
             }
-            let listener = UnixListener::bind(&socket_path)
-                .with_context(|| format!("Failed to bind to socket at '{socket_path}'"))?;
-            (listener, Some(OwnedSocketFileDropGuard(socket_path)))
+            let (listener, lock) = bind_socket(&socket_path)?;
+            (
+                listener,
+                Some((OwnedSocketFileDropGuard(socket_path), lock)),
+            )
         }
     };
     info!(listener = ?listener.local_addr().as_ref().ok().and_then(|s| s.as_pathname()), "Server listening");
@@ -305,6 +312,75 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Binds a UNIX socket listener at `socket_path`, reclaiming a stale socket file if necessary.
+///
+/// `UnixListener::bind` fails with `AddrInUse` if a file already exists at the path, even when no
+/// process is listening on it — which happens when a previous run was killed before its socket file
+/// could be cleaned up (e.g. the process was terminated abruptly). In that case we want to remove
+/// the stale file and bind again, but only when it is safe to do so — never stealing the socket
+/// from a healthy instance.
+///
+/// To make this race-free we guard socket creation with an `flock`-based lock file
+/// (`<socket_path>.lock`), which a running server holds for its whole lifetime and the kernel
+/// releases automatically when the process dies, even on `SIGKILL` (see
+/// <https://gavv.net/articles/unix-socket-reuse/>). Acquiring the lock therefore proves that no
+/// other server is running, so any leftover socket file is definitively stale and can be removed
+/// before binding. If the lock is already held, another instance owns the socket and we bail
+/// without touching it.
+///
+/// The lock lives next to the socket so that, when the socket is shared into containers via a
+/// volume, all instances that could contend for it (necessarily on the same host kernel, since a
+/// UNIX socket is host-local) see the same lock. On the rare filesystem where `flock` silently
+/// no-ops we could still hold the lock while another server is actually listening, so before
+/// deleting a leftover socket we ping it as a final safety check and refuse to touch it if a server
+/// answers.
+///
+/// The returned [`Flockfile`] must be kept alive for as long as the server runs.
+fn bind_socket(socket_path: &Utf8Path) -> anyhow::Result<(UnixListener, Flockfile)> {
+    let lock_path = format!("{socket_path}.lock");
+    let lock = match Flockfile::new_lock(&lock_path) {
+        Ok(lock) => lock,
+        // `FromNix` is the non-blocking `flock()` call reporting the lock is already held: another
+        // instance owns the socket.
+        Err(FlockfileError::FromNix { .. }) => {
+            anyhow::bail!("Another instance is already listening on the socket at '{socket_path}'");
+        }
+        // `FromIo` is a genuine problem creating or opening the lock file itself.
+        Err(err) => {
+            return Err(err)
+                .with_context(|| format!("Failed to acquire socket lock at '{lock_path}'"));
+        }
+    };
+
+    match UnixListener::bind(socket_path) {
+        Ok(listener) => Ok((listener, lock)),
+        Err(err) if err.kind() == std::io::ErrorKind::AddrInUse => {
+            // We hold the lock, so no other server should be running and the socket file should be
+            // stale. Guard against `flock` having silently no-op'd on this filesystem by pinging
+            // the socket first: if a server actually answers, refuse to steal it. `with_ready_check`
+            // already pings once (discarding the result); we ping again to observe the answer.
+            let is_alive = TedgeP11Client::with_ready_check(Arc::from(socket_path.as_std_path()))
+                .ping()
+                .is_ok();
+            if is_alive {
+                anyhow::bail!(
+                    "Another instance is already listening on the socket at '{socket_path}'"
+                );
+            }
+            warn!(%socket_path, "Removing stale socket file left over by a previous run");
+            std::fs::remove_file(socket_path).with_context(|| {
+                format!("Failed to remove stale socket file at '{socket_path}'")
+            })?;
+            let listener = UnixListener::bind(socket_path)
+                .with_context(|| format!("Failed to bind to socket at '{socket_path}'"))?;
+            Ok((listener, lock))
+        }
+        Err(err) => {
+            Err(err).with_context(|| format!("Failed to bind to socket at '{socket_path}'"))
+        }
+    }
 }
 
 struct OwnedSocketFileDropGuard(Utf8PathBuf);
@@ -343,5 +419,98 @@ module_path = """#;
                 }
             }
         )
+    }
+
+    #[test]
+    fn bind_socket_reclaims_a_stale_socket_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket_path = Utf8PathBuf::from_path_buf(dir.path().join("test.sock")).unwrap();
+
+        // Simulate an unclean shutdown: a socket file exists but nothing holds the lock and
+        // nothing is listening on it. std's UnixListener does not unlink the file on drop, so the
+        // path lingers.
+        drop(UnixListener::bind(&socket_path).unwrap());
+        assert!(socket_path.exists());
+
+        // A plain bind would fail with AddrInUse; bind_socket should reclaim the stale file.
+        let (listener, _lock) =
+            bind_socket(&socket_path).expect("should reclaim stale socket file");
+        drop(listener);
+    }
+
+    #[test]
+    fn bind_socket_refuses_when_another_instance_holds_the_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket_path = Utf8PathBuf::from_path_buf(dir.path().join("test.sock")).unwrap();
+
+        // A running instance holds the socket lock (and the listener) for its whole lifetime.
+        let (_listener, _lock) = bind_socket(&socket_path).unwrap();
+
+        // A second start must refuse, because the lock is held, and must leave the live socket in
+        // place.
+        let err = bind_socket(&socket_path).unwrap_err();
+        assert!(
+            err.to_string().contains("Another instance"),
+            "unexpected error: {err:#}"
+        );
+        assert!(socket_path.exists());
+    }
+
+    /// A no-op service used only to stand up a real server for the "refuse" test below. A ping is
+    /// answered by the server itself, so none of these methods are ever called.
+    struct StubService;
+
+    impl tedge_p11::service::TedgeP11Service for StubService {
+        fn choose_scheme(
+            &self,
+            _: tedge_p11::service::ChooseSchemeRequest,
+        ) -> anyhow::Result<tedge_p11::service::ChooseSchemeResponse> {
+            unimplemented!()
+        }
+        fn sign(
+            &self,
+            _: tedge_p11::service::SignRequestWithSigScheme,
+        ) -> anyhow::Result<tedge_p11::service::SignResponse> {
+            unimplemented!()
+        }
+        fn get_public_key_pem(&self, _: Option<&str>) -> anyhow::Result<String> {
+            unimplemented!()
+        }
+        fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
+            unimplemented!()
+        }
+        fn create_key(
+            &self,
+            _: tedge_p11::service::CreateKeyRequest,
+        ) -> anyhow::Result<tedge_p11::service::CreateKeyResponse> {
+            unimplemented!()
+        }
+    }
+
+    /// Belt-and-suspenders for the hybrid approach: even if `flock` silently no-ops (so the lock is
+    /// acquired despite a live server), the ping guard must stop us from stealing a socket that a
+    /// server is actually answering on. Here the live server is stood up directly on the socket
+    /// without going through the lock, mimicking that degraded-`flock` case.
+    #[tokio::test]
+    async fn bind_socket_refuses_when_a_server_is_listening() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket_path = Utf8PathBuf::from_path_buf(dir.path().join("test.sock")).unwrap();
+
+        // Run a real tedge-p11-server on the socket so it answers pings.
+        let listener = tokio::net::UnixListener::bind(&socket_path).unwrap();
+        let server = TedgeP11Server::new(StubService).unwrap();
+        tokio::spawn(async move { server.serve(listener).await });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // bind_socket must refuse to touch a live server's socket, and leave it in place.
+        let path = socket_path.clone();
+        let err = tokio::task::spawn_blocking(move || bind_socket(&path).unwrap_err())
+            .await
+            .unwrap();
+        assert!(
+            err.to_string().contains("Another instance"),
+            "unexpected error: {err:#}"
+        );
+        assert!(socket_path.exists());
     }
 }
