@@ -11,11 +11,12 @@ The following environment variables are set:
 * APK_VERSION
 * DEB_VERSION
 * RPM_VERSION
+* IPK_VERSION
 * CONTAINER_VERSION
 * TARBALL_VERSION
 
 USAGE
-    $0 [apk|deb|rpm|container|tarball|all] [--version <version>]
+    $0 [apk|deb|rpm|ipk|container|tarball|all] [--version <version>]
     # Print out a version
 
     # importing values via a script
@@ -164,6 +165,13 @@ set_version_variables() {
     else
         RPM_VERSION="$GIT_SEMVER"
     fi
+
+    if [[ "$GIT_SEMVER" = *-rc* ]]; then
+        IPK_VERSION="${GIT_SEMVER//-/\~}"
+    else
+        IPK_VERSION="$GIT_SEMVER"
+    fi
+
     # container tags are quite limited, so replace forbidden characters with '-'
     CONTAINER_VERSION="${GIT_SEMVER//[^a-zA-Z0-9_.-]/-}"
 
@@ -179,6 +187,7 @@ set_version_variables() {
     export APK_VERSION_APPROXIMATE
     export DEB_VERSION
     export RPM_VERSION
+    export IPK_VERSION
     export CONTAINER_VERSION
     export TARBALL_VERSION
 }
@@ -267,6 +276,9 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         rpm)
             echo "$RPM_VERSION"
             ;;
+        ipk)
+            echo "$IPK_VERSION"
+            ;;
         tarball)
             echo "$TARBALL_VERSION"
             ;;
@@ -278,6 +290,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
             echo "APK_VERSION: $APK_VERSION"
             echo "DEB_VERSION: $DEB_VERSION"
             echo "RPM_VERSION: $RPM_VERSION"
+            echo "IPK_VERSION: $IPK_VERSION"
             echo "CONTAINER_VERSION: $CONTAINER_VERSION"
             echo "TARBALL_VERSION: $TARBALL_VERSION"
             ;;

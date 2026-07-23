@@ -78,3 +78,10 @@ overrides:
       postinstall: configuration/package_scripts/_generated/tedge-p11-server/deb/postinst
       preremove: configuration/package_scripts/_generated/tedge-p11-server/deb/prerm
       postremove: configuration/package_scripts/_generated/tedge-p11-server/deb/postrm
+
+  ipk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-p11-server/ipk/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-p11-server/ipk/postinst
+      preremove: configuration/package_scripts/_generated/tedge-p11-server/ipk/prerm
+      postremove: configuration/package_scripts/_generated/tedge-p11-server/ipk/postrm

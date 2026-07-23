@@ -68,6 +68,15 @@ overrides:
     suggests:
       - mosquitto
 
+  ipk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge/ipk/preinst
+      postinstall: configuration/package_scripts/_generated/tedge/ipk/postinst
+      preremove: configuration/package_scripts/_generated/tedge/ipk/prerm
+      postremove: configuration/package_scripts/_generated/tedge/ipk/postrm
+    suggests:
+      - mosquitto
+
 deb:
   fields:
     Vcs-Browser: ${CI_PROJECT_URL}

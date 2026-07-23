@@ -1,0 +1,89 @@
+#!/bin/sh
+set -e
+
+### Add include to mosquitto.conf so tedge specific conf will be loaded
+if [ -f /etc/mosquitto/mosquitto.conf ]; then
+    if ! grep -q "include_dir /etc/tedge/mosquitto-conf" "/etc/mosquitto/mosquitto.conf"; then
+        # Insert `include_dir /etc/tedge/mosquitto-conf` before any `include_dir`
+        # directive so that all other partial conf files inherit the
+        # `per_listener_settings` defined in /etc/tedge/mosquitto-conf.
+        # `per_listener_settings` has to be defined once, before other listener
+        # settings or else it causes the following error:
+        #
+        # Error: per_listener_settings must be set before any other security
+        # settings.
+        # Match any included_dir directive as different distributions have different default settings:
+        #  On Fedora: `#include_dir`. mosquitto does not use a /etc/mosquitto/conf.d folder
+        #  On Debian: `include_dir /etc/mosquitto/conf.d`. Uses a conf.d folder, so the tedge setting must be before this
+
+        # Check if `include_dir` or `#include_dir` (as the latter could be a future problem if the user uncomments it)
+        if grep -qE '^#?include_dir' /etc/mosquitto/mosquitto.conf; then
+            # support awk or gawk
+            AWK="awk"
+            if ! command -V awk >/dev/null 2>&1 && command -V gawk >/dev/null 2>&1; then
+                AWK="gawk"
+            fi
+
+            # insert tedge include_dir before the first `included_dir` (but only the first!)
+            mosquitto_conf=$("$AWK" '!found && /^#?include_dir/ \
+            { print "include_dir /etc/tedge/mosquitto-conf"; found=1 }1' \
+            /etc/mosquitto/mosquitto.conf)
+            echo "$mosquitto_conf" > /etc/mosquitto/mosquitto.conf
+        else
+            # config does not contain any include_dir directive, so we can safely append it
+            echo "include_dir /etc/tedge/mosquitto-conf" >> /etc/mosquitto/mosquitto.conf
+        fi
+    fi
+fi
+
+### Add tedge rules to mosquitto AppArmor local profile
+# /etc/apparmor.d/local/mosquitto is the standard file for local mosquitto AppArmor
+# customizations. We always replace the guarded block so upgrades pick up any rule changes.
+APPARMOR_LOCAL_MOSQUITTO=/etc/apparmor.d/local/mosquitto
+if [ -d /etc/apparmor.d/local ]; then
+    # Remove any previously installed block before (re-)adding the current one
+    if [ -f "$APPARMOR_LOCAL_MOSQUITTO" ]; then
+        sed -i '/# BEGIN tedge/,/# END tedge/d' "$APPARMOR_LOCAL_MOSQUITTO"
+    fi
+    printf '# BEGIN tedge\n/etc/tedge/mosquitto-conf/ r,\n/etc/tedge/mosquitto-conf/** r,\n# END tedge\n' >> "$APPARMOR_LOCAL_MOSQUITTO"
+fi
+
+# Check if AppArmor is active before attempting to reload
+if [ -x /usr/sbin/apparmor_parser ] && [ -d /sys/kernel/security/apparmor ]; then
+    if [ -f /etc/apparmor.d/mosquitto ]; then
+        echo "Reloading AppArmor profile for Mosquitto..."
+        apparmor_parser -r /etc/apparmor.d/mosquitto || true
+    fi
+fi
+
+# Initialize the tedge
+tedge init
+
+# Create completion scripts
+# Note: Generate completion scripts during post installation
+# to ensure the tedge binary is already installed at its intended location
+# as the generated completion scripts will use the full binary path at
+# the time of calling the `tedge completions` command
+if [ -d /usr/share/zsh/vendor-completions ]; then
+    echo "Adding zsh completion script" >&2
+    tedge completions zsh > /usr/share/zsh/vendor-completions/_tedge ||:
+fi
+
+if [ -d /usr/share/bash-completion/completions ]; then
+    echo "Adding bash completion script" >&2
+    tedge completions bash > /usr/share/bash-completion/completions/tedge ||:
+fi
+
+if [ -d /usr/share/fish/completions ]; then
+    tedge completions fish > /usr/share/fish/completions/tedge.fish ||:
+fi
+
+# On debian set the default plugin to apt to reduce friction if users
+# have not been using types and with the addition of the flow plugin
+# that it might cause unexpected failures
+if command -V apt >/dev/null 2>&1 && [ -x /etc/tedge/sm-plugins/apt ]; then
+    if ! tedge config get software.plugin.default >/dev/null 2>&1; then
+        echo "Setting default software plugin to apt" >&2
+        tedge config set software.plugin.default apt ||:
+    fi
+fi

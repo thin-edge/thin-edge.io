@@ -1,0 +1,42 @@
+#!/bin/sh
+set -e
+
+purge_agent_directory() {
+    if [ -d "/etc/tedge/.agent" ]; then
+        rm -rf /etc/tedge/.agent
+    fi
+}
+
+purge_agent_lock() {
+    # remove old lock file path
+    if [ -f "/run/lock/tedge_agent.lock" ]; then
+        rm -rf /run/lock/tedge_agent.lock
+    fi
+    
+    if [ -f "/run/lock/tedge-agent.lock" ]; then
+        rm -rf /run/lock/tedge-agent.lock
+    fi
+}
+
+purge_agent_logs() {
+    if [ -d "/var/log/tedge/agent" ]; then
+        rm -rf /var/log/tedge/agent
+    fi
+}
+
+purge_var_data_directory() {
+    if [ -d "/var/tedge" ]; then
+        rm -rf /var/tedge
+    fi
+}
+
+case "$1" in
+    purge)
+        purge_agent_directory
+        purge_agent_lock
+        purge_var_data_directory
+        purge_agent_logs
+    ;;
+esac
+
+

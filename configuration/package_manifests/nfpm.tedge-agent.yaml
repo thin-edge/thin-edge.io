@@ -76,3 +76,9 @@ overrides:
       postinstall: configuration/package_scripts/_generated/tedge-agent/deb/postinst
       preremove: configuration/package_scripts/_generated/tedge-agent/deb/prerm
       postremove: configuration/package_scripts/_generated/tedge-agent/deb/postrm
+  ipk:
+    scripts:
+      preinstall: configuration/package_scripts/_generated/tedge-agent/ipk/preinst
+      postinstall: configuration/package_scripts/_generated/tedge-agent/ipk/postinst
+      preremove: configuration/package_scripts/_generated/tedge-agent/ipk/prerm
+      postremove: configuration/package_scripts/_generated/tedge-agent/ipk/postrm
