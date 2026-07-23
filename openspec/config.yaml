@@ -9,12 +9,29 @@ schema: spec-driven
 #     We use conventional commits
 #     Domain: e-commerce platform
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+context: |
+  Writing style (all artifacts): plain, direct English.
+  Use semantic line breaks.
+  Clear, complete sentences. Prefer concise, but never at the cost of ambiguity.
+  Bullets for lists of items; short paragraphs for explanations and context.
+  No hedging or filler.
+  Avoid restating well known MQTT and thin-edge concepts.
+  State each decision and its reason. Skip elaboration unless a reader would
+  need to infer a non-obvious connection.
+  Never let terseness introduce ambiguity about scope — if a phrase could be
+  read two ways, spell out which reading is meant.
+
+rules:
+  proposal:
+    - After "Why", add a "Proposed solution" section that introduces the feature from the
+      user's point of view with short usage examples — before any internal mechanism.
+    - In "What Changes", lead with what the feature introduces — what a user or consumer
+      would interact with — before stating its properties or constraints (opt-in, security
+      model, correctness guarantees). Don't qualify something the reader hasn't met yet.
+  design:
+    - Do not restate the problem or motivation — that lives in the proposal. Link the
+      proposal instead of repeating its "Why".
+    - "Open with a brief Context: name the problem being solved (one sentence, link the
+      proposal for detail) and the constraints that shape the design decisions."
+    - Assume a reader who already knows the problem and the user-facing surface. Spend the
+      words on how it is built and why this design over the alternatives.
