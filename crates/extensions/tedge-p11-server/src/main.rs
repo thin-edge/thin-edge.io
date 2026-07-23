@@ -204,12 +204,23 @@ async fn try_read_config(args: Args) -> anyhow::Result<ValidConfig> {
     let toml_path = args.config_dir.join("tedge.toml");
     let mut toml_config = TomlConfig::read_tedge_toml(&toml_path).await;
 
+    // Treat an empty env var / flag value the same as unset, so e.g. an empty
+    // TEDGE_DEVICE_CRYPTOKI_PIN falls back to tedge.toml instead of overriding it with "".
+    // (clap parses a set-but-empty env var as `Some("")`.) This matters for service managers
+    // that pass the variables unconditionally.
     let (pin, Some(module_path), socket_path, uri) = (
-        args.pin.unwrap_or_else(|| toml_config.pin()),
-        args.module_path.or_else(|| toml_config.module_path()),
+        args.pin
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| toml_config.pin()),
+        args.module_path
+            .filter(|p| !p.as_str().is_empty())
+            .or_else(|| toml_config.module_path()),
         args.socket_path
+            .filter(|p| !p.as_str().is_empty())
             .unwrap_or_else(|| toml_config.socket_path()),
-        args.uri.or_else(|| toml_config.uri()),
+        args.uri
+            .filter(|s| !s.is_empty())
+            .or_else(|| toml_config.uri()),
     ) else {
         anyhow::bail!("Missing configuration values. Please set them in `tedge.toml` or pass them as command-line arguments.")
     };
@@ -419,6 +430,33 @@ module_path = """#;
                 }
             }
         )
+    }
+
+    #[tokio::test]
+    async fn empty_env_values_fall_back_to_tedge_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_dir = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+        std::fs::write(
+            config_dir.join("tedge.toml"),
+            "[device.cryptoki]\nmodule_path = \"/lib/module.so\"\npin = \"123456\"\n",
+        )
+        .unwrap();
+
+        // An empty env var / flag value (as a service manager passes for an unset variable)
+        // must not override the configured value.
+        let args = Args {
+            socket_path: None,
+            module_path: None,
+            pin: Some(String::new()),
+            uri: Some(String::new()),
+            log_level: None,
+            config_dir,
+        };
+
+        let config = try_read_config(args).await.unwrap();
+        assert_eq!(config.pin, "123456"); // empty pin fell back to tedge.toml
+        assert_eq!(config.module_path.as_str(), "/lib/module.so");
+        assert_eq!(config.uri, None); // empty uri treated as unset
     }
 
     #[test]
