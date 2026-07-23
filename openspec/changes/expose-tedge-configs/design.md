@@ -1,12 +1,15 @@
 ## Context
 
-%%te%% config lives in files (`tedge.toml`, per-mapper `mapper.toml`) read only by the components that
-own them.
-An external process — a plugin, or a %%te%% component in its own container — has no access to the
-config directory or the device certificate, since these aren't mounted into other containers, and
-`tedge config get` needs both.
-So even a non-secret, widely-needed value like `device.id` is out of reach for anything outside the
-component that owns the config file.
+The problem and the user-facing surface are in the [proposal](./proposal.md):
+an external process can't read even a non-secret value like `device.id` without file access.
+
+This document covers how that surface is built.
+Each config value has a single owner —
+the component that loads it — and no component reads another's config.
+
+Each owner publishes only its own values and reconciles only its own `config/+` topics.
+The agent additionally subscribes to *every* service's `config/+` topics to build the aggregated view.
+A consumer reads either straight off MQTT or through that HTTP view.
 
 ## Goals / Non-Goals
 

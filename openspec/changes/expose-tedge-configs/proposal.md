@@ -1,10 +1,44 @@
 ## Why
 
-An external process — a plugin, or a %%te%% component in its own container — has no access to the
-config directory or the device certificate, and `tedge config get` needs both.
-So even a non-secret, widely-needed value like `device.id` is out of reach for anything outside the
-component that owns the config file.
-There's currently no way to read a %%te%% config value without file access.
+A plugin, or a %%te%% component running in its own container, or a child device,
+often needs a config value as basic as `device.id`.
+Today it has no way to read one.
+
+%%te%% config lives in files (`tedge.toml`, `mapper.toml`) that only the owning component can read,
+and `tedge config get` needs the device certificate as well.
+So, that external process can not read any of the configs, not even the ones that are not secrets,
+without file system access to those files and device certificates.
+
+See [thin-edge/thin-edge.io#4235](https://github.com/thin-edge/thin-edge.io/issues/4235) for the full
+requirement and the motivating use cases.
+
+## What you can do
+
+This feature proposes the following solution:
+
+Read a selected config value without any file or certificate access, either way:
+
+- **Subscribe** to its retained MQTT topic, scoped to the service that owns the value:
+
+  ```
+  te/device/main/service/tedge-agent/config/device.id       -> my-device-01
+  te/device/main/service/tedge-mapper-c8y/config/url         -> example.cumulocity.com
+  ```
+
+- **Pull** it over HTTP from the agent — a single value, or a whole service's config as a JSON object:
+
+  ```console
+  $ curl http://tedge:8000/te/v1/entities/device/main/service/tedge-agent/config/device.id
+  my-device-01
+
+  $ curl http://tedge:8000/te/v1/entities/device/main/service/tedge-mapper-c8y/config
+  {"url":"example.cumulocity.com","device.id":"my-device-01"}
+  ```
+
+Only values a component maintainer has explicitly marked as exposable are ever published or served:
+the set is opt-in and never includes secrets (private keys, PINs, credential-file paths).
+A value that isn't exposed and a key that doesn't exist look the same from outside — both return
+`404 Not Found`.
 
 ## What Changes
 
