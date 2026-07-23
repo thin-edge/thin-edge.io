@@ -484,6 +484,8 @@ impl ConnectCommand {
         tedge_config: &TEdgeConfig,
         max_attempts: u32,
     ) -> Result<DeviceStatus, Fancy<ConnectError>> {
+        let max_interval = std::time::Duration::from_secs(30);
+        let mut interval = std::time::Duration::from_secs(2);
         for i in 1..max_attempts {
             let result = self.check_connection(tedge_config).await;
             if let Ok(DeviceStatus::AlreadyExists) = result {
@@ -493,7 +495,8 @@ impl ConnectCommand {
                 "Connection test failed, attempt {} of {}\n",
                 i, max_attempts,
             );
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            tokio::time::sleep(interval).await;
+            interval = (interval * 2).min(max_interval)
         }
         self.check_connection(tedge_config).await
     }
