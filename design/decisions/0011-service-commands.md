@@ -1,6 +1,6 @@
 # Service command support (Cumulocity service actions)
 
-* Date: __2026-07-07__
+* Date: __2026-07-23__
 * Status: __Draft__
 
 ## Background
@@ -44,7 +44,7 @@ However, acting on a service is not really supported today:
   so there is no component that would carry out an operation targeting a service.
 
 Supporting this is harder than a plain mapper feature
-because **services on one device are owned by different daemons**:
+because **services on one device are controlled through different mechanisms**:
 
 1. **Init-managed services** (systemd, OpenRC, SysVinit, ...):
    thin-edge's own daemons (`tedge-agent`, `tedge-mapper-*`) and arbitrary units.
@@ -68,17 +68,17 @@ is **who executes a service command, and how**.
 * Support the standard commands `start`, `stop`, `restart`, plus **custom commands**:
   Cumulocity allows arbitrary command names in `c8y_SupportedServiceCommands`,
   and a service owner can define its own.
-* Works both for init-managed services and for services owned by third-party daemons,
+* Works both for init-managed services (abstracted by `system.toml`)
+  and for services controlled through a third-party abstraction (e.g. containers via `tedge-container-plugin`),
   without conflicting executors.
-* Ownership is respected:
-  what a service supports reflects what its owner can actually execute.
 * No broadening of the privileged surface beyond what thin-edge packaging already grants.
 
 ## Design
 
 At a glance, four roles are involved:
 
-* **Service owner** (tedge-agent, a mapper, or a third-party daemon)
+* **Service owner** (tedge-agent, a mapper, or a third-party daemon like `tedge-container-plugin`):
+  registers the service as an entity and is the source of its supported commands.
 * **tedge-mapper-c8y**: converts between Cumulocity and thin-edge
     * the capability → `c8y_SupportedServiceCommands` + supported operation (SmartREST `114`)
     * a `c8y_ServiceCommand` operation → a thin-edge command;
@@ -254,7 +254,7 @@ so accepting additional custom command templates requires a small schema extensi
 * **Single executor ⇒ no terminal-state hazard.**
   Since nothing else will ever execute the command,
   failing with "no handler installed for service type `<type>`" is *correct*,
-  not a race against the real owner.
+  not a race against a real handler.
 * The `tedge service` command is independently useful for operators:
   an init-system-agnostic wrapper (`tedge service restart mosquitto`) that honors `system.toml`.
   Today this requires knowing which init system the device uses.
