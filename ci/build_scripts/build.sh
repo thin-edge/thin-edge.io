@@ -11,7 +11,7 @@ set -eo pipefail
 
 # enable debugging  by default in ci
 if [ "$CI" = "true" ]; then
-    set -x
+  set -x
 fi
 
 help() {
@@ -112,66 +112,64 @@ ZIGLANG_BIN=()
 BUILD=1
 
 REST_ARGS=()
-while [ $# -gt 0 ]
-do
-    case "$1" in
-        --build-with)
-            BUILD_WITH="$2"
-            shift
-            ;;
-        --bin)
-            OVERRIDE_BINARIES=( "$2" )
-            shift
-            ;;
-        --toolchain)
-            TOOLCHAIN="+$2"
-            shift
-            ;;
-        --glibc-version)
-            GLIBC_VERSION="$2"
-            shift
-            ;;
-        --profile)
-            BUILD_PROFILE="$2"
-            shift
-            ;;
-        --skip-build)
-            BUILD=0
-            ;;
-        --artifact-dir)
-            ARTIFACT_DIR="$2"
-            shift
-            ;;
-        # deprecated option. To be removed after usage of it is removed from the build-workflow
-        --skip-deprecated-packages)
-            ;;
-        -h|--help)
-            help
-            exit 0
-            ;;
-        *)
-            REST_ARGS+=("$1")
-            ;;
-    esac
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --build-with)
+    BUILD_WITH="$2"
     shift
+    ;;
+  --bin)
+    OVERRIDE_BINARIES=("$2")
+    shift
+    ;;
+  --toolchain)
+    TOOLCHAIN="+$2"
+    shift
+    ;;
+  --glibc-version)
+    GLIBC_VERSION="$2"
+    shift
+    ;;
+  --profile)
+    BUILD_PROFILE="$2"
+    shift
+    ;;
+  --skip-build)
+    BUILD=0
+    ;;
+  --artifact-dir)
+    ARTIFACT_DIR="$2"
+    shift
+    ;;
+  # deprecated option. To be removed after usage of it is removed from the build-workflow
+  --skip-deprecated-packages) ;;
+  -h | --help)
+    help
+    exit 0
+    ;;
+  *)
+    REST_ARGS+=("$1")
+    ;;
+  esac
+  shift
 done
 
 # Only set if rest arguments are defined
 if [ ${#REST_ARGS[@]} -gt 0 ]; then
-    set -- "${REST_ARGS[@]}"
+  set -- "${REST_ARGS[@]}"
 fi
 
 if [ ${#OVERRIDE_BINARIES[@]} -gt 0 ]; then
-    # Override the list of binaries to build
-    BINARIES=("${OVERRIDE_BINARIES[@]}")
+  # Override the list of binaries to build
+  BINARIES=("${OVERRIDE_BINARIES[@]}")
 fi
 
 if [ $# -eq 1 ]; then
-    TARGET="$1"
+  TARGET="$1"
 fi
 
 if [ -z "$TARGET" ]; then
-    TARGET=$(./ci/build_scripts/detect_target.sh)
+  TARGET=$(./ci/build_scripts/detect_target.sh)
 fi
 
 # Set version from scm
@@ -181,196 +179,196 @@ fi
 source ./ci/build_scripts/version.sh
 
 install_rust() {
-    # Install toolchain if missing
-    if command -V rustup >/dev/null 2>&1; then
-        rustup toolchain install "${TOOLCHAIN//+/}" --no-self-update
-    fi
+  # Install toolchain if missing
+  if command -V rustup >/dev/null 2>&1; then
+    rustup toolchain install "${TOOLCHAIN//+/}" --no-self-update
+  fi
 }
 
 install_zig_tools() {
-    # zig provides better cross compiling support
-    # shellcheck disable=SC2086
-    cargo +stable install cargo-zigbuild --version ">=0.17.3"
+  # zig provides better cross compiling support
+  # shellcheck disable=SC2086
+  cargo +stable install cargo-zigbuild --version ">=0.17.3"
 
-    # Allow users to install zig by other package managers
-    ZIGLANG_BIN=(
-        zig
-    )
-    if ! zig --help &>/dev/null; then
-        if ! python3 -m ziglang --help &>/dev/null; then
-            PIP_ROOT_USER_ACTION=ignore pip3 install ziglang --break-system-packages 2>/dev/null || PIP_ROOT_USER_ACTION=ignore pip3 install ziglang
-        fi
-        ZIGLANG_BIN=(
-            python3
-            -m
-            ziglang
-        )
+  # Allow users to install zig by other package managers
+  ZIGLANG_BIN=(
+    zig
+  )
+  if ! zig --help &>/dev/null; then
+    if ! python3 -m ziglang --help &>/dev/null; then
+      PIP_ROOT_USER_ACTION=ignore pip3 install ziglang --break-system-packages 2>/dev/null || PIP_ROOT_USER_ACTION=ignore pip3 install ziglang
     fi
+    ZIGLANG_BIN=(
+      python3
+      -m
+      ziglang
+    )
+  fi
 
-    # Display zig version to help with debugging
-    echo "zig version: $("${ZIGLANG_BIN[@]}" version 2>/dev/null ||:)"
+  # Display zig version to help with debugging
+  echo "zig version: $("${ZIGLANG_BIN[@]}" version 2>/dev/null || :)"
 }
 
 build() {
-    build_tool="$1"
-    shift
-    case "$build_tool" in
-        zig|ziglang|cargo-zigbuild)
-            # shellcheck disable=SC2086
-            cargo-zigbuild $TOOLCHAIN zigbuild "$@"
-            ;;
-        clang)
-            # shellcheck disable=SC2086
-            mk/cargo.sh $TOOLCHAIN build "$@"
-            ;;
-        native|*)
-            # shellcheck disable=SC2086
-            cargo $TOOLCHAIN build "$@"
-            ;;
-    esac
+  build_tool="$1"
+  shift
+  case "$build_tool" in
+  zig | ziglang | cargo-zigbuild)
+    # shellcheck disable=SC2086
+    cargo-zigbuild $TOOLCHAIN zigbuild "$@"
+    ;;
+  clang)
+    # shellcheck disable=SC2086
+    mk/cargo.sh $TOOLCHAIN build "$@"
+    ;;
+  native | *)
+    # shellcheck disable=SC2086
+    cargo $TOOLCHAIN build "$@"
+    ;;
+  esac
 }
 
 get_build_tool_for_binary() {
-    # Different binaries have different requirements / build dependencies
-    # which influence which build tools can be used.
-    # Previously tedge has been using clang to build the binaries, so clang
-    # should still be preferred to reduce risk of unexpected differences between
-    # different compiler optimizations (not sure if this is true, but less changes are generally safer)
-    binary="$1"
-    case "$binary" in
-        tedge-p11-server)
-            echo "zig"
-            ;;
-        *)
-            echo "clang"
-    esac
+  # Different binaries have different requirements / build dependencies
+  # which influence which build tools can be used.
+  # Previously tedge has been using clang to build the binaries, so clang
+  # should still be preferred to reduce risk of unexpected differences between
+  # different compiler optimizations (not sure if this is true, but less changes are generally safer)
+  binary="$1"
+  case "$binary" in
+  tedge-p11-server)
+    echo "zig"
+    ;;
+  *)
+    echo "clang"
+    ;;
+  esac
 }
 
 get_target_for_binary() {
-    binary_name="$1"
-    target="$2"
-    case "$binary_name" in
-        tedge-p11-server)
-            # requires gnu target as loading .so files requires to be dynamically compiled
-            # This can return the same output, but this is fine as apple targets support
-            # loading by default
-            echo "${target//musl/gnu}"
-            ;;
-        *)
-            echo "$target"
-            ;;
-    esac
+  binary_name="$1"
+  target="$2"
+  case "$binary_name" in
+  tedge-p11-server)
+    # requires gnu target as loading .so files requires to be dynamically compiled
+    # This can return the same output, but this is fine as apple targets support
+    # loading by default
+    echo "${target//musl/gnu}"
+    ;;
+  *)
+    echo "$target"
+    ;;
+  esac
 }
 
 if [ -z "$ARTIFACT_DIR" ]; then
-    ARTIFACT_DIR="target/$TARGET/$BUILD_PROFILE"
+  ARTIFACT_DIR="target/$TARGET/$BUILD_PROFILE"
 fi
 mkdir -p "$ARTIFACT_DIR"
 
 if [ "$BUILD_PROFILE" = "release" ]; then
-    COMMON_BUILD_OPTIONS+=("--release")
+  COMMON_BUILD_OPTIONS+=("--release")
 elif [ "$BUILD_PROFILE" != "debug" ]; then
-    COMMON_BUILD_OPTIONS+=("--profile" "$BUILD_PROFILE")
+  COMMON_BUILD_OPTIONS+=("--profile" "$BUILD_PROFILE")
 fi
 
 install_clang_if_required() {
-    # Only install clang if it is not available to keep build times
-    # quicker and avoiding unnecessary usage of sudo which is required to install packages
-    # note: clang is required by bindgen
-    if command -V ldconfig >/dev/null 2>&1; then
-        # linux
-        if ! ldconfig -p 2>/dev/null | grep -q "libclang.*\.so"; then
-            # shellcheck disable=SC2086
-            ./mk/install-build-tools.sh $TOOLCHAIN --target="$BINARY_TARGET"
-        fi
-    elif command -V brew >/dev/null 2>&1; then
-        # macOS
-        if ! brew list llvm >/dev/null 2>&1; then
-            brew install llvm
-        fi
-        LLVM_DIR="$(brew --prefix)/opt/llvm/bin"
-        if [ -d "$LLVM_DIR" ]; then
-            export PATH="$LLVM_DIR:$PATH"
-        fi
+  # Only install clang if it is not available to keep build times
+  # quicker and avoiding unnecessary usage of sudo which is required to install packages
+  # note: clang is required by bindgen
+  if command -V ldconfig >/dev/null 2>&1; then
+    # linux
+    if ! ldconfig -p 2>/dev/null | grep -q "libclang.*\.so"; then
+      # shellcheck disable=SC2086
+      ./mk/install-build-tools.sh $TOOLCHAIN --target="$BINARY_TARGET"
     fi
+  elif command -V brew >/dev/null 2>&1; then
+    # macOS
+    if ! brew list llvm >/dev/null 2>&1; then
+      brew install llvm
+    fi
+    LLVM_DIR="$(brew --prefix)/opt/llvm/bin"
+    if [ -d "$LLVM_DIR" ]; then
+      export PATH="$LLVM_DIR:$PATH"
+    fi
+  fi
 }
 
 # build release for target
 # GIT_SEMVER should be referenced in the build.rs scripts
 if [ "$BUILD" = 1 ] && [ ${#BINARIES[@]} -gt 0 ]; then
-    install_rust
+  install_rust
 
-    for name in "${BINARIES[@]}"; do
-        BINARY_TARGET=$(get_target_for_binary "$name" "$TARGET")
-        # shellcheck disable=SC2086
-        rustup $TOOLCHAIN target add "$BINARY_TARGET"
-        BUILD_DIR="target/$BINARY_TARGET/$BUILD_PROFILE"
+  for name in "${BINARIES[@]}"; do
+    BINARY_TARGET=$(get_target_for_binary "$name" "$TARGET")
+    # shellcheck disable=SC2086
+    rustup $TOOLCHAIN target add "$BINARY_TARGET"
+    BUILD_DIR="target/$BINARY_TARGET/$BUILD_PROFILE"
 
-        # Each binary should have its preferred build tool (unless if the user overrides this)
-        BUILD_TOOL=$(get_build_tool_for_binary "$name")
-        if [ -n "$BUILD_WITH" ] && [ "$BUILD_WITH" != "auto" ]; then
-            BUILD_TOOL="$BUILD_WITH"
-        fi
+    # Each binary should have its preferred build tool (unless if the user overrides this)
+    BUILD_TOOL=$(get_build_tool_for_binary "$name")
+    if [ -n "$BUILD_WITH" ] && [ "$BUILD_WITH" != "auto" ]; then
+      BUILD_TOOL="$BUILD_WITH"
+    fi
 
-        case "$BUILD_TOOL" in
-            zig)
-                install_zig_tools
-                install_clang_if_required
+    case "$BUILD_TOOL" in
+    zig)
+      install_zig_tools
+      install_clang_if_required
 
-                case "$BINARY_TARGET" in
-                    riscv64gc-unknown-linux-musl)
-                        # find ziglang includes files and provide the paths to bindgen otherwise the
-                        # rquickjs bindgen build step will fail due to missing dependencies
-                        ZIGLANG_LIB_DIR=$("${ZIGLANG_BIN[@]}" env | awk -F"\"" '/.lib_dir/ {print $2}')
-                        
-                        # Explicitly set the target due to a different between rust and bindgen targets for riscv64
-                        # note: BINDGEN_EXTRA_CLANG_ARGS is used instead of the target specific bindgen env variable
-                        # as it is not respected
-                        export BINDGEN_EXTRA_CLANG_ARGS="
+      case "$BINARY_TARGET" in
+      riscv64gc-unknown-linux-musl)
+        # find ziglang includes files and provide the paths to bindgen otherwise the
+        # rquickjs bindgen build step will fail due to missing dependencies
+        ZIGLANG_LIB_DIR=$("${ZIGLANG_BIN[@]}" env | awk -F"\"" '/.lib_dir/ {print $2}')
+
+        # Explicitly set the target due to a different between rust and bindgen targets for riscv64
+        # note: BINDGEN_EXTRA_CLANG_ARGS is used instead of the target specific bindgen env variable
+        # as it is not respected
+        export BINDGEN_EXTRA_CLANG_ARGS="
                             --target=riscv64-unknown-linux-musl
                             -I\"$ZIGLANG_LIB_DIR/libc/include/riscv-linux-gnu\"
                             -I\"$ZIGLANG_LIB_DIR/libc/include/generic-glibc\"
                             "
-                        ;;
-                    riscv64gc-unknown-linux-gnu)
-                        # Explicitly set the target due to a different between rust and bindgen targets for riscv64
-                        # note: BINDGEN_EXTRA_CLANG_ARGS is used instead of the target specific bindgen env variable
-                        # as it is not respected
-                        ZIGLANG_LIB_DIR=$("${ZIGLANG_BIN[@]}" env | awk -F"\"" '/.lib_dir/ {print $2}')
-                        export BINDGEN_EXTRA_CLANG_ARGS="
+        ;;
+      riscv64gc-unknown-linux-gnu)
+        # Explicitly set the target due to a different between rust and bindgen targets for riscv64
+        # note: BINDGEN_EXTRA_CLANG_ARGS is used instead of the target specific bindgen env variable
+        # as it is not respected
+        ZIGLANG_LIB_DIR=$("${ZIGLANG_BIN[@]}" env | awk -F"\"" '/.lib_dir/ {print $2}')
+        export BINDGEN_EXTRA_CLANG_ARGS="
                             --target=riscv64-unknown-linux-gnu
                             -I\"$ZIGLANG_LIB_DIR/libc/include/riscv-linux-gnu\"
                             -I\"$ZIGLANG_LIB_DIR/libc/include/generic-glibc\"
                             "
-                        # riscv is a newer processor so the minimum glibc version is higher than for other targets
-                        if [ -n "$RISCV_GLIBC_VERSION" ]; then
-                            BINARY_TARGET="${BINARY_TARGET}.${RISCV_GLIBC_VERSION}"
-                        fi
-                        ;;
-                    *gnu*)
-                        if [ -n "$GLIBC_VERSION" ]; then
-                            BINARY_TARGET="${BINARY_TARGET}.${GLIBC_VERSION}"
-                        fi
-                        ;;
-                esac
-                ;;
-            clang)
-                # shellcheck disable=SC2086
-                ./mk/install-build-tools.sh $TOOLCHAIN --target="$BINARY_TARGET"
-                ;;
-            *)
-                ;;
-        esac
-
-        build "$BUILD_TOOL" --target="$BINARY_TARGET" "${COMMON_BUILD_OPTIONS[@]}" --bin "$name"
-        if [ "$BUILD_DIR" != "$ARTIFACT_DIR" ]; then
-            cp "$BUILD_DIR/$name" "$ARTIFACT_DIR/"
+        # riscv is a newer processor so the minimum glibc version is higher than for other targets
+        if [ -n "$RISCV_GLIBC_VERSION" ]; then
+          BINARY_TARGET="${BINARY_TARGET}.${RISCV_GLIBC_VERSION}"
         fi
-    done
+        ;;
+      *gnu*)
+        if [ -n "$GLIBC_VERSION" ]; then
+          BINARY_TARGET="${BINARY_TARGET}.${GLIBC_VERSION}"
+        fi
+        ;;
+      esac
+      ;;
+    clang)
+      # shellcheck disable=SC2086
+      ./mk/install-build-tools.sh $TOOLCHAIN --target="$BINARY_TARGET"
+      ;;
+    *) ;;
+    esac
+
+    build "$BUILD_TOOL" --target="$BINARY_TARGET" "${COMMON_BUILD_OPTIONS[@]}" --bin "$name"
+    if [ "$BUILD_DIR" != "$ARTIFACT_DIR" ]; then
+      cp "$BUILD_DIR/$name" "$ARTIFACT_DIR/"
+    fi
+  done
 fi
 
 # Create release packages (e.g. linux packages like rpm, deb, apk etc.)
 OUTPUT_DIR="$(dirname "$ARTIFACT_DIR")/packages"
-PACKAGES=( "${RELEASE_PACKAGES[@]}" )
+PACKAGES=("${RELEASE_PACKAGES[@]}")
 export BUILD_PROFILE
 ./ci/build_scripts/package.sh build "$TARGET" "${PACKAGES[@]}" --output "$OUTPUT_DIR"

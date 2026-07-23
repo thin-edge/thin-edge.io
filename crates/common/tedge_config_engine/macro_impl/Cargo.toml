@@ -1,0 +1,25 @@
+[package]
+name = "tedge_config_engine-impl"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+darling = { workspace = true }
+heck = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+prettyplease = { workspace = true }
+# span-locations makes Span::start()/end() available so tests can assert
+# that generated tokens point back at the macro input
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,5 @@
+error: Unknown field: `multi`
+ --> tests/compile_fail/group_attribute_rejected.rs:5:24
+  |
+5 |         #[tedge_config(multi)]
+  |                        ^^^^^
