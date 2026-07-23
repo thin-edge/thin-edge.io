@@ -36,7 +36,9 @@ zeroize = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+mockito = { workspace = true }
 tempfile = { workspace = true }
+test-case = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 
 [lints]

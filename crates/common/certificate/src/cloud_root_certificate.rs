@@ -10,6 +10,8 @@ use tokio_stream::wrappers::ReadDirStream;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt as _;
 
+pub mod http_client;
+
 #[derive(Debug, Clone)]
 pub struct CloudHttpConfig {
     certificates: Arc<[Certificate]>,
@@ -29,30 +31,6 @@ impl CloudHttpConfig {
             certificates: Arc::new([]),
             proxy: None,
         }
-    }
-
-    #[allow(clippy::disallowed_types)]
-    pub fn client_builder(&self) -> reqwest::ClientBuilder {
-        let builder = self
-            .certificates
-            .iter()
-            .cloned()
-            .fold(reqwest::ClientBuilder::new(), |builder, cert| {
-                builder.add_root_certificate(cert)
-            });
-
-        if let Some(proxy) = self.proxy.clone() {
-            builder.proxy(proxy)
-        } else {
-            builder.no_proxy()
-        }
-    }
-
-    #[allow(clippy::disallowed_types)]
-    pub fn client(&self) -> reqwest::Client {
-        self.client_builder()
-            .build()
-            .expect("Valid reqwest client builder configuration")
     }
 }
 

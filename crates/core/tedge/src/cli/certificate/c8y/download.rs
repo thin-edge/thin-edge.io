@@ -102,7 +102,11 @@ impl DownloadCertCmd {
         }
         let csr = read_csr_from_file(&self.csr_path).await?;
 
-        let http = self.root_certs.client();
+        let http = self
+            .root_certs
+            .client_builder()
+            .build()
+            .expect("Valid reqwest client builder configuration");
         let c8y_url = &self.c8y_url;
         let url = format!("https://{c8y_url}/.well-known/est/simpleenroll");
         let url = Url::parse(&url)?;
