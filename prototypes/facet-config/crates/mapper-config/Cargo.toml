@@ -1,0 +1,12 @@
+[package]
+name = "mapper-config"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+facet-config-macro = { path = "../config-macro" }
+facet-config-runtime = { path = "../config-runtime" }
+facet = { version = "0.50.0-rc.5", features = ["camino", "net", "nonzero"] }
+serde = { version = "1", features = ["derive"] }
+camino = { version = "1", features = ["serde1"] }
+toml = "0.8"

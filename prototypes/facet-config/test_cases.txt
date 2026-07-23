@@ -1,0 +1,13 @@
+TEDGE_MAPPERS_TB_URL=... -> sets mappers.tb.url
+TEDGE_MAPPERS_C8Y_URL=... -> sets mappers.c8y.url
+TEDGE_C8Y_URL=... -> sets c8y.url
+TEDGE_C8Y_PROFILES_NEW_URL ... -> sets mappers.c8y.new.url
+TEDGE_MAPPERS_C8Y_NEW_URL=... -> sets mappers.c8y.new.url (optional)
+TEDGE_DEVICE_KEY_PATH=... -> sets device.key.path
+TEDGE_DEVICE_CERT_PATH=... -> sets mappers.c8y.device.cert_path (if not otherwise set)
+TEDGE_DEVICE_CERT_PATH=... -> sets mappers.tb.device.cert_path (if not otherwise set)
+TEDGE_C8Y_PROXY_BIND_PORT=... -> sets c8y.proxy.bind_port
+TEDGE_MAPPERS_C8Y_PROXY_BIND_PORT=... -> sets mappers.c8y.proxy.bind_port
+TEDGE_MAPPERS_TB_PROXY_BIND_PORT=... -> unrecognised
+TEDGE_MAPPERS_TB_CLOUD_TYPE=c8y + TEDGE_MAPPERS_TB_PROXY_BIND_PORT=... -> sets mappers.tb.proxy.bind_port
+
