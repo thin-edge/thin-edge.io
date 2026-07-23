@@ -16,6 +16,7 @@ test_helpers = []
 
 [dependencies]
 async-trait = { workspace = true }
+certificate = { workspace = true }
 http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true, default-features = false, features = [

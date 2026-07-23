@@ -14,6 +14,7 @@ use axum_tls::config::load_ssl_config;
 use axum_tls::config::PemReader;
 use axum_tls::config::TrustStoreLoader;
 use axum_tls::start_tls_server;
+use certificate::CloudHttpConfig;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use futures::Sink;
@@ -502,6 +503,14 @@ async fn respond_to(
     Ok((status, headers, body).into_response())
 }
 
+pub fn remote_reqwest_client(config: &CloudHttpConfig) -> reqwest::Client {
+    config
+        .client_builder()
+        .set_user_agent(false)
+        .build()
+        .expect("Valid reqwest client builder configuration")
+}
+
 #[cfg(test)]
 mod tests {
     use axum::body::Bytes;
@@ -511,6 +520,7 @@ mod tests {
     use axum_extra::headers::Authorization;
     use axum_extra::TypedHeader;
     use camino::Utf8PathBuf;
+    use certificate::CloudHttpConfig;
     use futures::channel::mpsc;
     use futures::future::ready;
     use futures::stream::once;
@@ -634,6 +644,55 @@ mod tests {
         let request = parse_raw_request(&mut tcp_stream).await;
 
         assert_eq!(host_header_values(&request), [&destination_host], "Did not find correct host header. The value should be the proxy destination ({destination_host}), not the proxy itself ({proxy_host})");
+    }
+
+    /// The proxy shouldn't add the user-agent header, it should be set by the clients in the request.
+    #[tokio::test]
+    #[test_case::test_case(Some("my UA"))]
+    #[test_case::test_case(None)]
+    async fn forwards_user_agent_header_for_http_requests(user_agent: Option<&str>) {
+        let target_host = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target = target_host.local_addr().unwrap();
+
+        let proxy_port = start_server_port(target.port(), vec!["unused token"]);
+
+        let builder = reqwest_builder();
+        let builder = if let Some(ua) = user_agent {
+            builder.user_agent(ua.to_string())
+        } else {
+            builder
+        };
+        tokio::spawn(async move {
+            builder
+                .build()
+                .unwrap()
+                .get(format!("http://127.0.0.1:{proxy_port}/c8y/test"))
+                .send()
+                .await
+                .unwrap()
+                .error_for_status()
+                .unwrap();
+        });
+
+        let (mut tcp_stream, _) =
+            tokio::time::timeout(Duration::from_secs(5), target_host.accept())
+                .await
+                .unwrap()
+                .unwrap();
+
+        let request = parse_raw_request(&mut tcp_stream).await;
+
+        tcp_stream
+            .write_all(b"HTTP/1.1 204 No Content")
+            .await
+            .unwrap();
+        let received_ua = request
+            .headers
+            .iter()
+            .find(|h| h.name.to_lowercase() == "user-agent")
+            .map(|h| std::str::from_utf8(h.value).unwrap());
+
+        assert_eq!(received_ua, user_agent);
     }
 
     async fn parse_raw_request(tcp_stream: &mut TcpStream) -> httparse::Request<'static, 'static> {
@@ -1152,10 +1211,13 @@ mod tests {
 
     #[allow(clippy::disallowed_methods)]
     fn reqwest_client() -> reqwest::Client {
-        reqwest::Client::builder()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap()
+        reqwest_builder().build().unwrap()
+    }
+
+    #[allow(clippy::disallowed_methods)]
+    #[allow(clippy::disallowed_types)]
+    fn reqwest_builder() -> reqwest::ClientBuilder {
+        reqwest::Client::builder().danger_accept_invalid_certs(true)
     }
 
     fn start_server(server: &mockito::Server, tokens: Vec<impl Into<Cow<'static, str>>>) -> u16 {
@@ -1201,7 +1263,7 @@ mod tests {
                 is_https: false,
                 host: target_host.into(),
                 token_manager: jwt_retriever.clone(),
-                client: reqwest::Client::new(),
+                client: remote_reqwest_client(&CloudHttpConfig::new([], None)),
             };
             let trust_store = ca_dir
                 .as_ref()
