@@ -6,8 +6,6 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 use std::vec;
 use tedge_utils::paths::ManagedDir;
-use time::format_description;
-use time::OffsetDateTime;
 use tracing::info;
 use tracing::warn;
 
@@ -70,11 +68,12 @@ impl OperationLogs {
         operation_name: String,
         cmd_id: String,
     ) -> Result<CommandLog, OperationLogsError> {
-        let now = OffsetDateTime::now_utc();
+        // The timestamp becomes part of the log file name, so it must not contain `:`,
+        // which is not a valid character on FAT32.
         let file_name = format!(
             "{}-{}.log",
             operation_name,
-            now.format(&format_description::well_known::Rfc3339)?
+            tedge_utils::timestamp::now_filename_safe_format()
         );
         let file_path = self.log_dir.path().join(file_name);
 
@@ -255,6 +254,13 @@ mod tests {
 
         // The new log has been created
         assert!(new_log.path.exists());
+
+        // The new log file name is valid on FAT32 (no `:` in the generated timestamp)
+        let file_name = new_log
+            .path
+            .file_name()
+            .expect("log file should have a file name");
+        assert!(!file_name.contains(':'), "{file_name} contains ':'");
 
         // Outdated logs are removed
         assert!(!update_log_1.exists());

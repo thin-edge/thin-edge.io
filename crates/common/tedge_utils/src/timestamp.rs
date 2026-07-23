@@ -7,8 +7,24 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::str::FromStr;
 use strum::Display;
+use time::format_description;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+
+/// Formats the current UTC time in an RFC-3339-like representation that avoids `:`,
+/// which is not a valid character in file names on FAT32.
+///
+/// Use this to build file names (e.g. log files) that must remain valid across all
+/// commonly used file systems.
+pub fn now_filename_safe_format() -> String {
+    let format = format_description::parse(
+        "[year]-[month]-[day]T[hour]-[minute]-[second].[subsecond digits:9]Z",
+    )
+    .expect("valid time format description");
+    OffsetDateTime::now_utc()
+        .format(&format)
+        .expect("a valid OffsetDateTime can always be formatted with this format description")
+}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize, Document, Display)]
 #[serde(rename_all = "kebab-case")]
@@ -200,6 +216,12 @@ fn invalid_iso8601(value: &str, err: impl fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn filename_safe_timestamp_contains_no_colon() {
+        let timestamp = now_filename_safe_format();
+        assert!(!timestamp.contains(':'), "{timestamp} contains ':'");
+    }
 
     #[test]
     fn time_format_deserialize() {

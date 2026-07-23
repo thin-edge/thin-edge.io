@@ -12,8 +12,6 @@ use std::convert::Infallible;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
-use time::format_description;
-use time::OffsetDateTime;
 
 const ENTITY_ID_SEGMENTS: usize = 4;
 
@@ -960,12 +958,12 @@ impl IdGenerator {
     }
 
     pub fn new_id(&self) -> String {
+        // `cmd_id` ends up as part of a log file name (see `CommandLog::new`), so the
+        // timestamp must not contain `:`, which is not a valid character on FAT32
         format!(
             "{}-{}",
             self.prefix,
-            OffsetDateTime::now_utc()
-                .format(&format_description::well_known::Rfc3339)
-                .unwrap(),
+            tedge_utils::timestamp::now_filename_safe_format(),
         )
     }
 
@@ -994,6 +992,14 @@ mod tests {
     use test_case::test_case;
 
     const MQTT_ROOT: &str = "test_te";
+
+    #[test]
+    fn generated_ids_are_valid_fat32_file_names() {
+        // cmd_id ends up as part of a log file name (see `CommandLog::new`), so it must not
+        // contain `:`, which is not a valid character on FAT32
+        let id = IdGenerator::new("c8y-mapper").new_id();
+        assert!(!id.contains(':'), "{id} contains ':'");
+    }
 
     #[test]
     fn parses_full_correct_topic() {
