@@ -143,7 +143,8 @@ async fn get_internal_id_before_posting_software_list() {
     assert!(res.is_ok(), "Expected software list request to succeed");
 }
 
-#[tokio::test]
+// Time is paused so the retry back-off intervals elapse instantly.
+#[tokio::test(start_paused = true)]
 async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
     let c8y_host = "c8y.tenant.io";
     let main_device_id = "device-001";
@@ -182,7 +183,96 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
             child_device_id.into(),
         )
         .await;
-    assert!(res.is_err(), "Expected software list request to succeed");
+    assert!(
+        res.is_err(),
+        "Expected software list request to fail once the internal id lookup gives up"
+    );
+}
+
+// A freshly-registered child device may not be created yet in the c8y inventory when the mapper
+// first tries to publish its software list, making the internal id lookup transiently return
+// `404 Not Found`. The lookup must retry until the device is created rather than dropping the
+// request (regression test for the flaky `software-update-child` system test).
+// Time is paused so the retry back-off intervals elapse instantly.
+#[tokio::test(start_paused = true)]
+async fn get_internal_id_retries_until_the_device_is_created() {
+    let c8y_host = "c8y.tenant.io";
+    let main_device_id = "device-001";
+    let child_device_id = "child-101";
+
+    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), main_device_id.into()).await;
+
+    // Mock server definition
+    tokio::spawn(async move {
+        let get_internal_id_url =
+            format!("http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{child_device_id}");
+
+        // The child device is not created in the c8y inventory yet: fail the first lookups
+        for _ in 0..3 {
+            assert_recv(
+                &mut c8y,
+                Some(
+                    HttpRequestBuilder::get(&get_internal_id_url)
+                        .build()
+                        .unwrap(),
+                ),
+            )
+            .await;
+            let c8y_response = HttpResponseBuilder::new()
+                .status(StatusCode::NOT_FOUND)
+                .build()
+                .unwrap();
+            c8y.send(Ok(c8y_response)).await.unwrap();
+        }
+
+        // Once the child device has been created, the internal id lookup succeeds
+        assert_recv(
+            &mut c8y,
+            Some(
+                HttpRequestBuilder::get(&get_internal_id_url)
+                    .build()
+                    .unwrap(),
+            ),
+        )
+        .await;
+        let c8y_response = HttpResponseBuilder::new()
+            .status(200)
+            .json(&InternalIdResponse::new("200", child_device_id))
+            .build()
+            .unwrap();
+        c8y.send(Ok(c8y_response)).await.unwrap();
+
+        // ... and the software list is finally posted against the resolved internal id
+        let c8y_software_list = C8yUpdateSoftwareListResponse::default();
+        assert_recv(
+            &mut c8y,
+            Some(
+                HttpRequestBuilder::put(
+                    "http://localhost:8001/c8y/inventory/managedObjects/200".to_string(),
+                )
+                .header("content-type", "application/json")
+                .header("accept", "application/json")
+                .json(&c8y_software_list)
+                .build()
+                .unwrap(),
+            ),
+        )
+        .await;
+        let c8y_response = HttpResponseBuilder::new().status(200).build().unwrap();
+        c8y.send(Ok(c8y_response)).await.unwrap();
+    });
+
+    // Fetch the software list so that it internally invokes get_internal_id
+    let res = proxy
+        .send_software_list_http(
+            C8yUpdateSoftwareListResponse::default(),
+            child_device_id.into(),
+        )
+        .await;
+    assert!(
+        res.is_ok(),
+        "Expected software list request to succeed once the device is created: {res:?}"
+    );
 }
 
 #[tokio::test]
