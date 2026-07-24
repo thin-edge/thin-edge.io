@@ -286,6 +286,16 @@ impl WorkflowActor {
             info!("Ignoring {operation} operation because it is disabled in agent capabilities");
             return Ok(());
         }
+
+        // Notify actors listening for the completion of this operation.
+        // Workflow operations built from `builtin:<op>:<step>` actions (e.g. the default
+        // config_update) never flow through `process_builtin_command_update`, so their
+        // completion must be signalled here; otherwise listeners such as the log manager
+        // (which re-scans supported log types on config/software updates) are never notified.
+        if state.is_finished() {
+            self.sync_listener_actors(&state).await?;
+        }
+
         let mut log_file = self.open_command_log(&state, &operation, &cmd_id).await;
 
         let action = match self.workflow_repository.get_action(&state) {
@@ -664,9 +674,15 @@ impl WorkflowActor {
         command: &GenericCommandState,
     ) -> Result<(), RuntimeError> {
         if let Some(command) = command.operation() {
-            self.sync_signal_dispatcher
+            // Notifying listeners is best-effort: a listener that has shut down must not
+            // bring down the whole operation-processing actor.
+            if let Err(err) = self
+                .sync_signal_dispatcher
                 .sync_listener(command.as_str().into())
-                .await?;
+                .await
+            {
+                warn!("Failed to notify listeners on completion of {command} operation: {err}");
+            }
         }
         Ok(())
     }

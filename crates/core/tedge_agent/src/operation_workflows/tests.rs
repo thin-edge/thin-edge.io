@@ -26,6 +26,7 @@ use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::CmdMetaSyncSignal;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::RestartCommandPayload;
 use tedge_api::commands::SoftwareCommandMetadata;
@@ -46,6 +47,7 @@ use tedge_api::workflow::OperationStep;
 use tedge_api::workflow::OperationStepHandler;
 use tedge_api::workflow::OperationStepRequest;
 use tedge_api::workflow::OperationStepResponse;
+use tedge_api::workflow::SyncOnCommand;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_downloader_ext::DownloadResponse;
@@ -746,6 +748,95 @@ action = "cleanup"
     Ok(())
 }
 
+#[tokio::test]
+async fn sync_signal_sent_to_listeners_on_successful_workflow_operation() -> Result<(), DynError> {
+    // A workflow-based `config_update` operation reaching its `successful` state must notify
+    // the actors listening for its completion. Unlike a monolithic builtin operation, this
+    // terminal state flows through `process_command_update` (not `process_builtin_command_update`),
+    // so this test guards the fix that emits the sync signal on that path.
+    let workflow = r#"
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+"#;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut sync_signal_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![("config_update.toml".to_string(), workflow.to_string())],
+    )
+    .await?;
+
+    // Trigger the operation
+    let init_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_update/123"),
+        r#"{"status":"init"}"#,
+    );
+    mqtt_box.send(init_message).await?;
+
+    // The listener registered for `config_update` is notified once the workflow finishes
+    let signal =
+        recv_or_fail_on_actor_exit(&mut sync_signal_box, &mut actor_handle, "sync signal").await;
+    assert!(
+        signal.is_some(),
+        "expected a sync signal on operation completion"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn sync_signal_sent_to_listeners_on_failed_workflow_operation() -> Result<(), DynError> {
+    // Listeners must also be notified when the operation reaches its `failed` terminal state.
+    let workflow = r#"
+operation = "config_update"
+
+[init]
+action = "proceed"
+on_success = "failed"
+
+[failed]
+action = "cleanup"
+"#;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut sync_signal_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![("config_update.toml".to_string(), workflow.to_string())],
+    )
+    .await?;
+
+    // Trigger the operation
+    let init_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_update/123"),
+        r#"{"status":"init"}"#,
+    );
+    mqtt_box.send(init_message).await?;
+
+    // The listener registered for `config_update` is notified once the workflow finishes
+    let signal =
+        recv_or_fail_on_actor_exit(&mut sync_signal_box, &mut actor_handle, "sync signal").await;
+    assert!(
+        signal.is_some(),
+        "expected a sync signal on operation completion"
+    );
+
+    Ok(())
+}
+
 struct TestHandler {
     tmp_dir: Arc<TempTedgeDir>,
     actor_handle: JoinHandle<Result<(), RuntimeError>>,
@@ -759,6 +850,7 @@ struct TestHandler {
     config_box: TimedMessageBox<
         SimpleMessageBox<RequestEnvelope<OperationStepRequest, OperationStepResponse>, NoMessage>,
     >,
+    sync_signal_box: TimedMessageBox<SimpleMessageBox<CmdMetaSyncSignal, NoMessage>>,
 }
 
 async fn spawn_mqtt_operation_converter(
@@ -768,6 +860,8 @@ async fn spawn_mqtt_operation_converter(
     let mut software_builder = SoftwareActor(SimpleMessageBoxBuilder::new("Software", 5));
     let mut restart_builder = RestartActor(SimpleMessageBoxBuilder::new("Restart", 5));
     let mut config_builder = ConfigActorBuilder(SimpleMessageBoxBuilder::new("Config", 5));
+    let sync_listener_builder =
+        SyncListenerActorBuilder(SimpleMessageBoxBuilder::new("SyncListener", 5));
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 5);
@@ -818,8 +912,14 @@ async fn spawn_mqtt_operation_converter(
     workflow_actor_builder.register_builtin_operation(&mut restart_builder);
     workflow_actor_builder.register_builtin_operation(&mut software_builder);
     workflow_actor_builder.register_builtin_operation_step_handler(&mut config_builder);
+    workflow_actor_builder
+        .register_sync_signal_sink(OperationType::ConfigUpdate, &sync_listener_builder);
 
     let config_box = config_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
+    let sync_signal_box = sync_listener_builder
+        .0
+        .build()
+        .with_timeout(TEST_TIMEOUT_MS);
     let software_box = software_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
     let restart_box = restart_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
     let mqtt_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
@@ -843,6 +943,7 @@ async fn spawn_mqtt_operation_converter(
         _inotify_box,
         downloader_box,
         config_box,
+        sync_signal_box,
     })
 }
 
@@ -1016,5 +1117,22 @@ impl MessageSink<RequestEnvelope<OperationStepRequest, OperationStepResponse>>
         &self,
     ) -> DynSender<RequestEnvelope<OperationStepRequest, OperationStepResponse>> {
         self.0.get_sender()
+    }
+}
+
+// A fake actor that listens for sync signals emitted on the completion of `config_update`
+// operations, standing in for actors such as the log manager which re-scan their supported
+// types on config/software updates.
+struct SyncListenerActorBuilder(SimpleMessageBoxBuilder<CmdMetaSyncSignal, NoMessage>);
+
+impl MessageSink<CmdMetaSyncSignal> for SyncListenerActorBuilder {
+    fn get_sender(&self) -> DynSender<CmdMetaSyncSignal> {
+        self.0.get_sender()
+    }
+}
+
+impl SyncOnCommand for SyncListenerActorBuilder {
+    fn sync_on_commands(&self) -> Vec<OperationType> {
+        vec![OperationType::ConfigUpdate]
     }
 }

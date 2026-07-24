@@ -39,7 +39,6 @@ Supported log types updated on software update
 
 Supported log types updated on config update
     [Documentation]    Updating any configuration should trigger supported log types update
-    Skip    msg=Skip until the false-positive passing is fixed see https://github.com/thin-edge/thin-edge.io/pull/4259
     ${config_url}=    Cumulocity.Create Inventory Binary
     ...    tedge-configuration-plugin
     ...    tedge-configuration-plugin
@@ -255,7 +254,7 @@ Supported log types loaded when sudo disabled
     Should Contain Supported Log Types    dummy_log::dummy_plugin2
 
 Agent resilient to plugin dirs removal
-    Skip    msg=Skip until the false-positive passing is fixed see https://github.com/thin-edge/thin-edge.io/pull/4259
+    # Skip    msg=Skip until the false-positive passing is fixed see https://github.com/thin-edge/thin-edge.io/pull/4259
     ${date_from}=    Get Unix Timestamp
     Execute Command    rm -rf /usr/share/tedge/log-plugins
     Should Have MQTT Messages    c8y/s/us    date_from=${date_from}    message_pattern=118,
@@ -387,6 +386,9 @@ Custom Setup
     ...    ${CURDIR}/plugins/fake_plugin
     ...    /usr/share/tedge/log-plugins/fake_plugin
     Execute Command    chmod +x /usr/share/tedge/log-plugins/fake_plugin
+
+    # Wait for the log types to be registered first before starting tests
+    Should Contain Supported Log Types    software-management    fake_log::fake_plugin
 
 Create Log Request Operation
     [Arguments]    ${start_timestamp}
