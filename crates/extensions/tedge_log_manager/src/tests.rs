@@ -89,6 +89,15 @@ esac
     Ok(tempdir)
 }
 
+/// Make the file at `path` executable so it can be launched as a log plugin.
+#[cfg(unix)]
+fn make_executable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
 /// Create a log manager actor builder
 /// along two boxes to exchange MQTT and HTTP messages with the log actor
 #[allow(clippy::type_complexity)]
@@ -198,6 +207,137 @@ async fn log_manager_reloads_log_types() -> Result<(), anyhow::Error> {
             MqttMessage::new(&log_reload_topic, r#"{"types":["type_one","type_two"]}"#)
                 .with_retain()
         )
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn log_manager_reloads_log_types_on_plugin_dir_removal() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, mut fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
+
+    let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
+
+    // The `file` plugin from the fixture is reported on start-up.
+    assert_eq!(
+        mqtt.recv().await,
+        Some(
+            MqttMessage::new(&log_reload_topic, r#"{"types":["type_one","type_two"]}"#)
+                .with_retain()
+        )
+    );
+
+    // Events that must NOT trigger a reload: a nested sub-directory removal and a change to a
+    // file nested in a sub-directory.
+    // Plugins live directly under the plugin dir root, so neither is a plugin.
+    let nested_dir = tempdir.utf8_path().join("log-plugins").join("nested");
+    fs.send(FsWatchEvent::DirectoryDeleted(nested_dir.clone().into()))
+        .await?;
+    fs.send(FsWatchEvent::Modified(nested_dir.join("plugin").into()))
+        .await?;
+
+    // Removing the whole plugin directory (e.g. `rm -rf`) emits a single `DirectoryDeleted`
+    // for the directory itself, with no per-file `FileDeleted` events. The actor must still
+    // reload and publish the now-empty set of supported log types.
+    let plugin_dir = tempdir.utf8_path().join("log-plugins");
+    std::fs::remove_dir_all(&plugin_dir)?;
+    fs.send(FsWatchEvent::DirectoryDeleted(plugin_dir.into()))
+        .await?;
+
+    assert_eq!(
+        mqtt.recv().await,
+        Some(MqttMessage::new(&log_reload_topic, r#"{"types":[]}"#).with_retain())
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn log_manager_reloads_log_types_on_new_plugin_file() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, mut fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
+
+    let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
+
+    // Let's ignore the init message sent on start
+    mqtt.skip(1).await;
+
+    // A new executable plugin dropped directly into the plugin dir must be picked up.
+    let plugin_path = tempdir.utf8_path().join("log-plugins").join("custom");
+    std::fs::write(
+        &plugin_path,
+        "#!/bin/bash\ncase \"$1\" in\n    \"list\") echo \"app_log\" ;;\n    *) exit 1 ;;\nesac\n",
+    )?;
+    make_executable(plugin_path.as_std_path());
+    fs.send(FsWatchEvent::Modified(plugin_path.into())).await?;
+
+    // Types of the new plugin are suffixed with `::<plugin_name>` and sorted with the rest.
+    assert_eq!(
+        mqtt.recv().await,
+        Some(
+            MqttMessage::new(
+                &log_reload_topic,
+                r#"{"types":["app_log::custom","type_one","type_two"]}"#
+            )
+            .with_retain()
+        )
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn log_manager_reloads_log_types_on_plugin_file_deletion() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, mut fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
+
+    let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
+
+    // Let's ignore the init message sent on start
+    mqtt.skip(1).await;
+
+    // Deleting the only plugin file (a direct child of the plugin dir) drops its types.
+    let plugin_path = tempdir.utf8_path().join("log-plugins").join("file");
+    std::fs::remove_file(&plugin_path)?;
+    fs.send(FsWatchEvent::FileDeleted(plugin_path.into()))
+        .await?;
+
+    assert_eq!(
+        mqtt.recv().await,
+        Some(MqttMessage::new(&log_reload_topic, r#"{"types":[]}"#).with_retain())
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn log_manager_reloads_log_types_on_plugin_config_change() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let (mut mqtt, mut fs, _uploader) = spawn_log_manager_actor(tempdir.utf8_path()).await;
+
+    let log_reload_topic = Topic::new_unchecked("te/device/main///cmd/log_upload");
+
+    assert_eq!(
+        mqtt.recv().await,
+        Some(
+            MqttMessage::new(&log_reload_topic, r#"{"types":["type_one","type_two"]}"#)
+                .with_retain()
+        )
+    );
+
+    // Editing the plugin config file must be re-read on reload: exclude one of the file plugin's
+    // types and confirm the published set shrinks accordingly.
+    let config_path = tempdir.utf8_path().join("tedge-log-plugin.toml");
+    std::fs::write(
+        &config_path,
+        "[[plugins.file.filters]]\nexclude = \"type_two\"\n",
+    )?;
+    fs.send(FsWatchEvent::Modified(config_path.into())).await?;
+
+    assert_eq!(
+        mqtt.recv().await,
+        Some(MqttMessage::new(&log_reload_topic, r#"{"types":["type_one"]}"#).with_retain())
     );
 
     Ok(())

@@ -5,6 +5,7 @@ use crate::config::PluginConfig;
 use crate::plugin_manager::ExternalPlugins;
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::path::Path;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::ChannelError;
@@ -254,33 +255,49 @@ impl LogManagerActor {
     }
 
     async fn process_file_watch_events(&mut self, event: FsWatchEvent) -> Result<(), RuntimeError> {
-        let path = match event {
-            FsWatchEvent::Modified(path) => path,
-            FsWatchEvent::FileDeleted(path) => path,
+        if self.log_plugins_updated(&event) {
+            self.reload_supported_log_types().await?;
+        }
+        Ok(())
+    }
+
+    /// Whether a filesystem event might change the supported log types
+    ///
+    /// This can happen when:
+    /// - one of the log plugins under the plugin dirs is modified or deleted, or
+    /// - a whole plugin dir is removed, or
+    /// - plugin configuration file is updated
+    fn log_plugins_updated(&self, event: &FsWatchEvent) -> bool {
+        let directly_in_plugin_dir = |path: &Path| {
+            self.config
+                .plugin_dirs
+                .iter()
+                .any(|dir| path.parent() == Some(dir.as_std_path()))
+        };
+        let is_plugin_dir = |path: &Path| {
+            self.config
+                .plugin_dirs
+                .iter()
+                .any(|dir| dir.as_std_path() == path)
+        };
+        let is_plugin_config_file = |path: &Path| {
+            path.file_name()
+                .is_some_and(|name| name.eq(DEFAULT_PLUGIN_CONFIG_FILE_NAME))
+        };
+
+        match event {
+            FsWatchEvent::Modified(path) | FsWatchEvent::FileDeleted(path) => {
+                directly_in_plugin_dir(path) || is_plugin_config_file(path)
+            }
+            FsWatchEvent::DirectoryDeleted(path) => is_plugin_dir(path),
             // Creating new files and file moves and copies also emits `FsWatchEvent::Modified`
             // _most_ of the time, so we don't have to listen to `FileCreated`, if we did we'd have
             // duplicates.
             //
             // https://github.com/thin-edge/thin-edge.io/pull/2454#discussion_r1394358034
-            FsWatchEvent::FileCreated(_) => return Ok(()),
-            FsWatchEvent::DirectoryDeleted(_) => return Ok(()),
-            FsWatchEvent::DirectoryCreated(_) => return Ok(()),
-        };
-
-        let plugin_changed = self
-            .config
-            .plugin_dirs
-            .iter()
-            .any(|plugin_dir| path.starts_with(plugin_dir));
-        if plugin_changed
-            || path
-                .file_name()
-                .is_some_and(|name| name.eq(DEFAULT_PLUGIN_CONFIG_FILE_NAME))
-        {
-            self.reload_supported_log_types().await?;
+            // Sub-directory creations are also ignored.
+            FsWatchEvent::FileCreated(_) | FsWatchEvent::DirectoryCreated(_) => false,
         }
-
-        Ok(())
     }
 
     async fn reload_supported_log_types(&mut self) -> Result<(), RuntimeError> {

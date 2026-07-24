@@ -254,7 +254,7 @@ Supported log types loaded when sudo disabled
     Should Contain Supported Log Types    dummy_log::dummy_plugin2
 
 Agent resilient to plugin dirs removal
-    Skip    msg=Skip until the false-positive passing is fixed see https://github.com/thin-edge/thin-edge.io/pull/4259
+    # Skip    msg=Skip until the false-positive passing is fixed see https://github.com/thin-edge/thin-edge.io/pull/4259
     ${date_from}=    Get Unix Timestamp
     Execute Command    rm -rf /usr/share/tedge/log-plugins
     Should Have MQTT Messages    c8y/s/us    date_from=${date_from}    message_pattern=118,
