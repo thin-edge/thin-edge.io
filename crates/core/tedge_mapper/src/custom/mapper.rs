@@ -333,7 +333,7 @@ impl TEdgeComponent for CustomMapper {
         let startup = validate_and_load(mapper_dir.path(), config_dir.root()).await?;
 
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(&service_name, &tedge_config).await?;
+            start_basic_actors(&service_name, &tedge_config, Vec::new()).await?;
 
         if let MapperStartup::WithBridge { ref config, .. } = startup {
             let bridge_dir = mapper_dir.dir("bridge")?;

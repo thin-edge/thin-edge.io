@@ -46,8 +46,13 @@ impl TEdgeComponent for AwsMapper {
         let aws_config = tedge_config.mapper_config::<AwsMapperSpecificConfig>(&self.profile)?;
         let prefix = &aws_config.bridge.topic_prefix;
         let aws_mapper_name = format!("tedge-mapper-{prefix}");
+        let exposed_config = tedge_config::tedge_toml::exposed_cloud_config(
+            &tedge_config,
+            tedge_config::models::CloudType::Aws,
+            self.profile.as_ref(),
+        )?;
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(&aws_mapper_name, &tedge_config).await?;
+            start_basic_actors(&aws_mapper_name, &tedge_config, exposed_config).await?;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
 
         if tedge_config.mqtt.bridge.built_in {

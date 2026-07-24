@@ -3,6 +3,7 @@ use futures::channel::mpsc;
 use futures::StreamExt as _;
 use serde_json::Map;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use tedge_actors::LoggingSender;
 use tedge_actors::MappingSender;
 use tedge_actors::MessageSink;
@@ -38,6 +39,8 @@ pub enum EntityStoreRequest {
     SetTwinFragment(EntityTwinMessage),
     GetTwinFragments(EntityTopicId),
     SetTwinFragments(EntityTopicId, Map<String, Value>),
+    GetConfig(EntityTopicId),
+    GetConfigValue(EntityTopicId, String),
 }
 
 #[derive(Debug)]
@@ -52,6 +55,8 @@ pub enum EntityStoreResponse {
     SetTwinFragment(Result<bool, entity_store::Error>),
     GetTwinFragments(Result<Map<String, Value>, entity_store::Error>),
     SetTwinFragments(Result<(), entity_store::Error>),
+    GetConfig(Result<BTreeMap<String, String>, entity_store::Error>),
+    GetConfigValue(Option<String>),
 }
 
 pub struct EntityStoreServer {
@@ -166,6 +171,14 @@ impl Server for EntityStoreServer {
                 self.process_mqtt_message(mqtt_message).await;
                 EntityStoreResponse::Ok
             }
+            EntityStoreRequest::GetConfig(topic_id) => {
+                let res = self.entity_store.get_config(&topic_id);
+                EntityStoreResponse::GetConfig(res.cloned())
+            }
+            EntityStoreRequest::GetConfigValue(topic_id, key) => {
+                let value = self.entity_store.get_config_value(&topic_id, &key);
+                EntityStoreResponse::GetConfigValue(value.cloned())
+            }
         }
     }
 }
@@ -240,14 +253,26 @@ impl EntityStoreServer {
             }
         }
 
-        if let Channel::EntityTwinData { fragment_key } = channel {
-            let fragment_value = if message.payload().is_empty() {
-                Value::Null
-            } else {
-                serde_json::from_slice(message.payload_bytes())?
-            };
-            let twin_message = EntityTwinMessage::new(topic_id, fragment_key, fragment_value);
-            self.entity_store.update_twin_fragment(twin_message)?;
+        match channel {
+            Channel::EntityTwinData { fragment_key } => {
+                let fragment_value = if message.payload().is_empty() {
+                    Value::Null
+                } else {
+                    serde_json::from_slice(message.payload_bytes())?
+                };
+                let twin_message = EntityTwinMessage::new(topic_id, fragment_key, fragment_value);
+                self.entity_store.update_twin_fragment(twin_message)?;
+            }
+            Channel::Config { key } => {
+                if message.payload().is_empty() {
+                    self.entity_store.clear_config_value(&topic_id, &key)?;
+                } else {
+                    let value = message.payload_str().unwrap_or_default().to_string();
+                    self.entity_store
+                        .ingest_config_value(&topic_id, key, value)?;
+                }
+            }
+            _ => {}
         }
 
         Ok(())
@@ -351,6 +376,7 @@ impl EntityStoreServer {
                 ChannelFilter::AlarmMetadata,
                 ChannelFilter::Alarm,
                 ChannelFilter::EntityTwinData,
+                ChannelFilter::Config,
                 ChannelFilter::AnyCommand,
                 ChannelFilter::AnyCommandMetadata,
                 ChannelFilter::Health,
@@ -435,6 +461,7 @@ pub fn subscriptions(mqtt_schema: &MqttSchema) -> TopicFilter {
     for channel_filter in [
         ChannelFilter::EntityMetadata,
         ChannelFilter::EntityTwinData,
+        ChannelFilter::Config,
         ChannelFilter::Measurement,
         ChannelFilter::MeasurementMetadata,
         ChannelFilter::Event,

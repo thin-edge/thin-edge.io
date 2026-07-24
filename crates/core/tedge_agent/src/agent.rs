@@ -43,6 +43,7 @@ use tedge_api::mqtt_topics::ServiceTopicId;
 use tedge_api::path::DataDir;
 use tedge_api::EntityStore;
 use tedge_config::tedge_toml::TEdgeConfigReaderService;
+use tedge_config_ext::ConfigPublisherBuilder;
 use tedge_config_manager::ConfigManagerBuilder;
 use tedge_config_manager::ConfigManagerConfig;
 use tedge_config_manager::ConfigManagerOptions;
@@ -89,6 +90,7 @@ pub(crate) struct AgentConfig {
     pub capabilities: Capabilities,
     pub log_plugin_dirs: Vec<Utf8PathBuf>,
     pub config_plugin_dirs: Vec<Utf8PathBuf>,
+    pub exposed_config: Vec<(String, Option<String>)>,
     entity_auto_register: bool,
     entity_store_clean_start: bool,
 }
@@ -114,6 +116,19 @@ impl AgentConfig {
         };
         let service_topic_id = mqtt_device_topic_id.to_default_service_topic_id("tedge-agent")
             .with_context(|| format!("Device topic id {} currently needs default scheme, e.g: 'device/DEVICE_NAME//'", mqtt_device_topic_id))?;
+
+        // `mqtt.topic_root`/`mqtt.device_topic_id` may be overridden by a CLI flag, in which case
+        // `exposed_core_config` (built from `tedge_config` alone) would report the file value
+        // rather than what this process is actually running with. Patch those two entries with
+        // the CLI-effective values computed above.
+        let mut exposed_config = tedge_config::tedge_toml::exposed_core_config(&tedge_config);
+        for (key, value) in exposed_config.iter_mut() {
+            match key.as_str() {
+                "mqtt.topic_root" => *value = Some(mqtt_topic_root.to_string()),
+                "mqtt.device_topic_id" => *value = Some(mqtt_device_topic_id.to_string()),
+                _ => {}
+            }
+        }
 
         let mqtt_session_name = format!("{TEDGE_AGENT}#{mqtt_topic_root}/{mqtt_device_topic_id}");
 
@@ -210,6 +225,7 @@ impl AgentConfig {
             capabilities,
             log_plugin_dirs,
             config_plugin_dirs,
+            exposed_config,
             entity_auto_register,
             entity_store_clean_start,
         })
@@ -311,6 +327,13 @@ impl Agent {
         );
         let twin_manager_builder =
             TwinManagerActorBuilder::new(twin_manager_config, &mut mqtt_actor_builder);
+
+        let config_publisher_builder = ConfigPublisherBuilder::new(
+            mqtt_schema.clone(),
+            service.service_topic_id.clone(),
+            self.config.exposed_config,
+            &mut mqtt_actor_builder,
+        );
 
         let health_actor = HealthMonitorBuilder::from_service_topic_id(
             service,
@@ -441,6 +464,7 @@ impl Agent {
         runtime.spawn(mqtt_actor_builder).await?;
         runtime.spawn(fs_watch_actor_builder).await?;
         runtime.spawn(twin_manager_builder).await?;
+        runtime.spawn(config_publisher_builder).await?;
         runtime.spawn(downloader_actor_builder).await?;
         runtime.spawn(uploader_actor_builder).await?;
         if let Some(config_actor_builder) = config_actor_builder {

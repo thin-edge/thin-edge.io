@@ -9,6 +9,15 @@ schema: spec-driven
 #     We use conventional commits
 #     Domain: e-commerce platform
 
+context: |
+  Writing style (all artifacts): plain, direct English.
+  Use semantic line breaks.
+  Short declarative sentences.
+  Bullets over prose.
+  No hedging or filler.
+  Avoid restating well known MQTT and thin-edge concepts.
+  State each requirement/decision and its reason; skip elaboration.
+
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
 # Example:
@@ -18,3 +27,18 @@ schema: spec-driven
 #       - Always include a "Non-goals" section
 #     tasks:
 #       - Break tasks into chunks of max 2 hours
+
+rules:
+  proposal:
+    - After "Why", add a "What you can do" section that introduces the feature from the
+      user's point of view with short usage examples — before any internal mechanism.
+    - Keep "What Changes" for the mechanism and code impact. Never lead the solution with an
+      implementation detail (a macro flag, a struct, a topic-construction rule); those belong
+      under "What Changes", after the reader has seen how the feature is used.
+  design:
+    - Do not restate the problem or motivation — that lives in the proposal. Link the
+      proposal instead of repeating its "Why".
+    - Open with a 1-3 sentence orientation (what this doc covers, plus any premise the
+      decisions rest on), then go straight to the decisions and trade-offs.
+    - Assume a reader who already knows the problem and the user-facing surface. Spend the
+      words on how it is built and why this design over the alternatives.
