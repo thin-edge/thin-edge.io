@@ -170,7 +170,7 @@ impl<Registry: FlowRegistryExt + Send> MessageProcessor<Registry> {
                     .as_mut()
                     .on_context_update(&self.js_runtime, &mut self.stats, timestamp, &update)
                     .await;
-                out_messages.push(flow_output);
+                out_messages.extend(flow_output);
             }
         }
         out_messages

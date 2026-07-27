@@ -391,11 +391,22 @@ impl Flow {
         stats: &mut Counter,
         timestamp: SystemTime,
         update: &FlowContextUpdate,
-    ) -> FlowResult {
-        let result = self
+    ) -> Vec<FlowResult> {
+        let (messages, errors) = self
             .on_context_update_steps(js_runtime, stats, timestamp, update)
             .await;
-        self.publish(result)
+
+        // Publish the valid messages as one result, then one result per error, so a
+        // malformed message replayed alongside valid ones is reported without discarding
+        // its siblings.
+        let mut results = Vec::with_capacity(errors.len() + 1);
+        if !messages.is_empty() {
+            results.push(self.publish(Ok(messages)));
+        }
+        for error in errors {
+            results.push(self.publish(Err(error)));
+        }
+        results
     }
 
     async fn on_context_update_steps(
@@ -404,32 +415,45 @@ impl Flow {
         stats: &mut Counter,
         timestamp: SystemTime,
         update: &FlowContextUpdate,
-    ) -> Result<Vec<Message>, FlowError> {
+    ) -> (Vec<Message>, Vec<FlowError>) {
         let mut messages = vec![];
+        let mut errors = vec![];
         for step in self.steps.iter_mut() {
             // React on the context update
-            let mut transformed_messages = step
-                .on_context_update(js_runtime, timestamp, update)
-                .await?;
+            let mut transformed_messages =
+                match step.on_context_update(js_runtime, timestamp, update).await {
+                    Ok(output) => output,
+                    Err(err) => {
+                        errors.push(err);
+                        vec![]
+                    }
+                };
 
-            // Process then the messages triggered upstream by the context update
+            // Process then the messages triggered upstream by the context update.
+            //
+            // A batch of cached messages replayed on entity birth is fed through the
+            // remaining steps here. If one message is malformed (e.g. bad JSON), its
+            // error must be reported without discarding the valid messages batched with
+            // it — otherwise a single bad message silently drops its siblings.
             let js = step.source().to_string();
             for message in messages.iter() {
                 let step_started_at = stats.flow_step_start(&js, "onMessage");
-                let step_output = step.on_message(js_runtime, timestamp, message).await;
-                match &step_output {
-                    Ok(messages) => {
-                        stats.flow_step_done(&js, "onMessage", step_started_at, messages.len())
+                match step.on_message(js_runtime, timestamp, message).await {
+                    Ok(step_output) => {
+                        stats.flow_step_done(&js, "onMessage", step_started_at, step_output.len());
+                        transformed_messages.extend(step_output);
                     }
-                    Err(_) => stats.flow_step_failed(&js, "onMessage"),
+                    Err(err) => {
+                        stats.flow_step_failed(&js, "onMessage");
+                        errors.push(err);
+                    }
                 }
-                transformed_messages.extend(step_output?);
             }
 
             // Iterate with all the messages collected at this step
             messages = transformed_messages;
         }
-        Ok(messages)
+        (messages, errors)
     }
 
     pub fn on_error(&self, error: FlowError) -> FlowResult {
@@ -679,6 +703,13 @@ pub fn error_from_js(err: LoadError) -> FlowError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::ConfigError;
+    use crate::js_runtime::JsRuntime;
+    use crate::js_value::JsonValue;
+    use crate::stats::Counter;
+    use crate::steps::FlowStep;
+    use crate::transformers::Transformer;
+    use crate::FlowContextUpdate;
     use camino::Utf8PathBuf;
 
     #[test]
@@ -736,6 +767,63 @@ mod tests {
         assert_eq!(messages[1].topic, "te/other");
     }
 
+    /// A malformed message and a valid message for the same not-yet-registered entity are
+    /// both cached, then replayed together in a single batch when the entity is born. The
+    /// malformed message must yield an error WITHOUT discarding the valid message batched
+    /// with it
+    #[tokio::test]
+    async fn valid_message_survives_a_bad_sibling_in_a_replayed_batch() {
+        let js_runtime = JsRuntime::with_default().await.unwrap();
+        let mut stats = Counter::default();
+        let timestamp = SystemTime::UNIX_EPOCH;
+        let mut flow = cache_then_convert_flow();
+
+        // Both messages arrive before the entity is registered: they get cached,
+        // so nothing is forwarded yet.
+        let bad = Message::new("te/device/child///e/event_001", "bad");
+        let good = Message::new("te/device/child///e/event_001", "good");
+        let assert_nothing_forwarded = |result: FlowResult| match result {
+            FlowResult::Ok { messages, .. } => assert!(messages.is_empty()),
+            FlowResult::Err { .. } => panic!("cached message should not raise an error"),
+        };
+        assert_nothing_forwarded(
+            flow.on_message(&js_runtime, &mut stats, timestamp, &bad)
+                .await,
+        );
+        assert_nothing_forwarded(
+            flow.on_message(&js_runtime, &mut stats, timestamp, &good)
+                .await,
+        );
+
+        // The entity is born: the cached [bad, good] batch is replayed at once.
+        let birth = FlowContextUpdate::Inserted {
+            key: "device/child//".to_string(),
+        };
+        let results = flow
+            .on_context_update(&js_runtime, &mut stats, timestamp, &birth)
+            .await;
+
+        let mut converted = vec![];
+        let mut errors = 0;
+        for result in &results {
+            match result {
+                FlowResult::Ok { messages, .. } => converted.extend(messages.clone()),
+                FlowResult::Err { .. } => errors += 1,
+            }
+        }
+
+        // The bad payload is reported as an error...
+        assert_eq!(errors, 1, "the malformed message should raise one error");
+        // ...but the valid event is NOT dropped: it is converted and forwarded.
+        assert_eq!(
+            converted.len(),
+            1,
+            "the valid message must survive its bad sibling"
+        );
+        assert_eq!(converted[0].topic, "c8y/out");
+        assert_eq!(converted[0].payload_str(), Some("good"));
+    }
+
     fn test_flow(input: FlowInput, output: FlowOutput, expect_loop: bool) -> Flow {
         Flow {
             name: "test-flow".to_string(),
@@ -748,6 +836,106 @@ mod tests {
             errors: FlowOutput::Mqtt { topic: None },
             source: Utf8PathBuf::from("test.toml"),
             expect_loop,
+        }
+    }
+
+    /// A step that caches every message for an unregistered entity and releases
+    /// the whole batch when the entity is born (context update). This mirrors the
+    /// `MessageCache` transformer used by the c8y mapper's telemetry flows.
+    #[derive(Default)]
+    struct CacheUntilBirth {
+        cached: Vec<Message>,
+        birthed: bool,
+    }
+
+    impl Transformer for CacheUntilBirth {
+        fn name(&self) -> &str {
+            "cache-until-birth"
+        }
+
+        fn set_config(&mut self, _config: JsonValue) -> Result<(), ConfigError> {
+            Ok(())
+        }
+
+        fn on_message(
+            &mut self,
+            _timestamp: SystemTime,
+            message: &Message,
+            _context: &crate::FlowContextHandle,
+        ) -> Result<Vec<Message>, FlowError> {
+            if self.birthed {
+                Ok(vec![message.clone()])
+            } else {
+                self.cached.push(message.clone());
+                Ok(vec![])
+            }
+        }
+
+        fn on_context_update(
+            &mut self,
+            _timestamp: SystemTime,
+            _update: &FlowContextUpdate,
+            _context: &crate::FlowContextHandle,
+        ) -> Result<Vec<Message>, FlowError> {
+            self.birthed = true;
+            Ok(std::mem::take(&mut self.cached))
+        }
+    }
+
+    /// A step that fails to parse a `bad` payload but converts anything else.
+    #[derive(Default)]
+    struct FailOnBadPayload;
+
+    impl Transformer for FailOnBadPayload {
+        fn name(&self) -> &str {
+            "fail-on-bad-payload"
+        }
+
+        fn set_config(&mut self, _config: JsonValue) -> Result<(), ConfigError> {
+            Ok(())
+        }
+
+        fn on_message(
+            &mut self,
+            _timestamp: SystemTime,
+            message: &Message,
+            _context: &crate::FlowContextHandle,
+        ) -> Result<Vec<Message>, FlowError> {
+            if message.payload_str() == Some("bad") {
+                Err(FlowError::UnsupportedMessage(
+                    "not an event payload".to_string(),
+                ))
+            } else {
+                Ok(vec![Message::new("c8y/out", message.payload.clone())])
+            }
+        }
+    }
+
+    fn cache_then_convert_flow() -> Flow {
+        Flow {
+            name: "cache-then-convert".to_string(),
+            version: None,
+            description: None,
+            tags: None,
+            input: vec![FlowInput::Mqtt {
+                topics: TopicFilter::new_unchecked("te/device/+/+/+/e/+"),
+            }],
+            steps: vec![
+                FlowStep::new_transformer(
+                    "cache-until-birth".to_string(),
+                    Box::new(CacheUntilBirth::default()),
+                ),
+                FlowStep::new_transformer(
+                    "fail-on-bad-payload".to_string(),
+                    Box::new(FailOnBadPayload),
+                ),
+            ],
+            output: FlowOutput::Mqtt { topic: None },
+            errors: FlowOutput::Mqtt {
+                topic: Some(Topic::new_unchecked("te/errors")),
+            },
+            source: Utf8PathBuf::from("events.toml"),
+            expect_loop: false,
         }
     }
 }
