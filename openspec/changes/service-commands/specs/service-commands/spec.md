@@ -1,0 +1,162 @@
+## ADDED Requirements
+
+### Requirement: A service declares each supported command as a per-command capability
+
+A service entity SHALL declare a supported command by publishing a retained capability message
+on `te/device/<device>/service/<service>/cmd/<action>` with an empty JSON object `{}` as payload.
+One topic SHALL be used per command, so that each command can have its own workflow.
+
+`<action>` SHALL be one of the standard commands `start`, `stop`, `restart`,
+or any custom command name chosen by the service owner.
+Custom command names SHALL be lowercase, since the name is part of the MQTT topic.
+
+A declared command SHALL be withdrawn by clearing its capability topic with a retained empty message.
+
+#### Scenario: Standard commands are declared
+- **WHEN** a service publishes retained `{}` on its `cmd/start`, `cmd/stop` and `cmd/restart` topics
+- **THEN** those three commands SHALL be the commands supported by that service
+
+#### Scenario: A custom command is declared
+- **WHEN** a service publishes retained `{}` on `te/device/main/service/nodered/cmd/pause`
+- **THEN** `pause` SHALL be a supported command of the `nodered` service
+
+#### Scenario: A command is withdrawn
+- **WHEN** a service clears one of its `cmd/<action>` topics with a retained empty message
+- **THEN** that command SHALL no longer be a supported command of that service
+
+#### Scenario: Capabilities survive a restart of a consumer
+- **WHEN** a component subscribes to a service's `cmd/+` topics after the capabilities were published
+- **THEN** it SHALL receive the retained capability messages and rebuild the full set of supported commands
+
+### Requirement: A service command is issued on the per-command topic
+
+A service command SHALL be issued as a command message on
+`te/device/<device>/service/<service>/cmd/<action>/<cmd-id>`,
+following the standard thin-edge command state machine (`init` → `executing` → `successful` | `failed`).
+
+The command payload SHALL carry:
+
+- `status`: the command state
+- `serviceName`: the name of the target service, as the execution backend knows it
+- `serviceType`: the type of the target service, used to select the execution backend
+
+The payload SHALL NOT repeat the action name.
+The topic is the only place the action is named,
+as it is for every other thin-edge command.
+
+A command SHALL only be issued for a command the target service has declared as a capability.
+
+#### Scenario: A restart command is issued for a service
+- **WHEN** a `restart` command is issued for the `collectd` service of the main device
+- **THEN** the command SHALL be published on `te/device/main/service/collectd/cmd/restart/<cmd-id>`
+  with `status` `init`, `serviceName` `collectd` and the service's type as `serviceType`
+
+#### Scenario: The action is read from the topic
+- **WHEN** a workflow or an executor needs the action name of a service command
+- **THEN** it SHALL take it from the command topic, since the payload does not carry it
+
+#### Scenario: Each command has its own channel
+- **WHEN** a `restart` and a `pause` command are issued for the same service
+- **THEN** they SHALL be published on distinct command topics and SHALL be driven by distinct workflows
+
+### Requirement: Workflow definitions are scoped by target entity type
+
+A workflow definition SHALL support a `type` field naming the entity type the workflow applies to,
+taking one of the entity `@type` values (`device`, `child-device`, `service`).
+
+A workflow SHALL only be used for commands addressed to an entity of the declared type.
+When `type` is absent, the workflow SHALL apply to device entities, as it does today.
+
+This makes an operation name reusable across entity types:
+a `restart` workflow for a device and a `restart` workflow for a service are distinct workflows.
+
+#### Scenario: A service command does not trigger the device workflow
+- **WHEN** a `restart` command is addressed to a service entity
+  and both a device `restart` workflow and a `restart` workflow with `type = "service"` are installed
+- **THEN** only the workflow with `type = "service"` SHALL drive the command
+
+#### Scenario: Existing device workflows are unaffected
+- **WHEN** a workflow definition has no `type` field
+- **THEN** it SHALL keep applying to commands addressed to the device, as before this change
+
+### Requirement: tedge-agent is the sole executor of service commands for its own device
+
+tedge-agent SHALL subscribe to the command topics of the services of its **own** device
+and SHALL drive their command state machines with its workflow engine.
+
+tedge-agent SHALL NOT react to commands addressed to services of any other device.
+A child device running its own tedge-agent SHALL execute the commands of its own services,
+using its own configuration and its own service backends.
+Nothing SHALL be looked up across devices.
+
+Because a command topic is a single shared state record,
+no other component SHALL drive the state machine of a service command.
+A third-party service owner SHALL integrate below the state machine,
+as a process executed by tedge-agent, and never as a competing MQTT subscriber.
+
+#### Scenario: The agent drives a command for a service of its own device
+- **WHEN** a command is issued for a service of the agent's own device
+- **THEN** tedge-agent SHALL drive that command through the state machine to a terminal state
+
+#### Scenario: The agent ignores commands for services of other devices
+- **WHEN** a command is issued for a service of a device other than the agent's own device
+- **THEN** that agent SHALL NOT react to the command
+
+#### Scenario: No backend for the service type is a definitive failure
+- **WHEN** a command is issued for a service whose type has no execution backend installed
+- **THEN** the command SHALL move to `failed` with a reason naming the unsupported service type,
+  and SHALL NOT be left waiting for another executor
+
+### Requirement: Service command workflows delegate execution to the tedge service CLI
+
+The workflows shipped for service commands SHALL execute the command by invoking
+`sudo -n tedge service <command> <serviceName> --service-type <serviceType>`,
+taking the command name from the command topic and the service name and type from the command payload.
+
+A zero exit code SHALL move the command to `successful`;
+a non-zero exit code SHALL move it to `failed` with the failure reason.
+
+The workflow SHALL carry a timeout,
+so that a backend that never returns surfaces as a failed command rather than a stuck one.
+
+#### Scenario: A successful execution completes the command
+- **WHEN** the execution step of a service command workflow exits with code `0`
+- **THEN** the command SHALL move to `successful`
+
+#### Scenario: A failed execution fails the command
+- **WHEN** the execution step exits with a non-zero code
+- **THEN** the command SHALL move to `failed` with a reason reported to the requester
+
+#### Scenario: A hung backend fails the command
+- **WHEN** the execution step does not return within the workflow timeout
+- **THEN** the command SHALL move to `failed` rather than remain in progress indefinitely
+
+### Requirement: Service commands targeting thin-edge's own services are handled safely
+
+A `restart` addressed to **tedge-agent** itself SHALL NOT be run as a plain synchronous step,
+since the agent is killed mid-workflow and the step would re-execute on resume, causing a restart loop.
+The shipped workflow SHALL use the existing self-restart pattern:
+detached background execution followed by a state that awaits the agent restart.
+
+A `stop` addressed to **tedge-agent** or to a **cloud mapper** SHALL be rejected with a clear reason.
+A stopped agent cannot report the completion of the command,
+and a stopped mapper loses the cloud connection,
+so in both cases the requester would never learn the outcome.
+
+#### Scenario: Restarting the agent itself completes the command
+- **WHEN** a `restart` command is issued for the tedge-agent service
+- **THEN** the agent SHALL restart itself detached, resume the workflow after the restart,
+  and move the command to `successful` exactly once
+
+#### Scenario: Stopping the agent is rejected
+- **WHEN** a `stop` command is issued for the tedge-agent service
+- **THEN** the command SHALL move to `failed` with a reason explaining that the executor cannot be stopped
+
+#### Scenario: Stopping the agent named as its unit is rejected
+- **WHEN** a `stop` command is issued for the tedge-agent service,
+  naming it `tedge-agent.service`
+- **THEN** the command SHALL move to `failed` for the same reason
+
+#### Scenario: Stopping a cloud mapper is rejected
+- **WHEN** a `stop` command is issued for a cloud mapper service
+- **THEN** the command SHALL move to `failed` with a reason explaining that the cloud connection cannot be stopped this way
