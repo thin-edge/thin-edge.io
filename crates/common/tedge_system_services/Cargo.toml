@@ -16,6 +16,7 @@ strum_macros = { workspace = true }
 tedge_config = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["process"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

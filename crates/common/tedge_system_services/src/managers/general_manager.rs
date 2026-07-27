@@ -10,6 +10,7 @@ use tedge_config::InitConfig;
 use tedge_config::SystemConfig;
 use tedge_config::SystemTomlError;
 use tedge_config::SYSTEM_CONFIG_FILE;
+use tracing::debug;
 
 #[derive(Debug)]
 pub struct GeneralServiceManager {
@@ -22,6 +23,14 @@ impl GeneralServiceManager {
         let init_config = SystemConfig::try_new(config_root)?.init;
 
         let config_path = config_root.join(SYSTEM_CONFIG_FILE);
+
+        // Logged so that a key misspelled in [init] is visible: it shows up here as an
+        // action nobody asked for, instead of being rejected at parse time.
+        debug!(
+            "Init system '{}' from {config_path} supports the actions: {}",
+            init_config.name,
+            init_config.action_names().join(", ")
+        );
 
         Ok(Self {
             init_config,
@@ -48,39 +57,19 @@ impl SystemServiceManager for GeneralServiceManager {
         }
     }
 
-    async fn stop_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::Stop(service).try_exec_command(self)?;
+    async fn run_action(
+        &self,
+        action: &str,
+        service: SystemService<'_>,
+    ) -> Result<(), SystemServiceError> {
+        let exec_command = ServiceCommand::Action(action, service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())
             .await?
             .must_succeed()
     }
 
-    async fn start_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::Start(service).try_exec_command(self)?;
-        self.run_service_command_as_root(exec_command, self.config_path.as_str())
-            .await?
-            .must_succeed()
-    }
-
-    async fn restart_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::Restart(service).try_exec_command(self)?;
-        self.run_service_command_as_root(exec_command, self.config_path.as_str())
-            .await?
-            .must_succeed()
-    }
-
-    async fn enable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::Enable(service).try_exec_command(self)?;
-        self.run_service_command_as_root(exec_command, self.config_path.as_str())
-            .await?
-            .must_succeed()
-    }
-
-    async fn disable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
-        let exec_command = ServiceCommand::Disable(service).try_exec_command(self)?;
-        self.run_service_command_as_root(exec_command, self.config_path.as_str())
-            .await?
-            .must_succeed()
+    fn action_names(&self) -> Vec<&str> {
+        self.init_config.action_names()
     }
 
     async fn is_service_running(
@@ -177,12 +166,9 @@ fn replace_with_service_name<'a>(
 #[derive(Debug, Copy, Clone)]
 enum ServiceCommand<'a> {
     CheckManager,
-    Stop(SystemService<'a>),
-    Start(SystemService<'a>),
-    Restart(SystemService<'a>),
-    Enable(SystemService<'a>),
-    Disable(SystemService<'a>),
     IsActive(SystemService<'a>),
+    /// A named action acting on a service, resolved from the `[init]` templates.
+    Action(&'a str, SystemService<'a>),
 }
 
 impl ServiceCommand<'_> {
@@ -190,26 +176,29 @@ impl ServiceCommand<'_> {
         self,
         service_manager: &GeneralServiceManager,
     ) -> Result<ExecCommand, SystemServiceError> {
+        let init_config = &service_manager.init_config;
         let config_path = service_manager.config_path.clone();
-        let config = match self {
-            Self::CheckManager => &service_manager.init_config.is_available,
-            Self::Stop(_) => &service_manager.init_config.stop,
-            Self::Restart(_) => &service_manager.init_config.restart,
-            Self::Start(_) => &service_manager.init_config.start,
-            Self::Enable(_) => &service_manager.init_config.enable,
-            Self::Disable(_) => &service_manager.init_config.disable,
-            Self::IsActive(_) => &service_manager.init_config.is_active,
-        };
 
         match self {
-            Self::CheckManager => ExecCommand::try_new(config.clone(), self, config_path),
-            Self::Stop(service)
-            | Self::Restart(service)
-            | Self::Start(service)
-            | Self::Enable(service)
-            | Self::Disable(service)
-            | Self::IsActive(service) => {
-                ExecCommand::try_new_with_placeholder(config.clone(), self, config_path, service)
+            Self::CheckManager => {
+                ExecCommand::try_new(init_config.is_available.clone(), self, config_path)
+            }
+            Self::IsActive(service) => ExecCommand::try_new_with_placeholder(
+                init_config.is_active.clone(),
+                self,
+                config_path,
+                service,
+            ),
+            Self::Action(action, service) => {
+                let Some(template) = init_config.action(action) else {
+                    return Err(SystemServiceError::UnsupportedAction {
+                        action: action.to_string(),
+                        manager: init_config.name.clone(),
+                        known: init_config.action_names().join(", "),
+                        path: config_path,
+                    });
+                };
+                ExecCommand::try_new_with_placeholder(template.to_vec(), self, config_path, service)
             }
         }
     }
@@ -219,12 +208,8 @@ impl fmt::Display for ServiceCommand<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::CheckManager => write!(f, "is_available"),
-            Self::Stop(_service) => write!(f, "stop"),
-            Self::Start(_service) => write!(f, "start"),
-            Self::Restart(_service) => write!(f, "restart"),
-            Self::Enable(_service) => write!(f, "enable"),
-            Self::Disable(_service) => write!(f, "disable"),
             Self::IsActive(_service) => write!(f, "is_active"),
+            Self::Action(action, _service) => write!(f, "{action}"),
         }
     }
 }
@@ -293,7 +278,7 @@ mod tests {
     fn replace_placeholder_with_service(input: Vec<String>, expected_output: Vec<String>) {
         let replaced_config = replace_with_service_name(
             &input,
-            ServiceCommand::Stop(SystemService::new("mosquitto")),
+            ServiceCommand::Action("stop", SystemService::new("mosquitto")),
             "/dummy/path.toml",
             SystemService::new("mosquitto"),
         )
@@ -306,7 +291,7 @@ mod tests {
         let input = vec!["bin".to_string(), "arg1".to_string(), "arg2".to_string()];
         let system_config_error = replace_with_service_name(
             &input,
-            ServiceCommand::Stop(SystemService::new("mosquitto")),
+            ServiceCommand::Action("stop", SystemService::new("mosquitto")),
             "dummy/path.toml",
             SystemService::new("mosquitto"),
         )
@@ -334,7 +319,7 @@ mod tests {
     fn build_exec_command(config: Vec<String>, expected: ExecCommand) {
         let exec_command = ExecCommand::try_new(
             config,
-            ServiceCommand::Stop(SystemService::new("mosquitto")),
+            ServiceCommand::Action("stop", SystemService::new("mosquitto")),
             "test/dummy.toml".into(),
         )
         .unwrap();
@@ -346,7 +331,7 @@ mod tests {
         let config = vec![];
         let system_config_error = ExecCommand::try_new(
             config,
-            ServiceCommand::Stop(SystemService::new("mosquitto")),
+            ServiceCommand::Action("stop", SystemService::new("mosquitto")),
             "test/dummy.toml".into(),
         )
         .unwrap_err();

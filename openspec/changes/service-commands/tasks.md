@@ -19,12 +19,12 @@
 
 ## 3. `system.toml`: custom action templates
 
-- [ ] 3.1 Add a map to `InitConfig` (`crates/common/tedge_config/src/system_toml/services.rs:3`) collecting the `[init]` keys beyond the known ones, and drop `deny_unknown_fields` from `InitConfigToml` (`services.rs:17`)
-- [ ] 3.2 Keep `name` and the state-query templates reserved and not dispatchable as actions
-- [ ] 3.3 Log the actions parsed from `[init]` when the configuration is loaded, and log when an action falls back to a default template, so a misspelled key stays discoverable
-- [ ] 3.4 Add a method to `SystemServiceManager` (`crates/common/tedge_system_services/src/manager.rs:11`) that runs an action by name, and express the existing per-action methods in terms of it
-- [ ] 3.5 Implement it in `GeneralServiceManager` (`managers/general_manager.rs:14`) reusing `ExecCommand::try_new_with_placeholder` (`general_manager.rs:103`), keeping execution argv-based
-- [ ] 3.6 Test: a custom `reload` template is executed; an undefined action is reported as unsupported; a reserved key is not dispatchable; a `system.toml` with no extra keys behaves exactly as today
+- [x] 3.1 Add a map to `InitConfig` (`crates/common/tedge_config/src/system_toml/services.rs:3`) collecting the `[init]` keys beyond the known ones, and drop `deny_unknown_fields` from `InitConfigToml` (`services.rs:17`)
+- [x] 3.2 Keep `name` and the state-query templates reserved and not dispatchable as actions
+- [x] 3.3 Log the actions parsed from `[init]` when the configuration is loaded, and log when an action falls back to a default template, so a misspelled key stays discoverable
+- [x] 3.4 Add a method to `SystemServiceManager` (`crates/common/tedge_system_services/src/manager.rs:11`) that runs an action by name, and express the existing per-action methods in terms of it
+- [x] 3.5 Implement it in `GeneralServiceManager` (`managers/general_manager.rs:14`) reusing `ExecCommand::try_new_with_placeholder` (`general_manager.rs:103`), keeping execution argv-based
+- [x] 3.6 Test: a custom `reload` template is executed; an undefined action is reported as unsupported; a reserved key is not dispatchable; a `system.toml` with no extra keys behaves exactly as today
 
 ## 4. `tedge service` CLI
 
