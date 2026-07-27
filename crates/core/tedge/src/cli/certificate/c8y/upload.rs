@@ -52,7 +52,11 @@ impl UploadCertCmd {
             warning!("Detected use of a deprecated env variable, C8YPASS. Please use C8Y_PASSWORD instead\n");
         }
         let (username, password) = self.prompt_for_user_password().await?;
-        let client = self.cloud_root_certs.client();
+        let client = self
+            .cloud_root_certs
+            .client_builder()
+            .build()
+            .expect("Valid reqwest client builder configuration");
 
         // To post certificate c8y requires one of the following endpoints:
         // https://<tenant_id>.cumulocity.url.io[:port]/tenant/tenants/<tenant_id>/trusted-certificates

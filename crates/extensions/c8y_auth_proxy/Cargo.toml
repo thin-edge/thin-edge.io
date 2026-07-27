@@ -17,6 +17,7 @@ axum-server = { workspace = true }
 axum_tls = { workspace = true }
 c8y_api = { workspace = true }
 camino = { workspace = true }
+certificate = { workspace = true }
 futures = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }

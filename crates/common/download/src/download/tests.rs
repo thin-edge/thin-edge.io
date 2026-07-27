@@ -14,6 +14,43 @@ use test_case::test_case;
 mod partial_response;
 
 #[tokio::test]
+async fn downloader_has_user_agent() {
+    let mut server = mockito::Server::new_async().await;
+    let _mock1 = server
+        .mock("GET", "/some_file.txt")
+        .with_status(200)
+        // the downloader incorrectly tries to retry when it gets 501 Not Implemented status from
+        // mockito, so currently we can't use `.match_headers()` because match needs to succeed and
+        // return 200. So for now do the check in the assert in the body closure, can remove when
+        // downloader stops retrying for 501.
+        .with_body_from_request(|r| {
+            let user_agent = r.header("user-agent")[0];
+            assert_eq!(
+                user_agent.to_str().unwrap(),
+                certificate::http_client::USER_AGENT
+            );
+            b"hello".to_vec()
+        })
+        .create_async()
+        .await;
+
+    let target_dir_path = TempDir::new().unwrap();
+    let target_path = target_dir_path.path().join("test_download");
+
+    let mut target_url = server.url();
+    target_url.push_str("/some_file.txt");
+
+    let url = DownloadInfo::new(&target_url);
+
+    let mut downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
+    downloader.set_backoff(ExponentialBackoff {
+        current_interval: Duration::ZERO,
+        ..Default::default()
+    });
+    downloader.download(&url).await.unwrap();
+}
+
+#[tokio::test]
 async fn downloader_download_content_no_auth() {
     let mut server = mockito::Server::new_async().await;
     let _mock1 = server
