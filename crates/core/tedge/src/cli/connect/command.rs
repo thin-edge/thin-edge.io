@@ -1454,11 +1454,11 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
             let err = validate_config(&config, &cloud).unwrap_err();
-            pretty_assertions::assert_eq!(err.to_string(), format!("You have matching URLs and device IDs for different profiles.
+            pretty_assertions::assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
 
 c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
 
-Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud."))
+Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.")
         }
 
         #[tokio::test]
@@ -1476,11 +1476,11 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
             let err = validate_config(&config, &cloud).unwrap_err();
-            pretty_assertions::assert_eq!(err.to_string(), format!("You have matching URLs and device IDs for different profiles.
+            pretty_assertions::assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
 
 c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
 
-Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud."))
+Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.")
         }
 
         #[tokio::test]

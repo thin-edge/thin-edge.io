@@ -18,6 +18,7 @@ use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
 use rumqttc::tokio_rustls::rustls::CertificateError;
 use rumqttc::tokio_rustls::rustls::Error;
+use rumqttc::tokio_rustls::rustls::InvalidMessage;
 use rumqttc::AsyncClient;
 use rumqttc::ConnectionError;
 use rumqttc::Event;
@@ -37,7 +38,24 @@ use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tracing::debug;
 
+/// Reported for an error raised before the broker accepted the MQTT connection
+const HANDSHAKE_ERROR_CONTEXT: &str = "Connection error while connecting to Cumulocity";
+
+/// Reported for an error raised once the broker had accepted the MQTT connection
 const CONNECTION_ERROR_CONTEXT: &str = "Connection error while creating device in Cumulocity";
+
+/// Says which stage an otherwise unexplained error came from, so that a bare I/O error at least
+/// tells the user whether the connection was ever established
+fn error_context(connected: bool) -> &'static str {
+    if connected {
+        CONNECTION_ERROR_CONTEXT
+    } else {
+        HANDSHAKE_ERROR_CONTEXT
+    }
+}
+
+/// The message `rustls` reports when it has no room left to buffer an incoming message
+const BUFFER_FULL_MESSAGE: &str = "message buffer full";
 
 // Connect directly to the c8y cloud over mqtt and publish device create message.
 pub async fn create_device_with_direct_connection(
@@ -85,6 +103,11 @@ pub async fn create_device_with_direct_connection(
         .network_options
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
+    // Tracks whether the TLS handshake is behind us, so that errors can be attributed to the right
+    // stage. A ConnAck is the first event the broker sends us, so it is the earliest point at which
+    // we know the handshake succeeded
+    let mut connected = false;
+
     loop {
         match eventloop.poll().await {
             Ok(Event::Incoming(Packet::ConnAck(connack))) => {
@@ -92,6 +115,7 @@ pub async fn create_device_with_direct_connection(
                     "Received ConnAck ({:?}), session_present={:?}",
                     connack.code, connack.session_present
                 );
+                connected = true;
                 // Connection established, publish device creation message
                 publish_device_create_message(
                     &mut client,
@@ -116,41 +140,77 @@ pub async fn create_device_with_direct_connection(
                 // No acknowledgment received for device creation message even after 5s (keep alive interval)
                 bail!("Timed-out waiting for device creation acknowledgment from Cumulocity")
             }
-            Err(ConnectionError::Io(err)) if err.kind() == std::io::ErrorKind::InvalidData => {
-                if let Some(Error::AlertReceived(alert_description)) = err
-                    .get_ref()
-                    .and_then(|custom_err| custom_err.downcast_ref::<Error>())
-                {
-                    if let AlertDescription::CertificateUnknown = alert_description {
-                        // Either the device cert is not uploaded to c8y or
-                        // another cert is set in device.cert_path
-                        bail!("The device certificate is not trusted by Cumulocity. Upload the certificate using `tedge cert upload c8y`");
-                    } else if let AlertDescription::HandshakeFailure = alert_description {
-                        // Non-paired private key is set in device.key_path
-                        bail!(
-                            "The private key is not paired with the certificate. Check your 'device.key_path'."
-                        );
-                    }
-                }
-                return Err(err).context(CONNECTION_ERROR_CONTEXT);
-            }
-            Err(ConnectionError::Tls(TlsError::Io(err)))
-                if err.kind() == std::io::ErrorKind::InvalidData =>
-            {
-                match err
-                    .get_ref()
-                    .and_then(|custom_err| custom_err.downcast_ref::<Error>())
-                {
-                    Some(Error::InvalidCertificate(CertificateError::UnknownIssuer)) => {
-                        bail!("Cumulocity certificate is not trusted by the device. Check your 'c8y.root_cert_path'.");
-                    }
-                    _ => return Err(err).context(CONNECTION_ERROR_CONTEXT),
+            Err(ConnectionError::Io(err) | ConnectionError::Tls(TlsError::Io(err))) => {
+                match diagnose_tls_error(&err, &address.host().to_string(), connected) {
+                    Some(explanation) => bail!("{explanation}"),
+                    None => return Err(err).context(error_context(connected)),
                 }
             }
-            Err(err) => return Err(err).context(CONNECTION_ERROR_CONTEXT),
+            Err(err) => return Err(err).context(error_context(connected)),
             _ => {}
         }
     }
+}
+
+/// Recognises `rustls` refusing to buffer any more of an over-large message
+///
+/// `rustls` gives up without constructing a `rustls::Error`, so there is nothing to downcast to
+/// and the message has to be matched instead. A test below checks this still matches what the
+/// current `rustls` version reports. The same message is used whether or not a handshake is in
+/// progress, and the two cases have different size limits, so the caller must establish which of
+/// them applies
+fn is_buffer_full(err: &std::io::Error) -> bool {
+    err.get_ref()
+        .is_some_and(|inner| inner.to_string() == BUFFER_FULL_MESSAGE)
+}
+
+/// Explains a TLS error in terms of what the user can do about it
+///
+/// Returns `None` for anything unrecognised, leaving the caller to report the error as it is.
+/// `connected` tells us whether the broker has accepted the MQTT connection, and hence whether the
+/// TLS handshake is behind us
+fn diagnose_tls_error(err: &std::io::Error, host: &str, connected: bool) -> Option<String> {
+    if err.kind() != std::io::ErrorKind::InvalidData {
+        return None;
+    }
+
+    match err
+        .get_ref()
+        .and_then(|custom_err| custom_err.downcast_ref::<Error>())
+    {
+        // Either the device cert is not uploaded to c8y or
+        // another cert is set in device.cert_path
+        Some(Error::AlertReceived(AlertDescription::CertificateUnknown)) => Some(
+            "The device certificate is not trusted by Cumulocity. Upload the certificate using `tedge cert upload c8y`".into(),
+        ),
+        // Non-paired private key is set in device.key_path
+        Some(Error::AlertReceived(AlertDescription::HandshakeFailure)) => Some(
+            "The private key is not paired with the certificate. Check your 'device.key_path'.".into(),
+        ),
+        Some(Error::InvalidCertificate(CertificateError::UnknownIssuer)) => Some(
+            "Cumulocity certificate is not trusted by the device. Check your 'c8y.root_cert_path'.".into(),
+        ),
+        // A single handshake message that announces more than `rustls` will buffer
+        Some(Error::InvalidMessage(InvalidMessage::HandshakePayloadTooLarge)) if !connected => {
+            Some(oversized_handshake(host))
+        }
+        // A handshake that fills the buffer before any one message completes. Only a handshake
+        // can reach the larger of the two buffer limits, so both diagnoses hold only while the
+        // connection is still being established
+        _ if !connected && is_buffer_full(err) => Some(oversized_handshake(host)),
+        _ => None,
+    }
+}
+
+/// Explains a handshake too large for `rustls` to accept, however it broke the limit
+fn oversized_handshake(host: &str) -> String {
+    format!(
+        "Cumulocity sent a TLS handshake that is too large for thin-edge.io to accept (over 64 KB).\n\
+        The likely cause is the server listing the client certificates it will accept, \
+        which it should not be sending.\n\
+        Whatever the cause, this is not something that can be fixed on this device. \
+        Please report it to Cumulocity support, quoting the host {host}."
+    )
 }
 
 // Check the connection by using the jwt token retrieval over the mqtt.
@@ -433,6 +493,11 @@ pub(crate) fn decode_jwt_token(token: &str) -> Result<String, ConnectError> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use rumqttc::tokio_rustls::rustls::ClientConfig;
+    use rumqttc::tokio_rustls::rustls::ClientConnection;
+    use rumqttc::tokio_rustls::rustls::RootCertStore;
+    use std::io::Cursor;
+    use std::sync::Arc;
     use test_case::test_case;
 
     #[test]
@@ -495,5 +560,175 @@ mod test {
                 assert_eq!(error_msg, expected_error_msg)
             }
         }
+    }
+
+    #[test]
+    fn blames_cumulocity_for_a_handshake_too_large_to_buffer() {
+        let explanation = diagnose_tls_error(&oversized_handshake_error(), HOST, false)
+            .expect("an oversized handshake is diagnosed");
+
+        assert!(
+            explanation.contains("too large"),
+            "should say what went wrong: {explanation}"
+        );
+        assert!(
+            explanation.contains("Cumulocity support") && explanation.contains(HOST),
+            "should say who to report it to: {explanation}"
+        );
+    }
+
+    /// The other way `rustls` refuses an over-large handshake: rather than filling the buffer, a
+    /// single message announces more than it will ever accept
+    #[test]
+    fn blames_cumulocity_for_a_handshake_message_that_announces_too_much() {
+        let err = std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            Error::InvalidMessage(InvalidMessage::HandshakePayloadTooLarge),
+        );
+
+        let explanation = diagnose_tls_error(&err, HOST, false)
+            .expect("an over-large handshake message is diagnosed");
+
+        assert_eq!(explanation, oversized_handshake(HOST));
+    }
+
+    #[test]
+    fn does_not_blame_the_handshake_for_an_over_large_message_after_connecting() {
+        let err = std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            Error::InvalidMessage(InvalidMessage::HandshakePayloadTooLarge),
+        );
+
+        assert_eq!(diagnose_tls_error(&err, HOST, true), None);
+    }
+
+    /// `rustls` reports a full buffer the same way once the handshake is done, but then it means a
+    /// single over-long record rather than an over-long handshake, so the diagnosis must not apply
+    #[test]
+    fn does_not_blame_the_handshake_for_a_full_buffer_after_connecting() {
+        assert_eq!(
+            diagnose_tls_error(&oversized_handshake_error(), HOST, true),
+            None
+        );
+    }
+
+    #[test]
+    fn advises_uploading_the_certificate_when_cumulocity_does_not_trust_it() {
+        let err = alert(AlertDescription::CertificateUnknown);
+
+        let explanation =
+            diagnose_tls_error(&err, HOST, false).expect("a rejected certificate is diagnosed");
+
+        assert!(
+            explanation.contains("tedge cert upload c8y"),
+            "{explanation}"
+        );
+    }
+
+    #[test]
+    fn advises_checking_the_key_path_when_the_key_does_not_match_the_certificate() {
+        let err = alert(AlertDescription::HandshakeFailure);
+
+        let explanation =
+            diagnose_tls_error(&err, HOST, false).expect("an unpaired private key is diagnosed");
+
+        assert!(explanation.contains("device.key_path"), "{explanation}");
+    }
+
+    #[test]
+    fn advises_checking_the_root_cert_path_when_the_device_does_not_trust_cumulocity() {
+        let err = std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            Error::InvalidCertificate(CertificateError::UnknownIssuer),
+        );
+
+        let explanation =
+            diagnose_tls_error(&err, HOST, false).expect("an untrusted server is diagnosed");
+
+        assert!(explanation.contains("c8y.root_cert_path"), "{explanation}");
+    }
+
+    #[test]
+    fn leaves_an_unrecognised_error_to_be_reported_verbatim() {
+        let err = std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "connection refused");
+
+        assert_eq!(diagnose_tls_error(&err, HOST, false), None);
+    }
+
+    #[test]
+    fn error_context_says_whether_the_connection_was_ever_established() {
+        assert_ne!(error_context(true), error_context(false));
+    }
+
+    const HOST: &str = "example.cumulocity.com";
+
+    /// The largest handshake flight `rustls` will buffer, as a guard against denial-of-service
+    ///
+    /// Mirrors `MAX_HANDSHAKE_SIZE` in `rustls`, which is not publicly exported
+    const MAX_HANDSHAKE_SIZE: usize = 0xffff;
+
+    /// Wraps a TLS alert the way `rustls` surfaces it through `read_tls`
+    fn alert(description: AlertDescription) -> std::io::Error {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            Error::AlertReceived(description),
+        )
+    }
+
+    /// Drives a real [`ClientConnection`] into rejecting an over-large handshake
+    ///
+    /// Going through `rustls` rather than hand-building the error means an upgrade that changes
+    /// how the refusal is reported fails these tests instead of silently losing the diagnosis
+    fn oversized_handshake_error() -> std::io::Error {
+        // Must be called before any use of `ClientConfig::builder()`
+        let _ = rumqttc::tokio_rustls::rustls::crypto::ring::default_provider().install_default();
+
+        let config = ClientConfig::builder()
+            .with_root_certificates(RootCertStore::empty())
+            .with_no_client_auth();
+        let mut connection =
+            ClientConnection::new(Arc::new(config), "example.com".try_into().unwrap())
+                .expect("a client connection can be created");
+        connection
+            .write_tls(&mut std::io::sink())
+            .expect("the client hello can be flushed");
+
+        let mut flight = Cursor::new(oversized_handshake_flight());
+        loop {
+            match connection.read_tls(&mut flight) {
+                Ok(0) => panic!("rustls buffered the whole flight without complaining"),
+                Ok(_) => connection
+                    .process_new_packets()
+                    .expect("the partial flight is not rejected on its content"),
+                Err(err) => break err,
+            };
+        }
+    }
+
+    /// Frames a single `Certificate` handshake message into plaintext TLS records
+    ///
+    /// The message declares just under [`MAX_HANDSHAKE_SIZE`] bytes of payload, so once its own
+    /// header and the record headers are counted, the flight can never fit in the buffer and
+    /// `rustls` gives up part way through
+    fn oversized_handshake_flight() -> Vec<u8> {
+        const HANDSHAKE_RECORD: u8 = 22;
+        const TLS_1_2_VERSION: [u8; 2] = [0x03, 0x03];
+        const MAX_RECORD_PAYLOAD: usize = 16_384;
+        const CERTIFICATE_MESSAGE: u8 = 11;
+
+        let payload_len = MAX_HANDSHAKE_SIZE - 1;
+        let mut message = vec![CERTIFICATE_MESSAGE];
+        // A handshake message length is 3 bytes wide
+        message.extend_from_slice(&(payload_len as u32).to_be_bytes()[1..]);
+        message.resize(message.len() + payload_len, 0);
+
+        let mut flight = Vec::new();
+        for chunk in message.chunks(MAX_RECORD_PAYLOAD) {
+            flight.push(HANDSHAKE_RECORD);
+            flight.extend_from_slice(&TLS_1_2_VERSION);
+            flight.extend_from_slice(&(chunk.len() as u16).to_be_bytes());
+            flight.extend_from_slice(chunk);
+        }
+        flight
     }
 }
