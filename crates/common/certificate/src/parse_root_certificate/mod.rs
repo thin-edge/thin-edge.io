@@ -247,7 +247,9 @@ pub fn read_cert_chain(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
     use std::io::Write;
+    use std::path::PathBuf;
     use tempfile::NamedTempFile;
     use tempfile::TempDir;
 
@@ -331,5 +333,52 @@ mod tests {
 
         let root_certs = new_root_store(temp_dir.path()).unwrap();
         assert_eq!(root_certs.len(), 3);
+    }
+
+    /// `tedge connect` relies on this to rule out an unpaired key when a handshake fails later, so
+    /// this test fails if a `rustls` upgrade or a change of crypto provider stops it happening
+    #[test]
+    fn a_key_that_does_not_belong_to_the_certificate_is_refused_before_connecting() {
+        let dir = TempDir::new().unwrap();
+        let (cert_path, _) = write_selfsigned_pair(dir.path(), "device-a");
+        let (_, other_key_path) = write_selfsigned_pair(dir.path(), "device-b");
+
+        let err = create_tls_config(&cert_path, &other_key_path, &cert_path)
+            .expect_err("a certificate and a key that do not belong together cannot be used");
+
+        assert_matches!(
+            err,
+            CertificateError::CertParse(rustls::Error::InconsistentKeys(
+                rustls::InconsistentKeys::KeyMismatch
+            )),
+            "an unpaired key has to be reported as one, and not as some other failure"
+        );
+    }
+
+    /// The counterpart of the above: a certificate and the key it was issued for are accepted, so
+    /// the comparison is not simply refusing everything
+    #[test]
+    fn a_certificate_and_its_own_key_are_accepted() {
+        let dir = TempDir::new().unwrap();
+        let (cert_path, key_path) = write_selfsigned_pair(dir.path(), "device-a");
+
+        create_tls_config(&cert_path, &key_path, &cert_path)
+            .expect("a certificate and the key it was issued for can be used");
+    }
+
+    /// Writes a fresh self-signed certificate and its private key, returning their paths
+    fn write_selfsigned_pair(dir: &Path, id: &str) -> (PathBuf, PathBuf) {
+        let pair = crate::KeyCertPair::new_selfsigned_certificate(
+            &crate::CsrTemplate::default(),
+            id,
+            &crate::KeyKind::New,
+        )
+        .expect("a self-signed certificate can be created");
+
+        let cert_path = dir.join(format!("{id}.crt"));
+        let key_path = dir.join(format!("{id}.key"));
+        fs::write(&cert_path, pair.certificate_pem_string().unwrap()).unwrap();
+        fs::write(&key_path, pair.private_key_pem_string().unwrap().as_str()).unwrap();
+        (cert_path, key_path)
     }
 }
