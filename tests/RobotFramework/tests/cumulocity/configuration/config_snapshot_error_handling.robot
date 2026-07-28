@@ -45,6 +45,8 @@ Custom Setup
     Cumulocity.Device Should Exist    ${DEVICE_SN}
 
 Remove Write Permissions From File-Transfer Directory
+    # Wait for tedge-agent to finish starting up before locking down the directory
+    Service Health Status Should Be Up    tedge-agent
     # Remove all permissions from the file-transfer storage directory so that any
     # PUT request to the file-transfer service results in a 500 Internal Server Error.
     Execute Command    sudo chmod 000 ${FILE_TRANSFER_DIR}
