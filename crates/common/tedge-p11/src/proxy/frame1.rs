@@ -11,6 +11,8 @@ use crate::service::DeleteKeyRequest;
 use crate::service::DeleteKeyResponse;
 use crate::service::InitTokenRequest;
 use crate::service::InitTokenResponse;
+use crate::service::ListKeysRequest;
+use crate::service::ListKeysResponse;
 use crate::service::ListTokensResponse;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
@@ -44,6 +46,8 @@ pub enum Frame1 {
     ChangePinResponse(ChangePinResponse),
     DeleteKeyRequest(DeleteKeyRequest),
     DeleteKeyResponse(DeleteKeyResponse),
+    ListKeysRequest(ListKeysRequest),
+    ListKeysResponse(ListKeysResponse),
 }
 
 /// An error that can be returned to the client by the server.
@@ -59,6 +63,7 @@ mod tests {
     use crate::pkcs11::CreateKeyParams;
     use crate::pkcs11::KeyTypeParams;
     use crate::pkcs11::SigScheme;
+    use crate::service::KeyDetails;
     use crate::service::SignatureAlgorithm;
     use crate::service::SignatureScheme;
     use crate::service::TokenDetails;
@@ -388,6 +393,37 @@ mod tests {
             frame,
             Frame1::DeleteKeyResponse(DeleteKeyResponse {
                 deleted: vec!["a".to_string(), "b".to_string()],
+            })
+        );
+    }
+
+    #[test]
+    fn test_deserialize_list_keys_request() {
+        let input = vec![22, 1, 1, 117, 1, 1, 112];
+        let frame: Frame1 = postcard::from_bytes(&input).unwrap();
+        assert_eq!(
+            frame,
+            Frame1::ListKeysRequest(ListKeysRequest {
+                uri: Some("u".to_string()),
+                pin: Some(SecretString::new("p".to_string())),
+            })
+        );
+    }
+
+    #[test]
+    fn test_deserialize_list_keys_response() {
+        let input = vec![23, 1, 1, 112, 1, 69, 1, 107, 1, 49, 1, 117];
+        let frame: Frame1 = postcard::from_bytes(&input).unwrap();
+        assert_eq!(
+            frame,
+            Frame1::ListKeysResponse(ListKeysResponse {
+                keys: vec![KeyDetails {
+                    class: "p".to_string(),
+                    key_type: "E".to_string(),
+                    label: "k".to_string(),
+                    id: "1".to_string(),
+                    uri: "u".to_string(),
+                }],
             })
         );
     }

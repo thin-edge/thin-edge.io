@@ -110,6 +110,9 @@ use crate::service::DeleteKeyRequest;
 use crate::service::DeleteKeyResponse;
 use crate::service::InitTokenRequest;
 use crate::service::InitTokenResponse;
+use crate::service::KeyDetails;
+use crate::service::ListKeysRequest;
+use crate::service::ListKeysResponse;
 use crate::service::ListTokensResponse;
 use crate::service::SecretString;
 use crate::service::SignRequestWithSigScheme;
@@ -251,6 +254,77 @@ impl TedgeP11Service for Cryptoki {
         }
 
         Ok(ListTokensResponse { tokens })
+    }
+
+    #[instrument(skip_all)]
+    fn list_keys(&self, request: ListKeysRequest) -> anyhow::Result<ListKeysResponse> {
+        let params = SessionParams {
+            uri: request.uri,
+            pin: request.pin,
+        };
+        // Private key objects are only visible after a login, which open_session_ro performs.
+        let session = self.open_session_ro(&params)?;
+
+        let mut keys = Vec::new();
+        for (class, class_name) in [
+            (ObjectClass::PRIVATE_KEY, "private"),
+            (ObjectClass::PUBLIC_KEY, "public"),
+        ] {
+            let template = [Attribute::Token(true), Attribute::Class(class)];
+            let objects = match session.session.find_objects(&template) {
+                Ok(objects) => objects,
+                Err(e) => {
+                    error!(?e, class = class_name, "Failed to find key objects");
+                    continue;
+                }
+            };
+            for object in objects {
+                let uri = session
+                    .export_object_uri(object)
+                    .unwrap_or_else(|_| "<unknown>".to_string());
+
+                let mut label = String::new();
+                let mut id = String::new();
+                let mut key_type = String::new();
+                if let Ok(attrs) = session.session.get_attributes(
+                    object,
+                    &[
+                        AttributeType::Label,
+                        AttributeType::Id,
+                        AttributeType::KeyType,
+                    ],
+                ) {
+                    for attr in attrs {
+                        match attr {
+                            Attribute::Label(bytes) => {
+                                label = String::from_utf8_lossy(&bytes).into_owned();
+                            }
+                            Attribute::Id(bytes) => {
+                                id = bytes.iter().map(|b| format!("{b:02x}")).collect();
+                            }
+                            Attribute::KeyType(kt) => {
+                                key_type = match kt {
+                                    KeyType::RSA => "RSA".to_string(),
+                                    KeyType::EC => "EC".to_string(),
+                                    other => format!("{other:?}"),
+                                };
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                keys.push(KeyDetails {
+                    class: class_name.to_string(),
+                    key_type,
+                    label,
+                    id,
+                    uri,
+                });
+            }
+        }
+
+        Ok(ListKeysResponse { keys })
     }
 
     #[instrument(skip_all)]

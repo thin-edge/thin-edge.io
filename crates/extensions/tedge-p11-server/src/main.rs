@@ -520,6 +520,12 @@ module_path = """#;
         fn list_tokens(&self) -> anyhow::Result<tedge_p11::service::ListTokensResponse> {
             unimplemented!()
         }
+        fn list_keys(
+            &self,
+            _: tedge_p11::service::ListKeysRequest,
+        ) -> anyhow::Result<tedge_p11::service::ListKeysResponse> {
+            unimplemented!()
+        }
         fn change_pin(
             &self,
             _: tedge_p11::service::ChangePinRequest,

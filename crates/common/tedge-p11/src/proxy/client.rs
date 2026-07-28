@@ -19,6 +19,8 @@ use crate::service::DeleteKeyRequest;
 use crate::service::DeleteKeyResponse;
 use crate::service::InitTokenRequest;
 use crate::service::InitTokenResponse;
+use crate::service::ListKeysRequest;
+use crate::service::ListKeysResponse;
 use crate::service::ListTokensResponse;
 use crate::service::SecretString;
 use crate::service::SignRequest;
@@ -127,6 +129,17 @@ impl TedgeP11Service for TedgeP11Client {
 
         let Frame1::DeleteKeyResponse(response) = response else {
             bail!("protocol error: bad response, expected delete_key, received: {response:?}");
+        };
+
+        Ok(response)
+    }
+
+    fn list_keys(&self, request: ListKeysRequest) -> anyhow::Result<ListKeysResponse> {
+        let request = Frame1::ListKeysRequest(request);
+        let response = self.do_request(request)?;
+
+        let Frame1::ListKeysResponse(response) = response else {
+            bail!("protocol error: bad response, expected list_keys, received: {response:?}");
         };
 
         Ok(response)

@@ -34,6 +34,13 @@ pub trait TedgeP11Service: Send + Sync {
     /// no PIN or login is required.
     fn list_tokens(&self) -> anyhow::Result<ListTokensResponse>;
 
+    /// List the key objects stored on a token.
+    ///
+    /// Both private and public key objects are reported, each with its label, id, type and full
+    /// PKCS #11 URI (usable as `device.key_uri`). Private key objects require a login, so a PIN
+    /// (from the request or the service configuration) is used.
+    fn list_keys(&self, request: ListKeysRequest) -> anyhow::Result<ListKeysResponse>;
+
     /// Change or reset the user PIN of an initialized PKCS #11 token.
     ///
     /// By default the current user PIN is changed to a new one (`C_SetPIN`). When
@@ -188,6 +195,35 @@ pub struct ChangePinRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChangePinResponse {
     /// URI identifying the token whose PIN was changed.
+    pub uri: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListKeysRequest {
+    /// URI selecting the token whose keys to list. If `None`, the single available token is used.
+    pub uri: Option<String>,
+    /// PIN for logging into the token (required to see private keys). If `None`, the configured
+    /// PIN is used.
+    pub pin: Option<SecretString>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListKeysResponse {
+    pub keys: Vec<KeyDetails>,
+}
+
+/// Metadata describing a single key object on a token.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KeyDetails {
+    /// Object class: `private` or `public`.
+    pub class: String,
+    /// Key type, e.g. `RSA` or `EC`. Empty if it could not be read.
+    pub key_type: String,
+    /// Object label (CKA_LABEL). Empty if not set.
+    pub label: String,
+    /// Object id (CKA_ID) as a hex string. Empty if not set.
+    pub id: String,
+    /// PKCS #11 URI identifying this key object, usable as `device.key_uri`.
     pub uri: String,
 }
 

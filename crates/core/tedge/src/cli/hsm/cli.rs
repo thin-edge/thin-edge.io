@@ -4,6 +4,7 @@ use super::change_pin::ChangePinArgs;
 use super::create_key::CreateKeyArgs;
 use super::delete_key::DeleteKeyArgs;
 use super::init_token::InitArgs;
+use super::list_keys::ListKeysArgs;
 use super::list_tokens::ListTokensArgs;
 use crate::command::BuildCommand;
 use crate::command::Command;
@@ -34,6 +35,16 @@ pub enum TEdgeHsmCli {
     ///
     /// Only public token metadata is read, so no PIN is required.
     ListTokens(ListTokensArgs),
+
+    /// List the keys stored on a PKCS #11 token.
+    ///
+    /// Both private and public key objects are listed, each with its label, id, type and full
+    /// PKCS #11 URI. The URI can be used as `device.key_uri` to select an existing key, e.g. one
+    /// pre-provisioned on the token.
+    ///
+    /// The token is auto-discovered when no URI is given. Listing private keys requires a login, so
+    /// the configured PIN (or `--pin`) is used.
+    ListKeys(ListKeysArgs),
 
     /// Generate a new keypair on the PKCS #11 token and select it to be used.
     ///
@@ -87,6 +98,7 @@ impl BuildCommand for TEdgeHsmCli {
         match self {
             TEdgeHsmCli::Init(args) => args.build_command(config),
             TEdgeHsmCli::ListTokens(args) => args.build_command(config),
+            TEdgeHsmCli::ListKeys(args) => args.build_command(config),
             TEdgeHsmCli::CreateKey(args) => args.build_command(config),
             TEdgeHsmCli::ChangePin(args) => args.build_command(config),
             TEdgeHsmCli::DeleteKey(args) => args.build_command(config),
