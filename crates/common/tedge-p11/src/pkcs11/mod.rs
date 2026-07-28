@@ -96,6 +96,8 @@ use std::fmt::Debug;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 pub use cryptoki::types::AuthPin;
 
@@ -163,6 +165,9 @@ impl Debug for CryptokiConfigDirect {
 pub struct Cryptoki {
     context: Arc<Mutex<Pkcs11>>,
     config: CryptokiConfigDirect,
+    /// When the module was last reloaded from the signing path, used to rate-limit reloads so a
+    /// burst of failed signings does not churn a physical reader (see [`Cryptoki::should_reinit`]).
+    last_reinit: Arc<Mutex<Option<Instant>>>,
 }
 
 impl TedgeP11Service for Cryptoki {
@@ -596,7 +601,28 @@ impl Cryptoki {
         Ok(Self {
             context: Arc::new(Mutex::new(pkcs11client)),
             config,
+            last_reinit: Arc::new(Mutex::new(None)),
         })
+    }
+
+    /// Rate-limit module reloads driven by signing failures.
+    ///
+    /// Returns `true` (and records the time) if the module has not been reloaded from the signing
+    /// path within [`SIGNING_REINIT_MIN_INTERVAL`], otherwise `false`. Reloading the PKCS #11 module
+    /// (`C_Finalize` + `C_Initialize`) can recover a token that was re-inserted, but on a physical
+    /// reader (a CCID smartcard via pcscd) it churns the connection and can hang it, so a
+    /// reconnecting cloud mapper retrying to sign must not trigger it on every attempt.
+    fn should_reinit(&self) -> bool {
+        const SIGNING_REINIT_MIN_INTERVAL: Duration = Duration::from_secs(30);
+        let now = Instant::now();
+        let mut last = self.last_reinit.lock().unwrap_or_else(|e| e.into_inner());
+        match *last {
+            Some(t) if now.duration_since(t) < SIGNING_REINIT_MIN_INTERVAL => false,
+            _ => {
+                *last = Some(now);
+                true
+            }
+        }
     }
 
     /// Enumerate the tokens currently present, reading only public metadata. Does not reinitialize
@@ -682,33 +708,36 @@ impl Cryptoki {
     /// want to restart the server manually. If the key is still missing after a reload, the
     /// original error is returned.
     pub fn signing_key_retry(&self, session_params: SessionParams) -> anyhow::Result<Pkcs11Signer> {
-        let signing_key = self
+        let err = match self
             .open_session_ro(&session_params)
             .and_then(|s| s.signing_key())
-            .context("Failed to find a signing key");
-
-        let signing_key = match signing_key {
-            Ok(key) => key,
-            // refresh the slots only if the key couldn't be found, i.e.:
-            // - we didn't find a slot with the token that matches the URI
-            // - we didn't find an object on the token that matches the URI
-            Err(ref e)
-                if format!("{e:#}").contains("Didn't find a slot to use")
-                    || format!("{e:#}").contains("Failed to find a key") =>
-            {
-                warn!("Failed to find a signing key, reloading the library to retry");
-                // ensure current session is dropped before opening a new one
-                drop(signing_key);
-                self.reinit()?;
-                self.open_session_ro(&session_params)
-                    .and_then(|s| s.signing_key())
-                    .context("Failed to find a signing key")?
-            }
-
-            Err(e) => return Err(e),
+            .context("Failed to find a signing key")
+        {
+            Ok(key) => return Ok(key),
+            // The failed session has already been dropped by the time we get here.
+            Err(e) => e,
         };
 
-        Ok(signing_key)
+        // Reload the module and retry only if the key couldn't be found, i.e.:
+        // - we didn't find a slot with the token that matches the URI
+        // - we didn't find an object on the token that matches the URI
+        // and only if we haven't reloaded recently: reloading (C_Finalize + C_Initialize) can pick
+        // up a re-inserted token, but it churns a physical reader's connection, so a mapper
+        // repeatedly retrying to sign must not trigger a reload on every attempt.
+        let recoverable = {
+            let msg = format!("{err:#}");
+            msg.contains("Didn't find a slot to use") || msg.contains("Failed to find a key")
+        };
+        if recoverable && self.should_reinit() {
+            warn!("Failed to find a signing key, reloading the library to retry");
+            self.reinit()?;
+            return self
+                .open_session_ro(&session_params)
+                .and_then(|s| s.signing_key())
+                .context("Failed to find a signing key");
+        }
+
+        Err(err)
     }
 
     fn open_session_ro<'a>(
