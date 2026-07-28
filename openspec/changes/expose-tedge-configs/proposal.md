@@ -1,52 +1,87 @@
 ## Why
 
-An external process — a plugin, or a %%te%% component in its own container — has no access to the
-config directory or the device certificate, and `tedge config get` needs both.
-So even a non-secret, widely-needed value like `device.id` is out of reach for anything outside the
-component that owns the config file.
-There's currently no way to read a %%te%% config value without file access.
+External processes — plugins, containerized components, child devices —
+cannot read thin-edge config values like `device.id` without filesystem access
+to `/etc/tedge` and the device certificate.
+The Cumulocity opcua-device-gateway, for example, needs `device.id` for its
+Cumulocity external ID and `c8y.http` for API calls;
+today it achieves this by mounting `/etc/tedge` and running `tedge config get`,
+which also requires the device certificate to be present.
+
+## Proposed solution
+
+The `tedge-agent` and mappers publish a curated set of their owned configs
+(from `tedge.toml` and `mapper.toml` respectively)
+as MQTT retained messages to `config/` topics scoped to their entity topic IDs:
+* te/device/main/service/tedge-agent/config/device.id
+* te/device/main/service/tedge-mapper-c8y/config/url
+
+Only the configs that are deemed exposable by the maintainers of these components
+are published.
+The `tedge-agent` aggregates the configs published by itself
+and other tedge services and serves them via HTTP as well.
+
+Users and external components read config values without any file system access,
+via either of those channels:
+
+- **Subscribe** to its retained MQTT topic, scoped to the owning service:
+
+  ```
+  te/device/main/service/tedge-agent/config/device.id       -> my-device-01
+  te/device/main/service/tedge-mapper-c8y/config/url        -> example.cumulocity.com
+  ```
+
+- **Query** it over HTTP from the agent — a single value, or a whole service's
+  config as a JSON object:
+
+  ```console
+  $ curl http://tedge:8000/te/v1/entities/device/main/service/tedge-agent/config/device.id
+  my-device-01
+
+  $ curl http://tedge:8000/te/v1/entities/device/main/service/tedge-mapper-c8y/config
+  {"url":"example.cumulocity.com","device.id":"my-device-01"}
+  ```
+
+Only values a component maintainer has explicitly marked as exposable are ever
+published or served.
+The set never includes secrets (private keys, PINs, credential-file paths).
 
 ## What Changes
 
-- Add an opt-in `exposable` marker to individual `tedge_config` settings, set where each setting is
-  defined.
-  A new setting stays hidden until a maintainer marks it — safe by default.
-- Each owning component publishes its own exposable values as retained MQTT messages, one value per
-  topic, under its own service topic: `te/device/<device>/service/<service>/config/<key>`.
+- Each owning component publishes its exposable config values as retained MQTT
+  messages, one per topic: `te/device/<device>/service/<service>/config/<key>`.
   The agent publishes core/device settings;
-  each cloud mapper publishes its own cloud settings under its own service topic, with the cloud (and
-  profile) prefix stripped from the key (`c8y.url` → `.../config/url`).
-  An empty retained payload means the value is unset or removed.
-- The agent collects these topics (as an ordinary subscriber — it never reads another component's
-  config file) and serves them over HTTP as a convenience view:
-  `GET /te/v1/entities/<service>/config` (all exposed values as a JSON object) and
-  `GET /te/v1/entities/<service>/config/<key>` (a single value).
-  A key that isn't exposed and a key that doesn't exist both return `404 Not Found` — you can't tell
-  them apart from outside.
-- Curate the initial exposable set per the allowlist in this change's `design.md` (core device/MQTT/HTTP
-  settings; per-cloud URL, device id, bridge topic prefix, feature-enable flags, topic lists; secrets and
-  file paths excluded).
-- The shared publisher also watches its own topics: if an external client overwrites a value, it
-  republishes the correct one.
+  each mapper publishes its own cloud settings with the cloud/profile prefix
+  stripped from the key.
+- The agent subscribes to every service's `config/+` topics and serves them as a
+  read-only HTTP view:
+  `GET .../config` (JSON object) and `GET .../config/<key>` (single value).
+  A key that isn't exposed and a key that doesn't exist both return `404`.
+- The exposed set is opt-in per setting — a new setting stays hidden until a
+  maintainer marks it.
+- Each publisher self-corrects by subscribing to its own `config/+` topics and
+  reconciling every message against expected state, correcting external overwrites
+  and clearing stale keys from prior versions.
+- Exposed values reflect the active/applied config (what the running process has
+  loaded), not a live mirror of the file on disk.
 
 ## Capabilities
 
 ### New Capabilities
-- `config-exposure`: the opt-in allowlist mechanism, the retained per-value MQTT topic scheme, key
-  naming and ownership rules, and the HTTP read view served by the agent.
+- `config-exposure`: opt-in allowlist, retained per-key MQTT topics, key-naming
+  and ownership rules, and the read-only HTTP view served by the agent
+
+### Modified Capabilities
 
 ## Impact
 
-- `crates/common/tedge_config_macros` — new `#[tedge_config(exposable)]` field attribute and a
-  generated `ReadableKey::is_exposable()`.
-- `crates/common/tedge_config` — allowlist marking in `define_tedge_config!`, plus a helper to collect
-  each component's exposable (key, value) pairs.
-- `crates/core/tedge_api` — new `Channel::Config { key }` topic variant and matching `ChannelFilter`,
-  plus config storage on the entity store (parallel to twin data).
-- A new small extensions crate that publishes retained config messages at startup and corrects them if
-  externally overwritten, used by both `crates/core/tedge_agent` and `crates/core/tedge_mapper`
-  (c8y/aws/az).
-- `crates/core/tedge_agent` — MQTT ingestion of `config/<key>` into the entity store, and new
-  `GET /te/v1/entities/<service>/config[/<key>]` HTTP routes, modeled on the existing twin-data routes.
-- `tests/RobotFramework` — end-to-end coverage of the retained topics and HTTP routes.
-- `docs/` — MQTT topic reference and entity HTTP API reference gain the `config` channel/routes.
+- `tedge_config_macros` — new `#[tedge_config(exposable)]` field attribute,
+  generates `ReadableKey::is_exposable()`
+- `tedge_config` — allowlist marking in `define_tedge_config!`,
+  `exposed_core_config()` / `exposed_cloud_config()` helpers
+- `tedge_api` — new `Channel::Config { key }` topic variant,
+  config storage on the entity store
+- New shared publisher crate used by the agent and all three mappers
+- `tedge_agent` — MQTT ingestion of config topics, new HTTP routes
+- Robot Framework end-to-end tests
+- Docs: MQTT topic reference and HTTP API reference
