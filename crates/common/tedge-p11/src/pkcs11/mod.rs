@@ -223,37 +223,19 @@ impl TedgeP11Service for Cryptoki {
     }
 
     fn list_tokens(&self) -> anyhow::Result<ListTokensResponse> {
-        // Refresh the slot list so recently attached/initialized tokens are visible.
-        let _ = self.reinit();
-        let context = match self.context.lock() {
-            Ok(c) => c,
-            Err(e) => e.into_inner(),
-        };
-        let slots = context
-            .get_slots_with_token()
-            .context("Failed to list slots with a token")?;
-
-        let mut tokens = Vec::with_capacity(slots.len());
-        for slot in slots {
-            let info = match context.get_token_info(slot) {
-                Ok(info) => info,
-                Err(e) => {
-                    error!(?e, slot = slot.id(), "Failed to get_token_info for slot");
-                    continue;
-                }
-            };
-            tokens.push(TokenDetails {
-                slot: slot.id(),
-                label: info.label().to_string(),
-                model: info.model().to_string(),
-                manufacturer: info.manufacturer_id().to_string(),
-                serial: info.serial_number().to_string(),
-                initialized: info.token_initialized(),
-                uri: export_session_uri(&info),
-            });
+        // Enumerate the tokens without reinitializing the PKCS #11 module first. Reloading the
+        // module (C_Finalize + C_Initialize) on every call churns the connection to physical
+        // readers - e.g. a CCID smartcard reached via pcscd - and can hang them. Only fall back to
+        // a one-shot reinit-and-retry when nothing is found, which is the case where a token was
+        // just attached or initialized and the cached slot list may be stale.
+        let tokens = self.collect_token_details()?;
+        if !tokens.is_empty() {
+            return Ok(ListTokensResponse { tokens });
         }
-
-        Ok(ListTokensResponse { tokens })
+        let _ = self.reinit();
+        Ok(ListTokensResponse {
+            tokens: self.collect_token_details()?,
+        })
     }
 
     #[instrument(skip_all)]
@@ -615,6 +597,39 @@ impl Cryptoki {
             context: Arc::new(Mutex::new(pkcs11client)),
             config,
         })
+    }
+
+    /// Enumerate the tokens currently present, reading only public metadata. Does not reinitialize
+    /// the module, so it is safe to call repeatedly against a physical reader.
+    fn collect_token_details(&self) -> anyhow::Result<Vec<TokenDetails>> {
+        let context = match self.context.lock() {
+            Ok(c) => c,
+            Err(e) => e.into_inner(),
+        };
+        let slots = context
+            .get_slots_with_token()
+            .context("Failed to list slots with a token")?;
+
+        let mut tokens = Vec::with_capacity(slots.len());
+        for slot in slots {
+            let info = match context.get_token_info(slot) {
+                Ok(info) => info,
+                Err(e) => {
+                    error!(?e, slot = slot.id(), "Failed to get_token_info for slot");
+                    continue;
+                }
+            };
+            tokens.push(TokenDetails {
+                slot: slot.id(),
+                label: info.label().to_string(),
+                model: info.model().to_string(),
+                manufacturer: info.manufacturer_id().to_string(),
+                serial: info.serial_number().to_string(),
+                initialized: info.token_initialized(),
+                uri: export_session_uri(&info),
+            });
+        }
+        Ok(tokens)
     }
 
     /// Reinitializes the PKCS11 library.
