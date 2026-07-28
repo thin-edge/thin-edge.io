@@ -947,6 +947,7 @@ define_tedge_config! {
             mqtt: {
                 /// The maximum message payload size that can be mapped to the cloud via MQTT
                 #[tedge_config(example = "262144", default(function = "az_mqtt_payload_limit"))]
+                #[tedge_config(exposable)]
                 max_payload_size: MqttPayloadLimit,
             }
         },

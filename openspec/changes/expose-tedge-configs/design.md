@@ -63,60 +63,107 @@ generating `ReadableKey::is_exposable()`.
 This follows the same pattern already used for `deprecated_key` and doc
 comments — the decision to expose lives next to the setting definition.
 
-### Per-value retained topics, not one aggregate document
+### Values keep their declared type, via a second macro-generated reader
 
-Each value gets its own retained MQTT message:
-`te/device/<device>/service/<service>/config/<key>`.
-`<key>` is the `tedge config` key kept as a single final topic segment
-(e.g: `config/device.id`), so it maps straight back to a
-`tedge config` key with no extra parsing.
+`read_string` renders every value through `Display`, which would publish a port
+as `"1883"`, a flag as `"true"` and a template set as the `Debug` rendering of a
+`Vec<String>`. So the macro generates a second reader,
+`TEdgeConfigReader::read_exposed_value`, which serializes the reader value
+instead of formatting it.
 
-A consumer subscribes to exactly the value(s) it needs.
-An empty retained payload means the value is unset or was removed.
+Each field type's `Serialize` impl is the source of truth for the published
+shape, and it already matches the `tedge.toml` form: `ConnectUrl`, `HostPort`
+and `TopicPrefix` serialize `into = "String"`, `TemplatesSet` as an array,
+`MqttPayloadLimit` as its inner `u32`, `EntityTopicId` as `serde(transparent)`.
+So there is nothing to hand-maintain per type.
 
-Alternative: splitting the key across topic segments (e.g: `config/device/id`).
-Rejected — variable depth and extra logic to reconstruct the key.
+Arms are generated only for `#[tedge_config(exposable)]` fields; every other key
+falls into a `_ => Ok(None)` catch-all. Restricting it this way keeps the
+`Serialize` requirement scoped to the allowlist, so adding a config type that
+isn't `Serialize` can never break the build inside macro-expanded code. It also
+means a non-exposable key has no typed representation to leak in the first
+place.
+
+The value type is `serde_json::Value` rather than `toml::Value`. Every
+destination is JSON — the retained payload, the entity store's `config` map
+(parallel to `twin_data`), and the HTTP response — and the publisher actor
+compares against a *parsed JSON* payload, so a `toml::Value` would have to be
+converted in its constructor anyway and would survive nowhere downstream.
+`toml::Value` is also a lossier intermediate rather than an interchangeable one:
+no null, `i64`-only integers, and a `Datetime` variant that transcodes to a
+`{"$__toml_private_datetime": ...}` sentinel object through a non-TOML
+serializer.
+
+### One retained JSON document per service, not per-value topics
+
+Each service publishes a single retained MQTT message on
+`te/device/<device>/service/<service>/config`, containing every exposed
+key-value pair as one JSON object. Each field name inside that object is the
+`tedge config` key kept flat (e.g: `device.id`), so it maps straight back to
+a `tedge config` key with no extra parsing.
+
+A consumer subscribes to one topic and gets the service's whole exposed
+config; there's no way to subscribe to a single key over MQTT — a client
+that wants just one value uses the HTTP API instead.
+
+On every startup, the previously published `config` message is replaced with a new one.
+This will make sure that any keys that were published on the previous run,
+that became stale for the following reasons do not stay with the broker:
+- any exposed keys that were unset before the restart
+- any previously exposed config in the previous version, hidden in the new version
+- any config key that's renamed/removed in the new version
+
+Alternative: one retained message per key (`config/<key>`). Rejected —
+publishing and reconciling N per-key topics is proportionally more MQTT
+traffic and state to track for no benefit over parsing one JSON object.
+It also complicates clearing a stale key after a rename or version
+upgrade (each one needs its own explicit empty-payload clear — see
+"Self-correcting publisher" below, where the aggregate document avoids this
+entirely).
 
 ### Mapper-published keys drop the cloud and profile qualifier
 
-`c8y.url` becomes `.../tedge-mapper-c8y/config/url`.
+`c8y.url` becomes the `url` field in `.../tedge-mapper-c8y/config`'s JSON
+object.
 The service topic already scopes the value; repeating the cloud/profile
-prefix in the key would be redundant.
+prefix in the field name would be redundant.
 That name comes from `bridge.topic_prefix`: `format!("tedge-mapper-{prefix}")`
 
 ### One shared publisher
 
-At startup, a component publishes every exposed value: the value if set,
-or an empty payload if unset (which clears any previously set/published values).
-This means a value removed from config can't linger from a previous run.
+Since all tedge components follow the same protocol to publish the configs,
+that logic is captured into a single actor and shared by all of them.
 
-### Self-correcting publisher via wildcard subscription
+### Self-correcting publisher
 
-Each component subscribes to its own `config/+` and reconciles every
-message against expected state (`Some(value)` for an exposed+set key,
-absent for everything else):
+Each component subscribes to its own `config` topic and compares the
+retained payload against its expected JSON object:
 
-- Payload differs from expected value (including an empty payload on an
-  owned key) — republish the expected value.
-- Expected absent but payload is non-empty — clear with an empty retained
-  payload.
-- Payload matches expected state — no-op (terminates the loop).
+- Payload doesn't match the expected object (wrong content, or absent) —
+  republish the expected object.
+- Payload matches — no-op (terminates the loop).
 
-This does two jobs: corrects external overwrites within one round trip,
-and clears stale keys left behind by renames or upgrades
-(their expected state is absent, so the replayed retained message gets cleared).
+This corrects external overwrites within one round trip. Because the
+document is replaced as a whole rather than patched key by key, this same
+comparison also clears stale keys left behind by renames, demotions, or
+version upgrades — they're simply absent from the republished object, with
+no separate clearing path to implement or test.
 
 ### Config stored parallel to twin data, not merged into it
 
-The entity store gets a `config` map on each entity, separate from
-`twin_data`. Config values come from one source of truth (the owning
-component's `tedge_config`) and nothing external can set them.
-Merging into twin data would blur that distinction.
+The entity store maintains a `twin_data` map for each entity.
+Even though `config` values are also just key-value pairs, just like twin data,
+the same `twin_data` map be re-used to store configs as well,
+as they both serve distinct responsibilities.
+The `twin_data` map captures `twin` messages published by the users,
+while `config` is published by the owning component itself.
+So, they must be stored in a separate dedicated `config` map per entity.
 
 ### Unexposed and non-existent keys are indistinguishable
 
-The agent collects config purely by subscribing to MQTT — it never knows
-which keys exist but are hidden vs. which don't exist at all.
+The agent collects config purely by subscribing to each service's `config`
+topic and parsing the retained JSON object — it never knows which keys exist
+but are hidden vs. which don't exist at all.
 Both the MQTT view (no retained message) and the HTTP API (`404 Not Found`)
 treat the two cases identically, so the response leaks nothing about which
 non-exposed settings exist.
@@ -158,7 +205,7 @@ The curated set (✓ = exposed, ✗ = not exposed):
 | `az.device.key_path` | ✗ |
 | `az.device.key_pin` | ✗ |
 | `az.device.key_uri` | ✗ |
-| `az.mapper.mqtt.max_payload_size` | ✗ |
+| `az.mapper.mqtt.max_payload_size` | ✓ |
 | `az.mapper.timestamp` | ✗ |
 | `az.mapper.timestamp_format` | ✗ |
 | `az.root_cert_path` | ✗ |
@@ -289,13 +336,16 @@ The curated set (✓ = exposed, ✗ = not exposed):
 HTTP and MQTT share the same per-service scoping and the same keys:
 
 ```
-te/device/main/service/tedge-agent/config/device.id            -> "my-device-01"
-te/device/main/service/tedge-agent/config/mqtt.client.port     -> "1883"
-te/device/main/service/tedge-agent/config/http.client.port     -> "8000"
-te/device/main/service/tedge-mapper-c8y/config/url             -> "example.cumulocity.com"
-te/device/main/service/tedge-mapper-c8y/config/device.id       -> "my-device-01"
-te/device/main/service/tedge-mapper-c8y-edge/config/url        -> "edge.c8y.io"
+te/device/main/service/tedge-agent/config
+  -> {"device.id":"my-device-01","http.client.port":"8000","mqtt.client.port":"1883"}
+te/device/main/service/tedge-mapper-c8y/config
+  -> {"device.id":"my-device-01","url":"example.cumulocity.com"}
+te/device/main/service/tedge-mapper-c8y-edge/config
+  -> {"url":"edge.c8y.io"}
 ```
+
+The HTTP single-value route (`GET .../config/<key>`) looks the key up in the
+same parsed object — it isn't backed by a separate MQTT topic per key.
 
 ## Risks / Trade-offs
 
@@ -303,9 +353,9 @@ te/device/main/service/tedge-mapper-c8y-edge/config/url        -> "edge.c8y.io"
   value masking or secret newtype.
   A forward-guarding CI test asserts known-secret keys are non-exposable,
   so marking one fails CI.
-- A removed mapper profile's config topics can only be cleared when that
+- A removed mapper profile's config topic can only be cleared when that
   profile's entity is explicitly deregistered — the same gap twin data has
   for a decommissioned profile.
-- A value only appears once its owner has published it at least once.
-  Consumers that need a value before the owning component starts must wait
-  on MQTT for the retained message to arrive.
+- A service's config only appears once its owner has published its document
+  at least once. Consumers that need a value before the owning component
+  starts must wait on MQTT for the retained message to arrive.
