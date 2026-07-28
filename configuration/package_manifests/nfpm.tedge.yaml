@@ -199,3 +199,11 @@ contents:
     dst: /usr/share/tedge/diag-plugins/
     file_info:
       mode: 0755
+
+  # service plugins, one per service type, named after the type it handles.
+  # None is shipped: the directory is created empty, owned by root, since
+  # 'tedge service' runs a plugin from it as root.
+  - dst: /usr/share/tedge/service-plugins
+    type: dir
+    file_info:
+      mode: 0755

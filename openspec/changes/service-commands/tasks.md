@@ -28,15 +28,15 @@
 
 ## 4. `tedge service` CLI
 
-- [ ] 4.1 Add a `Service` variant to `TEdgeOpt` (`crates/core/tedge/src/cli/mod.rs:97`), the module declaration (`mod.rs:22`) and the `BuildCommand` arm (`mod.rs:196`)
-- [ ] 4.2 Define `tedge service <action> <service-name> [--service-type <type>]`, `--service-type` defaulting to `service`
-- [ ] 4.3 Validate the arguments before selecting any backend: action is a single token (`[A-Za-z0-9_-]+`, non-empty, bounded, no leading `-`), service name matches `[A-Za-z0-9_.@-]+` with no leading `-`, service type matches `[a-z0-9_-]+`
-- [ ] 4.4 Dispatch the `service` type to the init-system backend via `tedge_system_services::service_manager(config.root_dir())`, as `tedge connect` does (`cli/connect/cli.rs:52`)
-- [ ] 4.5 Dispatch any other type to `<service-plugin-dir>/<type> <action> <service-name>`, spawned argv-based following `tedge diag collect` (`cli/diag/collect.rs:159`)
-- [ ] 4.6 Map exit codes: `0` success, `2` action not supported for this service type, other non-zero failure with the backend's stderr as the reason; propagate a plugin's `2` unchanged
-- [ ] 4.7 List the known actions in the error when an action is rejected as unsupported
-- [ ] 4.8 Add a `service_plugin_dir` config key next to the existing plugin directories (`crates/common/tedge_config/src/tedge_toml/tedge_config.rs:1385`-`:1397`), defaulting to `/usr/share/tedge/service-plugins`
-- [ ] 4.9 Test: default type restarts through the init system; a custom type runs its plugin; a missing plugin file, a rejected argument, and each exit code path
+- [x] 4.1 Add a `Service` variant to `TEdgeOpt` (`crates/core/tedge/src/cli/mod.rs:97`), the module declaration (`mod.rs:22`) and the `BuildCommand` arm (`mod.rs:196`)
+- [x] 4.2 Define `tedge service <action> <service-name> [--service-type <type>]`, `--service-type` defaulting to `service`
+- [x] 4.3 Validate the arguments before selecting any backend: action matches `[a-z][a-z0-9_]+` and is bounded in length, service name matches `[A-Za-z0-9_.@-]+` with no leading `-`, service type matches `[a-z0-9_-]+`. Put the action name rule in `tedge_api` so the mapper uses the same one (7.5)
+- [x] 4.4 Dispatch the `service` type to the init-system backend via `tedge_system_services::service_manager(config.root_dir())`, as `tedge connect` does (`cli/connect/cli.rs:52`)
+- [x] 4.5 Dispatch any other type to `<service-plugin-dir>/<type> <action> <service-name>`, spawned argv-based following `tedge diag collect` (`cli/diag/collect.rs:159`)
+- [x] 4.6 Map exit codes: `0` success, `2` action not supported for this service type, other non-zero failure with the backend's stderr as the reason; propagate a plugin's `2` unchanged
+- [x] 4.7 List the known actions in the error when an action is rejected as unsupported
+- [x] 4.8 Add a `service.plugin_dir` config key to the existing `service` table (`crates/common/tedge_config/src/tedge_toml/tedge_config.rs:1327`), defaulting to `/usr/share/tedge/service-plugins`
+- [x] 4.9 Test: default type restarts through the init system; a custom type runs its plugin; a missing plugin file, a rejected argument, and each exit code path
 
 ## 5. Shipped service command workflows
 
@@ -60,19 +60,19 @@
 - [ ] 7.2 Add the arm to `process_json_over_mqtt` (`converter.rs:509`) and a forward function following `forward_restart_request` (`converter.rs:823`), resolving the entity with `EntityCache::try_get_by_external_id` (`src/entity_cache.rs:377`)
 - [ ] 7.3 Build the command topic from the lowercased `command` value, and do not copy it into the thin-edge payload; publish `{"status": "init", "serviceName", "serviceType"}`
 - [ ] 7.4 Take `serviceName` from the resolved entity topic identifier, and `serviceType` from the registration data, falling back to the operation payload and then to the default type `service`
-- [ ] 7.5 Fail the cloud operation, publishing no command, when the entity cannot be resolved, when the action is not declared (compared case-insensitively), or when the `command` value is not a single valid token
+- [ ] 7.5 Fail the cloud operation, publishing no command, when the entity cannot be resolved, when the action is not declared (compared case-insensitively), or when the lowercased `command` value does not match the action name rule `[a-z][a-z0-9_]+` from 4.3
 - [ ] 7.6 Add the `OperationType` variant (`crates/core/tedge_api/src/mqtt_topics.rs:738`), the `CumulocitySupportedOperations` mapping (`c8y_api/src/smartrest/smartrest_serializer.rs:184`), the `to_c8y_operation` entry and a status handler module alongside the existing ones (`src/operations/handlers/`), plus the topic filter in `OperationHandler::topic_filter` (`src/operations/handler.rs:226`)
 - [ ] 7.7 Test: a RESTART operation becoming a `restart` command; type from registration winning over the payload; the default type for an untyped service; a display name in the payload being ignored; each rejection case; `501`-`506` reported on the service's topic
 
 ## 8. Packaging
 
-- [ ] 8.1 Add `/usr/share/tedge/service-plugins/` to `configuration/package_manifests/nfpm.tedge.yaml` with mode `0755`, following the `log-plugins` and `config-plugins` entries
-- [ ] 8.2 Confirm it is **not** added to the chown list in `configuration/package_scripts/tedge/preinst:102`, so it stays out of the `tedge` user's reach
-- [ ] 8.3 Confirm no sudoers change is needed: `/usr/bin/tedge` is already covered (`preinst:89`) and the plugin is run by an already-root process
+- [x] 8.1 Add `/usr/share/tedge/service-plugins/` to `configuration/package_manifests/nfpm.tedge.yaml` with mode `0755`, following the `log-plugins` and `config-plugins` entries
+- [x] 8.2 Confirm it is **not** added to the chown list in `configuration/package_scripts/tedge/preinst:102`, so it stays out of the `tedge` user's reach
+- [x] 8.3 Confirm no sudoers change is needed: `/usr/bin/tedge` is already covered (`preinst:89`) and the plugin is run by an already-root process
 
 ## 9. Documentation
 
-- [ ] 9.1 Document the service command interface: the per-action capability topics, the command payload, and that the action is named by the topic only
+- [ ] 9.1 Document the service command interface: the per-action capability topics, the command payload, that the action is named by the topic only, and the action name rule `[a-z][a-z0-9_]+`
 - [ ] 9.2 Document the workflow `type` field, including that the file name is free and only `type = "service"` distinguishes a service workflow
 - [ ] 9.3 Document `tedge service`, its exit codes, and the service plugin contract with the example plugin from 0011
 - [ ] 9.4 Document custom action templates in `[init]`, and note in the release notes that `[init]` no longer rejects unknown keys
@@ -98,3 +98,4 @@ Each item below is a place where 0011 no longer matches. Keep it in its own comm
 - [ ] 11.6 Future consideration "Workflow file naming collision": remove it. The operation name comes from the parsed `operation` field, never from the file name (`persist.rs:132`), so a file may be named anything
 - [ ] 11.7 Capability clearing: state that withdrawal is implemented for command metadata on service entities, and that the rest of issue #2739 is out of scope
 - [ ] 11.8 Future consideration "Filter the capability to declare to cloud": keep it, and add the concrete case — a service declaring both `cmd/restart` and `cmd/collect_measurements` gets both in `c8y_SupportedServiceCommands` with no way to expose only one
+- [ ] 11.9 Action names: state the rule `[a-z][a-z0-9_]+` where the `cmd/<action>` topic segment is described, and that a name with spaces or mixed case is out of scope even though MQTT topics allow it
