@@ -11,6 +11,7 @@ error[E0277]: the trait bound `char: AppendRemoveItem` is not satisfied
              std::net::IpAddr
              std::string::String
              u16
+             u32
              u64
 note: required by a bound in `tedge_config_engine::register_append_remove`
   --> $WORKSPACE/crates/common/tedge_config_engine/src/append_remove.rs

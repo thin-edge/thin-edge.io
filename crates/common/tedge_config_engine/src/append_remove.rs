@@ -63,6 +63,7 @@ macro_rules! impl_single_value {
 impl_single_value!(
     String,
     u16,
+    u32,
     u64,
     std::net::IpAddr,
     std::num::NonZeroU16,
