@@ -5,17 +5,19 @@
 The `tedge` CLI SHALL provide a `service` subcommand:
 
 ```
-tedge service <command> <service-name> [--service-type <type>]
+tedge service <action> <service-name> [--service-type <type>]
 ```
 
-`<command>` is a single token naming the action to perform, for example `start`, `stop` or `restart`.
+`<action>` names the action to perform, for example `start`, `stop` or `restart`.
+It is a single lowercase token, matching `[a-z][a-z0-9_]+`,
+the same rule that applies to the `cmd/<action>` topic segment.
 `<service-name>` is the name of the service to act on.
 `--service-type` selects the execution backend and SHALL default to `service` when omitted.
 
 The command SHALL exit `0` on success,
 and SHALL exit non-zero on failure with the reason written to stderr.
-The exit code SHALL distinguish "the command failed" from
-"the command is not supported for this service type",
+The exit code SHALL distinguish "the action failed" from
+"the action is not supported for this service type",
 so that a caller can tell a real failure from a missing backend.
 
 Acting on a service usually requires root,
@@ -28,11 +30,11 @@ No new privileged surface is added.
 - **THEN** it SHALL act on `collectd` using the `service` backend and SHALL exit `0` on success
 
 #### Scenario: A failing backend is reported
-- **WHEN** the selected backend fails to run the command
+- **WHEN** the selected backend fails to run the action
 - **THEN** `tedge service` SHALL exit non-zero and SHALL write the reason to stderr
 
-#### Scenario: An unsupported command is distinguishable
-- **WHEN** the command is not supported for the given service type
+#### Scenario: An unsupported action is distinguishable
+- **WHEN** the action is not supported for the given service type
 - **THEN** `tedge service` SHALL exit with the dedicated "not supported" exit code
   and SHALL NOT report a generic failure
 
@@ -46,10 +48,10 @@ No new privileged surface is added.
   `/usr/share/tedge/service-plugins/<type>`;
 - when no backend can handle the request — no action template for the `service` type,
   or no plugin file for the given type — the command SHALL fail
-  with the "not supported" exit code and an error message naming the command and the service type.
+  with the "not supported" exit code and an error message naming the action and the service type.
 
-The set of supported commands SHALL be decided by the backend, not by the CLI.
-The CLI SHALL pass the command through unchanged.
+The set of supported actions SHALL be decided by the backend, not by the CLI.
+The CLI SHALL pass the action through unchanged.
 
 #### Scenario: Default type uses the init system
 - **WHEN** `tedge service restart collectd --service-type service` is run
@@ -66,7 +68,7 @@ The CLI SHALL pass the command through unchanged.
 - **THEN** the command SHALL fail with the "not supported" exit code and an error message naming the type
 
 #### Scenario: No action template for the default type
-- **WHEN** a command with no matching action template in `system.toml` is run against the `service` type
+- **WHEN** an action with no matching template in `system.toml` is run against the `service` type
 - **THEN** the command SHALL fail with the "not supported" exit code
 
 ### Requirement: system.toml accepts custom action templates
@@ -107,28 +109,30 @@ SHALL remain reserved and SHALL NOT be dispatchable as actions.
 A service plugin SHALL be an executable file at `/usr/share/tedge/service-plugins/<service-type>`,
 named after the service type it handles.
 
-`tedge service` SHALL invoke it as `<plugin> <command> <service-name>`,
-where `<command>` is `start`, `stop`, `restart` or a command the plugin defines itself.
+`tedge service` SHALL invoke it as `<plugin> <action> <service-name>`,
+where `<action>` is `start`, `stop`, `restart` or an action the plugin defines itself.
 
 The plugin SHALL report its outcome through its exit code:
 
-- `0`: the command succeeded;
-- `2`: the command is not supported by this plugin, reserved for this meaning;
-- any other non-zero code: the command failed, with the reason on stderr.
+- `0`: the action succeeded;
+- `2`: the action is not supported by this plugin, reserved for this meaning;
+- any other non-zero code: the action failed, with the reason on stderr.
 
 `tedge service` SHALL propagate the plugin's outcome:
 exit `0` on `0`, the "not supported" outcome on `2`, and a failure otherwise.
 
-Because a command name is used in an MQTT topic, plugins SHALL accept lowercase command names.
-A plugin defining a command such as `myCommand` SHALL accept it as `mycommand`.
+An action name is a single lowercase token, `[a-z][a-z0-9_]+`,
+so a plugin SHALL name the actions it defines within that rule.
+It receives the name exactly as the service declared it,
+and SHALL NOT have to accept any other spelling of it.
 
 #### Scenario: Plugin succeeds
 - **WHEN** the plugin exits `0`
 - **THEN** `tedge service` SHALL exit `0`
 
-#### Scenario: Plugin reports an unsupported command
+#### Scenario: Plugin reports an unsupported action
 - **WHEN** the plugin exits `2`
-- **THEN** `tedge service` SHALL report the command as not supported for that service type
+- **THEN** `tedge service` SHALL report the action as not supported for that service type
 
 #### Scenario: Plugin fails
 - **WHEN** the plugin exits `1` and writes a reason to stderr
@@ -139,10 +143,9 @@ A plugin defining a command such as `myCommand` SHALL accept it as `mycommand`.
 Since `tedge service` runs as root, it SHALL validate every argument before use,
 and SHALL reject an invalid argument without invoking any backend.
 
-- the command SHALL be a single token:
-  non-empty, of bounded length, matching `[A-Za-z0-9_-]+`, and not starting with `-`.
-  A multi-word string SHALL be rejected:
-  a custom command is a name the backend understands, not a command line to run;
+- the action SHALL be of bounded length and SHALL match `[a-z][a-z0-9_]+`.
+  The rule allows neither a space nor a leading `-`,
+  so the action can be neither read as an option nor mistaken for a command line to run;
 - the service name SHALL be non-empty, of bounded length,
   match `[A-Za-z0-9_.@-]+`, and not start with `-`,
   so that it cannot be read as an option by the init tool;
@@ -152,8 +155,8 @@ and SHALL reject an invalid argument without invoking any backend.
 All execution SHALL be argv-based.
 No argument SHALL be interpolated into a shell command line.
 
-#### Scenario: A command with a shell metacharacter is rejected
-- **WHEN** the command argument contains whitespace or a shell metacharacter
+#### Scenario: An action with a space or a shell metacharacter is rejected
+- **WHEN** the action argument contains whitespace or a shell metacharacter
 - **THEN** `tedge service` SHALL reject the request and SHALL NOT invoke any backend
 
 #### Scenario: An option-like service name is rejected

@@ -66,7 +66,9 @@ For a valid operation, the mapper SHALL publish a thin-edge command with:
 
 - the target entity resolved from `externalSource.externalId`;
 - the command topic built from the lowercased `command` value,
-  as `te/device/<device>/service/<service>/cmd/<command>/<cmd-id>`.
+  as `te/device/<device>/service/<service>/cmd/<action>/<cmd-id>`.
+  Cumulocity uppercases a command name by convention,
+  so lowercasing the value it sends gives back the action name the service declared.
   The action is named by the topic only;
   the mapper SHALL NOT copy the cloud's `command` value into the thin-edge payload;
 - `serviceName` derived from the resolved entity topic identifier, not from the cloud payload,
@@ -104,8 +106,8 @@ and SHALL NOT publish any thin-edge command, when:
 - the target entity cannot be resolved from `externalSource.externalId`;
 - the requested command, compared case-insensitively,
   is not among the commands the target service has declared;
-- the command is not a single valid token,
-  as required for the value that `tedge service` will receive.
+- the lowercased `command` value does not match the action name rule `[a-z][a-z0-9_]+`,
+  which is what `tedge service` accepts.
 
 #### Scenario: The target cannot be resolved
 - **WHEN** the operation's external id matches no known entity
@@ -120,7 +122,8 @@ and SHALL NOT publish any thin-edge command, when:
 - **THEN** the mapper SHALL accept it and publish a `restart` command
 
 #### Scenario: A malformed command value is refused
-- **WHEN** the operation's `command` is empty, multi-word, or contains characters outside a single token
+- **WHEN** the operation's `command` is empty, carries a space,
+  or once lowercased contains a character outside `[a-z0-9_]`
 - **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
 
 ### Requirement: The mapper reports the service command status back to Cumulocity

@@ -194,10 +194,15 @@ fragment, which carries `serviceType`, `serviceName` and `command`.
 thin-edge does not need to follow Cumulocity's shape;
 `command` is the cloud's word and stays inside the mapper.
 
-The one thing lost is the original casing of a Cumulocity custom command:
-`myCommand` becomes the topic segment `mycommand` and nothing keeps the original spelling.
-Nothing needs it — status is reported against the operation id, not its name,
-and the plugin contract already requires plugins to accept lowercase action names.
+Nothing is lost with the field, because an action name is a single lowercase token,
+`[a-z][a-z0-9_]+`.
+MQTT topic names are case-sensitive and do accept spaces,
+so this is a restriction thin-edge puts on itself:
+a name such as `do something` or `doSomething` is out of scope,
+and is rejected by the mapper and by `tedge service` alike.
+Cumulocity uppercases a command name by convention,
+so lowercasing the value it sends gives back the declared action name exactly,
+and there is no original spelling left to carry.
 
 This needs a matching edit in 0011.
 
@@ -213,9 +218,10 @@ build the command, publish it.
 
 The difference from the existing operations is that the thin-edge operation name is not fixed:
 it comes from the lowercased `command` value in the payload.
-So the command name is validated before it is used to build a topic,
-with the same single-token rule that `tedge service` applies,
+So the name is validated against the action name rule `[a-z][a-z0-9_]+`,
+the same rule `tedge service` applies, before it is used to build a topic,
 and it is checked against the set of commands the service has declared.
+Both the mapper and the CLI need that rule, so it lives in `tedge_api` and is used by both.
 
 Status reporting needs no new mapping.
 `OperationContext::update` (`crates/extensions/c8y_mapper_ext/src/operations/handlers/mod.rs:77`)
@@ -280,9 +286,12 @@ which already uses `0` for success and `2` for "this plugin skipped it":
 `0` success, `2` command not supported for this service type, other non-zero failure.
 The plugin's own `2` is propagated unchanged.
 
-The plugin directory is a config key next to the existing plugin directories
-(`crates/common/tedge_config/src/tedge_toml/tedge_config.rs:1385`-`:1397`),
+The plugin directory is a new key of the existing `service` table,
+`service.plugin_dir` (`crates/common/tedge_config/src/tedge_toml/tedge_config.rs:1327`),
 defaulting to `/usr/share/tedge/service-plugins`.
+It is a single directory, not a search path like `log.plugin_paths`,
+because a plugin is picked by its exact name, the service type,
+so a second directory would only raise the question of which plugin wins.
 Packaging adds the directory to `configuration/package_manifests/nfpm.tedge.yaml`
 with mode `0755`, following the `log-plugins` and `config-plugins` entries.
 It must **not** be added to the chown list in `package_scripts/tedge/preinst:102`,
@@ -332,9 +341,9 @@ and `/usr/bin/tedge` is already covered by the shipped rule.
   driving a state machine it may not own.
   On a child device this makes service commands depend on the connection to the main device,
   which is the same dependency the file transfer service already has.
-- `tedge service` runs as root and takes a command name that originates in the cloud
-  → the name is validated as a single token before any backend is selected, and all execution
-  is argv-based, so the value cannot become extra arguments or a shell fragment.
+- `tedge service` runs as root and takes an action name that originates in the cloud
+  → the name is validated against `[a-z][a-z0-9_]+` before any backend is selected, and all
+  execution is argv-based, so the value cannot become extra arguments or a shell fragment.
 
 ## Migration Plan
 

@@ -1381,6 +1381,12 @@ define_tedge_config! {
         #[tedge_config(example = "unix")]
         #[tedge_config(default(variable = "TimeFormat::Unix"))]
         timestamp_format: TimeFormat,
+
+        /// The directory where the service plugins are stored,
+        /// one plugin per service type, named after the type it handles
+        #[tedge_config(example = "/usr/share/tedge/service-plugins", default(value = "/usr/share/tedge/service-plugins"))]
+        #[doku(as = "PathBuf")]
+        plugin_dir: Utf8PathBuf,
     },
 
     apt: {

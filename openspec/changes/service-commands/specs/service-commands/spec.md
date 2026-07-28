@@ -8,7 +8,15 @@ One topic SHALL be used per command, so that each command can have its own workf
 
 `<action>` SHALL be one of the standard commands `start`, `stop`, `restart`,
 or any custom command name chosen by the service owner.
-Custom command names SHALL be lowercase, since the name is part of the MQTT topic.
+
+An action name SHALL match `[a-z][a-z0-9_]+`:
+lowercase letters, digits and `_`, starting with a letter.
+MQTT topic names are case-sensitive and do accept spaces,
+so this is a restriction thin-edge puts on itself, not one the protocol imposes.
+A name carrying spaces or mixed case, such as `do something` or `doSomething`,
+is deliberately left out of scope, and SHALL be rejected wherever it enters the system.
+The names then survive every conversion on the way to the cloud and back,
+and stay usable as the argument of a command line.
 
 A declared command SHALL be withdrawn by clearing its capability topic with a retained empty message.
 
