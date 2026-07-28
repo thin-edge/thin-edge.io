@@ -185,12 +185,13 @@ Check if a service is up
     ThinEdgeIO.Service Should Be Running    ${service_name}
 
     Device Should Exist    ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=up    timeout=${TIMEOUT}
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values
+    ...    status\=up
+    ...    name\=${service_name}
+    ...    serviceType\=service
+    ...    type\=c8y_Service
+    ...    timeout=${TIMEOUT}
 
-    Should Be Equal    ${SERVICE["name"]}    ${service_name}
-    Should Be Equal    ${SERVICE["serviceType"]}    service
-    Should Be Equal    ${SERVICE["status"]}    up
-    Should Be Equal    ${SERVICE["type"]}    c8y_Service
     ThinEdgeIO.Stop Service    ${service_name}
 
 Check if a service is down
@@ -204,12 +205,12 @@ Check if a service is down
     ThinEdgeIO.Service Should Be Stopped    ${service_name}
 
     Device Should Exist    ${DEVICE_SN}:device:main:service:${service_name}    show_info=False
-    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values    status\=down
+    ${SERVICE}=    Cumulocity.Device Should Have Fragment Values
+    ...    status\=down
+    ...    serviceType\=service
+    ...    name\=${service_name}
+    ...    type\=c8y_Service
 
-    Should Be Equal    ${SERVICE["name"]}    ${service_name}
-    Should Be Equal    ${SERVICE["serviceType"]}    service
-    Should Be Equal    ${SERVICE["status"]}    down
-    Should Be Equal    ${SERVICE["type"]}    c8y_Service
     [Teardown]    ThinEdgeIO.Start Service    ${service_name}
 
 Check if a service using configured service type
@@ -220,12 +221,9 @@ Check if a service using configured service type
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values
     ...    status\=up
     ...    serviceType\=thinedge
+    ...    name\=${service_name}
+    ...    type\=c8y_Service
     ...    timeout=${TIMEOUT}
-
-    Should Be Equal    ${SERVICE["name"]}    ${service_name}
-    Should Be Equal    ${SERVICE["serviceType"]}    thinedge
-    Should Be Equal    ${SERVICE["status"]}    up
-    Should Be Equal    ${SERVICE["type"]}    c8y_Service
 
 Check if a service using configured service type as empty
     [Arguments]    ${service_name}
@@ -235,9 +233,6 @@ Check if a service using configured service type as empty
     ${SERVICE}=    Cumulocity.Device Should Have Fragment Values
     ...    status\=up
     ...    serviceType\=service
+    ...    name\=${service_name}
+    ...    type\=c8y_Service
     ...    timeout=${TIMEOUT}
-
-    Should Be Equal    ${SERVICE["name"]}    ${service_name}
-    Should Be Equal    ${SERVICE["serviceType"]}    service
-    Should Be Equal    ${SERVICE["status"]}    up
-    Should Be Equal    ${SERVICE["type"]}    c8y_Service
