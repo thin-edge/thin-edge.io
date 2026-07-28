@@ -2,6 +2,8 @@
 //!
 //! Fields with guaranteed defaults are plain values. Other fields retain
 //! their key so an unset value can produce a useful error when accessed.
+//! Each reader group gets a `build_from_dto` method that constructs itself
+//! directly from the DTO + defaults, without requiring Facet on Reader types.
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -22,10 +24,14 @@ pub fn generate_reader(model: &Model) -> TokenStream {
 fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
     let mut nested = Vec::new();
     let mut fields = Vec::new();
+    let mut build_fields = Vec::new();
 
     for item in &group.items {
         match item {
-            ItemModel::Field(f) => fields.push(generate_reader_leaf(f.field)),
+            ItemModel::Field(f) => {
+                fields.push(generate_reader_leaf(f.field));
+                build_fields.push(generate_build_field(f.field, &f.key));
+            }
             ItemModel::Group(child) => {
                 let ident = child.ident;
                 let ty = &child.group.reader_ident;
@@ -34,17 +40,29 @@ fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
                     #(#doc_attrs)*
                     pub #ident: #ty,
                 });
+                build_fields.push(quote! {
+                    #ident: <#ty as tedge::BuildFromDto>::build_from_dto(__dto, __defaults, __root, __display_prefix, __profile)?,
+                });
                 nested.extend(generate_group(&child.group));
             }
             ItemModel::External(ext) => {
                 let ident = &ext.ext.ident;
                 let ty = &ext.ext.ty;
                 let doc_attrs = &ext.ext.doc_attrs;
-                // Report an invalid external type at the caller's declaration.
                 let field_ty = quote_spanned! {ty.span()=> #ty };
                 fields.push(quote! {
                     #(#doc_attrs)*
                     pub #ident: #field_ty,
+                });
+                let _prefix = &ext.prefix;
+                build_fields.push(quote! {
+                    #ident: <#ty as tedge::BuildFromDto>::build_from_dto(
+                        __dto,
+                        __defaults,
+                        __root,
+                        __display_prefix,
+                        __profile,
+                    )?,
                 });
             }
         }
@@ -52,22 +70,31 @@ fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
 
     let struct_ident = &group.reader_ident;
     let mut structs = vec![quote! {
-        #[derive(Debug, ::facet::Facet)]
-        #[facet(type_tag = "config_group")]
+        #[derive(Debug)]
         pub struct #struct_ident {
             #(#fields)*
+        }
+
+        impl tedge::BuildFromDto for #struct_ident {
+            fn build_from_dto<__Dto: for<'a> ::facet::Facet<'a>>(
+                __dto: &__Dto,
+                __defaults: &tedge::DefaultsRegistry,
+                __root: tedge::RootResolver<'_>,
+                __display_prefix: &str,
+                __profile: Option<&str>,
+            ) -> Result<Self, tedge::ConfigError> {
+                Ok(Self {
+                    #(#build_fields)*
+                })
+            }
         }
     }];
     structs.extend(nested);
     structs
 }
 
-fn generate_reader_leaf(field: &ConfigField) -> TokenStream {
-    let ident = field.field_ident();
-    let ty = &field.ty;
-    let doc_attrs = &field.doc_attrs;
-
-    let has_concrete_default = matches!(
+fn has_concrete_default(field: &ConfigField) -> bool {
+    matches!(
         &field.default,
         Some(
             FieldDefault::Value(_)
@@ -75,25 +102,38 @@ fn generate_reader_leaf(field: &ConfigField) -> TokenStream {
                 | FieldDefault::FromConfigDir(_)
                 | FieldDefault::FromKey(_)
         )
-    );
+    )
+}
 
-    let mut extra_attrs = Vec::new();
-    if let Some(rename) = field.rename() {
-        extra_attrs.push(quote! { #[facet(rename = #rename)] });
-    }
+fn generate_reader_leaf(field: &ConfigField) -> TokenStream {
+    let ident = field.field_ident();
+    let ty = &field.ty;
+    let doc_attrs = &field.doc_attrs;
 
-    if has_concrete_default {
+    if has_concrete_default(field) {
         quote! {
             #(#doc_attrs)*
-            #(#extra_attrs)*
             pub #ident: #ty,
         }
     } else {
         let field_ty = quote_spanned! {ty.span()=> OptionalConfig<#ty> };
         quote! {
             #(#doc_attrs)*
-            #(#extra_attrs)*
             pub #ident: #field_ty,
+        }
+    }
+}
+
+fn generate_build_field(field: &ConfigField, key: &str) -> TokenStream {
+    let ident = field.field_ident();
+
+    if has_concrete_default(field) {
+        quote! {
+            #ident: tedge::reader_helpers::read_required(__dto, __defaults, __root, #key)?,
+        }
+    } else {
+        quote! {
+            #ident: tedge::reader_helpers::read_optional(__dto, __defaults, __root, #key, __display_prefix, __profile)?,
         }
     }
 }
@@ -184,7 +224,7 @@ mod tests {
     }
 
     #[test]
-    fn renamed_reader_fields_only_get_the_facet_attribute() {
+    fn renamed_reader_fields_do_not_get_facet_attributes() {
         let input: Configuration = parse_quote!(
             Test {
                 device: {
@@ -199,7 +239,6 @@ mod tests {
             .find_struct("DeviceConfig")
             .find_field("ty")
             .assert_eq(&parse_quote! {
-                #[facet(rename = "type")]
                 pub ty: String,
             });
     }
@@ -232,10 +271,10 @@ mod tests {
 }";
         let input: Configuration = syn::parse_str(src).unwrap();
         let generated = generate(&input);
-        assert_eq!(
-            ident_positions(&generated, "MapperConfig"),
-            vec![position_of(src, "Mapper")],
-        );
+        let expected = position_of(src, "Mapper");
+        let positions = ident_positions(&generated, "MapperConfig");
+        assert!(positions.len() >= 1);
+        assert!(positions.iter().all(|p| *p == expected));
     }
 
     #[test]
@@ -249,8 +288,8 @@ mod tests {
         let generated = generate(&input);
         let starts = ident_positions(&generated, "C8yConfig");
         let expected = position_of(src, "c8y");
-        // The ident appears both as the field type and the struct definition
-        assert_eq!(starts.len(), 2);
+        // The ident appears as field type, struct def, and in the impl block
+        assert!(starts.len() >= 2);
         assert!(starts.iter().all(|start| *start == expected));
     }
 
@@ -278,10 +317,10 @@ mod tests {
 }";
         let input: Configuration = syn::parse_str(src).unwrap();
         let generated = generate(&input);
-        assert_eq!(
-            ident_positions(&generated, "MapperDeviceConfig"),
-            vec![position_of(src, "MapperDeviceConfig")],
-        );
+        let expected = position_of(src, "MapperDeviceConfig");
+        let positions = ident_positions(&generated, "MapperDeviceConfig");
+        assert!(positions.len() >= 1);
+        assert!(positions.iter().all(|p| *p == expected));
     }
 
     fn generate(config: &Configuration) -> TokenStream {

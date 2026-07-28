@@ -26,7 +26,7 @@ use crate::defaults::FieldDefault;
 /// example values live as facet attributes on the DTO fields and are
 /// discovered at runtime through shape-tree walks.
 pub trait ConfigSchema {
-    type Dto: for<'a> Facet<'a> + Default + Clone + serde::Serialize + serde::de::DeserializeOwned;
+    type Dto: for<'a> Facet<'a> + Default + Clone;
 
     /// Defaulting rules for every key in the schema
     fn defaults(config_dir: &Path) -> Vec<FieldDefault>;

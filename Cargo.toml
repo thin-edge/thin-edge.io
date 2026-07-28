@@ -128,6 +128,7 @@ easy_reader = "0.5"
 env_logger = "0.11"
 facet = { version = "0.50.0-rc.5", features = ["camino", "net", "nonzero"] }
 facet-reflect = "0.50.0-rc.5"
+facet-toml = "0.50.0-rc.5"
 fastrand = "2.0"
 figment = { version = "0.10" }
 filetime = "0.2"

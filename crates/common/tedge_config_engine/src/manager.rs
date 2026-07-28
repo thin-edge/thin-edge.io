@@ -183,7 +183,7 @@ impl ConfigManager {
     /// `display_prefix` is prepended to keys in error messages (e.g. `"c8y"`)
     /// — pass `""` when no prefix is needed.
     /// `profile` is attached to [OptionalConfig](crate::OptionalConfig) values for user-facing messages.
-    pub fn build_reader<Dto: for<'a> Facet<'a>, Reader: for<'a> Facet<'a>>(
+    pub fn build_reader<Dto: for<'a> Facet<'a>, Reader: crate::BuildFromDto>(
         &self,
         dto: &Dto,
         root_resolver: crate::defaults::RootResolver<'_>,

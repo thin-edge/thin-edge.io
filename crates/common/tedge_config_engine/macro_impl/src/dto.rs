@@ -42,7 +42,7 @@ fn generate_group(group: &GroupModel, kind: GroupKind) -> Vec<TokenStream> {
                 let doc_attrs = child.doc_attrs;
                 fields.push(quote! {
                     #(#doc_attrs)*
-                    #[serde(default, skip_serializing_if = "Option::is_none")]
+                    #[facet(default, skip_serializing_if = Option::is_none)]
                     pub #ident: Option<#ty>,
                 });
                 nested.extend(generate_group(&child.group, GroupKind::Nested));
@@ -55,7 +55,7 @@ fn generate_group(group: &GroupModel, kind: GroupKind) -> Vec<TokenStream> {
                 let field_ty = quote_spanned! {ty.span()=> Option<<#ty as ConfigSchema>::Dto> };
                 fields.push(quote! {
                     #(#doc_attrs)*
-                    #[serde(default, skip_serializing_if = "Option::is_none")]
+                    #[facet(default, skip_serializing_if = Option::is_none)]
                     pub #ident: #field_ty,
                 });
             }
@@ -67,7 +67,7 @@ fn generate_group(group: &GroupModel, kind: GroupKind) -> Vec<TokenStream> {
 
     let struct_ident = &group.dto_ident;
     let mut structs = vec![quote! {
-        #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+        #[derive(Debug, Default, Clone, ::facet::Facet)]
         #[facet(type_tag = "config_group")]
         #schema_root_attr
         pub struct #struct_ident {
@@ -86,7 +86,6 @@ fn generate_leaf_field(field: &ConfigField) -> TokenStream {
     let mut extra_attrs = Vec::new();
     if let Some(rename) = field.rename() {
         extra_attrs.push(quote! { #[facet(rename = #rename)] });
-        extra_attrs.push(quote! { #[serde(rename = #rename)] });
     }
     if field.readonly {
         extra_attrs.push(quote! { #[facet(tedge::readonly)] });
@@ -103,7 +102,7 @@ fn generate_leaf_field(field: &ConfigField) -> TokenStream {
     quote! {
         #(#doc_attrs)*
         #(#extra_attrs)*
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[facet(default, skip_serializing_if = Option::is_none)]
         pub #ident: #field_ty,
     }
 }
@@ -126,7 +125,7 @@ mod tests {
             .find_struct("MapperConfigDto")
             .find_field("port")
             .assert_eq(&parse_quote! {
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub port: Option<u16>,
             });
     }
@@ -139,7 +138,7 @@ mod tests {
         TokenQuery::new(&generated)
             .find_struct("TestConfigDto")
             .assert_eq(&parse_quote! {
-                #[derive(Debug, Default, Clone, ::facet::Facet, ::serde::Serialize, ::serde::Deserialize)]
+                #[derive(Debug, Default, Clone, ::facet::Facet)]
                 #[facet(type_tag = "config_group")]
                 #[facet(tedge::schema_root)]
                 pub struct TestConfigDto {}
@@ -165,7 +164,7 @@ mod tests {
             .find_struct("C8yConfigDto")
             .find_field("proxy")
             .assert_eq(&parse_quote! {
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub proxy: Option<C8yProxyConfigDto>,
             });
     }
@@ -190,14 +189,14 @@ mod tests {
             .find_struct("TestConfigDto")
             .find_field("device")
             .assert_eq(&parse_quote! {
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub device: Option<DeviceConfigDto>,
             });
         TokenQuery::new(&generated)
             .find_struct("C8yConfigDto")
             .find_field("device")
             .assert_eq(&parse_quote! {
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub device: Option<C8yDeviceConfigDto>,
             });
     }
@@ -219,13 +218,13 @@ mod tests {
             .find_field("port")
             .assert_eq(&parse_quote! {
                 /// MQTT broker port
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub port: Option<u16>,
             });
     }
 
     #[test]
-    fn renamed_fields_get_facet_and_serde_attributes() {
+    fn renamed_fields_get_facet_rename_attribute() {
         let input: Configuration = parse_quote!(
             Test {
                 device: {
@@ -241,8 +240,7 @@ mod tests {
             .find_field("ty")
             .assert_eq(&parse_quote! {
                 #[facet(rename = "type")]
-                #[serde(rename = "type")]
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub ty: Option<String>,
             });
     }
@@ -262,7 +260,7 @@ mod tests {
             .find_field("device")
             .assert_eq(&parse_quote! {
                 /// Device identity shared across mappers
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub device: Option<<shared::MapperDeviceConfig as ConfigSchema>::Dto>,
             });
     }
@@ -284,7 +282,7 @@ mod tests {
             .find_field("port")
             .assert_eq(&parse_quote! {
                 #[facet(tedge::readonly)]
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub port: Option<u16>,
             });
     }
@@ -306,7 +304,7 @@ mod tests {
             .find_field("port")
             .assert_eq(&parse_quote! {
                 #[facet(tedge::deprecated_key = "mqtt.external.port")]
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub port: Option<u16>,
             });
     }
@@ -329,7 +327,7 @@ mod tests {
             .assert_eq(&parse_quote! {
                 #[facet(tedge::example = "my-device")]
                 #[facet(tedge::example = "AINA123")]
-                #[serde(default, skip_serializing_if = "Option::is_none")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
                 pub id: Option<String>,
             });
     }

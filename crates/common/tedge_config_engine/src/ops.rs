@@ -42,7 +42,7 @@ pub struct TypedConfigOps<T> {
 
 impl<T> TypedConfigOps<T>
 where
-    T: for<'a> Facet<'a> + Default + serde::de::DeserializeOwned + serde::Serialize,
+    T: for<'a> Facet<'a> + Default,
 {
     /// Loads a DTO from `path`, or starts from `T::default()` if it does not exist.
     pub fn new(manager: ConfigManager, path: PathBuf) -> Result<Self, ConfigError> {
@@ -85,7 +85,7 @@ where
     }
 
     fn save(&self, dto: &T) -> Result<(), ConfigError> {
-        let content = toml::to_string_pretty(dto)
+        let content = facet_toml::to_string(dto)
             .map_err(|e| ConfigError::IoError(format!("serialization error: {e}")))?;
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)
@@ -99,7 +99,7 @@ where
 
 impl<T> ConfigOps for TypedConfigOps<T>
 where
-    T: for<'a> Facet<'a> + Default + serde::de::DeserializeOwned + serde::Serialize,
+    T: for<'a> Facet<'a> + Default,
 {
     fn get(&self, key: &str) -> Result<Option<String>, ConfigError> {
         self.manager.get(&self.dto, key)
@@ -132,11 +132,9 @@ where
     }
 }
 
-fn load_dto<T: for<'a> Facet<'a> + Default + serde::de::DeserializeOwned>(
-    path: &Path,
-) -> Result<T, ConfigError> {
+fn load_dto<T: for<'a> Facet<'a> + Default>(path: &Path) -> Result<T, ConfigError> {
     match std::fs::read_to_string(path) {
-        Ok(content) => toml::from_str(&content)
+        Ok(content) => facet_toml::from_str(&content)
             .map_err(|e| ConfigError::IoError(format!("parsing {}: {e}", path.display()))),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
         Err(e) => Err(ConfigError::IoError(format!(
