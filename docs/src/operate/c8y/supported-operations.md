@@ -28,11 +28,13 @@ The Cumulocity mapper treats the following operations as inbuilt operations and 
 | Log retrieval | `c8y_LogfileRequest` | `te/<device-topic-id>/cmd/log_upload` |
 | Firmware update | `c8y_Firmware` | `te/<device-topic-id>/cmd/firmware_update` |
 | Device profile | `c8y_DeviceProfile` | `te/<device-topic-id>/cmd/device_profile` |
-| Remote access | `c8y_RemoteAccessConnect` | via `c8y-remote-access-plugin` |
 
 Another process like the `tedge-agent` or an external plugin may process these mapped tedge commands.
 The `tedge-agent` currently supports the mapped tedge commands above out-of-the-box.
-Remote access is provided by the `c8y-remote-access-plugin`.
+
+The `c8y_RemoteAccessConnect` operation is also announced as supported but is not handled by `tedge-agent`.
+It is handled directly by the [`c8y-remote-access-plugin`](./remote-access.md),
+which manages the full connection lifecycle independently of the mapper's inbuilt command conversion.
 
 For all other operation types, the mapper can execute a custom operation plugin if one is configured.
 
