@@ -78,6 +78,22 @@ so overloading it would leak the scoping into the wire format.
 `WorkflowRepository.definitions` (`persist.rs:42`) is keyed the same way,
 and gets the same treatment.
 
+Two methods do not take the entity type.
+
+`get_action` keeps its signature.
+A command under execution is identified by its operation name and its `@version`,
+and the version is the digest of the workflow definition (`persist.rs:483`),
+of which `type` is part.
+So two workflows sharing an operation name never share a version,
+and the workflow of a running command is found without knowing the entity type.
+This also means a command resumed after an agent restart needs nothing more than
+what is already persisted with it, which matters for the agent self-restart case.
+
+`deregistration_message` is only sent for a device workflow.
+The capabilities of a service are declared by that service,
+so a deleted service workflow file clears nothing on the device's topics.
+For the same reason `capability_messages` is filtered on the entity type of the target.
+
 0011 leaves open how two workflows named `restart` can live in `/etc/tedge/operations/`
 when the file name is `restart.toml` in both cases.
 Reading the code, the question does not arise: the file name is never used as the operation name.

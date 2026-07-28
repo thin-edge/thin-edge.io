@@ -18,6 +18,7 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::UnboundedLoggingReceiver;
+use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -129,10 +130,11 @@ impl Actor for WorkflowActor {
 
 impl WorkflowActor {
     async fn publish_operation_capabilities(&mut self) -> Result<(), RuntimeError> {
-        for capability in self
-            .workflow_repository
-            .capability_messages(&self.mqtt_schema, &self.device_topic_id)
-        {
+        for capability in self.workflow_repository.capability_messages(
+            &self.mqtt_schema,
+            &self.device_topic_id,
+            EntityType::MainDevice,
+        ) {
             self.mqtt_publisher.send(capability).await?
         }
         Ok(())
@@ -240,7 +242,7 @@ impl WorkflowActor {
 
         match self
             .workflow_repository
-            .apply_external_update(&operation, state)
+            .apply_external_update(EntityType::MainDevice, &operation, state)
             .await
         {
             Ok(None) => (),
