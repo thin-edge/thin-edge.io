@@ -63,48 +63,57 @@ generating `ReadableKey::is_exposable()`.
 This follows the same pattern already used for `deprecated_key` and doc
 comments — the decision to expose lives next to the setting definition.
 
-### Per-value retained topics, not one aggregate document
+### One retained JSON document per service, not per-value topics
 
-Each value gets its own retained MQTT message:
-`te/device/<device>/service/<service>/config/<key>`.
-`<key>` is the `tedge config` key kept as a single final topic segment
-(e.g: `config/device.id`), so it maps straight back to a
-`tedge config` key with no extra parsing.
+Each service publishes a single retained MQTT message on
+`te/device/<device>/service/<service>/config`, containing every exposed
+key-value pair as one JSON object. Each field name inside that object is the
+`tedge config` key kept flat (e.g: `device.id`), so it maps straight back to
+a `tedge config` key with no extra parsing.
 
-A consumer subscribes to exactly the value(s) it needs.
-An empty retained payload means the value is unset or was removed.
+A consumer subscribes to one topic and gets the service's whole exposed
+config; there's no way to subscribe to a single key over MQTT — a client
+that wants just one value uses the HTTP API instead.
 
-Alternative: splitting the key across topic segments (e.g: `config/device/id`).
-Rejected — variable depth and extra logic to reconstruct the key.
+Alternative: one retained message per key (`config/<key>`). Rejected —
+publishing and reconciling N per-key topics is proportionally more MQTT
+traffic and state to track for no benefit over parsing one JSON object.
+It also complicates clearing a stale key after a rename or version
+upgrade (each one needs its own explicit empty-payload clear — see
+"Self-correcting publisher" below, where the aggregate document avoids this
+entirely).
 
 ### Mapper-published keys drop the cloud and profile qualifier
 
-`c8y.url` becomes `.../tedge-mapper-c8y/config/url`.
+`c8y.url` becomes the `url` field in `.../tedge-mapper-c8y/config`'s JSON
+object.
 The service topic already scopes the value; repeating the cloud/profile
-prefix in the key would be redundant.
+prefix in the field name would be redundant.
 That name comes from `bridge.topic_prefix`: `format!("tedge-mapper-{prefix}")`
 
 ### One shared publisher
 
-At startup, a component publishes every exposed value: the value if set,
-or an empty payload if unset (which clears any previously set/published values).
-This means a value removed from config can't linger from a previous run.
+At startup, a component publishes one retained message: a JSON object of
+every currently-set exposed key-value pair. Unset exposable keys are simply
+omitted from the object.
+Because the whole document is replaced as a unit, a value removed from config, 
+or a key no longer marked exposable, can't linger from a previous run:
+the next publish just doesn't include it.
 
-### Self-correcting publisher via wildcard subscription
+### Self-correcting publisher
 
-Each component subscribes to its own `config/+` and reconciles every
-message against expected state (`Some(value)` for an exposed+set key,
-absent for everything else):
+Each component subscribes to its own `config` topic and compares the
+retained payload against its expected JSON object:
 
-- Payload differs from expected value (including an empty payload on an
-  owned key) — republish the expected value.
-- Expected absent but payload is non-empty — clear with an empty retained
-  payload.
-- Payload matches expected state — no-op (terminates the loop).
+- Payload doesn't match the expected object (wrong content, or absent) —
+  republish the expected object.
+- Payload matches — no-op (terminates the loop).
 
-This does two jobs: corrects external overwrites within one round trip,
-and clears stale keys left behind by renames or upgrades
-(their expected state is absent, so the replayed retained message gets cleared).
+This corrects external overwrites within one round trip. Because the
+document is replaced as a whole rather than patched key by key, this same
+comparison also clears stale keys left behind by renames, demotions, or
+version upgrades — they're simply absent from the republished object, with
+no separate clearing path to implement or test.
 
 ### Config stored parallel to twin data, not merged into it
 
@@ -115,8 +124,9 @@ Merging into twin data would blur that distinction.
 
 ### Unexposed and non-existent keys are indistinguishable
 
-The agent collects config purely by subscribing to MQTT — it never knows
-which keys exist but are hidden vs. which don't exist at all.
+The agent collects config purely by subscribing to each service's `config`
+topic and parsing the retained JSON object — it never knows which keys exist
+but are hidden vs. which don't exist at all.
 Both the MQTT view (no retained message) and the HTTP API (`404 Not Found`)
 treat the two cases identically, so the response leaks nothing about which
 non-exposed settings exist.
@@ -289,13 +299,16 @@ The curated set (✓ = exposed, ✗ = not exposed):
 HTTP and MQTT share the same per-service scoping and the same keys:
 
 ```
-te/device/main/service/tedge-agent/config/device.id            -> "my-device-01"
-te/device/main/service/tedge-agent/config/mqtt.client.port     -> "1883"
-te/device/main/service/tedge-agent/config/http.client.port     -> "8000"
-te/device/main/service/tedge-mapper-c8y/config/url             -> "example.cumulocity.com"
-te/device/main/service/tedge-mapper-c8y/config/device.id       -> "my-device-01"
-te/device/main/service/tedge-mapper-c8y-edge/config/url        -> "edge.c8y.io"
+te/device/main/service/tedge-agent/config
+  -> {"device.id":"my-device-01","mqtt.client.port":"1883","http.client.port":"8000"}
+te/device/main/service/tedge-mapper-c8y/config
+  -> {"url":"example.cumulocity.com","device.id":"my-device-01"}
+te/device/main/service/tedge-mapper-c8y-edge/config
+  -> {"url":"edge.c8y.io"}
 ```
+
+The HTTP single-value route (`GET .../config/<key>`) looks the key up in the
+same parsed object — it isn't backed by a separate MQTT topic per key.
 
 ## Risks / Trade-offs
 
@@ -303,9 +316,9 @@ te/device/main/service/tedge-mapper-c8y-edge/config/url        -> "edge.c8y.io"
   value masking or secret newtype.
   A forward-guarding CI test asserts known-secret keys are non-exposable,
   so marking one fails CI.
-- A removed mapper profile's config topics can only be cleared when that
+- A removed mapper profile's config topic can only be cleared when that
   profile's entity is explicitly deregistered — the same gap twin data has
   for a decommissioned profile.
-- A value only appears once its owner has published it at least once.
-  Consumers that need a value before the owning component starts must wait
-  on MQTT for the retained message to arrive.
+- A service's config only appears once its owner has published its document
+  at least once. Consumers that need a value before the owning component
+  starts must wait on MQTT for the retained message to arrive.

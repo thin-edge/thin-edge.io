@@ -17,35 +17,35 @@
 
 ## 3. `tedge_api`: config channel and entity store
 
-- [x] 3.1 Add `Channel::Config { key }` (parse/serialize/`ChannelFilter`) to `tedge_api/src/mqtt_topics.rs`, mirroring `EntityTwinData`
+- [ ] 3.1 Represent the config channel as `Channel::Config`, with no key segment (parse/serialize/`ChannelFilter`), in `tedge_api/src/mqtt_topics.rs`
 - [x] 3.2 Add a `config: BTreeMap<String, String>` map to `EntityMetadata`, parallel to `twin_data`, excluded from serialization
-- [x] 3.3 Add entity-store accessors for MQTT ingestion, not an external write API: ingest/clear one config value, read one or all values, with the same key-validation as twin fragments. Name them as ingestion primitives (`ingest_config_value`/`clear_config_value`/`get_config`), not a mutation surface
-- [x] 3.4 Unit-test channel round-tripping and the new entity-store accessors, including empty-payload-as-removal
+- [ ] 3.3 Add entity-store accessors for MQTT ingestion, not an external write API: ingest a whole config document by parsing the retained JSON object and replacing the entity's `config` map, read one or all values, with the same key-validation as twin fragments. Name them as ingestion primitives (e.g. `set_config`/`clear_config`/`get_config`), not a mutation surface
+- [ ] 3.4 Unit-test channel round-tripping and the entity-store accessors, including whole-document replace-on-ingest and malformed-JSON handling
 
 ## 4. Shared retained-config publisher
 
-- [x] 4.1 Add a new extensions crate with a builder/actor that publishes a set of (key, optional value) pairs as retained messages under a given service topic, publishing an empty payload for unset values
-- [x] 4.2 Subscribe the actor to its own service's `config/+` (one wildcard, not per-key) and reconcile each message against expected state (`Some(value)` for an exposed+set key, absent otherwise): payload ≠ expected value (including empty) → republish; expected absent + non-empty payload → clear; payload matches expected → no-op
-- [x] 4.3 Unit-test the publisher against a captured MQTT message box
-- [x] 4.4 Unit-test tamper correction: a divergent value on an owned key republishes; an empty payload on an owned+set key also republishes (empty must not wipe an owned value); the actor's own matching echo does not
-- [x] 4.5 Unit-test stale-key clearing: a retained message for a key not in the exposed set (renamed/removed/demoted) is cleared; a key still in the set is untouched; an empty payload on an absent key does not clear (no clear-echo loop)
+- [ ] 4.1 Add a new extensions crate with a builder/actor that publishes one retained JSON message — a map of key to value for the currently-set exposed keys — under a given service topic
+- [ ] 4.2 Subscribe the actor to its own service's `config` topic and republish the expected JSON object whenever the retained payload doesn't match it
+- [ ] 4.3 Unit-test the publisher against a captured MQTT message box
+- [ ] 4.4 Unit-test tamper correction: a divergent payload on the `config` topic republishes the expected object; the actor's own matching echo does not
+- [ ] 4.5 Unit-test stale-key handling: when the expected key set shrinks between publishes (a key is renamed, removed, or demoted), the republished object omits the dropped key
 
 ## 5. Agent publishes its own configuration
 
 - [x] 5.1 Compute the agent's exposed core config (including CLI-effective `mqtt.topic_root`/`mqtt.device_topic_id`) in `tedge_agent`'s startup config assembly
-- [x] 5.2 Spawn the shared publisher for the agent's service topic alongside the existing twin-manager actor
+- [ ] 5.2 Spawn the shared publisher for the agent's service topic alongside the existing twin-manager actor
 
 ## 6. Mappers publish their own cloud configuration
 
 - [x] 6.1 Extend the mapper startup helper that already spawns the health monitor to also spawn the shared config publisher
-- [x] 6.2 Pass each mapper's own exposed cloud config (profile-aware) from the c8y, aws, and az mapper `build()` entry points
+- [ ] 6.2 Pass each mapper's own exposed cloud config (profile-aware) from the c8y, aws, and az mapper `build()` entry points
 
 ## 7. Agent aggregates retained config over MQTT
 
-- [x] 7.1 Subscribe the entity store to the new config channel filter
-- [x] 7.2 Ingest `config/<key>` messages into the entity store, treating an empty payload as removal
-- [x] 7.3 Clear retained config topics for a service when it is deregistered
-- [x] 7.4 Test ingestion, empty-payload removal, and deregistration cleanup
+- [ ] 7.1 Subscribe the entity store to the config channel filter
+- [ ] 7.2 Ingest a service's `config` message into the entity store by parsing the JSON object and replacing that entity's config map wholesale
+- [x] 7.3 Clear the retained config topic for a service when it is deregistered
+- [ ] 7.4 Test ingestion (JSON parse, whole-map replace) and deregistration cleanup
 
 ## 8. Agent HTTP read view
 
@@ -56,10 +56,10 @@
 
 ## 9. End-to-end tests
 
-- [x] 9.1 Add a Robot Framework suite verifying the agent's retained config topics and HTTP routes, including that secret settings never appear
-- [x] 9.2 Extend the suite to cover a bootstrapped c8y mapper's retained config topics and HTTP routes
+- [ ] 9.1 Add a Robot Framework suite verifying the agent's retained config topic and HTTP routes, including that secret settings never appear
+- [ ] 9.2 Extend the suite to cover a bootstrapped c8y mapper's retained config topic and HTTP routes
 
 ## 10. Documentation
 
-- [x] 10.1 Document the `config` MQTT channel in the MQTT topic reference
+- [ ] 10.1 Document the `config` MQTT channel in the MQTT topic reference
 - [x] 10.2 Document the two `config` HTTP routes in the entity HTTP API reference
