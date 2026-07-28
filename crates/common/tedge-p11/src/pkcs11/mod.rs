@@ -484,85 +484,108 @@ impl TedgeP11Service for Cryptoki {
         let user_pin = request.pin.unwrap_or_else(|| self.config.pin.clone());
         let so_pin = request.so_pin.unwrap_or_else(|| user_pin.clone());
 
-        // Refresh the slot list before inspecting the token state.
-        let _ = self.reinit();
+        // Inspect the tokens without reinitializing the module first (reinit churns physical
+        // readers); `snapshot_tokens` reinit-retries only if nothing is present.
+        let tokens = self.snapshot_tokens()?;
+        // A token that is initialized and has a user PIN is ready to use as-is.
+        let is_usable = |i: &TokenInfo| i.token_initialized() && i.user_pin_initialized();
 
+        // Resolve which slot to reuse (idempotent) or initialize.
+        let slot = match request.slot {
+            Some(id) => {
+                let slot = Slot::try_from(id).with_context(|| format!("Invalid slot id {id}"))?;
+                let info = tokens
+                    .iter()
+                    .find(|(s, _)| s.id() == id)
+                    .map(|(_, i)| i)
+                    .with_context(|| format!("No token present in slot {id}"))?;
+                // Idempotent: a slot that already holds a usable token is left untouched.
+                if is_usable(info) {
+                    return Ok(InitTokenResponse {
+                        uri: export_session_uri(info),
+                    });
+                }
+                // Never reinitialize an already-initialized token: C_InitToken would erase it.
+                anyhow::ensure!(
+                    !info.token_initialized(),
+                    "Slot {id} already holds an initialized token (label '{}') without a usable \
+                     user PIN. Refusing to reinitialize it as this would erase its contents.",
+                    info.label()
+                );
+                slot
+            }
+            None => {
+                // Idempotency: if a token with the requested label is already usable, return it.
+                if let Some((_, info)) = tokens
+                    .iter()
+                    .find(|(_, i)| is_usable(i) && i.label() == label)
+                {
+                    return Ok(InitTokenResponse {
+                        uri: export_session_uri(info),
+                    });
+                }
+
+                // Otherwise prefer creating a token (with the requested label) on an uninitialized
+                // slot.
+                let uninitialized: Vec<Slot> = tokens
+                    .iter()
+                    .filter(|(_, i)| !i.token_initialized())
+                    .map(|(s, _)| *s)
+                    .collect();
+                match uninitialized.as_slice() {
+                    [slot] => *slot,
+                    [_, _, ..] => {
+                        let ids: Vec<u64> = uninitialized.iter().map(|s| s.id()).collect();
+                        anyhow::bail!(
+                            "Found multiple uninitialized slots ({ids:?}). \
+                             Please select one explicitly using the slot argument."
+                        );
+                    }
+                    // No slot to initialize. Fall back to reusing an existing usable token if there
+                    // is exactly one - e.g. a pre-initialized Nitrokey/SmartCard-HSM, which ships
+                    // with a token whose label differs from --label and never exposes an
+                    // uninitialized slot. This keeps `init` idempotent and uniform across HSM types.
+                    [] => {
+                        let usable: Vec<&(Slot, TokenInfo)> =
+                            tokens.iter().filter(|(_, i)| is_usable(i)).collect();
+                        match usable.as_slice() {
+                            [entry] => {
+                                debug!(label = %entry.1.label(), "A usable token already exists, reusing it");
+                                return Ok(InitTokenResponse {
+                                    uri: export_session_uri(&entry.1),
+                                });
+                            }
+                            [] => anyhow::bail!(
+                                "No token was found. Ensure the HSM is connected and exposes a slot \
+                                 with a token."
+                            ),
+                            _ => {
+                                let uris = usable
+                                    .iter()
+                                    .map(|(_, i)| export_session_uri(i))
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                anyhow::bail!(
+                                    "Found multiple initialized tokens and no uninitialized slot to \
+                                     create a new one. Use one of the existing tokens directly by \
+                                     its URI: {uris}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        // Initialize the resolved (uninitialized) slot under the module lock.
         let token_info = {
             let context = match self.context.lock() {
                 Ok(c) => c,
                 Err(e) => e.into_inner(),
             };
-
-            let slots = context
-                .get_slots_with_token()
-                .context("Failed to list slots with a token")?;
-
-            // Idempotency: if a token with this label is already initialized with a user PIN, leave
-            // it untouched and return its URI.
-            for slot in &slots {
-                let info = context
-                    .get_token_info(*slot)
-                    .context("Failed to get token info")?;
-                if info.token_initialized() && info.user_pin_initialized() && info.label() == label
-                {
-                    debug!(
-                        slot = slot.id(),
-                        %label, "Token is already initialized, skipping initialization"
-                    );
-                    return Ok(InitTokenResponse {
-                        uri: export_session_uri(&info),
-                    });
-                }
-            }
-
-            // Resolve the slot to initialize.
-            let slot = match request.slot {
-                Some(id) => {
-                    let slot =
-                        Slot::try_from(id).with_context(|| format!("Invalid slot id {id}"))?;
-                    let info = context
-                        .get_token_info(slot)
-                        .with_context(|| format!("No token present in slot {id}"))?;
-                    // Never reinitialize an already-initialized token: C_InitToken would erase it.
-                    anyhow::ensure!(
-                        !info.token_initialized(),
-                        "Slot {id} already holds an initialized token (label '{}'). \
-                         Refusing to reinitialize it as this would erase its contents.",
-                        info.label()
-                    );
-                    slot
-                }
-                None => {
-                    let uninitialized: Vec<Slot> = slots
-                        .iter()
-                        .copied()
-                        .filter(|s| {
-                            context
-                                .get_token_info(*s)
-                                .map(|i| !i.token_initialized())
-                                .unwrap_or(false)
-                        })
-                        .collect();
-                    match uninitialized.as_slice() {
-                        [] => anyhow::bail!(
-                            "No uninitialized token was found. Ensure the HSM is connected and \
-                             exposes a slot with an uninitialized token, or pass an explicit slot."
-                        ),
-                        [slot] => *slot,
-                        many => {
-                            let ids: Vec<u64> = many.iter().map(|s| s.id()).collect();
-                            anyhow::bail!(
-                                "Found multiple uninitialized slots ({ids:?}). \
-                                 Please select one explicitly using the slot argument."
-                            );
-                        }
-                    }
-                }
-            };
-
             debug!(slot = slot.id(), %label, "Initializing token");
 
-            let so_auth = AuthPin::from(so_pin.clone());
+            let so_auth = AuthPin::from(so_pin);
             context
                 .init_token(slot, &so_auth, &label)
                 .context("Failed to initialize the token (C_InitToken)")?;
@@ -623,6 +646,32 @@ impl Cryptoki {
                 true
             }
         }
+    }
+
+    /// Snapshot the (slot, token info) of every slot that currently holds a token.
+    ///
+    /// Does not reinitialize the module first (that churns physical readers), but reinit-and-
+    /// retries once if nothing is present, to pick up a token that was just attached or created.
+    fn snapshot_tokens(&self) -> anyhow::Result<Vec<(Slot, TokenInfo)>> {
+        let read = || -> anyhow::Result<Vec<(Slot, TokenInfo)>> {
+            let context = match self.context.lock() {
+                Ok(c) => c,
+                Err(e) => e.into_inner(),
+            };
+            let slots = context
+                .get_slots_with_token()
+                .context("Failed to list slots with a token")?;
+            Ok(slots
+                .into_iter()
+                .filter_map(|s| context.get_token_info(s).ok().map(|i| (s, i)))
+                .collect())
+        };
+        let tokens = read()?;
+        if !tokens.is_empty() {
+            return Ok(tokens);
+        }
+        let _ = self.reinit();
+        read()
     }
 
     /// Enumerate the tokens currently present, reading only public metadata. Does not reinitialize
