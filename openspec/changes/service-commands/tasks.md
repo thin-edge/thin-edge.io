@@ -1,17 +1,19 @@
 ## 1. Workflow engine: scope workflows by entity type
 
-- [ ] 1.1 Add an optional `type` field holding an `EntityType` to `TomlOperationWorkflow` (`crates/core/tedge_api/src/workflow/toml_config.rs:33`), declared **before** the flattened `handlers` and `states` fields so serde does not fold it into the state map; default to `device`
-- [ ] 1.2 Carry the field through `TryFrom<TomlOperationWorkflow> for OperationWorkflow` (`toml_config.rs:225`), `OperationWorkflow` (`workflow/mod.rs:60`), `try_new` (`mod.rs:248`), `built_in` (`mod.rs:308`) and `ill_formed` (`mod.rs:343`)
-- [ ] 1.3 Change `WorkflowSupervisor.workflows` (`workflow/supervisor.rs:12`) to key on `(EntityType, OperationType)` and update `register_custom_workflow`, `unregister_custom_workflow`, `capability_message`, `use_current_version`, `apply_external_update` and `get_action` (`supervisor.rs:31`-`:206`)
-- [ ] 1.4 Change `WorkflowRepository.definitions` (`crates/core/tedge_agent/src/operation_workflows/persist.rs:42`) to the same key, and update `load_operation_workflow` (`persist.rs:132`) and `remove_operation_workflow` (`persist.rs:245`)
-- [ ] 1.5 Unit-test TOML parsing of `type` (present, absent, invalid value) next to the existing cases in `toml_config.rs:699-930`
-- [ ] 1.6 Unit-test that a device `restart` workflow and a service `restart` workflow coexist and that neither drives the other's commands, and that an existing workflow without `type` keeps behaving as before
+- [x] 1.1 Add an optional `type` field holding an `EntityType` to `TomlOperationWorkflow` (`crates/core/tedge_api/src/workflow/toml_config.rs:33`), declared **before** the flattened `handlers` and `states` fields so serde does not fold it into the state map; default to `device`
+- [x] 1.2 Carry the field through `TryFrom<TomlOperationWorkflow> for OperationWorkflow` (`toml_config.rs:225`), `OperationWorkflow` (`workflow/mod.rs:60`), `try_new` (`mod.rs:248`), `built_in` (`mod.rs:308`) and `ill_formed` (`mod.rs:343`)
+- [x] 1.3 Change `WorkflowSupervisor.workflows` (`workflow/supervisor.rs:12`) to key on `(EntityType, OperationType)` and update `register_custom_workflow`, `unregister_custom_workflow`, `capability_message`, `use_current_version` and `apply_external_update` (`supervisor.rs:31`-`:206`). `get_action` keeps its signature: a command under execution is found by its operation and `@version`, which is the digest of the workflow definition
+- [x] 1.3b Filter `capability_messages` on the entity type, so a service workflow does not declare a capability on the device's topics
+- [x] 1.4 Change `WorkflowRepository.definitions` (`crates/core/tedge_agent/src/operation_workflows/persist.rs:42`) to the same key, and update `load_operation_workflow` (`persist.rs:132`) and `remove_operation_workflow` (`persist.rs:245`)
+- [x] 1.5 Unit-test TOML parsing of `type` (present, absent, invalid value) next to the existing cases in `toml_config.rs:699-930`
+- [x] 1.6 Unit-test that a device `restart` workflow and a service `restart` workflow coexist and that neither drives the other's commands, and that an existing workflow without `type` keeps behaving as before
 
 ## 2. Agent: react to commands addressed to its own device's services
 
 - [ ] 2.1 Widen `WorkflowActorBuilder::subscriptions` (`crates/core/tedge_agent/src/operation_workflows/builder.rs:166`) to `EntityFilter::AnyEntity` with `ChannelFilter::AnyCommand`, keeping the own-service signal filter
 - [ ] 2.2 Add an entity lookup client to the workflow actor that calls `GET /te/v1/entities/<topic-id>` (`crates/core/tedge_agent/src/http_server/entity_store.rs:167`) using the existing `tedge_http_host` and `tedge_http_protocol` config
 - [ ] 2.3 Keep the entity in `WorkflowActor::process_mqtt_message` (`operation_workflows/actor.rs:163`) and act only when the target is the agent's own device, or a `service` whose parent is the agent's own device; ignore anything else with a log line
+- [ ] 2.3b Classify the target for the workflow lookup, replacing the `EntityType::MainDevice` passed everywhere by section 1. **Open decision**: a device target is classified with the `@type` the entity store reports, and the lookup falls back from `(child-device, operation)` to `(device, operation)` — otherwise an agent running on a child device stops finding its own `device` workflows, since its own `@type` is `child-device`. A `service` never falls back
 - [ ] 2.4 On a failed lookup, do not act and log the failure, so the command is left for a retry rather than half-driven
 - [ ] 2.5 Use `(entity_type, operation)` for the workflow lookup in `process_command_message` (`actor.rs:223`) and `apply_external_update` (`persist.rs:401`)
 - [ ] 2.6 Test: a command for a service of the own device is driven; a command for a service of another device is ignored; a command for an unregistered entity is ignored; a lookup failure leaves the command untouched

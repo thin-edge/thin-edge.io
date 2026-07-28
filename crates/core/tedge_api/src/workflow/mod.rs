@@ -6,6 +6,7 @@ pub mod state;
 pub mod supervisor;
 mod toml_config;
 
+use crate::entity::EntityType;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
@@ -54,10 +55,18 @@ pub fn version_is_builtin(version: &str) -> bool {
     version == BUILT_IN
 }
 
+/// A workflow without explicit `type` is assumed to be for the main device
+pub(crate) fn default_entity_type() -> EntityType {
+    EntityType::MainDevice
+}
+
 /// An OperationWorkflow defines the state machine that rules an operation
 #[derive(Clone, Debug, Deserialize)]
 #[serde(try_from = "toml_config::TomlOperationWorkflow")]
 pub struct OperationWorkflow {
+    /// The type of the entity this workflow applies
+    pub entity_type: EntityType,
+
     /// The operation to which this workflow applies
     pub operation: OperationType,
 
@@ -261,6 +270,7 @@ impl OperationWorkflow {
     /// Return a new OperationWorkflow unless there are errors
     /// such as missing or ill-defined states.
     pub fn try_new(
+        entity_type: EntityType,
         operation: OperationType,
         handlers: DefaultHandlers,
         mut states: HashMap<StateName, OperationAction>,
@@ -313,6 +323,7 @@ impl OperationWorkflow {
         }
 
         Ok(OperationWorkflow {
+            entity_type,
             operation,
             handlers,
             states,
@@ -345,6 +356,7 @@ impl OperationWorkflow {
         .collect();
 
         OperationWorkflow {
+            entity_type: EntityType::MainDevice,
             operation,
             handlers: DefaultHandlers::default(),
             states,
@@ -355,7 +367,7 @@ impl OperationWorkflow {
     ///
     /// The point is to raise an error to the user when a workflow definition cannot be parsed,
     /// instead of silently ignoring the commands.
-    pub fn ill_formed(operation: String, reason: String) -> Self {
+    pub fn ill_formed(entity_type: EntityType, operation: String, reason: String) -> Self {
         let states = [
             ("init", OperationAction::MoveTo("executing".into())),
             (
@@ -369,6 +381,7 @@ impl OperationWorkflow {
         .collect();
 
         OperationWorkflow {
+            entity_type,
             operation: operation.as_str().into(),
             handlers: DefaultHandlers::default(),
             states,

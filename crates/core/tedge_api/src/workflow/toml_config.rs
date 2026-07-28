@@ -1,3 +1,4 @@
+use crate::entity::EntityType;
 use crate::mqtt_topics::OperationType;
 use crate::script::ShellScript;
 use crate::substitution::Record;
@@ -33,6 +34,10 @@ use std::time::Duration;
 pub struct TomlOperationWorkflow {
     /// The operation to which this workflow applies
     pub operation: OperationType,
+
+    /// The type of the entity this workflow applies
+    #[serde(rename = "type", default = "crate::workflow::default_entity_type")]
+    pub entity_type: EntityType,
 
     /// Default handlers used to determine the next state from an action outcome
     #[serde(flatten)]
@@ -239,7 +244,7 @@ impl TryFrom<TomlOperationWorkflow> for OperationWorkflow {
             states.insert(state, action);
         }
 
-        OperationWorkflow::try_new(operation, default_handlers, states)
+        OperationWorkflow::try_new(input.entity_type, operation, default_handlers, states)
     }
 }
 
@@ -726,6 +731,60 @@ on_error = "failed_reboot"
         assert_eq!(
             input.handlers.on_timeout,
             Some(TomlStateUpdate::Simple("timeout".to_string()))
+        );
+    }
+
+    #[test]
+    fn a_workflow_with_no_type_applies_to_main_device() {
+        let file = r#"operation = "restart""#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        assert_eq!(input.entity_type, EntityType::MainDevice);
+    }
+
+    #[test]
+    fn a_workflow_can_be_typed() {
+        let workflow_of_type = |type_field: &str| {
+            format!(
+                r#"
+operation = "restart"
+type = "{type_field}"
+
+[init]
+action = "proceed"
+on_success = "successful"
+"#
+            )
+        };
+
+        for (type_field, expected) in [
+            ("device", EntityType::MainDevice),
+            ("child-device", EntityType::ChildDevice),
+            ("service", EntityType::Service),
+        ] {
+            let file = workflow_of_type(type_field);
+
+            let input: TomlOperationWorkflow = toml::from_str(&file).unwrap();
+            assert_eq!(input.entity_type, expected, "{type_field}");
+            assert!(!input.states.contains_key("type"), "{type_field}");
+
+            let workflow = OperationWorkflow::try_from(input).unwrap();
+            assert_eq!(workflow.entity_type, expected, "{type_field}");
+        }
+    }
+
+    #[test]
+    fn a_workflow_with_an_unknown_type_is_rejected() {
+        let file = r#"
+operation = "restart"
+type = "gadget"
+"#;
+        let error = toml::from_str::<TomlOperationWorkflow>(file).unwrap_err();
+
+        assert!(
+            error.to_string().contains(
+                "unknown variant `gadget`, expected one of `device`, `child-device`, `service`"
+            ),
+            "{error}"
         );
     }
 
