@@ -121,9 +121,15 @@ impl Command for DeleteKeyCmd {
             pin: self.pin.clone().map(SecretString::from),
         })?;
 
-        eprintln!("Deleted {} object(s):", response.deleted.len());
-        for uri in &response.deleted {
-            eprintln!("  {uri}");
+        // Deleting a key that does not exist is not an error: the command is idempotent, so this
+        // exits successfully with a note rather than failing.
+        if response.deleted.is_empty() {
+            eprintln!("No matching key was found; nothing to delete.");
+        } else {
+            eprintln!("Deleted {} object(s):", response.deleted.len());
+            for uri in &response.deleted {
+                eprintln!("  {uri}");
+            }
         }
 
         Ok(())

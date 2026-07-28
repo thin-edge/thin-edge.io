@@ -436,15 +436,12 @@ impl TedgeP11Service for Cryptoki {
             template.push(Attribute::Id(id.clone()));
         }
 
-        // Matches both the private and public key objects that share the label/id.
+        // Matches both the private and public key objects that share the label/id. A missing key
+        // is not an error: delete is idempotent, so an empty result means there was nothing to do.
         let objects = session
             .session
             .find_objects(&template)
             .context("Failed to find key objects to delete")?;
-        anyhow::ensure!(
-            !objects.is_empty(),
-            "No matching key objects were found on the token for the given selector."
-        );
 
         let mut deleted = Vec::with_capacity(objects.len());
         for object in objects {
