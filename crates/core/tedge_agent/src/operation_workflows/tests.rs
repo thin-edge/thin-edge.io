@@ -9,6 +9,7 @@ use serde_json::json;
 use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
+use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
@@ -36,6 +37,8 @@ use tedge_api::commands::SoftwareModuleAction;
 use tedge_api::commands::SoftwareModuleItem;
 use tedge_api::commands::SoftwareRequestResponseSoftwareList;
 use tedge_api::commands::SoftwareUpdateCommandPayload;
+use tedge_api::entity::EntityMetadata;
+use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
@@ -52,6 +55,9 @@ use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_http_ext::test_helpers::HttpResponseBuilder;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -1729,9 +1735,59 @@ struct TestHandler {
     sync_signal_box: TimedMessageBox<SimpleMessageBox<CmdMetaSyncSignal, NoMessage>>,
 }
 
+/// A fake entity store, answering the entity lookups of the workflow actor over HTTP
+enum FakeEntityStore {
+    /// Serve the given entities, answering `404` for any other
+    Entities(Vec<EntityMetadata>),
+
+    /// Answer `500` to every request, as an entity store that cannot be queried
+    Failing,
+}
+
+impl FakeEntityStore {
+    async fn serve(self, mut http: FakeServerBox<HttpRequest, HttpResult>) {
+        while let Some(request) = http.recv().await {
+            let response = match &self {
+                FakeEntityStore::Failing => HttpResponseBuilder::new().status(500).build(),
+                FakeEntityStore::Entities(entities) => {
+                    let target = request
+                        .uri()
+                        .path()
+                        .strip_prefix("/te/v1/entities/")
+                        .and_then(|path| path.parse::<EntityTopicId>().ok());
+                    match entities
+                        .iter()
+                        .find(|entity| Some(&entity.topic_id) == target.as_ref())
+                    {
+                        Some(entity) => HttpResponseBuilder::new().status(200).json(entity).build(),
+                        None => HttpResponseBuilder::new().status(404).build(),
+                    }
+                }
+            };
+            if http.send(response).await.is_err() {
+                break;
+            }
+        }
+    }
+}
+
 async fn spawn_mqtt_operation_converter(
     device_topic_id: &str,
     workflows: Vec<(String, String)>,
+) -> Result<TestHandler, DynError> {
+    // The commands of these tests are addressed to the device itself, which needs no lookup
+    spawn_workflow_actor(
+        device_topic_id,
+        workflows,
+        FakeEntityStore::Entities(vec![]),
+    )
+    .await
+}
+
+async fn spawn_workflow_actor(
+    device_topic_id: &str,
+    workflows: Vec<(String, String)>,
+    entity_store: FakeEntityStore,
 ) -> Result<TestHandler, DynError> {
     let mut software_builder = SoftwareActor(SimpleMessageBoxBuilder::new("Software", 5));
     let mut restart_builder = RestartActor(SimpleMessageBoxBuilder::new("Restart", 5));
@@ -1751,6 +1807,7 @@ async fn spawn_mqtt_operation_converter(
         RequestEnvelope<DownloaderRequest, DownloaderResult>,
         NoMessage,
     > = SimpleMessageBoxBuilder::new("Downloader", 5);
+    let mut http_builder = FakeServerBox::<HttpRequest, HttpResult>::builder();
 
     let tmp_dir = Arc::new(TempTedgeDir::new());
     let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
@@ -1762,9 +1819,16 @@ async fn spawn_mqtt_operation_converter(
     let device_topic_id = device_topic_id
         .parse::<EntityTopicId>()
         .expect("Invalid topic id");
+    // Under a custom topic scheme the agent's own service topic id cannot be derived,
+    // it is configured. Here the last segment of the device topic id is simply replaced.
     let service_topic_id = device_topic_id
         .default_service_for_device("tedge-agent")
-        .expect("Invalid service topic id");
+        .unwrap_or_else(|| {
+            let (prefix, _) = device_topic_id.as_str().rsplit_once('/').unwrap();
+            format!("{prefix}/tedge-agent")
+                .parse()
+                .expect("Invalid service topic id")
+        });
     let log_dir = TedgePaths::from_root_with_defaults(tmp_path, "", "").root_dir();
 
     let config = OperationConfig {
@@ -1777,6 +1841,7 @@ async fn spawn_mqtt_operation_converter(
         operations_dir: config_root.dir("operations").unwrap(),
         tmp_dir: TedgePaths::from_root_with_defaults(tmp_path.join(tmp_path), "", ""),
         capabilities: Capabilities::default(),
+        entities_url: "http://127.0.0.1:8000/te/v1/entities".into(),
     };
     let mut workflow_actor_builder = WorkflowActorBuilder::new(
         config,
@@ -1784,6 +1849,7 @@ async fn spawn_mqtt_operation_converter(
         &mut script_builder,
         &mut inotify_builder,
         &mut downloade_builder,
+        &mut http_builder,
     );
     workflow_actor_builder.register_builtin_operation(&mut restart_builder);
     workflow_actor_builder.register_builtin_operation(&mut software_builder);
@@ -1801,6 +1867,8 @@ async fn spawn_mqtt_operation_converter(
     let mqtt_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let downloader_box = downloade_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let inotify_box = inotify_builder.build().with_timeout(TEST_TIMEOUT_MS);
+
+    tokio::spawn(entity_store.serve(http_builder.build()));
 
     let workflow_actor = workflow_actor_builder.build();
     let tmp_dir_guard = Arc::clone(&tmp_dir);
@@ -1821,6 +1889,16 @@ async fn spawn_mqtt_operation_converter(
         config_box,
         sync_signal_box,
     })
+}
+
+/// Skip the only capability message published on start when no software type is declared
+///
+/// The software capabilities are published by the software actor, which these tests do not drive.
+async fn skip_device_restart_capability(
+    mqtt: &mut impl MessageReceiver<MqttMessage>,
+    device: &str,
+) {
+    assert_received_contains_str(mqtt, [(format!("te/{device}/cmd/restart").as_str(), "{}")]).await;
 }
 
 async fn skip_capability_messages(mqtt: &mut impl MessageReceiver<MqttMessage>, device: &str) {

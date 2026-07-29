@@ -2,6 +2,7 @@ use crate::operation_workflows::actor::AgentInput;
 use crate::operation_workflows::actor::InternalCommandState;
 use crate::operation_workflows::actor::WorkflowActor;
 use crate::operation_workflows::config::OperationConfig;
+use crate::operation_workflows::entity_store_client::EntityStoreClient;
 use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
@@ -42,6 +43,8 @@ use tedge_api::workflow::SyncOnCommand;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
@@ -60,6 +63,7 @@ pub struct WorkflowActorBuilder {
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
+    entity_store: EntityStoreClient,
     builtin_operation_step_executor: HashMap<
         (OperationType, OperationStep),
         ClientMessageBox<OperationStepRequest, OperationStepResponse>,
@@ -73,6 +77,7 @@ impl WorkflowActorBuilder {
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         downloader: &mut impl Service<DownloaderRequest, DownloaderResult>,
+        http: &mut impl Service<HttpRequest, HttpResult>,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();
         let (signal_sender, signal_receiver) = mpsc::channel(10);
@@ -91,11 +96,7 @@ impl WorkflowActorBuilder {
 
         let mqtt_publisher = mqtt_actor.get_sender();
         mqtt_actor.connect_sink(
-            Self::subscriptions(
-                &config.mqtt_schema,
-                &config.device_topic_id,
-                &config.service_topic_id,
-            ),
+            Self::subscriptions(&config.mqtt_schema, &config.service_topic_id),
             &input_sender,
         );
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
@@ -103,6 +104,9 @@ impl WorkflowActorBuilder {
         let script_runner = ClientMessageBox::new(script_runner);
 
         let downloader = ClientMessageBox::new(downloader);
+
+        let entity_store =
+            EntityStoreClient::new(config.entities_url.clone(), ClientMessageBox::new(http));
 
         fs_notify.connect_sink(config.operations_dir.path().into(), &input_sender);
 
@@ -117,6 +121,7 @@ impl WorkflowActorBuilder {
             signal_sender,
             script_runner,
             downloader,
+            entity_store,
             builtin_operation_step_executor: HashMap::new(),
         }
     }
@@ -163,15 +168,17 @@ impl WorkflowActorBuilder {
         }
     }
 
+    /// The commands of every entity, plus the signals addressed to this agent
+    ///
+    /// The commands cannot be narrowed down by a topic filter: a service of this device is not
+    /// recognizable from its topic under a custom topic scheme, only from its registration data.
+    /// Which commands this agent has to execute is therefore decided per message, see
+    /// `WorkflowActor::command_target_type`.
     pub fn subscriptions(
         mqtt_schema: &MqttSchema,
-        device_topic_id: &EntityTopicId,
         service_topic_id: &EntityTopicId,
     ) -> TopicFilter {
-        let mut topics = mqtt_schema.topics(
-            EntityFilter::Entity(device_topic_id),
-            ChannelFilter::AnyCommand,
-        );
+        let mut topics = mqtt_schema.topics(EntityFilter::AnyEntity, ChannelFilter::AnyCommand);
         topics.add_all(mqtt_schema.topics(
             EntityFilter::Entity(service_topic_id),
             ChannelFilter::AnySignal,
@@ -221,6 +228,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             command_sender: self.command_sender,
             script_runner: self.script_runner,
             downloader: self.downloader,
+            entity_store: self.entity_store,
             tmp_dir: self.config.tmp_dir.root().into(),
         }
     }

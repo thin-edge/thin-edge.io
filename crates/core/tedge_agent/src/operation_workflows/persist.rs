@@ -21,6 +21,7 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 /// Persist the workflow definitions.
 ///
@@ -135,6 +136,10 @@ impl WorkflowRepository {
     ) -> Result<(EntityType, OperationName), anyhow::Error> {
         let entity_type = workflow.entity_type;
         let operation_name = workflow.operation.to_string();
+        if entity_type == EntityType::ChildDevice {
+            warn!("The {operation_name} workflow declares type = \"{entity_type}\", which no command is addressed to: \
+                   the device an agent runs on is a \"{}\"", EntityType::MainDevice);
+        }
         let version = match source {
             WorkflowSource::UserDefined(definition) => {
                 self.definitions.insert(
