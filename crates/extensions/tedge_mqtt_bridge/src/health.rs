@@ -11,10 +11,12 @@ use rumqttc::QoS;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
-/// A tool for monitoring and publishing the health of the two bridge halves
+/// Publishes the overall health of the two bridge halves
 ///
-/// When [Self::monitor] runs, this will watch the status of the bridge halves, and notify the
-/// relevant MQTT topic about the overall health.
+/// The bridge is up only when both halves are up, i.e. both can relay the messages they are
+/// given. Consumers rely on that: `tedge connect` and the c8y mapper publish cloud-bound
+/// messages as soon as they see the bridge up, and on a fresh session such a message is
+/// dropped if the bridge has not subscribed yet.
 pub struct BridgeHealthMonitor {
     topic: String,
     rx_status: mpsc::Receiver<(&'static str, Status)>,
@@ -62,25 +64,24 @@ impl BridgeHealthMonitor {
 
 type NotificationRes = Result<Event, ConnectionError>;
 
-/// A client for [BridgeHealthMonitor]
+/// Logs the connection events of one bridge half
 ///
-/// This is used by each bridge half to log and notify the monitor of health status updates
-pub struct BridgeHealth {
+/// A failure is logged only when it differs from the previous one, so a broker that keeps
+/// refusing connections is reported once rather than on every reconnection attempt
+pub struct BridgeConnectionLog {
     name: &'static str,
-    tx_health: mpsc::Sender<(&'static str, Status)>,
     last_err: Option<String>,
 }
 
-impl BridgeHealth {
-    pub(crate) fn new(name: &'static str, tx_health: mpsc::Sender<(&'static str, Status)>) -> Self {
+impl BridgeConnectionLog {
+    pub(crate) fn new(name: &'static str) -> Self {
         Self {
             name,
-            tx_health,
-            last_err: Some("dummy error".into()),
+            last_err: None,
         }
     }
 
-    pub async fn update(&mut self, result: &NotificationRes) {
+    pub fn update(&mut self, result: &NotificationRes) {
         let name = self.name;
         let err = match result {
             Ok(event) => {
@@ -97,8 +98,6 @@ impl BridgeHealth {
                 log_event!(error: name, "MQTT bridge failed to connect to {name} broker: {err}");
             }
             self.last_err = err;
-            let status = self.last_err.as_ref().map_or(Status::Up, |_| Status::Down);
-            self.tx_health.send((name, status)).await.unwrap()
         }
     }
 }

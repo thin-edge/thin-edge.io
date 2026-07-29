@@ -3161,7 +3161,6 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     config: C8yMapperConfig,
     init: bool,
 ) -> TestHandle {
-    let bridge_health_topic = config.bridge_health_topic.clone();
     let builders = c8y_mapper_builder(tmp_dir, config, init).await;
 
     let actor = builders.c8y.build();
@@ -3169,10 +3168,6 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 
     let actor = builders.flows.build();
     tokio::spawn(async move { actor.run().await });
-
-    let mut service_monitor_box = builders.service_monitor.build();
-    let bridge_status_msg = MqttMessage::new(&bridge_health_topic, "1");
-    service_monitor_box.send(bridge_status_msg).await.unwrap();
 
     TestHandle {
         mqtt: builders.mqtt.build(),
@@ -3193,7 +3188,6 @@ pub(crate) struct TestHandleBuilder {
     pub ul: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult>,
     pub dl: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult>,
     pub avail: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
-    pub service_monitor: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
 }
 
 pub(crate) async fn c8y_mapper_builder(
@@ -3216,9 +3210,6 @@ pub(crate) async fn c8y_mapper_builder(
         FakeServerBoxBuilder::default();
     let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         FakeServerBoxBuilder::default();
-    let mut service_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
-        SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
-
     C8yMapperBuilder::init(&config).await.unwrap();
     let mut c8y_mapper_builder = C8yMapperBuilder::try_new(
         config,
@@ -3227,7 +3218,6 @@ pub(crate) async fn c8y_mapper_builder(
         &mut uploader_builder,
         &mut downloader_builder,
         &mut fs_watcher_builder,
-        &mut service_monitor_builder,
     )
     .unwrap();
 
@@ -3273,7 +3263,6 @@ pub(crate) async fn c8y_mapper_builder(
         ul: uploader_builder,
         dl: downloader_builder,
         avail: availability_box_builder,
-        service_monitor: service_monitor_builder,
     }
 }
 
