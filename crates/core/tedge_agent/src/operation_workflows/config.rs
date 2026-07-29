@@ -1,4 +1,5 @@
 use crate::Capabilities;
+use std::sync::Arc;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::workflow::log::log_dir::OperationLogs;
@@ -17,6 +18,7 @@ pub struct OperationConfig {
     pub operations_dir: ManagedDir,
     pub tmp_dir: TedgePaths,
     pub capabilities: Capabilities,
+    pub entities_url: Arc<str>,
 }
 
 impl OperationConfig {
@@ -44,6 +46,7 @@ impl OperationConfig {
             operations_dir: config_dir.dir("operations")?,
             tmp_dir: tedge_config.tmp_root(),
             capabilities,
+            entities_url: tedge_config.http.entities_url(),
         })
     }
 }

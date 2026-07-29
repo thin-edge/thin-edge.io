@@ -75,6 +75,11 @@ taking one of the entity `@type` values (`device`, `child-device`, `service`).
 A workflow SHALL only be used for commands addressed to an entity of the declared type.
 When `type` is absent, the workflow SHALL apply to device entities, as it does today.
 
+The type a target is matched against SHALL be the `@type` reported for it,
+except for the device the agent runs on, which SHALL be matched as `device`.
+An agent running on a child device reports itself as `child-device`,
+so matching it on its reported type would leave it unable to find its own workflows.
+
 This makes an operation name reusable across entity types:
 a `restart` workflow for a device and a `restart` workflow for a service are distinct workflows.
 
@@ -87,15 +92,22 @@ a `restart` workflow for a device and a `restart` workflow for a service are dis
 - **WHEN** a workflow definition has no `type` field
 - **THEN** it SHALL keep applying to commands addressed to the device, as before this change
 
+#### Scenario: An agent on a child device uses its device workflows
+- **WHEN** a command is addressed to the child device an agent runs on
+- **THEN** it SHALL be driven by a workflow with no `type` or with `type = "device"`
+
 ### Requirement: tedge-agent is the sole executor of service commands for its own device
 
-tedge-agent SHALL subscribe to the command topics of the services of its **own** device
+tedge-agent SHALL react to the commands of the services of its **own** device
 and SHALL drive their command state machines with its workflow engine.
+
+Which device a service belongs to SHALL be taken from the registration data of that service,
+not from the shape of its topic, so that this holds under a custom topic scheme too.
 
 tedge-agent SHALL NOT react to commands addressed to services of any other device.
 A child device running its own tedge-agent SHALL execute the commands of its own services,
 using its own configuration and its own service backends.
-Nothing SHALL be looked up across devices.
+No agent SHALL execute a command on behalf of another device.
 
 Because a command topic is a single shared state record,
 no other component SHALL drive the state machine of a service command.
@@ -109,6 +121,11 @@ as a process executed by tedge-agent, and never as a competing MQTT subscriber.
 #### Scenario: The agent ignores commands for services of other devices
 - **WHEN** a command is issued for a service of a device other than the agent's own device
 - **THEN** that agent SHALL NOT react to the command
+
+#### Scenario: An unresolvable target leaves the command untouched
+- **WHEN** the agent cannot tell whether a command's target is a service of its own device
+- **THEN** it SHALL NOT act on the command and SHALL leave the command state unchanged,
+  so that the command can be retried rather than half-driven
 
 #### Scenario: No backend for the service type is a definitive failure
 - **WHEN** a command is issued for a service whose type has no execution backend installed

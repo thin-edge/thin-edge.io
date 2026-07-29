@@ -1,3 +1,4 @@
+use crate::operation_workflows::entity_store_client::EntityStoreClient;
 use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
@@ -49,6 +50,7 @@ use tedge_script_ext::Execute;
 use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tokio::time::sleep;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -84,6 +86,7 @@ pub struct WorkflowActor {
     pub(crate) script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     pub(crate) downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
     pub(crate) uploader: ClientMessageBox<UploaderRequest, UploaderResult>,
+    pub(crate) entity_store: EntityStoreClient,
     pub(crate) tmp_dir: Utf8PathBuf,
 }
 
@@ -167,13 +170,13 @@ impl WorkflowActor {
     /// but also from *this* actor as all its state transitions are published over MQTT.
     /// Only the former will be actually processed with [Self::process_command_update].
     async fn process_mqtt_message(&mut self, message: MqttMessage) -> Result<(), RuntimeError> {
-        let Ok((_, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) else {
+        let Ok((target, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) else {
             error!("Unknown topic: {}", message.topic.name);
             return Ok(());
         };
         match channel {
             Channel::Command { operation, cmd_id } => {
-                self.process_command_message(message, operation, cmd_id)
+                self.process_command_message(message, target, operation, cmd_id)
                     .await
             }
             Channel::Signal { signal_type } => {
@@ -230,6 +233,7 @@ impl WorkflowActor {
     async fn process_command_message(
         &mut self,
         message: MqttMessage,
+        target: EntityTopicId,
         operation: OperationType,
         cmd_id: String,
     ) -> Result<(), RuntimeError> {
@@ -237,6 +241,9 @@ impl WorkflowActor {
             info!("Ignoring {operation} operation because it is disabled in agent capabilities");
             return Ok(());
         }
+        let Some(entity_type) = self.command_target_type(&target).await else {
+            return Ok(());
+        };
         let Ok(state) = GenericCommandState::from_command_message(&message) else {
             error!("Invalid command payload: {}", message.topic.name);
             return Ok(());
@@ -247,7 +254,7 @@ impl WorkflowActor {
 
         match self
             .workflow_repository
-            .apply_external_update(EntityType::MainDevice, &operation, state)
+            .apply_external_update(entity_type, &operation, state)
             .await
         {
             Ok(None) => (),
@@ -273,6 +280,42 @@ impl WorkflowActor {
         }
 
         Ok(())
+    }
+
+    /// The entity type under which the workflow of a command addressed to `target` is registered
+    ///
+    /// `None` when this agent must not act on that command. The device this agent runs on is a
+    /// `device` whatever the entity store holds for it: a child device reports itself as
+    /// `child-device` there, and would find none of its own workflows under that type.
+    async fn command_target_type(&mut self, target: &EntityTopicId) -> Option<EntityType> {
+        if target == &self.device_topic_id {
+            return Some(EntityType::MainDevice);
+        }
+
+        let own_device = &self.device_topic_id;
+        match self.entity_store.get(target).await {
+            Ok(Some(entity))
+                if entity.r#type == EntityType::Service
+                    && entity.parent.as_ref() == Some(own_device) =>
+            {
+                Some(EntityType::Service)
+            }
+            Ok(Some(entity)) => {
+                debug!(
+                    "Ignoring the command addressed to {target}: a {} is not a service of {own_device}",
+                    entity.r#type
+                );
+                None
+            }
+            Ok(None) => {
+                info!("Ignoring the command addressed to {target}: no such entity is registered");
+                None
+            }
+            Err(err) => {
+                warn!("Not executing the command addressed to {target}, as its registration data cannot be read: {err}");
+                None
+            }
+        }
     }
 
     /// Process a command state update taking any action as defined by the workflow

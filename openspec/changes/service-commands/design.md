@@ -120,17 +120,36 @@ So the scoping is not done by the subscription; it is done when a command arrive
 The subscription in `WorkflowActorBuilder::subscriptions` (`builder.rs:166`) is widened to
 `EntityFilter::AnyEntity` with `ChannelFilter::AnyCommand`, keeping the own-service signal filter.
 `WorkflowActor::process_mqtt_message` currently drops the entity from the parsed topic (`actor.rs:163`);
-it will keep it and decide from the entity's registration data whether to act:
+it will keep it and decide, per command, whether to act and under which entity type:
 
-- the agent's own device: act, as today;
-- an entity of type `service` whose parent is the agent's own device: act;
-- anything else: ignore.
+- the target is the device the agent runs on: act, classified as `device`;
+- the target is an entity of type `service` whose parent is that device: act, classified as `service`;
+- anything else: ignore, with a log line.
 
-The registration data comes from the entity store over its REST API,
+The device the agent runs on is recognized by comparing topic identifiers, and needs no lookup.
+It is classified as `device` whatever type the entity store holds for it.
+An agent on a child device runs its own workflows and reports itself as `child-device`
+in the main device's entity store, so classifying it by its reported type would leave it
+unable to find its own workflows, and would need a fallback from `(child-device, operation)`
+to `(device, operation)`.
+Not looking it up also keeps a device command working exactly as before this change:
+it does not depend on the entity store being reachable, nor on the device being registered there.
+That last point matters under a custom topic scheme, where the device is not registered at all
+unless someone registers it: `EntityStore::with_main_device` only ever holds `device/main//`
+(`agent.rs:409`).
+The consequence is that a workflow declaring `type = "child-device"` matches nothing today.
+The key keeps the three values of the `@type` vocabulary,
+so the case that value is meant for stays expressible when it is designed:
+a main device agent driving the workflows of a child device that cannot run its own agent.
+Loading such a workflow is logged as a warning, since it will never be selected.
+
+The registration data of any other target comes from the entity store over its REST API,
 `GET /te/v1/entities/<topic-id>` (`crates/core/tedge_agent/src/http_server/entity_store.rs:167`),
 which returns the entity's type and parent.
-The agent already holds `tedge_http_host` and `tedge_http_protocol` for the file transfer service,
-and the config and log managers already use that host to reach the main device
+The request goes through the `tedge_http_ext` HTTP actor, which the agent now spawns,
+built from `http.client_tls_config()` as the c8y mapper already does (`c8y/mapper.rs:123`),
+and addressed at `http.client.host` and `http.client.port`.
+The config and log managers already use that host to reach the main device
 even when they run on the main device itself,
 so this needs no new configuration and no new assumption about deployment.
 

@@ -1870,13 +1870,23 @@ impl TEdgeConfigReaderHttp {
     /// Builds the URLs at which the File Transfer Service HTTP server exposes files,
     /// as seen by a client connecting to `http.client.host:http.client.port`.
     pub fn file_transfer_urls(&self) -> FileTransferUrls {
-        let authority: Arc<str> = format!("{}:{}", self.client.host, self.client.port).into();
+        let (authority, protocol) = self.client_authority();
+        FileTransferUrls::new(authority, protocol)
+    }
+
+    pub fn entities_url(&self) -> Arc<str> {
+        let (authority, protocol) = self.client_authority();
+        format!("{}://{authority}/te/v1/entities", protocol.as_str()).into()
+    }
+
+    fn client_authority(&self) -> (Arc<str>, Protocol) {
+        let authority = format!("{}:{}", self.client.host, self.client.port).into();
         let protocol = if self.is_secure() {
             Protocol::Https
         } else {
             Protocol::Http
         };
-        FileTransferUrls::new(authority, protocol)
+        (authority, protocol)
     }
 }
 

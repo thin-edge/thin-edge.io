@@ -10,14 +10,14 @@
 
 ## 2. Agent: react to commands addressed to its own device's services
 
-- [ ] 2.1 Widen `WorkflowActorBuilder::subscriptions` (`crates/core/tedge_agent/src/operation_workflows/builder.rs:166`) to `EntityFilter::AnyEntity` with `ChannelFilter::AnyCommand`, keeping the own-service signal filter
-- [ ] 2.2 Add an entity lookup client to the workflow actor that calls `GET /te/v1/entities/<topic-id>` (`crates/core/tedge_agent/src/http_server/entity_store.rs:167`) using the existing `tedge_http_host` and `tedge_http_protocol` config
-- [ ] 2.3 Keep the entity in `WorkflowActor::process_mqtt_message` (`operation_workflows/actor.rs:163`) and act only when the target is the agent's own device, or a `service` whose parent is the agent's own device; ignore anything else with a log line
-- [ ] 2.3b Classify the target for the workflow lookup, replacing the `EntityType::MainDevice` passed everywhere by section 1. **Open decision**: a device target is classified with the `@type` the entity store reports, and the lookup falls back from `(child-device, operation)` to `(device, operation)` — otherwise an agent running on a child device stops finding its own `device` workflows, since its own `@type` is `child-device`. A `service` never falls back
-- [ ] 2.4 On a failed lookup, do not act and log the failure, so the command is left for a retry rather than half-driven
-- [ ] 2.5 Use `(entity_type, operation)` for the workflow lookup in `process_command_message` (`actor.rs:223`) and `apply_external_update` (`persist.rs:401`)
-- [ ] 2.6 Test: a command for a service of the own device is driven; a command for a service of another device is ignored; a command for an unregistered entity is ignored; a lookup failure leaves the command untouched
-- [ ] 2.7 Test that the same behaviour holds under a custom topic scheme, where the parent relation is only in the entity store
+- [x] 2.1 Widen `WorkflowActorBuilder::subscriptions` (`crates/core/tedge_agent/src/operation_workflows/builder.rs:166`) to `EntityFilter::AnyEntity` with `ChannelFilter::AnyCommand`, keeping the own-service signal filter
+- [x] 2.2 Add an entity lookup client to the workflow actor that calls `GET /te/v1/entities/<topic-id>` (`crates/core/tedge_agent/src/http_server/entity_store.rs:167`) using the existing `http.client` host and port. The client goes through the `tedge_http_ext` HTTP actor, which the agent now spawns, so the TLS setup of `http.client_tls_config()` is reused as the c8y mapper does
+- [x] 2.3 Keep the entity in `WorkflowActor::process_mqtt_message` (`operation_workflows/actor.rs:163`) and act only when the target is the agent's own device, or a `service` whose parent is the agent's own device; ignore anything else with a log line
+- [x] 2.3b Classify the target for the workflow lookup, replacing the `EntityType::MainDevice` passed everywhere by section 1. **Decided**: the device the agent runs on is classified as `device` with no lookup at all, and every other target is classified with the `@type` the entity store reports, with no fallback. Classifying the own device by its reported `@type` was rejected: an agent on a child device reports itself as `child-device` and would need a `(child-device, operation)` to `(device, operation)` fallback, its own device commands would depend on the entity store being reachable and on the device being registered there, and under a custom topic scheme it is not registered at all (`EntityStore::with_main_device` only ever holds `device/main//`, `agent.rs:409`). A workflow declaring `type = "child-device"` therefore matches nothing yet
+- [x] 2.4 On a failed lookup, do not act and log the failure, so the command is left for a retry rather than half-driven
+- [x] 2.5 Use `(entity_type, operation)` for the workflow lookup in `process_command_message` (`actor.rs:223`) and `apply_external_update` (`persist.rs:401`)
+- [x] 2.6 Test: a command for a service of the own device is driven; a command for a service of another device is ignored; a command for an unregistered entity is ignored; a lookup failure leaves the command untouched
+- [x] 2.7 Test that the same behaviour holds under a custom topic scheme, where the parent relation is only in the entity store
 
 ## 3. `system.toml`: custom action templates
 
