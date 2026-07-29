@@ -23,6 +23,25 @@ pub fn is_c8y_bridge_established(
     }
 }
 
+/// Whether the given message reports that the c8y bridge connection is `up`.
+///
+/// Unlike [`is_c8y_bridge_established`], this requires the connection to actually be up
+/// (not merely a valid `up`/`down` status). This matters for the built-in bridge, whose
+/// cloud connection is the slow half to come up: once it is up, the bridge's local
+/// subscriptions are guaranteed to be in place, so it is safe to publish messages that
+/// must reach the cloud (e.g. the supported operations).
+pub fn is_c8y_bridge_up(
+    message: &MqttMessage,
+    mqtt_schema: &MqttSchema,
+    bridge_service_topic: &Topic,
+) -> bool {
+    if let Ok(health_status) = HealthStatus::try_from_health_status_message(message, mqtt_schema) {
+        &message.topic == bridge_service_topic && health_status.status == Status::Up
+    } else {
+        false
+    }
+}
+
 pub(crate) fn convert_health_status_message(
     mqtt_schema: &MqttSchema,
     entity: &CloudEntityMetadata,
