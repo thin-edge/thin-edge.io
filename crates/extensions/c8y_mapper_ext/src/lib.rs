@@ -14,6 +14,7 @@ pub mod json;
 mod mea;
 mod operations;
 mod serializer;
+pub mod service_command;
 pub mod service_monitor;
 mod signals;
 mod supported_operations;
