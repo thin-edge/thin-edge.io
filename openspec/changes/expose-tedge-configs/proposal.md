@@ -72,8 +72,8 @@ The set never includes secrets (private keys, PINs, credential-file paths).
 ## Capabilities
 
 ### New Capabilities
-- `config-exposure`: opt-in allowlist, retained per-key MQTT topics, key-naming
-  and ownership rules, and the read-only HTTP view served by the agent
+- `config-exposure`: opt-in allowlist, one retained JSON document per service,
+  key-naming and ownership rules, and the read-only HTTP view served by the agent
 
 ### Modified Capabilities
 

@@ -300,9 +300,9 @@ HTTP and MQTT share the same per-service scoping and the same keys:
 
 ```
 te/device/main/service/tedge-agent/config
-  -> {"device.id":"my-device-01","mqtt.client.port":"1883","http.client.port":"8000"}
+  -> {"device.id":"my-device-01","http.client.port":"8000","mqtt.client.port":"1883"}
 te/device/main/service/tedge-mapper-c8y/config
-  -> {"url":"example.cumulocity.com","device.id":"my-device-01"}
+  -> {"device.id":"my-device-01","url":"example.cumulocity.com"}
 te/device/main/service/tedge-mapper-c8y-edge/config
   -> {"url":"edge.c8y.io"}
 ```
