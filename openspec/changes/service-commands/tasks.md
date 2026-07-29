@@ -50,11 +50,12 @@
 
 ## 6. c8y mapper: capabilities to Cumulocity
 
-- [ ] 6.1 In `try_convert_data_message` (`crates/extensions/c8y_mapper_ext/src/converter.rs:1132`), route `Channel::CommandMetadata` for an `EntityType::Service` target to the new service-command handling instead of the per-operation mapping
-- [ ] 6.2 Keep the declared action names per service and register `c8y_ServiceCommand` once per service through `register_operation` (`converter.rs:1328`), which emits SmartREST `114`
-- [ ] 6.3 Publish the uppercased set as `c8y_SupportedServiceCommands` with `inventory_update_message` (`src/inventory.rs:82`), republishing the whole array on every change
-- [ ] 6.4 Handle the empty payload for command metadata on service entities: drop the action from the set and publish the reduced array, without touching anything else covered by issue #2739
-- [ ] 6.5 Test: standard actions uppercased; a custom action passed through; one action withdrawn; all actions withdrawn giving an empty array; the set rebuilt from retained messages after a mapper restart
+- [x] 6.1 In `try_convert_data_message` (`crates/extensions/c8y_mapper_ext/src/converter.rs:1132`), route `Channel::CommandMetadata` for an `EntityType::Service` target to the new service-command handling instead of the per-operation mapping
+- [x] 6.2 Keep the declared action names per service and register `c8y_ServiceCommand` once per service through `register_operation` (`converter.rs:1328`), which emits SmartREST `114`. `register_operation` is called on every newly declared action and only reports to the cloud when the set of supported operations actually changes, so a failed registration is retried by the next action
+- [x] 6.3 Publish the uppercased set as `c8y_SupportedServiceCommands` with `inventory_update_message` (`src/inventory.rs:82`), republishing the whole array on every change
+- [x] 6.4 Handle the empty payload for command metadata on service entities: drop the action from the set and publish the reduced array, without touching anything else covered by issue #2739. `c8y_ServiceCommand` is left registered as a supported operation, even when the array becomes empty
+- [x] 6.4b Do not declare a capability whose action name breaks the rule of 4.3, and log why: Cumulocity would show a command that no lowercasing could route back to that capability topic
+- [x] 6.5 Test: standard actions uppercased; a custom action passed through; one action withdrawn; all actions withdrawn giving an empty array; the set rebuilt from retained messages after a mapper restart
 
 ## 7. c8y mapper: `c8y_ServiceCommand` operation
 
@@ -92,12 +93,17 @@
 `design/decisions/0011-service-commands.md` was written before these decisions.
 Each item below is a place where 0011 no longer matches. Keep it in its own commit.
 
-- [ ] 11.1 Command payload: remove the `command` field from the JSON field list and from both end-to-end examples, and state that the action is named by the topic only
+- [ ] 11.1 Command payload: remove the `action` field from the JSON field list and from both end-to-end examples (0011 names it `action`, not `command`; `command` there is the Cumulocity fragment and stays), and state that the action is named by the topic only
 - [ ] 11.2 Terminology: call the `system.toml` templates and the topic segment **actions**; keep `command` as the Cumulocity word only
 - [ ] 11.3 `system.toml`: replace "requires a small schema extension" with the concrete decision — custom action templates are plain keys of `[init]`, and `deny_unknown_fields` is dropped, with the typo mitigations
-- [ ] 11.4 Executor scoping: replace the note saying the topic filter only works with the default topic scheme with the actual design — subscribe to all entities' commands and resolve the target through the entity store's REST API, which works on child devices too
+- [ ] 11.4 Executor scoping: 0011 says the new subscription "covers only services of the agent's **own** device (`te/device/<own-device>/service/+/cmd/...`)" and then notes that this topic filter only works with the default topic scheme. Replace both with the actual design: the agent subscribes to the commands of every entity and decides per message, so the scope is no longer expressed by the subscription. The target is resolved through the entity store's REST API, except the device the agent runs on, which is recognized by comparing topic identifiers and needs no lookup
 - [ ] 11.5 Exit codes: state them concretely — `0` success, `2` not supported for this service type, other non-zero failure
 - [ ] 11.6 Future consideration "Workflow file naming collision": remove it. The operation name comes from the parsed `operation` field, never from the file name (`persist.rs:132`), so a file may be named anything
-- [ ] 11.7 Capability clearing: state that withdrawal is implemented for command metadata on service entities, and that the rest of issue #2739 is out of scope
+- [ ] 11.7 Capability clearing: state that withdrawal is implemented for command metadata on service entities, and that the rest of issue #2739 is out of scope. Add what stays: `c8y_ServiceCommand` remains a registered supported operation of the service even when the array becomes empty, so Cumulocity still offers the operation with no action to pick
 - [ ] 11.8 Future consideration "Filter the capability to declare to cloud": keep it, and add the concrete case — a service declaring both `cmd/restart` and `cmd/collect_measurements` gets both in `c8y_SupportedServiceCommands` with no way to expose only one
 - [ ] 11.9 Action names: state the rule `[a-z][a-z0-9_]+` where the `cmd/<action>` topic segment is described, and that a name with spaces or mixed case is out of scope even though MQTT topics allow it
+- [ ] 11.10 Workflow `type` values: where 0011 gives `type = "service" # Can take one of the @type values: <device|child-device|service>`, add that the device an agent runs on is matched as `device` whatever `@type` the entity store reports for it, so `child-device` matches nothing today and is reserved for the future case of an agent driving another device's workflows
+- [ ] 11.11 "Nothing is looked up across devices" is no longer true as written: an agent on a child device queries the main device's entity store over HTTP to learn the parent of a service. Reword it as being about execution — no agent executes a command on behalf of another device
+- [ ] 11.12 Why-this-shape: "The workflow engine has no per-entity filtering, so once the agent subscribes, it drives the state machine for *every* service of its device" no longer holds — the agent now filters per message. The sole-driver contract stands, but its reason has to change: the agent deliberately claims every service of its own device, rather than being unable to filter
+- [ ] 11.13 Cumulocity mapping: state that on a service entity **every** `cmd/<action>` capability becomes a service action, so the built-in per-operation mappings (`c8y_Restart`, `c8y_LogfileRequest`, `c8y_UploadConfigFile`, ...) no longer apply to a service. A service declaring `cmd/restart` gets `RESTART` in `c8y_SupportedServiceCommands`, not `c8y_Restart`. Nothing changes for a device
+- [ ] 11.14 Cumulocity mapping: state that a capability whose action name breaks the rule of 11.9 is not declared to the cloud at all, only logged. Cumulocity would show a command whose lowercased name names no capability topic, so it could never be routed back

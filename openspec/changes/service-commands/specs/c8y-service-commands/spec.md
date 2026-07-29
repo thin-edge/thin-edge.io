@@ -6,18 +6,21 @@ When the c8y mapper sees a service declaring at least one `cmd/<action>` capabil
 it SHALL register `c8y_ServiceCommand` as a supported operation of that service,
 using the same supported-operation mechanism it uses today (SmartREST `114`).
 
-This registration SHALL happen without any operation file being placed
-under `/etc/tedge/operations/c8y/<service-external-id>/`,
-so it works for services and child devices,
-whose operation directories are not watched dynamically.
+This registration SHALL NOT require an operation file
+to be provided by the service or by an administrator:
+the mapper SHALL create the supported operation entry itself
+under `/etc/tedge/operations/c8y/<service-external-id>/`
+and SHALL reload that service's operations,
+since the operation directory of a service is not watched for changes.
 
 #### Scenario: A service declaring a command becomes actionable in the cloud
 - **WHEN** a service publishes its first `cmd/<action>` capability
 - **THEN** the mapper SHALL declare `c8y_ServiceCommand` among that service's supported operations
 
-#### Scenario: No operation file is required
+#### Scenario: No operation file has to be provided
 - **WHEN** a service declares its capabilities over MQTT only
-- **THEN** the mapper SHALL register the supported operation without any operation file on disk
+- **THEN** the mapper SHALL register the supported operation on its own,
+  with nothing to install beforehand
 
 ### Requirement: The mapper aggregates declared commands into c8y_SupportedServiceCommands
 
@@ -27,6 +30,7 @@ on the service's managed object, through an inventory update over the JSON over 
 
 Command names SHALL be uppercased, following the Cumulocity convention.
 Custom command names SHALL be passed through unchanged apart from the case mapping.
+The array SHALL be sorted, so that the same set of commands always gives the same array.
 
 The array SHALL be re-published whenever the set of declared commands changes.
 When a capability topic is cleared, the mapper SHALL drop that command from the set
@@ -36,7 +40,7 @@ so the mapper SHALL rebuild the full set and SHALL NOT lose a previously declare
 
 #### Scenario: Standard commands are published in uppercase
 - **WHEN** a service declares `cmd/start`, `cmd/stop` and `cmd/restart`
-- **THEN** the mapper SHALL set `{"c8y_SupportedServiceCommands": ["START", "STOP", "RESTART"]}`
+- **THEN** the mapper SHALL set `{"c8y_SupportedServiceCommands": ["RESTART", "START", "STOP"]}`
   on that service's managed object
 
 #### Scenario: A custom command is passed through
