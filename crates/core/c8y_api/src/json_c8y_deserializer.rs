@@ -40,6 +40,7 @@ pub enum C8yDeviceControlOperation {
     DownloadConfigFile(C8yDownloadConfigFile),
     Firmware(C8yFirmware),
     DeviceProfile(C8yDeviceProfile),
+    ServiceCommand(C8yServiceCommand),
     Custom,
 }
 
@@ -69,6 +70,10 @@ impl C8yDeviceControlOperation {
             C8yDeviceControlOperation::Firmware(C8yFirmware::from_json_value(value.clone())?)
         } else if let Some(value) = hashmap.get("c8y_DeviceProfile") {
             C8yDeviceControlOperation::DeviceProfile(C8yDeviceProfile::from_json_value(
+                value.clone(),
+            )?)
+        } else if let Some(value) = hashmap.get("c8y_ServiceCommand") {
+            C8yDeviceControlOperation::ServiceCommand(C8yServiceCommand::from_json_value(
                 value.clone(),
             )?)
         } else {
@@ -163,6 +168,45 @@ impl C8yOperation {
 /// ```
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct C8yRestart {}
+
+/// Representation of c8y_ServiceCommand JSON object
+///
+/// This is the single operation triggering any action of a service.
+/// The action to run is named by `command`, uppercased by the Cumulocity convention.
+///
+/// ```rust
+/// use c8y_api::json_c8y_deserializer::C8yServiceCommand;
+///
+/// // Example input from c8y
+/// let data = r#"{
+///     "command": "RESTART",
+///     "serviceName": "collectd",
+///     "serviceType": "container"
+/// }"#;
+///
+/// // Parse the data
+/// let req: C8yServiceCommand = serde_json::from_str(data).unwrap();
+///
+/// assert_eq!(req.command, "RESTART");
+/// assert_eq!(req.service_name.as_deref(), Some("collectd"));
+/// assert_eq!(req.service_type.as_deref(), Some("container"));
+/// ```
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct C8yServiceCommand {
+    /// The action to run on the service
+    pub command: String,
+
+    /// The name Cumulocity displays for the target service
+    ///
+    /// This can be a display name, so it names no service for a backend running an action.
+    #[serde(default)]
+    pub service_name: Option<String>,
+
+    /// The type of the target service, telling which backend can run the action
+    #[serde(default)]
+    pub service_type: Option<String>,
+}
 
 /// Representation of c8y_SoftwareUpdate JSON object
 ///
@@ -573,6 +617,8 @@ impl C8yDeviceControlOperationHelper for C8yDownloadConfigFile {}
 impl C8yDeviceControlOperationHelper for C8yFirmware {}
 
 impl C8yDeviceControlOperationHelper for C8yDeviceProfile {}
+
+impl C8yDeviceControlOperationHelper for C8yServiceCommand {}
 
 #[derive(thiserror::Error, Debug)]
 pub enum C8yJsonOverMqttDeserializerError {

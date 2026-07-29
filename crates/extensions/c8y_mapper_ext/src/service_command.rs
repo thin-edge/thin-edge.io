@@ -9,13 +9,25 @@
 //! command `RESTART`, not the device operation `c8y_Restart`.
 
 use crate::converter::CumulocityConverter;
+use crate::entity_cache::CloudEntityMetadata;
 use crate::error::ConversionError;
+use c8y_api::json_c8y_deserializer::C8yServiceCommand;
+use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
+use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_id;
+use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
+use c8y_api::smartrest::topic::C8yTopic;
 use serde_json::json;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use tedge_api::entity::EntityExternalId;
+use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::service_command::validate_action_name;
+use tedge_api::service_command::DEFAULT_SERVICE_TYPE;
+use tedge_api::workflow::GenericCommandState;
+use tedge_api::CommandStatus;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 use tracing::warn;
@@ -136,6 +148,117 @@ impl CumulocityConverter {
 
         Ok(messages)
     }
+
+    /// Convert a `c8y_ServiceCommand` operation into the thin-edge command of a service.
+    ///
+    /// The action to run is named by the topic of the published command and nowhere else.
+    /// Cumulocity uppercases a command name by convention, so lowercasing the name it sends gives
+    /// back the action name the service declared.
+    ///
+    /// No command is published when the operation cannot be honored. The cloud operation is failed
+    /// instead, since no thin-edge command would ever report a status for it.
+    pub(crate) fn convert_service_command_request(
+        &self,
+        device_xid: String,
+        cmd_id: String,
+        op_id: &str,
+        request: C8yServiceCommand,
+    ) -> Vec<MqttMessage> {
+        let target_xid: EntityExternalId = device_xid.into();
+        let target = match self.entity_cache.try_get_by_external_id(&target_xid) {
+            Ok(target) => target,
+            Err(err) => return self.fail_service_command(None, op_id, &err.to_string()),
+        };
+
+        let action = request.command.to_lowercase();
+        if let Err(err) = validate_action_name(&action) {
+            let reason = format!(
+                "{} cannot run the command '{}': {err}",
+                target_xid.as_ref(),
+                request.command
+            );
+            return self.fail_service_command(Some(target), op_id, &reason);
+        }
+        if !self.service_commands.declares(target.topic_id(), &action) {
+            let reason = format!(
+                "{} has not declared the '{action}' action",
+                target_xid.as_ref()
+            );
+            return self.fail_service_command(Some(target), op_id, &reason);
+        }
+
+        // The name the backend running the action knows, which is not the name Cumulocity sends:
+        // that one can be a display name
+        let service_name = target
+            .topic_id()
+            .default_service_name()
+            .unwrap_or_else(|| target.display_name());
+
+        // The type selects the backend, so what the service registered itself with wins. The value
+        // Cumulocity sends is only used for a service registered with no type of its own.
+        let service_type = target
+            .registered_type()
+            .or_else(|| {
+                request
+                    .service_type
+                    .as_deref()
+                    .filter(|service_type| !service_type.is_empty())
+            })
+            .unwrap_or(DEFAULT_SERVICE_TYPE);
+
+        let topic = self.mqtt_schema.topic_for(
+            target.topic_id(),
+            &Channel::Command {
+                operation: action.as_str().into(),
+                cmd_id,
+            },
+        );
+        let payload = json!({
+            "serviceName": service_name,
+            "serviceType": service_type,
+        });
+        let command = GenericCommandState::new(topic, CommandStatus::Init.to_string(), payload)
+            .into_message();
+
+        vec![command]
+    }
+
+    /// Tell Cumulocity that a service command failed, no command being published for it.
+    ///
+    /// The failure is reported on the topic of the target service, or on the topic of the main
+    /// device when the target itself could not be resolved.
+    fn fail_service_command(
+        &self,
+        target: Option<&CloudEntityMetadata>,
+        op_id: &str,
+        reason: &str,
+    ) -> Vec<MqttMessage> {
+        error!("Rejecting a {C8Y_SERVICE_COMMAND} operation: {reason}");
+
+        let prefix = &self.config.bridge_config.c8y_prefix;
+        let topic = target
+            .and_then(|target| {
+                C8yTopic::smartrest_response_topic(&target.external_id, &target.r#type(), prefix)
+            })
+            .unwrap_or_else(|| C8yTopic::upstream_topic(prefix));
+
+        let (executing, failed) = if self.config.smartrest_use_operation_id {
+            (
+                set_operation_executing_with_id(op_id),
+                fail_operation_with_id(op_id, reason),
+            )
+        } else {
+            (
+                set_operation_executing_with_name(C8Y_SERVICE_COMMAND),
+                fail_operation_with_name(C8Y_SERVICE_COMMAND, reason),
+            )
+        };
+
+        vec![
+            MqttMessage::new(&topic, executing),
+            MqttMessage::new(&topic, failed),
+        ]
+    }
 }
 
 #[cfg(test)]
@@ -148,10 +271,17 @@ mod tests {
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
     use tedge_test_utils::fs::TempTedgeDir;
+    use test_case::test_case;
 
+    const SERVICE_XID: &str = "test-device:device:main:service:collectd";
     const SMARTREST_TOPIC: &str = "c8y/s/us/test-device:device:main:service:collectd";
     const INVENTORY_TOPIC: &str =
         "c8y/inventory/managedObjects/update/test-device:device:main:service:collectd";
+
+    /// The Cumulocity id of the operation triggered by the tests, and the command topic it gives
+    const OPERATION_ID: &str = "16574089";
+    const RESTART_CMD_TOPIC: &str =
+        "te/device/main/service/collectd/cmd/restart/c8y-mapper-16574089";
 
     #[tokio::test]
     async fn declared_actions_are_published_in_uppercase() {
@@ -325,6 +455,152 @@ mod tests {
                 ),
             ],
         );
+    }
+
+    #[tokio::test]
+    async fn a_declared_action_becomes_a_command_of_the_service() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "restart").await;
+
+        // The action is the lowercased command name, and it is named by the topic only
+        assert_messages_matching(
+            &trigger(&mut converter, json!({"command": "RESTART"})).await,
+            [(
+                RESTART_CMD_TOPIC,
+                json!({
+                    "status": "init",
+                    "serviceName": "collectd",
+                    "serviceType": "service",
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
+    async fn the_type_of_the_registration_wins_over_the_type_of_the_payload() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_typed_service(&mut converter, json!({"type": "container"})).await;
+        declare(&mut converter, "restart").await;
+
+        // The type selects the backend running the action, so the local truth wins
+        assert_messages_matching(
+            &trigger(
+                &mut converter,
+                json!({"command": "RESTART", "serviceType": "systemd"}),
+            )
+            .await,
+            [(
+                RESTART_CMD_TOPIC,
+                json!({
+                    "status": "init",
+                    "serviceName": "collectd",
+                    "serviceType": "container",
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
+    async fn the_type_of_the_payload_is_used_when_the_service_registered_none() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "restart").await;
+
+        assert_messages_matching(
+            &trigger(
+                &mut converter,
+                json!({"command": "RESTART", "serviceType": "container"}),
+            )
+            .await,
+            [(
+                RESTART_CMD_TOPIC,
+                json!({
+                    "status": "init",
+                    "serviceName": "collectd",
+                    "serviceType": "container",
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
+    async fn the_name_of_the_service_is_never_a_display_name() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_typed_service(&mut converter, json!({"name": "Collectd Daemon"})).await;
+        declare(&mut converter, "restart").await;
+
+        // Neither the name displayed by Cumulocity nor the one displayed on the service twin
+        // names the service for the backend running the action
+        assert_messages_matching(
+            &trigger(
+                &mut converter,
+                json!({"command": "RESTART", "serviceName": "Collectd Daemon"}),
+            )
+            .await,
+            [(
+                RESTART_CMD_TOPIC,
+                json!({
+                    "status": "init",
+                    "serviceName": "collectd",
+                    "serviceType": "service",
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unresolvable_target_fails_the_operation() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "restart").await;
+
+        // Nothing is known of that target, so the failure is reported on the main device topic
+        let messages = trigger_on(
+            &mut converter,
+            "unknown-service",
+            json!({"command": "RESTART"}),
+        )
+        .await;
+
+        assert_operation_failed(&messages, "c8y/s/us", "unknown-service");
+    }
+
+    #[tokio::test]
+    async fn an_undeclared_action_fails_the_operation() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "start").await;
+
+        let messages = trigger(&mut converter, json!({"command": "RESTART"})).await;
+
+        assert_operation_failed(&messages, SMARTREST_TOPIC, "has not declared the 'restart'");
+    }
+
+    #[test_case(json!({"command": ""}); "empty")]
+    #[test_case(json!({"command": "do something"}); "with a space")]
+    #[test_case(json!({"command": "RESTART-NOW"}); "with a dash")]
+    #[tokio::test]
+    async fn a_command_naming_no_action_fails_the_operation(request: serde_json::Value) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "restart").await;
+
+        // Lowercasing such a name gives no action name, so it names no capability topic either
+        let messages = trigger(&mut converter, request).await;
+
+        assert_operation_failed(&messages, SMARTREST_TOPIC, "Invalid action name");
     }
 
     async fn register_service(converter: &mut CumulocityConverter) {

@@ -2786,6 +2786,138 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
 }
 
 #[tokio::test]
+async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
+        "{}",
+    ))
+    .await
+    .unwrap();
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+            "id": "1234",
+            "status": "PENDING",
+            "c8y_ServiceCommand": {
+                "command": "RESTART",
+                "serviceName": "collectd",
+                "serviceType": "service"
+            },
+            "externalSource": {
+                "externalId": "test-device:device:main:service:collectd",
+                "type": "c8y_Serial"
+            }
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
+
+    let topic = Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/c8y-mapper-1234");
+    assert_received_contains_str(&mut mqtt, [(topic.name.as_str(), r#""status":"init""#)]).await;
+
+    mqtt.send(MqttMessage::new(
+        &topic,
+        json!({"status": "executing"}).to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:main:service:collectd",
+            "501,c8y_ServiceCommand",
+        )],
+    )
+    .await;
+
+    mqtt.send(MqttMessage::new(
+        &topic,
+        json!({"status": "successful"}).to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:main:service:collectd",
+            "503,c8y_ServiceCommand",
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn a_failed_service_command_is_reported_with_its_reason() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
+        "{}",
+    ))
+    .await
+    .unwrap();
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+            "id": "1234",
+            "status": "PENDING",
+            "c8y_ServiceCommand": {"command": "RESTART"},
+            "externalSource": {
+                "externalId": "test-device:device:main:service:collectd",
+                "type": "c8y_Serial"
+            }
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
+
+    let command =
+        Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/c8y-mapper-1234");
+    assert_received_contains_str(&mut mqtt, [(command.name.as_str(), r#""status":"init""#)]).await;
+
+    mqtt.send(MqttMessage::new(
+        &command,
+        json!({"status": "failed", "reason": "failed with reason"}).to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:main:service:collectd",
+            "502,c8y_ServiceCommand,The 'restart' action failed: failed with reason",
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;

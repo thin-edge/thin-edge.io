@@ -6,6 +6,7 @@ use camino::Utf8PathBuf;
 use std::process::Stdio;
 use tedge_api::service_command::validate_action_name;
 use tedge_api::service_command::InvalidActionName;
+use tedge_api::service_command::DEFAULT_SERVICE_TYPE;
 use tedge_api::workflow::BEGIN_TEDGE_MARKER;
 use tedge_api::workflow::END_TEDGE_MARKER;
 use tedge_config::TEdgeConfig;
@@ -14,7 +15,7 @@ use tedge_system_services::SystemService;
 use tedge_system_services::SystemServiceError;
 
 /// The service type handled by the init system, rather than by a service plugin.
-const INIT_SERVICE_TYPE: &str = "service";
+const INIT_SERVICE_TYPE: &str = DEFAULT_SERVICE_TYPE;
 
 /// The exit code telling the caller that the action is not supported for that service type,
 /// as opposed to an action that was run and failed. Same meaning as for the diag plugins.

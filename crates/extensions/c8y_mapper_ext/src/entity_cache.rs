@@ -88,6 +88,10 @@ impl CloudEntityMetadata {
             .unwrap_or_else(|| self.external_id.as_ref())
     }
 
+    pub fn registered_type(&self) -> Option<&str> {
+        self.metadata.display_type()
+    }
+
     pub fn display_type(&self) -> &str {
         self.metadata
             .display_type()

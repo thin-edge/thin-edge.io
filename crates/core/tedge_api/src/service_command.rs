@@ -8,6 +8,12 @@
 /// The longest accepted action name.
 const MAX_ACTION_NAME_LEN: usize = 64;
 
+/// The type given to a service which is managed by the init system.
+///
+/// This is the type `tedge service` assumes when none is given, and the type the c8y mapper
+/// puts in a command when the target service was registered without a type.
+pub const DEFAULT_SERVICE_TYPE: &str = "service";
+
 /// Tells whether a name can be used as a service command action.
 ///
 /// A name is a single lowercase token: `[a-z][a-z0-9_]+`, of bounded length.

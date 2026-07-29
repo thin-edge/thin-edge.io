@@ -76,7 +76,9 @@ For a valid operation, the mapper SHALL publish a thin-edge command with:
   The action is named by the topic only;
   the mapper SHALL NOT copy the cloud's `command` value into the thin-edge payload;
 - `serviceName` derived from the resolved entity topic identifier, not from the cloud payload,
-  since the cloud value may be a display name;
+  since the cloud value may be a display name.
+  A custom topic scheme carries no service name in the topic identifier,
+  in which case the name given at registration is used;
 - `serviceType` taken from the service's registration data,
   falling back to the `serviceType` value in the operation payload,
   and to the default type `service` when the service was registered without a type;
@@ -113,6 +115,9 @@ and SHALL NOT publish any thin-edge command, when:
 - the lowercased `command` value does not match the action name rule `[a-z][a-z0-9_]+`,
   which is what `tedge service` accepts.
 
+The failure SHALL be reported on the SmartREST topic of the target service,
+or on the topic of the main device when the target itself cannot be resolved.
+
 #### Scenario: The target cannot be resolved
 - **WHEN** the operation's external id matches no known entity
 - **THEN** the mapper SHALL fail the operation with a reason naming the unresolvable target
@@ -133,9 +138,14 @@ and SHALL NOT publish any thin-edge command, when:
 ### Requirement: The mapper reports the service command status back to Cumulocity
 
 The c8y mapper SHALL report the state of a service command to Cumulocity
-using the existing command status mapping (SmartREST `501` to `506`),
-which already covers commands addressed to service entities.
-No separate status handling SHALL be introduced for service commands.
+with the existing command status mapping (SmartREST `501` to `506`),
+on the SmartREST topic of the service.
+
+The operation reported SHALL be `c8y_ServiceCommand`,
+decided by the target being a service and not by the name of the action.
+A service action is not the device operation its name would otherwise map to:
+reporting the status of the `restart` command of a service as `c8y_Restart`
+would name an operation that Cumulocity never created.
 
 #### Scenario: A successful command is reported
 - **WHEN** the service command reaches `successful`
@@ -144,3 +154,7 @@ No separate status handling SHALL be introduced for service commands.
 #### Scenario: A failed command is reported with its reason
 - **WHEN** the service command reaches `failed` with a reason
 - **THEN** the mapper SHALL mark the Cumulocity operation as failed and SHALL include that reason
+
+#### Scenario: An action named as a device operation stays a service command
+- **WHEN** the `restart` command of a service reaches `executing`
+- **THEN** the mapper SHALL report `c8y_ServiceCommand` as executing, and not `c8y_Restart`
