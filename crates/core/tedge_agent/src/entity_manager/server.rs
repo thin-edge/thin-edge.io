@@ -55,8 +55,8 @@ pub enum EntityStoreResponse {
     SetTwinFragment(Result<bool, entity_store::Error>),
     GetTwinFragments(Result<Map<String, Value>, entity_store::Error>),
     SetTwinFragments(Result<(), entity_store::Error>),
-    GetConfig(Result<BTreeMap<String, String>, entity_store::Error>),
-    GetConfigValue(Option<String>),
+    GetConfig(Result<BTreeMap<String, Value>, entity_store::Error>),
+    GetConfigValue(Result<Option<Value>, entity_store::Error>),
 }
 
 pub struct EntityStoreServer {
@@ -177,7 +177,7 @@ impl Server for EntityStoreServer {
             }
             EntityStoreRequest::GetConfigValue(topic_id, key) => {
                 let value = self.entity_store.get_config_value(&topic_id, &key);
-                EntityStoreResponse::GetConfigValue(value.cloned())
+                EntityStoreResponse::GetConfigValue(value.map(|v| v.cloned()))
             }
         }
     }
@@ -263,14 +263,13 @@ impl EntityStoreServer {
                 let twin_message = EntityTwinMessage::new(topic_id, fragment_key, fragment_value);
                 self.entity_store.update_twin_fragment(twin_message)?;
             }
-            Channel::Config { key } => {
-                if message.payload().is_empty() {
-                    self.entity_store.clear_config_value(&topic_id, &key)?;
+            Channel::Config => {
+                let config = if message.payload().is_empty() {
+                    BTreeMap::new()
                 } else {
-                    let value = message.payload_str().unwrap_or_default().to_string();
-                    self.entity_store
-                        .ingest_config_value(&topic_id, key, value)?;
-                }
+                    serde_json::from_slice(message.payload_bytes())?
+                };
+                self.entity_store.set_config(&topic_id, config)?;
             }
             _ => {}
         }

@@ -437,7 +437,7 @@ so that it can process them.
 | Events        | `te/<identifier>/e/<event-type>`       |
 | Alarms        | `te/<identifier>/a/<alarm-type>`       |
 | Twin          | `te/<identifier>/twin/<data-type>`     |
-| Configuration | `te/<identifier>/config/<key>`         |
+| Configuration | `te/<identifier>/config`               |
 | Status        | `te/<identifier>/status/<target-type>` |
 
 ### Examples: With default device/service topic semantics
@@ -564,32 +564,75 @@ te/device/main///twin/device_OS
 
 ## Configuration
 
-A service that owns a `tedge_config` setting (`tedge-agent` for core/device settings, each cloud
-mapper for its own cloud's settings) publishes any setting explicitly marked exposable as a retained
-`config` message under its own service topic, one message per value:
+Each %%te%% service publishes a subset of its configuration on its own `config` topic,
+so that other clients can read those settings without access to the configuration files:
 
 ```text
-te/<service-identifier>/config/<key>
+te/<service-topic-id>/config
 ```
 
-`<key>` is the setting's `tedge config` key, kept as a single topic segment (not split on its `.`s), so
-it maps directly back to a `tedge config get <key>` invocation. A mapper strips its own cloud (and
-profile) qualifier from the key, since the service topic already scopes it: `c8y.url` is published as
-`url` under `.../service/tedge-mapper-c8y/config/url`.
+* `te/device/main/service/tedge-agent/config`: the core device settings from `tedge.toml`
+* `te/device/main/service/tedge-mapper-<cloud>/config`: cloud connection settings from `mapper.toml`
+
+The whole set is published as a single JSON document, as a retained message.
+Each field name is the corresponding `tedge config` key:
+the agent publishes `device.id` as `device.id`.
+
+For mapper configs that contains the cloud/profile prefixes like `c8y.url`,
+the mapper strips the cloud and profile prefix from the key
+as the service topic already contains that information (e.g: `tedge-mapper-c8y`).
+So the Cumulocity mapper publishes both `c8y.url`
+and `c8y.profiles.<profile>.url` as just `url`.
+
+:::note
+Only the settings that are explicitly marked as exposable are published.
+Secrets, such as private keys, PINs and credential file paths, are never published,
+and neither are internal settings.
+:::
+
+A service publishes its `config` message on startup,
+reflecting the configuration it was started with
+rather than the current contents of the configuration files.
+As a configuration change takes effect only when the service is restarted,
+the updated values are published on that same restart.
+
+The `config` values are also served over HTTP by the agent,
+including a single-key lookup that has no MQTT equivalent.
+See the [Entity Store REST API](../operate/entity-management/rest_api.md#get-exposed-configuration).
+
+### Examples
+
+#### tedge-agent configuration
 
 ```text title="Topic (retain=true)"
-te/device/main/service/tedge-agent/config/device.id
+te/device/main/service/tedge-agent/config
 ```
 
-```text title="Payload"
-my-device-01
+```json5 title="Payload"
+{
+  "device.id": "my-device-01",
+  "http.client.port": 8000,
+  "mqtt.client.port": 1883,
+  // ... other settings
+}
 ```
 
-An empty payload means the value is unset, or was removed from configuration since the last time the
-owning service started. A setting is only published this way if it was explicitly marked exposable
-where it is defined; unmarked settings, including any secret (a private key, a PIN, a credential file
-path), are never published. See the [Entity Store REST API](../operate/entity-management/rest_api.md)
-for a read-only HTTP view of the same values.
+#### tedge-mapper-c8y configuration
+
+```text title="Topic (retain=true)"
+te/device/main/service/tedge-mapper-c8y/config
+```
+
+```json5 title="Payload"
+{
+  "url": "example.cumulocity.com",
+  "device.id": "my-device-01",
+  "auth_method": "certificate",
+  "enable.log_upload": true,
+  "smartrest.templates": ["1234", "5678"],
+  // ... other settings
+}
+```
 
 ## Commands
 

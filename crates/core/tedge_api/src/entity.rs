@@ -75,9 +75,11 @@ pub struct EntityMetadata {
     pub twin_data: Map<String, JsonValue>,
 
     /// Exposable configuration values collected from this entity's own retained
-    /// `config/<key>` MQTT topics, keyed by configuration key.
+    /// `config` MQTT topic, keyed by configuration key. Each value keeps the type
+    /// the setting has in `tedge.toml`, so a port stays a number and a flag stays
+    /// a boolean.
     #[serde(skip)]
-    pub config: BTreeMap<String, String>,
+    pub config: BTreeMap<String, JsonValue>,
 }
 
 impl EntityMetadata {

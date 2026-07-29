@@ -223,43 +223,43 @@ async fn clear_entity_twin_data() {
 }
 
 #[tokio::test]
-async fn config_value_ingested_from_mqtt() {
+async fn config_message_payload_is_stored_as_entity_config() {
     let handle = entity::server("device-under-test");
     let mut entity_store = handle.entity_store;
 
     entity_store
-        .process_mqtt_message(
-            MqttMessage::from(("te/device/main///config/device.id", "my-device")).with_retain(),
-        )
+        .process_mqtt_message(MqttMessage::from((
+            "te/device/main///config",
+            r#"{"device.id":"my-device"}"#,
+        )))
         .await;
 
     let topic_id = "device/main//".parse::<EntityTopicId>().unwrap();
     assert_eq!(
         entity_store.get(&topic_id).unwrap().config.get("device.id"),
-        Some(&"my-device".to_string())
+        Some(&json!("my-device"))
     );
 }
 
 #[tokio::test]
-async fn empty_payload_clears_config_value() {
+async fn empty_payload_clears_the_config_document() {
     let handle = entity::server("device-under-test");
     let mut entity_store = handle.entity_store;
 
     entity_store
-        .process_mqtt_message(
-            MqttMessage::from(("te/device/main///config/device.id", "my-device")).with_retain(),
-        )
+        .process_mqtt_message(MqttMessage::from((
+            "te/device/main///config",
+            r#"{"device.id":"my-device"}"#,
+        )))
         .await;
     let topic_id = "device/main//".parse::<EntityTopicId>().unwrap();
     assert_eq!(
         entity_store.get(&topic_id).unwrap().config.get("device.id"),
-        Some(&"my-device".to_string())
+        Some(&json!("my-device"))
     );
 
     entity_store
-        .process_mqtt_message(
-            MqttMessage::from(("te/device/main///config/device.id", "")).with_retain(),
-        )
+        .process_mqtt_message(MqttMessage::from(("te/device/main///config", "")))
         .await;
     assert_eq!(
         entity_store.get(&topic_id).unwrap().config.get("device.id"),
@@ -268,7 +268,40 @@ async fn empty_payload_clears_config_value() {
 }
 
 #[tokio::test]
-async fn deregistering_entity_clears_retained_config_topics() {
+async fn malformed_config_payload_does_not_change_the_stored_document() {
+    let handle = entity::server("device-under-test");
+    let mut entity_store = handle.entity_store;
+
+    entity_store
+        .process_mqtt_message(MqttMessage::from((
+            "te/device/main///config",
+            r#"{"device.id":"my-device"}"#,
+        )))
+        .await;
+
+    // None of these are a JSON object, so all must be ignored rather than panicking or
+    // clearing the previously ingested document.
+    for payload in [
+        "not json",
+        r#"["a", "b"]"#,
+        r#""not an object""#,
+        "true",
+        "2",
+    ] {
+        entity_store
+            .process_mqtt_message(MqttMessage::from(("te/device/main///config", payload)))
+            .await;
+    }
+
+    let topic_id = "device/main//".parse::<EntityTopicId>().unwrap();
+    assert_eq!(
+        entity_store.get(&topic_id).unwrap().config.get("device.id"),
+        Some(&json!("my-device"))
+    );
+}
+
+#[tokio::test]
+async fn deregistering_entity_clears_the_retained_config_topic() {
     let handle = entity::server("device-under-test");
     let (mut entity_store, mut mqtt_input, mut mqtt_output) =
         (handle.entity_store, handle.mqtt_input, handle.mqtt_output);
@@ -281,23 +314,22 @@ async fn deregistering_entity_clears_retained_config_topics() {
     )
     .await
     .unwrap();
-    mqtt_output.skip(1).await; // Skip the registration message
 
-    // Simulate a retained config value published by the entity's owning component
     mqtt_input
-        .send(MqttMessage::from(("te/device/child0///config/device.id", "child-0")).with_retain())
+        .send(
+            MqttMessage::from(("te/device/child0///config", r#"{"device.id":"child-0"}"#))
+                .with_retain(),
+        )
         .await
         .unwrap();
-    mqtt_output.skip(1).await;
 
     entity::delete_entity(&mut entity_store, "device/child0//")
         .await
         .unwrap();
 
     mqtt_output
-        .assert_received([
-            MqttMessage::from(("te/device/child0///config/device.id", "")).with_retain(),
-            MqttMessage::from(("te/device/child0//", "")).with_retain(),
+        .assert_received_unordered([
+            MqttMessage::from(("te/device/child0///config", "")).with_retain()
         ])
         .await;
 }

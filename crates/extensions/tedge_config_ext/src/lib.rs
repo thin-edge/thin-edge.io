@@ -1,6 +1,6 @@
-//! A shared actor that publishes a component's own exposable configuration values as retained
-//! MQTT messages, one per value, under the component's own service topic, and corrects them if
-//! externally overwritten.
+//! A shared actor that publishes a component's own exposable configuration values as a single
+//! retained JSON message under the component's own service topic, and corrects it if externally
+//! overwritten.
 //!
 //! Used by `tedge-agent` (for core configuration) and each cloud mapper (for its own cloud's
 //! configuration), so that the topic construction, retain flag, and reconciliation logic exist
@@ -12,6 +12,7 @@ mod actor;
 mod tests;
 
 use actor::ConfigPublisherActor;
+use serde_json::Value;
 use std::convert::Infallible;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -31,19 +32,16 @@ use tedge_mqtt_ext::TopicFilter;
 pub struct ConfigPublisherBuilder {
     mqtt_schema: MqttSchema,
     service_topic_id: ServiceTopicId,
-    exposed_config: Vec<(String, Option<String>)>,
+    exposed_config: Vec<(String, Option<Value>)>,
     box_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     mqtt_publisher: LoggingSender<MqttMessage>,
 }
 
 impl ConfigPublisherBuilder {
-    /// Creates a builder that will publish `exposed_config` — every exposable (key, value) pair
-    /// in the owning component's scope, with `None` for a key that is exposable but currently
-    /// unset — under `service_topic_id`'s own `config/<key>` topics.
     pub fn new(
         mqtt_schema: MqttSchema,
         service_topic_id: ServiceTopicId,
-        exposed_config: Vec<(String, Option<String>)>,
+        exposed_config: Vec<(String, Option<Value>)>,
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Self {
         let mqtt_publisher = LoggingSender::new(

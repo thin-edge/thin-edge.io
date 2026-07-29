@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use std::collections::HashMap;
+use serde_json::Value;
+use std::collections::BTreeMap;
 use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
 use tedge_actors::MessageReceiver;
@@ -16,13 +17,7 @@ use tracing::error;
 pub struct ConfigPublisherActor {
     mqtt_schema: MqttSchema,
     service_topic_id: ServiceTopicId,
-    /// Every exposable key in scope, with the value to publish at startup (or `None` to clear
-    /// any stale retained message left over from a previous run).
-    initial_config: Vec<(String, Option<String>)>,
-    /// The expected value for each key that is currently exposed and set. A key that is exposed
-    /// but unset, or not in the exposed set at all, has no entry here, and its expected state is
-    /// "absent" (i.e. no retained message).
-    expected: HashMap<String, String>,
+    config: BTreeMap<String, Value>,
     messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     mqtt_publisher: LoggingSender<MqttMessage>,
 }
@@ -31,20 +26,19 @@ impl ConfigPublisherActor {
     pub fn new(
         mqtt_schema: MqttSchema,
         service_topic_id: ServiceTopicId,
-        exposed_config: Vec<(String, Option<String>)>,
+        exposed_config: Vec<(String, Option<Value>)>,
         messages: SimpleMessageBox<MqttMessage, MqttMessage>,
         mqtt_publisher: LoggingSender<MqttMessage>,
     ) -> Self {
-        let expected = exposed_config
-            .iter()
-            .filter_map(|(key, value)| Some((key.clone(), value.clone()?)))
+        let config = exposed_config
+            .into_iter()
+            .filter_map(|(key, value)| Some((key, value?)))
             .collect();
 
         Self {
             mqtt_schema,
             service_topic_id,
-            initial_config: exposed_config,
-            expected,
+            config,
             messages,
             mqtt_publisher,
         }
@@ -58,14 +52,7 @@ impl Actor for ConfigPublisherActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        // Startup pass: publish every exposable key in scope, clearing any that are unset. This
-        // is required even for keys the reconciliation loop below could otherwise handle, since
-        // reconciliation only reacts to messages it receives, and a brand new key has no retained
-        // message yet to react to.
-        let initial_config = std::mem::take(&mut self.initial_config);
-        for (key, value) in initial_config {
-            self.publish_config_value(&key, value.as_deref()).await;
-        }
+        self.publish_current_config().await;
 
         while let Some(message) = self.messages.recv().await {
             self.reconcile(message).await;
@@ -76,45 +63,37 @@ impl Actor for ConfigPublisherActor {
 }
 
 impl ConfigPublisherActor {
-    /// Reconciles a message received on this actor's own `config/+` topics against the expected
-    /// state for that key: republishes a diverged (or wrongly-cleared) owned value, clears a
-    /// retained message for a key that is no longer exposed (renamed, removed, or demoted), and
-    /// otherwise does nothing, so the actor's own echo does not trigger a further action.
+    /// Reconciles a message received on this actor's own `config` topic against the expected
+    /// JSON object, republishing it whenever the retained payload doesn't match. Because the
+    /// whole document is replaced as a unit rather than patched key by key, this same
+    /// comparison also clears a stale key left behind by a rename, removal, or demotion — it is
+    /// simply absent from the republished object.
     async fn reconcile(&mut self, message: MqttMessage) {
-        let Ok((_, Channel::Config { key })) = self.mqtt_schema.entity_channel_of(&message.topic)
-        else {
-            return;
-        };
-        let payload = message.payload_str().unwrap_or_default();
-
-        match self.expected.get(&key).cloned() {
-            Some(expected_value) if payload != expected_value => {
-                self.publish_config_value(&key, Some(&expected_value)).await;
-            }
-            None if !payload.is_empty() => {
-                self.publish_config_value(&key, None).await;
-            }
-            _ => {
-                // The payload already matches the expected state: either it is the owned value
-                // this actor just published, or it is an empty payload on a key that has no
-                // expected value at all. Either way, no action is taken.
-            }
+        let channel = self.mqtt_schema.entity_channel_of(&message.topic);
+        if matches!(channel, Ok((_, Channel::Config)))
+            && !self.payload_matches_expected(message.payload_bytes())
+        {
+            self.publish_current_config().await;
         }
     }
 
-    async fn publish_config_value(&mut self, key: &str, value: Option<&str>) {
-        let topic = self.mqtt_schema.topic_for(
-            self.service_topic_id.entity(),
-            &Channel::Config {
-                key: key.to_string(),
-            },
-        );
-        let message = MqttMessage::new(&topic, value.unwrap_or(""))
+    fn payload_matches_expected(&self, payload: &[u8]) -> bool {
+        serde_json::from_slice::<BTreeMap<String, Value>>(payload)
+            .is_ok_and(|received| received == self.config)
+    }
+
+    async fn publish_current_config(&mut self) {
+        let topic = self
+            .mqtt_schema
+            .topic_for(self.service_topic_id.entity(), &Channel::Config);
+        let payload =
+            serde_json::to_string(&self.config).expect("a map of JSON values always serializes");
+        let message = MqttMessage::new(&topic, payload)
             .with_retain()
             .with_qos(QoS::AtLeastOnce);
 
         if let Err(err) = self.mqtt_publisher.send(message).await {
-            error!("Failed to publish the config value for '{key}' due to {err}");
+            error!("Failed to publish the config document due to {err}");
         }
     }
 }
