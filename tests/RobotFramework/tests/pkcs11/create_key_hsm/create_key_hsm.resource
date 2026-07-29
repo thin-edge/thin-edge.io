@@ -75,12 +75,14 @@ Set key ID using --id flag
     ...    strip=True
     ...    stdout=False
     ...    stderr=True
-    ...    exp_exit_code=!0
-    Should Contain    ${output}    Object with this id already exists on the token
+    ...    exp_exit_code=0
+    Should Contain    ${output}    A key labelled 'my-key' already exists on the token
 
 Provide PIN using --pin flag
+    # Use a label that does not yet exist so the command takes the create path (which honours the
+    # --pin flag) instead of idempotently reusing an existing key with the configured PIN.
     ${output}=    Execute Command
-    ...    cmd=tedge hsm create-key --label my-key --pin 000000 "${TOKEN_URI}"
+    ...    cmd=tedge hsm create-key --label wrong-pin-key --pin 000000 "${TOKEN_URI}"
     ...    strip=True
     ...    stdout=False
     ...    stderr=True
