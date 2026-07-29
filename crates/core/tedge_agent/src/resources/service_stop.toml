@@ -1,0 +1,69 @@
+# The `stop` action of a service.
+#
+# The action is run by `tedge service`, which dispatches it to whatever manages that service:
+# the init system for the default service type, a service plugin for any other type.
+#
+# Stopping the components thin-edge needs in order to answer the requester is refused: the outcome
+# of the very command asking for it could never be reported. That is tedge-agent, which runs the
+# command, and any mapper connected to a cloud.
+#
+# This file is a template: tedge-agent creates it if it is missing, and never overwrites it once
+# it differs from `service_stop.toml.template`, which always holds the shipped definition.
+
+operation = "stop"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "reject-stopping-the-agent"
+
+# tedge-agent is what runs this very command.
+# The name comes from the cloud, and an init system knows the same service under more than one
+# name: systemd stops `tedge-agent.service` and `tedge-agent` alike. So every guard below accepts
+# both spellings, otherwise the suffix alone would be enough to get past it.
+[reject-stopping-the-agent]
+script = "test ${.payload.serviceName} = tedge-agent -o ${.payload.serviceName} = tedge-agent.service"
+on_exit.0 = { status = "failed", reason = "tedge-agent runs this command and cannot stop itself: it could not report the outcome, and nothing would start it again" }
+on_exit.1-255 = "allow-stopping-the-collectd-mapper"
+
+# Two mappers are connected to no cloud: the collectd mapper, which feeds local measurements in,
+# and the local mapper, which transforms data on the device. Stopping one of them takes no way of
+# reporting anything away. Both have a fixed name, as neither takes a cloud profile.
+[allow-stopping-the-collectd-mapper]
+script = "test ${.payload.serviceName} = tedge-mapper-collectd -o ${.payload.serviceName} = tedge-mapper-collectd.service"
+on_exit.0 = "execute"
+on_exit.1-255 = "allow-stopping-the-local-mapper"
+
+[allow-stopping-the-local-mapper]
+script = "test ${.payload.serviceName} = tedge-mapper-local -o ${.payload.serviceName} = tedge-mapper-local.service"
+on_exit.0 = "execute"
+on_exit.1-255 = "reject-stopping-a-mapper"
+
+# Any other mapper is what carries the outcome to its cloud. They are all named
+# `tedge-mapper-<x>`, whatever the cloud, the topic prefix and the profile.
+[reject-stopping-a-mapper]
+script = "expr ${.payload.serviceName} : tedge-mapper-"
+on_exit.0 = { status = "failed", reason = "A mapper reports the outcome of this command to its cloud and cannot be stopped this way: the device could no longer be managed remotely" }
+on_exit.1-255 = "execute"
+
+[execute]
+script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type ${.payload.serviceType}"
+# systemd waits for the service to stop, 90 seconds by default
+timeout_second = 180
+on_exit.0 = "successful"
+# A reason has to be given per exit code: the reason given by the backend goes to the operation
+# log, and only what a script prints on stdout can update the state of a command
+on_exit.1 = { status = "failed", reason = "The action failed, see the operation log for the reason given by the backend" }
+on_exit.2 = { status = "failed", reason = "This action is not supported for that type of service" }
+on_exit.3-255 = { status = "failed", reason = "The action failed, see the operation log for the reason given by the backend" }
+on_kill = { status = "failed", reason = "The action did not complete in time and was cancelled" }
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

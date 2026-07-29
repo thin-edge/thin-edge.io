@@ -160,13 +160,27 @@ so that a backend that never returns surfaces as a failed command rather than a 
 
 A `restart` addressed to **tedge-agent** itself SHALL NOT be run as a plain synchronous step,
 since the agent is killed mid-workflow and the step would re-execute on resume, causing a restart loop.
-The shipped workflow SHALL use the existing self-restart pattern:
-detached background execution followed by a state that awaits the agent restart.
+The shipped workflow SHALL use the existing self-restart pattern instead:
+the agent persists the state awaiting its own restart, asks its runtime to stop,
+and is started again by whatever runs it.
+No backend is asked to restart the agent,
+so this holds whether the agent runs as a service of its own
+or is co-hosted with the mappers in a single process.
 
 A `stop` addressed to **tedge-agent** or to a **cloud mapper** SHALL be rejected with a clear reason.
 A stopped agent cannot report the completion of the command,
 and a stopped mapper loses the cloud connection,
 so in both cases the requester would never learn the outcome.
+
+A mapper is recognized by its name, which is always `tedge-mapper-<x>`,
+whatever its cloud, topic prefix and profile.
+Two mappers are the exception, being connected to no cloud:
+the collectd mapper, which feeds local measurements in,
+and the local mapper, which transforms data on the device.
+Stopping one of them takes no way of reporting anything away,
+so both SHALL be stopped as any other service.
+They are always named `tedge-mapper-collectd` and `tedge-mapper-local`,
+as neither takes a cloud profile.
 
 #### Scenario: Restarting the agent itself completes the command
 - **WHEN** a `restart` command is issued for the tedge-agent service
@@ -185,3 +199,8 @@ so in both cases the requester would never learn the outcome.
 #### Scenario: Stopping a cloud mapper is rejected
 - **WHEN** a `stop` command is issued for a cloud mapper service
 - **THEN** the command SHALL move to `failed` with a reason explaining that the cloud connection cannot be stopped this way
+
+#### Scenario: Stopping a mapper connected to no cloud is allowed
+- **WHEN** a `stop` command is issued for the `tedge-mapper-collectd`
+  or the `tedge-mapper-local` service
+- **THEN** the action SHALL be run as it is for any other service
