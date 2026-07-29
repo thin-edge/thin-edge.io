@@ -1,12 +1,13 @@
 *** Settings ***
-Documentation       Verify that tedge-agent publishes its own exposable configuration as retained
-...                 MQTT messages under its own service topic, and serves them over the
+Documentation       Verify that tedge-agent publishes its own exposable configuration as one retained
+...                 MQTT JSON message under its own service topic, and serves them over the
 ...                 GET /te/v1/entities/<service>/config[/<key>] HTTP routes, while secret settings
 ...                 never appear on either surface.
 
 Resource            ../../../resources/common.resource
 Library             Cumulocity
 Library             ThinEdgeIO
+Library             JSONLibrary
 
 Suite Setup         Custom Setup
 Test Teardown       Get Logs    ${DEVICE_SN}
@@ -19,12 +20,15 @@ ${DEVICE_SN}    ${EMPTY}    # Main device serial number
 
 
 *** Test Cases ***
-Agent publishes an exposed core setting as a retained MQTT message
+Agent publishes its exposed core settings as one retained MQTT JSON message
     ${device_id}=    Execute Command    tedge config get device.id    strip=${True}
-    ${retained}=    Execute Command
-    ...    tedge mqtt sub te/device/main/service/tedge-agent/config/device.id --retained-only --no-topic --duration 1s
-    ...    strip=${True}
-    Should Be Equal    ${retained}    ${device_id}
+    ${mqtt_port}=    Execute Command    tedge config get mqtt.client.port    strip=${True}
+
+    ${retained}=    Should Have Retained MQTT Messages    te/device/main/service/tedge-agent/config
+
+    ${config}=    JSONLibrary.Convert String To Json    ${retained}[0]
+    Should Be Equal As Strings    ${config["device.id"]}    ${device_id}
+    Should Be Equal As Strings    ${config["mqtt.client.port"]}    ${mqtt_port}
 
 Agent serves a single exposed value over HTTP
     ${device_id}=    Execute Command    tedge config get device.id    strip=${True}
@@ -41,8 +45,8 @@ Agent serves the whole exposed config as a JSON object over HTTP
     Should Contain    ${get}    "mqtt.client.port":"${mqtt_port}"
 
 A non-exposed secret setting never appears on the retained config topic
-    Should Not Have Retained MQTT Messages
-    ...    topic=te/device/main/service/tedge-agent/config/device.key_pin
+    ${retained}=    Should Have Retained MQTT Messages    te/device/main/service/tedge-agent/config
+    Should Not Contain    ${retained}[0]    key_pin
 
 A non-exposed secret setting never appears in the HTTP config view
     ${get}=    Execute Command

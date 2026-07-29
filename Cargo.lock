@@ -5248,6 +5248,7 @@ name = "tedge_config_ext"
 version = "2.0.1"
 dependencies = [
  "async-trait",
+ "serde_json",
  "tedge_actors",
  "tedge_api",
  "tedge_mqtt_ext",

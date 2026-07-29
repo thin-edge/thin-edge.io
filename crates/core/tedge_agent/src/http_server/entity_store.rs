@@ -231,8 +231,10 @@ async fn get_resource(
 ) -> impl IntoResponse {
     let (topic_id, channel) = parse_path(&path)?;
     match channel {
-        Channel::EntityMetadata => Ok(get_entity(state, topic_id).await.into_response()),
-        Channel::EntityTwinData { fragment_key } => {
+        ResourceChannel::Mqtt(Channel::EntityMetadata) => {
+            Ok(get_entity(state, topic_id).await.into_response())
+        }
+        ResourceChannel::Mqtt(Channel::EntityTwinData { fragment_key }) => {
             if fragment_key.is_empty() {
                 return Ok(get_entity_twin_fragments(state, topic_id)
                     .await
@@ -245,15 +247,12 @@ async fn get_resource(
                     .into_response(),
             )
         }
-        Channel::Config { key } => {
-            if key.is_empty() {
-                return Ok(get_entity_config(state, topic_id).await.into_response());
-            }
-
-            Ok(get_entity_config_value(state, topic_id, key)
-                .await
-                .into_response())
+        ResourceChannel::Mqtt(Channel::Config) => {
+            Ok(get_entity_config(state, topic_id).await.into_response())
         }
+        ResourceChannel::ConfigValue(key) => Ok(get_entity_config_value(state, topic_id, key)
+            .await
+            .into_response()),
         _ => Err(Error::MethodNotAllowed),
     }
 }
@@ -265,7 +264,7 @@ async fn put_resource(
 ) -> impl IntoResponse {
     let (topic_id, channel) = parse_path(&path)?;
     match channel {
-        Channel::EntityTwinData { fragment_key } => {
+        ResourceChannel::Mqtt(Channel::EntityTwinData { fragment_key }) => {
             if fragment_key.is_empty() {
                 let fragments = serde_json::from_str(&payload)?;
                 return Ok(set_entity_twin_fragments(state, topic_id, fragments)
@@ -291,7 +290,7 @@ async fn patch_resource(
 ) -> impl IntoResponse {
     let (topic_id, channel) = parse_path(&path)?;
     match channel {
-        Channel::EntityMetadata => {
+        ResourceChannel::Mqtt(Channel::EntityMetadata) => {
             let entity_update: EntityUpdateMessage = serde_json::from_str(&payload)?;
             Ok(update_entity(state, topic_id, entity_update)
                 .await
@@ -307,8 +306,8 @@ async fn delete_resource(
 ) -> Result<Response, Error> {
     let (topic_id, channel) = parse_path(&path)?;
     match channel {
-        Channel::EntityMetadata => deregister_entity(state, topic_id).await,
-        Channel::EntityTwinData { fragment_key } => {
+        ResourceChannel::Mqtt(Channel::EntityMetadata) => deregister_entity(state, topic_id).await,
+        ResourceChannel::Mqtt(Channel::EntityTwinData { fragment_key }) => {
             if fragment_key.is_empty() {
                 return Ok(delete_entity_twin_fragments(state, topic_id)
                     .await
@@ -321,37 +320,45 @@ async fn delete_resource(
     }
 }
 
-fn parse_path(path: &str) -> Result<(EntityTopicId, Channel), Error> {
+/// The channel of an entity HTTP resource path. Wraps the MQTT [`Channel`], plus the
+/// single-key config lookup, which is an HTTP-only convenience with no MQTT equivalent.
+enum ResourceChannel {
+    Mqtt(Channel),
+    ConfigValue(String),
+}
+
+/// Parses an entity HTTP resource path into the entity's topic id and its [`ResourceChannel`].
+fn parse_path(path: &str) -> Result<(EntityTopicId, ResourceChannel), Error> {
     let segments = path.split('/').collect::<Vec<&str>>();
     match segments.as_slice() {
         [seg1, seg2] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), None, None)?;
-            Ok((topic_id, Channel::EntityMetadata))
+            Ok((topic_id, ResourceChannel::Mqtt(Channel::EntityMetadata)))
         }
         [seg1, seg2, seg3] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), None)?;
-            Ok((topic_id, Channel::EntityMetadata))
+            Ok((topic_id, ResourceChannel::Mqtt(Channel::EntityMetadata)))
         }
         [seg1, seg2, seg3, seg4, "twin"] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
             Ok((
                 topic_id,
-                Channel::EntityTwinData {
+                ResourceChannel::Mqtt(Channel::EntityTwinData {
                     fragment_key: "".to_string(),
-                },
+                }),
             ))
         }
         [seg1, seg2, seg3, seg4] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
-            Ok((topic_id, Channel::EntityMetadata))
+            Ok((topic_id, ResourceChannel::Mqtt(Channel::EntityMetadata)))
         }
         [seg1, seg2, seg3, seg4, "twin", fragment_key] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
             Ok((
                 topic_id,
-                Channel::EntityTwinData {
+                ResourceChannel::Mqtt(Channel::EntityTwinData {
                     fragment_key: fragment_key.to_string(),
-                },
+                }),
             ))
         }
         [_, _, _, _, "twin", keys @ ..] => Err(Error::EntityStoreError(
@@ -359,21 +366,11 @@ fn parse_path(path: &str) -> Result<(EntityTopicId, Channel), Error> {
         )),
         [seg1, seg2, seg3, seg4, "config"] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
-            Ok((
-                topic_id,
-                Channel::Config {
-                    key: "".to_string(),
-                },
-            ))
+            Ok((topic_id, ResourceChannel::Mqtt(Channel::Config)))
         }
         [seg1, seg2, seg3, seg4, "config", key] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
-            Ok((
-                topic_id,
-                Channel::Config {
-                    key: key.to_string(),
-                },
-            ))
+            Ok((topic_id, ResourceChannel::ConfigValue(key.to_string())))
         }
         [_, _, _, _, channel, ..] => Err(Error::UnsupportedChannel(channel.to_string())),
         _ => Err(Error::ResourceNotFound),

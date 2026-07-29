@@ -1,6 +1,6 @@
-//! A shared actor that publishes a component's own exposable configuration values as retained
-//! MQTT messages, one per value, under the component's own service topic, and corrects them if
-//! externally overwritten.
+//! A shared actor that publishes a component's own exposable configuration values as a single
+//! retained JSON message under the component's own service topic, and corrects it if externally
+//! overwritten.
 //!
 //! Used by `tedge-agent` (for core configuration) and each cloud mapper (for its own cloud's
 //! configuration), so that the topic construction, retain flag, and reconciliation logic exist
@@ -37,9 +37,6 @@ pub struct ConfigPublisherBuilder {
 }
 
 impl ConfigPublisherBuilder {
-    /// Creates a builder that will publish `exposed_config` — every exposable (key, value) pair
-    /// in the owning component's scope, with `None` for a key that is exposable but currently
-    /// unset — under `service_topic_id`'s own `config/<key>` topics.
     pub fn new(
         mqtt_schema: MqttSchema,
         service_topic_id: ServiceTopicId,

@@ -167,7 +167,7 @@ impl MqttSchema {
         let channel = match channel {
             ChannelFilter::EntityMetadata => "".to_string(),
             ChannelFilter::EntityTwinData => "/twin/+".to_string(),
-            ChannelFilter::Config => "/config/+".to_string(),
+            ChannelFilter::Config => "/config".to_string(),
             ChannelFilter::Measurement => "/m/+".to_string(),
             ChannelFilter::MeasurementMetadata => "/m/+/meta".to_string(),
             ChannelFilter::Event => "/e/+".to_string(),
@@ -598,9 +598,7 @@ pub enum Channel {
     EntityTwinData {
         fragment_key: String,
     },
-    Config {
-        key: String,
-    },
+    Config,
     Measurement {
         measurement_type: String,
     },
@@ -644,9 +642,7 @@ impl FromStr for Channel {
             ["twin", fragment_key] => Ok(Channel::EntityTwinData {
                 fragment_key: fragment_key.to_string(),
             }),
-            ["config", key] => Ok(Channel::Config {
-                key: key.to_string(),
-            }),
+            ["config"] => Ok(Channel::Config),
             ["m", measurement_type] => Ok(Channel::Measurement {
                 measurement_type: measurement_type.to_string(),
             }),
@@ -693,7 +689,7 @@ impl Display for Channel {
         match self {
             Channel::EntityMetadata => Ok(()),
             Channel::EntityTwinData { fragment_key } => write!(f, "twin/{fragment_key}"),
-            Channel::Config { key } => write!(f, "config/{key}"),
+            Channel::Config => write!(f, "config"),
 
             Channel::Measurement { measurement_type } => write!(f, "m/{measurement_type}"),
             Channel::MeasurementMetadata { measurement_type } => {
@@ -733,7 +729,7 @@ impl Channel {
     }
 
     pub fn is_config(&self) -> bool {
-        matches!(self, Channel::Config { .. })
+        matches!(self, Channel::Config)
     }
 }
 
@@ -934,7 +930,7 @@ impl From<&Channel> for ChannelFilter {
         match value {
             Channel::EntityMetadata => ChannelFilter::EntityMetadata,
             Channel::EntityTwinData { fragment_key: _ } => ChannelFilter::EntityTwinData,
-            Channel::Config { key: _ } => ChannelFilter::Config,
+            Channel::Config => ChannelFilter::Config,
             Channel::Measurement {
                 measurement_type: _,
             } => ChannelFilter::Measurement,
@@ -1040,7 +1036,7 @@ mod tests {
         let schema = MqttSchema::with_root(MQTT_ROOT.to_string());
         let entity_topic = schema
             .parse(&format!(
-                "{MQTT_ROOT}/device/main/service/tedge-agent/config/device.id"
+                "{MQTT_ROOT}/device/main/service/tedge-agent/config"
             ))
             .unwrap();
 
@@ -1048,19 +1044,15 @@ mod tests {
             entity_topic,
             (
                 EntityTopicId("device/main/service/tedge-agent".to_string()),
-                Channel::Config {
-                    key: "device.id".to_string(),
-                }
+                Channel::Config
             )
         );
     }
 
     #[test]
     fn config_channel_round_trips_through_display_and_parse() {
-        let channel = Channel::Config {
-            key: "mqtt.client.port".to_string(),
-        };
-        assert_eq!(channel.to_string(), "config/mqtt.client.port");
+        let channel = Channel::Config;
+        assert_eq!(channel.to_string(), "config");
         assert_eq!(channel.to_string().parse::<Channel>().unwrap(), channel);
         assert!(channel.is_config());
     }
@@ -1073,7 +1065,7 @@ mod tests {
 
         assert!(
             topics.accept_topic(&mqtt_channel::Topic::new_unchecked(&format!(
-                "{MQTT_ROOT}/device/main/service/tedge-mapper-c8y/config/url"
+                "{MQTT_ROOT}/device/main/service/tedge-mapper-c8y/config"
             )))
         );
         assert!(
@@ -1085,10 +1077,7 @@ mod tests {
 
     #[test]
     fn config_channel_filter_from_channel() {
-        let channel = Channel::Config {
-            key: "device.id".to_string(),
-        };
-        assert_eq!(ChannelFilter::from(&channel), ChannelFilter::Config);
+        assert_eq!(ChannelFilter::from(&Channel::Config), ChannelFilter::Config);
     }
 
     #[test]

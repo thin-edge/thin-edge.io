@@ -263,14 +263,13 @@ impl EntityStoreServer {
                 let twin_message = EntityTwinMessage::new(topic_id, fragment_key, fragment_value);
                 self.entity_store.update_twin_fragment(twin_message)?;
             }
-            Channel::Config { key } => {
-                if message.payload().is_empty() {
-                    self.entity_store.clear_config_value(&topic_id, &key)?;
+            Channel::Config => {
+                let config = if message.payload().is_empty() {
+                    BTreeMap::new()
                 } else {
-                    let value = message.payload_str().unwrap_or_default().to_string();
-                    self.entity_store
-                        .ingest_config_value(&topic_id, key, value)?;
-                }
+                    serde_json::from_slice(message.payload_bytes())?
+                };
+                self.entity_store.set_config(&topic_id, config)?;
             }
             _ => {}
         }

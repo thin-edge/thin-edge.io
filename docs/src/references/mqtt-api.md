@@ -437,7 +437,7 @@ so that it can process them.
 | Events        | `te/<identifier>/e/<event-type>`       |
 | Alarms        | `te/<identifier>/a/<alarm-type>`       |
 | Twin          | `te/<identifier>/twin/<data-type>`     |
-| Configuration | `te/<identifier>/config/<key>`         |
+| Configuration | `te/<identifier>/config`               |
 | Status        | `te/<identifier>/status/<target-type>` |
 
 ### Examples: With default device/service topic semantics
@@ -565,31 +565,35 @@ te/device/main///twin/device_OS
 ## Configuration
 
 A service that owns a `tedge_config` setting (`tedge-agent` for core/device settings, each cloud
-mapper for its own cloud's settings) publishes any setting explicitly marked exposable as a retained
-`config` message under its own service topic, one message per value:
+mapper for its own cloud's settings) publishes every setting explicitly marked exposable as one
+retained `config` message under its own service topic — a JSON object of all its exposed key-value
+pairs:
 
 ```text
-te/<service-identifier>/config/<key>
+te/<service-identifier>/config
 ```
 
-`<key>` is the setting's `tedge config` key, kept as a single topic segment (not split on its `.`s), so
-it maps directly back to a `tedge config get <key>` invocation. A mapper strips its own cloud (and
-profile) qualifier from the key, since the service topic already scopes it: `c8y.url` is published as
-`url` under `.../service/tedge-mapper-c8y/config/url`.
+Each field name in that object is the setting's `tedge config` key, kept flat (not split on its
+`.`s), so it maps directly back to a `tedge config get <key>` invocation. A mapper strips its own
+cloud (and profile) qualifier from the key, since the service topic already scopes it: `c8y.url` is
+published as the `url` field under `.../service/tedge-mapper-c8y/config`.
 
 ```text title="Topic (retain=true)"
-te/device/main/service/tedge-agent/config/device.id
+te/device/main/service/tedge-agent/config
 ```
 
-```text title="Payload"
-my-device-01
+```json5 title="Payload"
+{
+  "device.id": "my-device-01",
+  "mqtt.client.port": "1883"
+}
 ```
 
-An empty payload means the value is unset, or was removed from configuration since the last time the
-owning service started. A setting is only published this way if it was explicitly marked exposable
-where it is defined; unmarked settings, including any secret (a private key, a PIN, a credential file
-path), are never published. See the [Entity Store REST API](../operate/entity-management/rest_api.md)
-for a read-only HTTP view of the same values.
+An exposable setting with no value is simply omitted from the object. A setting only appears here at
+all if it was explicitly marked exposable where it is defined; unmarked settings, including any
+secret (a private key, a PIN, a credential file path), are never published. See the
+[Entity Store REST API](../operate/entity-management/rest_api.md) for a read-only HTTP view of the
+same values, including a single-key lookup that has no MQTT equivalent.
 
 ## Commands
 
