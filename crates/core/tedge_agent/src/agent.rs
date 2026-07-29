@@ -9,6 +9,7 @@ use crate::operation_workflows::OperationConfig;
 use crate::operation_workflows::WorkflowActorBuilder;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
+use crate::service_workflows::ServiceWorkflowsBuilder;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::state_repository::state::agent_default_state_dir;
@@ -279,6 +280,9 @@ impl Agent {
         // Load device profile manager before the workflow actor
         // as it will create the device_profile workflow if it does not already exist
         DeviceProfileManagerBuilder::try_new(&self.config.operations_dir).await?;
+
+        // Install the shipped service workflows too, for the same reason
+        ServiceWorkflowsBuilder::try_new(&self.config.operations_dir).await?;
 
         // Inotify actor
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();

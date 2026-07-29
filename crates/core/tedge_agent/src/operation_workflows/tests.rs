@@ -8,6 +8,7 @@ use crate::software_manager::actor::SoftwareCommand;
 use crate::Capabilities;
 use camino::Utf8Path;
 use serde_json::json;
+use std::os::unix::process::ExitStatusExt;
 use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
@@ -67,6 +68,7 @@ use tedge_script_ext::Execute;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
 use tedge_utils::paths::TedgePaths;
+use test_case::test_case;
 use tokio::task::JoinHandle;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
@@ -1550,8 +1552,12 @@ async fn an_action_killed_on_timeout_fails_the_command() -> Result<(), DynError>
     Ok(())
 }
 
+/// An init system knows the same service under more than one name, and the name comes from the
+/// cloud, so the agent is refused under either spelling
+#[test_case("tedge-agent"; "named as the service")]
+#[test_case("tedge-agent.service"; "named as the unit")]
 #[tokio::test]
-async fn stopping_the_agent_is_rejected() -> Result<(), DynError> {
+async fn stopping_the_agent_is_rejected(service_name: &str) -> Result<(), DynError> {
     let TestHandler {
         mut mqtt_box,
         mut script_box,
@@ -1559,11 +1565,14 @@ async fn stopping_the_agent_is_rejected() -> Result<(), DynError> {
         ..
     } = spawn_agent_running(SHIPPED_STOP_WORKFLOW, "service_stop.toml").await?;
 
-    trigger_service_command(&mut mqtt_box, "stop", "tedge-agent").await?;
+    trigger_service_command_named(&mut mqtt_box, "stop", "tedge-agent", service_name).await?;
 
     let check = recv_script(&mut script_box, &mut actor_handle).await;
     assert_eq!(check.request.command, "test");
-    assert_eq!(check.request.args, ["tedge-agent", "=", "tedge-agent"]);
+    assert_eq!(
+        check.request.args,
+        both_spellings_of(service_name, "tedge-agent")
+    );
     reply_with(check, exited(0)).await;
 
     let reason =
@@ -1590,23 +1599,14 @@ async fn stopping_a_mapper_is_rejected() -> Result<(), DynError> {
 
     trigger_service_command(&mut mqtt_box, "stop", "tedge-mapper-c8y").await?;
 
-    let check = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(check.request.args, ["tedge-mapper-c8y", "=", "tedge-agent"]);
-    reply_with(check, exited(1)).await;
-
-    let check = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(
-        check.request.args,
-        ["tedge-mapper-c8y", "=", "tedge-mapper-collectd"]
-    );
-    reply_with(check, exited(1)).await;
-
-    let check = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(
-        check.request.args,
-        ["tedge-mapper-c8y", "=", "tedge-mapper-local"]
-    );
-    reply_with(check, exited(1)).await;
+    for guarded in ["tedge-agent", "tedge-mapper-collectd", "tedge-mapper-local"] {
+        let check = recv_script(&mut script_box, &mut actor_handle).await;
+        assert_eq!(
+            check.request.args,
+            both_spellings_of("tedge-mapper-c8y", guarded)
+        );
+        reply_with(check, exited(1)).await;
+    }
 
     // Any other mapper is named `tedge-mapper-<x>`, whatever its cloud and profile
     let check = recv_script(&mut script_box, &mut actor_handle).await;
@@ -1629,8 +1629,12 @@ async fn stopping_a_mapper_is_rejected() -> Result<(), DynError> {
     Ok(())
 }
 
+/// The exception is granted under either spelling too, otherwise the unit name would be caught
+/// by the guard on the mapper names that follows it
+#[test_case("tedge-mapper-collectd"; "named as the service")]
+#[test_case("tedge-mapper-collectd.service"; "named as the unit")]
 #[tokio::test]
-async fn stopping_the_collectd_mapper_is_allowed() -> Result<(), DynError> {
+async fn stopping_the_collectd_mapper_is_allowed(service_name: &str) -> Result<(), DynError> {
     let TestHandler {
         mut mqtt_box,
         mut script_box,
@@ -1638,12 +1642,13 @@ async fn stopping_the_collectd_mapper_is_allowed() -> Result<(), DynError> {
         ..
     } = spawn_agent_running(SHIPPED_STOP_WORKFLOW, "service_stop.toml").await?;
 
-    trigger_service_command(&mut mqtt_box, "stop", "tedge-mapper-collectd").await?;
+    trigger_service_command_named(&mut mqtt_box, "stop", "tedge-mapper-collectd", service_name)
+        .await?;
 
     let check = recv_script(&mut script_box, &mut actor_handle).await;
     assert_eq!(
         check.request.args,
-        ["tedge-mapper-collectd", "=", "tedge-agent"]
+        both_spellings_of(service_name, "tedge-agent")
     );
     reply_with(check, exited(1)).await;
 
@@ -1652,7 +1657,7 @@ async fn stopping_the_collectd_mapper_is_allowed() -> Result<(), DynError> {
     let check = recv_script(&mut script_box, &mut actor_handle).await;
     assert_eq!(
         check.request.args,
-        ["tedge-mapper-collectd", "=", "tedge-mapper-collectd"]
+        both_spellings_of(service_name, "tedge-mapper-collectd")
     );
     reply_with(check, exited(0)).await;
 
@@ -1665,7 +1670,7 @@ async fn stopping_the_collectd_mapper_is_allowed() -> Result<(), DynError> {
             "tedge",
             "service",
             "stop",
-            "tedge-mapper-collectd",
+            service_name,
             "--service-type",
             "service"
         ]
@@ -1684,8 +1689,10 @@ async fn stopping_the_collectd_mapper_is_allowed() -> Result<(), DynError> {
     Ok(())
 }
 
+#[test_case("tedge-mapper-local"; "named as the service")]
+#[test_case("tedge-mapper-local.service"; "named as the unit")]
 #[tokio::test]
-async fn stopping_the_local_mapper_is_allowed() -> Result<(), DynError> {
+async fn stopping_the_local_mapper_is_allowed(service_name: &str) -> Result<(), DynError> {
     let TestHandler {
         mut mqtt_box,
         mut script_box,
@@ -1693,11 +1700,12 @@ async fn stopping_the_local_mapper_is_allowed() -> Result<(), DynError> {
         ..
     } = spawn_agent_running(SHIPPED_STOP_WORKFLOW, "service_stop.toml").await?;
 
-    trigger_service_command(&mut mqtt_box, "stop", "tedge-mapper-local").await?;
+    trigger_service_command_named(&mut mqtt_box, "stop", "tedge-mapper-local", service_name)
+        .await?;
 
-    for expected in ["tedge-agent", "tedge-mapper-collectd"] {
+    for guarded in ["tedge-agent", "tedge-mapper-collectd"] {
         let check = recv_script(&mut script_box, &mut actor_handle).await;
-        assert_eq!(check.request.args, ["tedge-mapper-local", "=", expected]);
+        assert_eq!(check.request.args, both_spellings_of(service_name, guarded));
         reply_with(check, exited(1)).await;
     }
 
@@ -1705,7 +1713,7 @@ async fn stopping_the_local_mapper_is_allowed() -> Result<(), DynError> {
     let check = recv_script(&mut script_box, &mut actor_handle).await;
     assert_eq!(
         check.request.args,
-        ["tedge-mapper-local", "=", "tedge-mapper-local"]
+        both_spellings_of(service_name, "tedge-mapper-local")
     );
     reply_with(check, exited(0)).await;
 
@@ -1718,7 +1726,7 @@ async fn stopping_the_local_mapper_is_allowed() -> Result<(), DynError> {
             "tedge",
             "service",
             "stop",
-            "tedge-mapper-local",
+            service_name,
             "--service-type",
             "service"
         ]
@@ -1804,8 +1812,33 @@ fn expr_tells_a_mapper_name_from_any_other(service_name: &str, is_a_mapper: bool
     );
 }
 
+/// `test` with `-o` is what the shipped workflows use to accept both spellings of a unit name
+///
+/// The name of a service and the name of the unit running it are the same service to systemd.
+#[test_case("tedge-agent", true)]
+#[test_case("tedge-agent.service", true)]
+#[test_case("tedge-agentx", false)]
+#[test_case("tedge-agent.socket", false)]
+#[test_case("collectd", false)]
+fn test_tells_both_spellings_of_a_unit_name_from_any_other(service_name: &str, is_the_unit: bool) {
+    let outcome = std::process::Command::new("test")
+        .args(both_spellings_of(service_name, "tedge-agent"))
+        .output()
+        .expect("test is expected to be installed");
+
+    assert_eq!(
+        outcome.status.success(),
+        is_the_unit,
+        "unexpected match of {service_name}: {outcome:?}"
+    );
+}
+
+#[test_case("tedge-agent"; "named as the service")]
+#[test_case("tedge-agent.service"; "named as the unit")]
 #[tokio::test]
-async fn restarting_the_agent_restarts_the_process_once() -> Result<(), DynError> {
+async fn restarting_the_agent_restarts_the_process_once(
+    service_name: &str,
+) -> Result<(), DynError> {
     let tmp_dir = Arc::new(TempTedgeDir::new());
     let TestHandler {
         mut mqtt_box,
@@ -1819,10 +1852,13 @@ async fn restarting_the_agent_restarts_the_process_once() -> Result<(), DynError
     )
     .await?;
 
-    trigger_service_command(&mut mqtt_box, "restart", "tedge-agent").await?;
+    trigger_service_command_named(&mut mqtt_box, "restart", "tedge-agent", service_name).await?;
 
     let check = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(check.request.args, ["tedge-agent", "=", "tedge-agent"]);
+    assert_eq!(
+        check.request.args,
+        both_spellings_of(service_name, "tedge-agent")
+    );
     reply_with(check, exited(0)).await;
 
     // The agent restarts itself rather than asking a backend to do it, and the state awaiting
@@ -1897,14 +1933,41 @@ async fn trigger_service_command(
     action: &str,
     service: &str,
 ) -> Result<(), DynError> {
+    trigger_service_command_named(mqtt, action, service, service).await
+}
+
+/// The same, with the command naming the service differently from its topic
+///
+/// The name is the one the cloud sends, and a backend may know the target under another name than
+/// the one it was registered with: a systemd unit is named `<service>` as well as `<service>.service`.
+async fn trigger_service_command_named(
+    mqtt: &mut impl Sender<MqttMessage>,
+    action: &str,
+    service: &str,
+    service_name: &str,
+) -> Result<(), DynError> {
     let topic = format!("te/device/main/service/{service}/cmd/{action}/1");
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked(&topic),
-        json!({"status": "init", "serviceName": service, "serviceType": "service"}).to_string(),
+        json!({"status": "init", "serviceName": service_name, "serviceType": "service"})
+            .to_string(),
     ))
     .await?;
 
     Ok(())
+}
+
+/// The argv of a guard asking whether a service name is a service, under either of its spellings
+fn both_spellings_of(service_name: &str, service: &str) -> Vec<String> {
+    vec![
+        service_name.to_string(),
+        "=".to_string(),
+        service.to_string(),
+        "-o".to_string(),
+        service_name.to_string(),
+        "=".to_string(),
+        format!("{service}.service"),
+    ]
 }
 
 /// The next script run by the workflow, to be given its outcome with [reply_with]
@@ -1986,6 +2049,9 @@ struct TestHandler {
         SimpleMessageBox<RequestEnvelope<OperationStepRequest, OperationStepResponse>, NoMessage>,
     >,
     sync_signal_box: TimedMessageBox<SimpleMessageBox<CmdMetaSyncSignal, NoMessage>>,
+    script_box: TimedMessageBox<
+        SimpleMessageBox<RequestEnvelope<Execute, std::io::Result<Output>>, NoMessage>,
+    >,
 }
 
 /// A fake entity store, answering the entity lookups of the workflow actor over HTTP
@@ -2042,14 +2108,34 @@ async fn spawn_workflow_actor(
     workflows: Vec<(String, String)>,
     entity_store: FakeEntityStore,
 ) -> Result<TestHandler, DynError> {
+    spawn_workflow_actor_in(
+        Arc::new(TempTedgeDir::new()),
+        device_topic_id,
+        workflows,
+        entity_store,
+    )
+    .await
+}
+
+/// Run the workflow actor with the given directory as its configuration and state directory
+///
+/// Running twice in the same directory is how a restart of the agent is tested.
+async fn spawn_workflow_actor_in(
+    tmp_dir: Arc<TempTedgeDir>,
+    device_topic_id: &str,
+    workflows: Vec<(String, String)>,
+    entity_store: FakeEntityStore,
+) -> Result<TestHandler, DynError> {
     let mut software_builder = SoftwareActor(SimpleMessageBoxBuilder::new("Software", 5));
     let mut restart_builder = RestartActor(SimpleMessageBoxBuilder::new("Restart", 5));
     let mut config_builder = ConfigActorBuilder(SimpleMessageBoxBuilder::new("Config", 5));
     let sync_listener_builder =
         SyncListenerActorBuilder(SimpleMessageBoxBuilder::new("SyncListener", 5));
 
+    // A workflow publishes the state of a command on every step, and a test reads those states
+    // only once it has driven the command: the channel has to hold them all meanwhile
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
-        SimpleMessageBoxBuilder::new("MQTT", 5);
+        SimpleMessageBoxBuilder::new("MQTT", 32);
     let mut script_builder: SimpleMessageBoxBuilder<
         RequestEnvelope<Execute, std::io::Result<Output>>,
         NoMessage,
@@ -2066,10 +2152,11 @@ async fn spawn_workflow_actor(
     > = SimpleMessageBoxBuilder::new("Uploader", 5);
     let mut http_builder = FakeServerBox::<HttpRequest, HttpResult>::builder();
 
-    let tmp_dir = Arc::new(TempTedgeDir::new());
     let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
     let config_root = TedgePaths::from_root_with_defaults(tmp_path, "", "");
     let operations_dir = tmp_dir.dir("operations");
+    // Where the agent persists the state of the commands under execution, as the packaging does
+    tmp_dir.dir("running-operations");
     for (file_name, content) in workflows {
         operations_dir.file(&file_name).with_raw_content(&content);
     }
@@ -2123,6 +2210,7 @@ async fn spawn_workflow_actor(
     let software_box = software_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
     let restart_box = restart_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
     let mqtt_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
+    let script_box = script_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let downloader_box = downloade_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let uploader_box = uploader_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let inotify_box = inotify_builder.build().with_timeout(TEST_TIMEOUT_MS);
@@ -2148,6 +2236,7 @@ async fn spawn_workflow_actor(
         uploader_box,
         config_box,
         sync_signal_box,
+        script_box,
     })
 }
 
