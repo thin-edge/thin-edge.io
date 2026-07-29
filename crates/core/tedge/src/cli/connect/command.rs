@@ -405,8 +405,13 @@ impl ConnectCommand {
                         .clone_into(&mut client_config.cert_file)
                 }
 
-                create_device_with_direct_connection(_bridge_config, device_type, mqtt_auth_config)
-                    .await
+                create_device_with_direct_connection(
+                    _bridge_config,
+                    profile_name.as_deref(),
+                    device_type,
+                    mqtt_auth_config,
+                )
+                .await
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => Ok(()),
@@ -1090,6 +1095,7 @@ impl ConnectCommand {
                     let spinner = Spinner::start("Creating device in Cumulocity cloud");
                     let res = create_device_with_direct_connection(
                         bridge_config,
+                        profile_name.as_deref(),
                         &tedge_config.device.ty,
                         mqtt_auth_config,
                     )
