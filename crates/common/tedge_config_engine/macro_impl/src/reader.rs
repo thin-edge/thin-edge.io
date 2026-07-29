@@ -41,7 +41,7 @@ fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
                     pub #ident: #ty,
                 });
                 build_fields.push(quote! {
-                    #ident: <#ty as tedge::BuildFromDto>::build_from_dto(__dto, __defaults, __root, __display_prefix, __profile)?,
+                    #ident: <#ty as tedge::BuildFromDto>::build_from_dto(__dto, __defaults, __root, __lookup_prefix, __display_prefix, __profile)?,
                 });
                 nested.extend(generate_group(&child.group));
             }
@@ -54,12 +54,13 @@ fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
                     #(#doc_attrs)*
                     pub #ident: #field_ty,
                 });
-                let _prefix = &ext.prefix;
+                let prefix = &ext.prefix;
                 build_fields.push(quote! {
                     #ident: <#ty as tedge::BuildFromDto>::build_from_dto(
                         __dto,
                         __defaults,
                         __root,
+                        &tedge::reader_helpers::key_at(__lookup_prefix, #prefix),
                         __display_prefix,
                         __profile,
                     )?,
@@ -80,6 +81,7 @@ fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
                 __dto: &__Dto,
                 __defaults: &tedge::DefaultsRegistry,
                 __root: tedge::RootResolver<'_>,
+                __lookup_prefix: &str,
                 __display_prefix: &str,
                 __profile: Option<&str>,
             ) -> Result<Self, tedge::ConfigError> {
@@ -126,6 +128,8 @@ fn generate_reader_leaf(field: &ConfigField) -> TokenStream {
 
 fn generate_build_field(field: &ConfigField, key: &str) -> TokenStream {
     let ident = field.field_ident();
+
+    let key = quote! { &tedge::reader_helpers::key_at(__lookup_prefix, #key) };
 
     if has_concrete_default(field) {
         quote! {

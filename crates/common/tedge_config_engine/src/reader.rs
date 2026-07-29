@@ -7,11 +7,18 @@ use crate::defaults::RootResolver;
 use crate::reflect::ConfigError;
 
 /// Trait implemented by generated reader types via `define_config!`
+///
+/// `lookup_prefix` is the path at which this reader's schema is mounted in `dto`.
+/// It is empty for the schema that owns the DTO, and set to the embedding
+/// field's key when a schema is reused through `extern`, so that keys named
+/// relative to the reader's own schema resolve against the whole DTO and the
+/// prefixed entries of `defaults`.
 pub trait BuildFromDto: Sized {
     fn build_from_dto<Dto: for<'a> Facet<'a>>(
         dto: &Dto,
         defaults: &DefaultsRegistry,
         root: RootResolver<'_>,
+        lookup_prefix: &str,
         display_prefix: &str,
         profile: Option<&str>,
     ) -> Result<Self, ConfigError>;
@@ -34,7 +41,7 @@ pub fn build_reader_at<Dto: for<'a> Facet<'a>, Reader: BuildFromDto>(
     display_prefix: &str,
     profile: Option<&str>,
 ) -> Result<Reader, ConfigError> {
-    Reader::build_from_dto(dto, defaults, root_resolver, display_prefix, profile)
+    Reader::build_from_dto(dto, defaults, root_resolver, "", display_prefix, profile)
 }
 
 #[cfg(test)]
@@ -75,13 +82,37 @@ mod tests {
             dto: &Dto,
             defaults: &DefaultsRegistry,
             root: RootResolver<'_>,
+            lookup_prefix: &str,
             display_prefix: &str,
             profile: Option<&str>,
         ) -> Result<Self, ConfigError> {
+            let key = |key| reader_helpers::key_at(lookup_prefix, key);
             Ok(Self {
-                url: reader_helpers::read_optional(dto, defaults, root, "url", display_prefix, profile)?,
-                http: reader_helpers::read_optional(dto, defaults, root, "http", display_prefix, profile)?,
-                device: TestDeviceReader::build_from_dto(dto, defaults, root, display_prefix, profile)?,
+                url: reader_helpers::read_optional(
+                    dto,
+                    defaults,
+                    root,
+                    &key("url"),
+                    display_prefix,
+                    profile,
+                )?,
+                http: reader_helpers::read_optional(
+                    dto,
+                    defaults,
+                    root,
+                    &key("http"),
+                    display_prefix,
+                    profile,
+                )?,
+                // As generated for `device: extern TestDeviceReader`
+                device: TestDeviceReader::build_from_dto(
+                    dto,
+                    defaults,
+                    root,
+                    &key("device"),
+                    display_prefix,
+                    profile,
+                )?,
             })
         }
     }
@@ -91,11 +122,20 @@ mod tests {
             dto: &Dto,
             defaults: &DefaultsRegistry,
             root: RootResolver<'_>,
+            lookup_prefix: &str,
             display_prefix: &str,
             profile: Option<&str>,
         ) -> Result<Self, ConfigError> {
+            let key = reader_helpers::key_at(lookup_prefix, "id");
             Ok(Self {
-                id: reader_helpers::read_optional(dto, defaults, root, "device.id", display_prefix, profile)?,
+                id: reader_helpers::read_optional(
+                    dto,
+                    defaults,
+                    root,
+                    &key,
+                    display_prefix,
+                    profile,
+                )?,
             })
         }
     }

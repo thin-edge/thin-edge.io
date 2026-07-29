@@ -15,10 +15,10 @@ tedge_config_engine-impl = { workspace = true }
 
 [dev-dependencies]
 facet = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+facet-json = { workspace = true }
+facet-toml = { workspace = true }
+facet-value = { workspace = true }
 tedge_config_engine = { workspace = true }
-toml = { workspace = true }
 trybuild = "1"
 
 [lints]
