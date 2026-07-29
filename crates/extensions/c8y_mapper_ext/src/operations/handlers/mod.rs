@@ -7,6 +7,7 @@ mod device_profile;
 mod firmware_update;
 mod log_upload;
 mod restart;
+mod service_command;
 mod software_list;
 mod software_update;
 
@@ -38,6 +39,7 @@ use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::entity::EntityExternalId;
+use tedge_api::entity::EntityType;
 use tedge_api::file_transfer_url::FileTransferUrls;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
@@ -90,9 +92,23 @@ impl OperationContext {
             }
         };
 
-        let mut c8y_operation = to_c8y_operation(&operation);
+        let is_service_action = entity.entity_type == EntityType::Service;
+
+        let mut c8y_operation = if is_service_action {
+            Some(CumulocitySupportedOperations::C8yServiceCommand)
+        } else {
+            to_c8y_operation(&operation)
+        };
 
         let operation_result = match operation {
+            // Every command of a service is one action of that service, whatever the action is
+            // named, and Cumulocity triggers them all with the same operation. The mappings that
+            // follow are the operations of a device, and none of them applies to a service.
+            _ if is_service_action => {
+                self.handle_service_command_state_change(&entity, &cmd_id, &message)
+                    .await
+            }
+
             OperationType::Health => {
                 debug!(
                     topic = message.topic.name,
@@ -370,6 +386,7 @@ pub(super) struct OperationMessage {
 pub struct EntityTarget {
     pub topic_id: EntityTopicId,
     pub external_id: EntityExternalId,
+    pub entity_type: EntityType,
     pub smartrest_publish_topic: Topic,
 }
 

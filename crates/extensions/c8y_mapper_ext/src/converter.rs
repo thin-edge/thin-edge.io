@@ -590,6 +590,9 @@ impl CumulocityConverter {
                     vec![]
                 }
             }
+            C8yDeviceControlOperation::ServiceCommand(request) => {
+                self.convert_service_command_request(device_xid, cmd_id, &operation_id, request)
+            }
             C8yDeviceControlOperation::Custom => {
                 return self
                     .process_json_custom_operation(
@@ -1189,6 +1192,7 @@ impl CumulocityConverter {
                 let entity = operations::EntityTarget {
                     topic_id: entity.topic_id().clone(),
                     external_id: entity.external_id.clone(),
+                    entity_type: entity.r#type(),
                     smartrest_publish_topic: self
                         .smartrest_publish_topic_for_entity(entity.topic_id())?,
                 };

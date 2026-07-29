@@ -2786,6 +2786,125 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
 }
 
 #[tokio::test]
+async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    let command = declare_and_trigger_a_service_action(&mut mqtt).await;
+
+    // A service action is not the `c8y_Restart` operation of a device, whatever it is named
+    mqtt.send(MqttMessage::new(
+        &command,
+        json!({"status": "executing"}).to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(
+        next_service_smartrest_message(&mut mqtt).await,
+        "501,c8y_ServiceCommand"
+    );
+
+    mqtt.send(MqttMessage::new(
+        &command,
+        json!({"status": "successful"}).to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(
+        next_service_smartrest_message(&mut mqtt).await,
+        "503,c8y_ServiceCommand"
+    );
+}
+
+#[tokio::test]
+async fn a_failed_service_command_is_reported_with_its_reason() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    let command = declare_and_trigger_a_service_action(&mut mqtt).await;
+
+    mqtt.send(MqttMessage::new(
+        &command,
+        json!({"status": "failed", "reason": "collectd.service not found"}).to_string(),
+    ))
+    .await
+    .unwrap();
+
+    let failure = next_service_smartrest_message(&mut mqtt).await;
+    assert!(
+        failure.starts_with("502,c8y_ServiceCommand,"),
+        "not a failure of the service command operation: {failure}"
+    );
+    assert!(
+        failure.contains("collectd.service not found"),
+        "the reason of the action is not reported: {failure}"
+    );
+}
+
+/// Have a service declare a `restart` action, and Cumulocity trigger it
+///
+/// Return the topic of the command the mapper published for it.
+async fn declare_and_trigger_a_service_action(
+    mqtt: &mut (impl MessageReceiver<MqttMessage> + Sender<MqttMessage>),
+) -> Topic {
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
+        "{}",
+    ))
+    .await
+    .unwrap();
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+            "id": "1234",
+            "status": "PENDING",
+            "c8y_ServiceCommand": {"command": "RESTART"},
+            "externalSource": {
+                "externalId": "test-device:device:main:service:collectd",
+                "type": "c8y_Serial"
+            }
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
+
+    let command =
+        Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/c8y-mapper-1234");
+    while let Some(message) = mqtt.recv().await {
+        if message.topic == command {
+            return command;
+        }
+    }
+    panic!("No command published for the service action")
+}
+
+/// The next message published on the SmartREST topic of the collectd service
+async fn next_service_smartrest_message(mqtt: &mut dyn MessageReceiver<MqttMessage>) -> String {
+    let topic = "c8y/s/us/test-device:device:main:service:collectd";
+    while let Some(message) = mqtt.recv().await {
+        if message.topic.name == topic {
+            return message.payload_str().unwrap().to_string();
+        }
+    }
+    panic!("Nothing published on {topic}")
+}
+
+#[tokio::test]
 async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;

@@ -315,6 +315,7 @@ mod tests {
     use tedge_api::commands::ConfigSnapshotCmd;
     use tedge_api::commands::ConfigSnapshotCmdPayload;
     use tedge_api::entity::EntityExternalId;
+    use tedge_api::entity::EntityType;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::CommandStatus;
@@ -340,6 +341,7 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
+            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -372,6 +374,7 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
+            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -405,6 +408,7 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
+            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -464,6 +468,7 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
+            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -551,6 +556,7 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
+            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -585,6 +591,7 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
+            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -626,6 +633,7 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
+            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -677,6 +685,7 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
+            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -770,6 +779,7 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
+            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
