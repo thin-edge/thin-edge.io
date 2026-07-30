@@ -18,9 +18,10 @@ pub enum TEdgeHsmCli {
     /// Security Officer (SO) PIN, then sets the user PIN used by all other operations. Afterwards
     /// the token can hold keys, e.g. created via `tedge hsm create-key`.
     ///
-    /// The slot to initialize is auto-discovered when `--slot` is not given: the single slot
-    /// holding an uninitialized token is selected. The command is idempotent: if a token with the
-    /// requested label is already initialized, it is left untouched.
+    /// The command is idempotent: if a token with the requested label is already initialized, it
+    /// is left untouched and its URI is returned. The slot to initialize is auto-discovered when
+    /// no URI is given: the single slot holding an uninitialized token is selected. When a URI is
+    /// given, it must match a token, otherwise the command fails.
     ///
     /// The resulting token URI is printed to stdout, so it can be captured in scripts:
     /// `URI=$(tedge hsm init)`.

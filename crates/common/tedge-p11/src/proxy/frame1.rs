@@ -257,7 +257,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_init_token_request() {
-        let input = vec![14, 2, 116, 107, 1, 2, 115, 111, 1, 3, 112, 105, 110, 1, 3];
+        let input = vec![
+            14, 2, 116, 107, 1, 2, 115, 111, 1, 3, 112, 105, 110, 1, 16, 112, 107, 99, 115, 49, 49,
+            58, 115, 108, 111, 116, 45, 105, 100, 61, 51,
+        ];
         let request: Frame1 = postcard::from_bytes(&input).unwrap();
         assert_eq!(
             request,
@@ -265,7 +268,7 @@ mod tests {
                 label: "tk".to_string(),
                 so_pin: Some(SecretString::new("so".to_string())),
                 pin: Some(SecretString::new("pin".to_string())),
-                slot: Some(3),
+                uri: Some("pkcs11:slot-id=3".to_string()),
             })
         );
     }
@@ -280,7 +283,7 @@ mod tests {
                 label: "tk".to_string(),
                 so_pin: None,
                 pin: None,
-                slot: None,
+                uri: None,
             })
         );
     }

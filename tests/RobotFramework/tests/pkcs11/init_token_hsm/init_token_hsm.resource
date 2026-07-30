@@ -99,6 +99,64 @@ Initializing an existing token is idempotent
     ${privkeys}=    Execute Command    cmd=p11tool --login --set-pin=123456 --list-privkeys "${uri}"
     Should Contain    ${privkeys}    Label: script-key
 
+Initialize a specific slot by URI
+    [Documentation]    The slot to initialize can be selected explicitly by passing the PKCS #11 URI
+    ...    printed by `tedge hsm list-tokens`. An uninitialized slot has no label or serial, so it is
+    ...    addressed by its model and slot id.
+    ${tokens}=    Execute Command    cmd=tedge hsm list-tokens    strip=True
+    ${slot_uris}=    Get Regexp Matches    ${tokens}    URI:\\s+(pkcs11:\\S*slot-id=\\d+)    1
+    Should Not Be Empty    ${slot_uris}    msg=No uninitialized slot was listed:\n${tokens}
+    VAR    ${slot_uri}=    ${slot_uris}[0]
+
+    ${uri}=    Execute Command
+    ...    cmd=tedge hsm init --label slot-token "${slot_uri}"
+    ...    strip=True
+    ...    stdout=True
+    ...    stderr=False
+    Should Start With    ${uri}    pkcs11:
+    Should Contain    ${uri}    token=slot-token
+
+    # the new token is usable, and the tokens initialized earlier are left untouched
+    # (note: SoftHSM2 reassigns the slot id once a token is initialized in it)
+    ${tokens}=    Execute Command    cmd=p11tool --list-tokens
+    Should Contain    ${tokens}    token=slot-token
+    Should Contain    ${tokens}    token=manual-token
+
+    # A slot URI is strict: initializing the token renumbered the slots, so the slot URI used
+    # above no longer matches anything and re-running the same command fails rather than
+    # guessing another slot
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm init --label slot-token "${slot_uri}"
+    ...    exp_exit_code=!0
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    No token matching the given URI was found
+
+    # Re-runnable scripts should omit the URI: auto-discovery finds the token by its label,
+    # making the command idempotent
+    ${uri2}=    Execute Command
+    ...    cmd=tedge hsm init --label slot-token
+    ...    strip=True
+    ...    stdout=True
+    ...    stderr=False
+    Should Be Equal    ${uri}    ${uri2}
+
+    # Even with a valid URI of a free slot, an already-satisfied label is idempotent: the existing
+    # token is returned and no duplicate label is created on the selected slot
+    ${tokens}=    Execute Command    cmd=tedge hsm list-tokens    strip=True
+    ${free_uris}=    Get Regexp Matches    ${tokens}    URI:\\s+(pkcs11:\\S*slot-id=\\d+)    1
+    Should Not Be Empty    ${free_uris}    msg=No uninitialized slot was listed:\n${tokens}
+    ${uri3}=    Execute Command
+    ...    cmd=tedge hsm init --label slot-token "${free_uris}[0]"
+    ...    strip=True
+    ...    stdout=True
+    ...    stderr=False
+    Should Be Equal    ${uri}    ${uri3}
+
+    ${tokens}=    Execute Command    cmd=p11tool --list-tokens
+    ${count}=    Get Count    ${tokens}    token=slot-token
+    Should Be Equal As Integers    ${count}    1
+
 Custom Setup
     [Arguments]    ${tedge_p11_server_version}
     ${DEVICE_SN}=    Setup    register=${False}

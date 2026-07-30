@@ -5,8 +5,6 @@ use tedge_p11::service::InitTokenRequest;
 use tedge_p11::CryptokiConfig;
 use tedge_p11::SecretString;
 
-use crate::cli::common::Cloud;
-use crate::cli::common::CloudArg;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::ConfigError;
@@ -31,27 +29,21 @@ pub struct InitArgs {
     #[arg(long)]
     pub pin: Option<String>,
 
-    /// The slot id to initialize.
+    /// A PKCS #11 URI selecting the slot to initialize, e.g. `pkcs11:slot-id=1`.
     ///
-    /// If not provided, the single slot holding an uninitialized token is selected
-    /// automatically.
-    #[arg(long)]
-    pub slot: Option<u64>,
-
-    #[clap(subcommand)]
-    pub cloud: Option<CloudArg>,
+    /// If not provided and only 1 uninitialized slot is found, then it is used. If more than 1 is
+    /// found, then an explicit slot must be given. Use `tedge hsm list-tokens` to see the URI of
+    /// each slot.
+    pub uri: Option<String>,
 }
 
 impl InitArgs {
     pub fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        let cloud: Option<Cloud> = self.cloud.map(<_>::try_into).transpose()?;
-        let cloud_config = match cloud.as_ref() {
-            Some(c) => Some(config.as_cloud_config(c.into())?),
-            None => None,
-        };
+        // Initializing a token is not scoped to a cloud; the slot is selected by URI and nothing
+        // cloud-specific is written to the configuration.
         let cryptoki_config = config
             .device
-            .cryptoki_config(cloud_config.as_ref().map(|c| &**c as &dyn CloudConfig))?
+            .cryptoki_config(None::<&dyn CloudConfig>)?
             .context("Cryptoki config is not enabled")?;
 
         Ok(InitTokenHsmCmd {
@@ -59,7 +51,7 @@ impl InitArgs {
             label: self.label,
             so_pin: self.so_pin,
             pin: self.pin,
-            slot: self.slot,
+            uri: self.uri,
         }
         .into_boxed())
     }
@@ -71,7 +63,7 @@ pub struct InitTokenHsmCmd {
     pub label: String,
     pub so_pin: Option<String>,
     pub pin: Option<String>,
-    pub slot: Option<u64>,
+    pub uri: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -87,7 +79,7 @@ impl Command for InitTokenHsmCmd {
             label: self.label.clone(),
             so_pin: self.so_pin.clone().map(SecretString::from),
             pin: self.pin.clone().map(SecretString::from),
-            slot: self.slot,
+            uri: self.uri.clone(),
         })?;
 
         // Human-readable status goes to stderr, so that stdout carries only the token URI and the

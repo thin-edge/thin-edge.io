@@ -487,15 +487,53 @@ impl TedgeP11Service for Cryptoki {
         // A token that is initialized and has a user PIN is ready to use as-is.
         let is_usable = |i: &TokenInfo| i.token_initialized() && i.user_pin_initialized();
 
+        // The URI selects the slot to initialize. Only the attributes of the request URI are used,
+        // not those of the configured `cryptoki.uri`: the latter points at the token tedge signs
+        // with, which is exactly the token that doesn't exist yet on a fresh HSM.
+        let requested_uri = request
+            .uri
+            .as_deref()
+            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
+            .transpose()?;
+
+        // A usable token that already carries the requested label; used for idempotent re-runs.
+        let usable_with_label = || {
+            tokens
+                .iter()
+                .find(|(_, i)| is_usable(i) && i.label() == label)
+        };
+
         // Resolve which slot to reuse (idempotent) or initialize.
-        let slot = match request.slot {
-            Some(id) => {
-                let slot = Slot::try_from(id).with_context(|| format!("Invalid slot id {id}"))?;
-                let info = tokens
+        let slot = match requested_uri {
+            Some(uri) => {
+                let matching: Vec<&(Slot, TokenInfo)> = tokens
                     .iter()
-                    .find(|(s, _)| s.id() == id)
-                    .map(|(_, i)| i)
-                    .with_context(|| format!("No token present in slot {id}"))?;
+                    .filter(|(slot, info)| token_matches_uri(&uri, *slot, info))
+                    .collect();
+
+                let (slot, info) = match matching.as_slice() {
+                    [entry] => *entry,
+                    // An explicitly given URI has to match: guessing what the user meant instead
+                    // would be surprising. Note that slot ids are transient (initializing a token
+                    // can renumber the slots), so a slot URI may go stale; re-runnable scripts
+                    // should omit the URI and rely on the label-based auto-discovery instead.
+                    [] => anyhow::bail!(
+                        "No token matching the given URI was found. Use `tedge hsm list-tokens` \
+                         to see the available tokens."
+                    ),
+                    many => {
+                        let uris = many
+                            .iter()
+                            .map(|(slot, i)| export_slot_uri(*slot, i))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        anyhow::bail!(
+                            "Found multiple tokens matching the given URI. Please select one by \
+                             passing a URI that identifies a single token:\n{uris}"
+                        );
+                    }
+                };
+
                 // Idempotent: a slot that already holds a usable token is left untouched.
                 if is_usable(info) {
                     return Ok(InitTokenResponse {
@@ -505,18 +543,25 @@ impl TedgeP11Service for Cryptoki {
                 // Never reinitialize an already-initialized token: C_InitToken would erase it.
                 anyhow::ensure!(
                     !info.token_initialized(),
-                    "Slot {id} already holds an initialized token (label '{}') without a usable \
+                    "Slot {} already holds an initialized token (label '{}') without a usable \
                      user PIN. Refusing to reinitialize it as this would erase its contents.",
+                    slot.id(),
                     info.label()
                 );
-                slot
+                // The URI selects a free slot, but a token with the requested label already
+                // exists: the user's intention is already met, so return the existing token
+                // instead of initializing a second one with a duplicate label, which would break
+                // label-based selection. This keeps re-running the same command idempotent.
+                if let Some((_, existing)) = usable_with_label() {
+                    return Ok(InitTokenResponse {
+                        uri: export_session_uri(existing),
+                    });
+                }
+                *slot
             }
             None => {
                 // Idempotency: if a token with the requested label is already usable, return it.
-                if let Some((_, info)) = tokens
-                    .iter()
-                    .find(|(_, i)| is_usable(i) && i.label() == label)
-                {
+                if let Some((_, info)) = usable_with_label() {
                     return Ok(InitTokenResponse {
                         uri: export_session_uri(info),
                     });
@@ -532,10 +577,15 @@ impl TedgeP11Service for Cryptoki {
                 match uninitialized.as_slice() {
                     [slot] => *slot,
                     [_, _, ..] => {
-                        let ids: Vec<u64> = uninitialized.iter().map(|s| s.id()).collect();
+                        let uris = tokens
+                            .iter()
+                            .filter(|(s, _)| uninitialized.contains(s))
+                            .map(|(s, i)| export_slot_uri(*s, i))
+                            .collect::<Vec<_>>()
+                            .join("\n");
                         anyhow::bail!(
-                            "Found multiple uninitialized slots ({ids:?}). \
-                             Please select one explicitly using the slot argument."
+                            "Found multiple uninitialized slots. Please select one by passing its \
+                             URI:\n{uris}"
                         );
                     }
                     // No slot to initialize. Fall back to reusing an existing usable token if there
@@ -698,7 +748,9 @@ impl Cryptoki {
                 manufacturer: info.manufacturer_id().to_string(),
                 serial: info.serial_number().to_string(),
                 initialized: info.token_initialized(),
-                uri: export_session_uri(&info),
+                // Report the URI that actually selects this slot: an uninitialized token has no
+                // label or serial to be selected by, only its slot id.
+                uri: export_slot_uri(slot, &info),
             });
         }
         Ok(tokens)
@@ -1267,6 +1319,45 @@ fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigS
         SECP521R1_OID => Ok(SigScheme::EcdsaNistp521Sha512),
         _ => anyhow::bail!("Parsed oID({oid}) doesn't match any supported EC curve"),
     }
+}
+
+/// Generates the PKCS11 URI identifying a slot, whether or not it holds an initialized token.
+///
+/// An uninitialized token has neither a label nor a serial - both are only assigned by
+/// `C_InitToken` - so [`export_session_uri`] would return the same URI for every one of them. Such a
+/// slot can only be addressed by its "slot-id"; the model is included as well since it is the one
+/// attribute that says which HSM the slot belongs to.
+fn export_slot_uri(slot: Slot, token_info: &TokenInfo) -> String {
+    if token_info.token_initialized() {
+        export_session_uri(token_info)
+    } else {
+        format!(
+            "pkcs11:model={};slot-id={}",
+            uri::percent_encode(token_info.model()),
+            slot.id()
+        )
+    }
+}
+
+/// Whether a slot and the token it holds match the attributes given in a PKCS #11 URI.
+///
+/// Only the attributes present in the URI are considered, so a URI selecting a token by its label
+/// matches it in whichever slot it currently sits.
+fn token_matches_uri(uri: &uri::Pkcs11Uri, slot: Slot, token_info: &TokenInfo) -> bool {
+    uri.slot_id.is_none_or(|id| id == slot.id())
+        && uri
+            .token
+            .as_ref()
+            .is_none_or(|label| token_info.label() == label)
+        && uri
+            .serial
+            .as_ref()
+            .is_none_or(|serial| token_info.serial_number() == serial)
+        // the model is not a field of Pkcs11Uri, it is kept with the other attributes
+        && uri
+            .other
+            .get("model")
+            .is_none_or(|model| token_info.model() == model)
 }
 
 /// Generates PKCS11 URI of the selected token.

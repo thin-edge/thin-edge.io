@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -14,6 +15,14 @@ pub struct Pkcs11Uri<'a> {
     pub serial: Option<Cow<'a, str>>,
     pub id: Option<Vec<u8>>,
     pub object: Option<Cow<'a, str>>,
+
+    /// Slot the token is in.
+    ///
+    /// This addresses a slot directly, which is the only way to select between uninitialized
+    /// tokens, as those have neither a label nor a serial. Note that slot ids are assigned by the
+    /// module and may be reordered, so prefer the token/serial attributes to select an initialized
+    /// token.
+    pub slot_id: Option<u64>,
     pub other: HashMap<&'a str, Cow<'a, str>>,
 
     /// PIN to be used for the request.
@@ -59,6 +68,14 @@ impl<'a> Pkcs11Uri<'a> {
             .remove("id")
             .map(|id| percent_encoding::percent_decode_str(id).collect());
 
+        let slot_id = pairs
+            .remove("slot-id")
+            .map(|v| {
+                v.parse::<u64>()
+                    .with_context(|| format!("Invalid slot-id in PKCS #11 URI ({v})"))
+            })
+            .transpose()?;
+
         let other = pairs
             .into_iter()
             .map(|(k, v)| {
@@ -90,6 +107,7 @@ impl<'a> Pkcs11Uri<'a> {
             serial,
             id,
             object,
+            slot_id,
             other,
             pin_value,
         })
@@ -104,6 +122,7 @@ impl<'a> Pkcs11Uri<'a> {
         self.serial = self.serial.take().or(other.serial);
         self.id = self.id.take().or(other.id);
         self.object = self.object.take().or(other.object);
+        self.slot_id = self.slot_id.or(other.slot_id);
         self.pin_value = self.pin_value.take().or(other.pin_value);
 
         for (attribute, value) in other.other {
@@ -161,6 +180,20 @@ mod tests {
             attributes.id,
             Some(vec![0x69, 0x95, 0x3e, 0x5c, 0xf4, 0xbd, 0xec, 0x91])
         );
+    }
+
+    #[test]
+    fn decodes_slot_id() {
+        let uri = Pkcs11Uri::parse("pkcs11:slot-id=3").unwrap();
+        assert_eq!(uri.slot_id, Some(3));
+    }
+
+    #[test]
+    fn fails_on_uris_with_an_invalid_slot_id() {
+        let err = Pkcs11Uri::parse("pkcs11:slot-id=first").unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Invalid slot-id in PKCS #11 URI (first)"));
     }
 
     #[test]

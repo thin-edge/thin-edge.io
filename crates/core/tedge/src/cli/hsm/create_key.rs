@@ -34,8 +34,8 @@ pub struct CreateKeyArgs {
     /// the new keypair. If an object with this ID already exists, the operation will return an
     /// error. If not provided, a random ID will be generated and used by the keypair.
     ///
-    /// The id shall be provided as a sequence of hex digits without `0x` prefix, optionally
-    /// separated by spaces, e.g. `--id 010203` or `--id "01 02 03"`.
+    /// The id shall be provided as hex digits without `0x` prefix, e.g. `--id 010203`. Byte
+    /// separators as printed by other tools (e.g. `01:02:03`) are accepted as well.
     #[arg(long)]
     pub id: Option<String>,
 
@@ -227,7 +227,7 @@ impl Command for CreateKeyHsmCmd {
                             label: self.token_label.clone(),
                             so_pin: self.so_pin.clone().map(SecretString::from),
                             pin: self.pin.clone().map(SecretString::from),
-                            slot: None,
+                            uri: None,
                         })?;
                         eprintln!("Initialized a new token: {}", response.uri);
                         response.uri
@@ -398,8 +398,8 @@ pub(crate) fn encode_uri_attr(value: &str) -> String {
     encoded
 }
 
-/// Parses id provided as a sequence of bytes encoded as pair of hex digits without `0x` prefix, optionally separated by
-/// spaces.
+/// Parses id provided as a sequence of bytes encoded as pair of hex digits without `0x` prefix.
+/// Whitespace or colon separators between bytes (as printed by e.g. p11tool) are ignored.
 pub(crate) fn parse_id(id_hexstr: &str) -> anyhow::Result<Vec<u8>> {
     let id_hexstr = id_hexstr.trim();
 
@@ -408,7 +408,7 @@ pub(crate) fn parse_id(id_hexstr: &str) -> anyhow::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     let mut chars = id_hexstr.char_indices();
     while let Some((i1, c1)) = chars.next() {
-        if c1.is_whitespace() {
+        if c1.is_whitespace() || c1 == ':' {
             continue;
         }
 
@@ -532,6 +532,8 @@ mod tests {
         assert_eq!(parse_id("01 02 03").unwrap(), vec![0x01, 0x02, 0x03]);
         assert_eq!(parse_id("010203").unwrap(), vec![0x01, 0x02, 0x03]);
         assert_eq!(parse_id("0102 03").unwrap(), vec![0x01, 0x02, 0x03]);
+        // colon-separated, as printed by p11tool
+        assert_eq!(parse_id("01:02:03").unwrap(), vec![0x01, 0x02, 0x03]);
 
         assert_eq!(
             parse_id("    ").unwrap_err().to_string(),

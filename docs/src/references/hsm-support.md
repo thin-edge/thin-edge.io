@@ -284,20 +284,57 @@ selected, even if another token contains the intended key.
 
 ## Token initialization
 
-Before a token can hold keys it must be initialized. Historically this required an external tool such
-as `softhsm2-util` or `p11tool` to run the PKCS #11 initialization sequence. The `tedge cert
-init-token-hsm` command does this directly, so the only thing you have to know about the device is the
+Typically a token must be initialized before it can hold any keys. The `tedge hsm init` command runs
+the PKCS #11 initialization sequence, so the only thing you have to know about the device is the
 module path (`device.cryptoki.module_path`) that points to the PKCS #11 dynamic library.
 
+In most cases the command can be run without any arguments:
+
 ```sh
-tedge hsm init --label my-token
+tedge hsm init
 ```
 
 The command prints the resulting token URI to `stdout` (and human-readable status to `stderr`):
 
 ```sh title="Output"
-pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=a30ed1ca6244fc5f;token=my-token
+pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=a30ed1ca6244fc5f;token=tedge
 ```
+
+:::note
+Other tools, such as `p11tool`, can also be used to initialize a token if
+required, for example when the token needs vendor specific initialization options.
+:::
+
+Without arguments, the following defaults are used:
+
+- the slot is selected automatically: an uninitialized token is initialized, or, if there is none, an
+  already usable token is reused. If there are several candidates to choose from, the command fails
+  rather than guessing, and the slot has to be selected explicitly
+- the token is labelled `tedge`
+- the **user PIN**, used by all subsequent operations, is the PIN configured for `tedge-p11-server`
+  (`device.cryptoki.pin`)
+- the **Security Officer (SO) PIN**, only needed to initialize the token, is the same as the user PIN,
+  which works for tokens that do not enforce distinct PINs (such as SoftHSM2)
+
+Each of these can be overridden if the token requires it. The slot to initialize is selected by
+passing a PKCS #11 URI, as printed by `tedge hsm list-tokens`. A token only gets a label and a serial
+once it is initialized, so an uninitialized slot is addressed by its model and slot id:
+
+```sh
+tedge hsm init --label my-token --pin 123456 --so-pin 654321 "pkcs11:model=SoftHSM%20v2;slot-id=1"
+```
+
+:::note
+Slot ids are assigned by the PKCS #11 module and can change, for instance when another token is
+initialized. Read the URI from `tedge hsm list-tokens` right before using it, rather than storing it.
+:::
+
+The command is idempotent: if a token with the requested label is already initialized, it is left
+untouched and its URI is returned, and duplicate labels are never created. A given URI must match a
+token though, otherwise the command fails. In particular, since slot ids can change once a token is
+initialized, re-running the same command with a stored slot URI fails once the URI has gone stale;
+re-runnable scripts should omit the URI and rely on the label, or read the URI from
+`tedge hsm list-tokens` each time.
 
 Because the URI is the only thing written to `stdout`, the command is easy to use in scripts:
 
@@ -305,18 +342,6 @@ Because the URI is the only thing written to `stdout`, the command is easy to us
 TOKEN_URI=$(tedge hsm init --label my-token)
 tedge hsm create-key --type ecdsa "$TOKEN_URI"
 ```
-
-The command auto-discovers the slot to initialize: when `--slot` is not given, the single slot holding
-an uninitialized token is selected. Initialization requires two secrets:
-
-- the **user PIN** (`--pin`), used by all subsequent operations. If not provided, the PIN configured
-  for `tedge-p11-server` is used.
-- the **Security Officer (SO) PIN** (`--so-pin`), only needed to initialize the token. If not provided,
-  the user PIN is reused as the SO PIN, which works for tokens that do not enforce distinct PINs (such
-  as SoftHSM2). Tokens that require a distinct SO PIN must pass `--so-pin` explicitly.
-
-The command is idempotent: if a token with the requested label is already initialized, it is left
-untouched and its URI is returned.
 
 :::note
 
@@ -372,7 +397,7 @@ Options:
           
           If provided and no object exists on the token with the same ID, this will be the ID of the new keypair. If an object with this ID already exists, the operation will return an error. If not provided, a random ID will be generated and used by the keypair.
           
-          The id shall be provided as a sequence of hex digits without `0x` prefix, optionally separated by spaces, e.g. `--id 010203` or `--id "01 02 03"`.
+          The id shall be provided as hex digits without `0x` prefix, e.g. `--id 010203`. Byte separators as printed by other tools (e.g. `01:02:03`) are accepted as well.
 
       --log-level <LOG_LEVEL>
           Configures the logging level.

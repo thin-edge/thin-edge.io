@@ -29,3 +29,6 @@ Can initialize a token with hsm init
 
 hsm init is idempotent
     Initializing an existing token is idempotent
+
+Can initialize a specific slot by URI
+    Initialize a specific slot by URI

@@ -20,8 +20,7 @@ pub struct DeleteKeyArgs {
     #[arg(long)]
     pub label: Option<String>,
 
-    /// Id (CKA_ID) of the key to delete, as a sequence of hex digits without `0x` prefix,
-    /// optionally separated by spaces, e.g. `--id 010203` or `--id "01 02 03"`.
+    /// Id (CKA_ID) of the key to delete, as hex digits without `0x` prefix, e.g. `--id 010203`.
     #[arg(long)]
     pub id: Option<String>,
 
