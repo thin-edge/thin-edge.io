@@ -3,8 +3,8 @@ set -e
 
 TOKEN_URL="${TOKEN_URL:-}"
 
-export GNUTLS_PIN="${GNUTLS_PIN:-123456}"
-export GNUTLS_SO_PIN="${GNUTLS_SO_PIN:-12345678}"
+export PIN="${PIN:-123456}"
+export SO_PIN="${SO_PIN:-12345678}"
 export TOKEN_LABEL="${TOKEN_LABEL:-tedge}"
 export TEDGE_CONFIG_DIR="${TEDGE_CONFIG_DIR:-/etc/tedge}"
 export PUBLIC_KEY="${PUBLIC_KEY:-${TEDGE_CONFIG_DIR}/device-certs/tedge.pub}"
@@ -56,20 +56,20 @@ of HSMs.
 
 ## TPM2
 
-$0 --type tpm2 --pin $GNUTLS_PIN --so-pin $GNUTLS_SO_PIN
+$0 --type tpm2 --pin $PIN --so-pin $SO_PIN
 # Initialize a new slot and create a new private key pair in a TPM 2.0 module
 # (the uninitialized slot is auto-discovered)
 
 ## Nitrokey
 
-$0 --type nitrokey --pin $GNUTLS_PIN --so-pin $GNUTLS_SO_PIN
+$0 --type nitrokey --pin $PIN --so-pin $SO_PIN
 # Set the user PIN on a pre-initialized nitrokey (USB based HSM) and create a new key pair.
 # The token is auto-selected; add --token-url '<uri>' to pick a specific token if several exist.
 
 
 ## SoftHSM2
 
-$0 --type softhsm2 --pin $GNUTLS_PIN --so-pin $GNUTLS_SO_PIN
+$0 --type softhsm2 --pin $PIN --so-pin $SO_PIN
 # Initialize a new slot and create a new private key pair using softhsm2 (for testing only)
 
 EOT
@@ -101,11 +101,11 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --pin)
-            GNUTLS_PIN="$2"
+            PIN="$2"
             shift
             ;;
         --so-pin)
-            GNUTLS_SO_PIN="$2"
+            SO_PIN="$2"
             shift
             ;;
         --key-type)
@@ -194,7 +194,7 @@ configure_tedge() {
     tedge config set mqtt.bridge.built_in true
     tedge config set device.cryptoki.mode socket
     tedge config set device.cryptoki.module_path "$PKCS11_MODULE"
-    tedge config set device.cryptoki.pin "$GNUTLS_PIN"
+    tedge config set device.cryptoki.pin "$PIN"
 }
 
 # (Re)start tedge-p11-server so it (re)loads the configured module and any HSM-specific
@@ -213,9 +213,9 @@ restart_p11_server() {
 # the available URIs if it cannot pick one).
 set_user_pin_via_so() {
     if [ -n "$TOKEN_URL" ]; then
-        tedge hsm change-pin --reset --new-pin "$GNUTLS_PIN" --so-pin "$GNUTLS_SO_PIN" "$TOKEN_URL"
+        tedge hsm change-pin --reset --new-pin "$PIN" --so-pin "$SO_PIN" "$TOKEN_URL"
     else
-        tedge hsm change-pin --reset --new-pin "$GNUTLS_PIN" --so-pin "$GNUTLS_SO_PIN"
+        tedge hsm change-pin --reset --new-pin "$PIN" --so-pin "$SO_PIN"
     fi
 }
 
@@ -228,7 +228,7 @@ init_private_key() {
             # Note: softhsm does not require a TOKEN_URL.
             usermod -a -G softhsm tedge ||:
             restart_p11_server
-            tedge hsm init --label "$TOKEN_LABEL" --pin "$GNUTLS_PIN" --so-pin "$GNUTLS_SO_PIN"
+            tedge hsm init --label "$TOKEN_LABEL" --pin "$PIN" --so-pin "$SO_PIN"
             ;;
         tpm2)
             usermod -a -G tss tedge ||:
@@ -247,7 +247,7 @@ EOT
             # (C_InitToken + C_InitPIN) through the PKCS#11 interface. The uninitialized slot is
             # auto-discovered, so a TOKEN_URL is not required.
             restart_p11_server
-            tedge hsm init --label "$TOKEN_LABEL" --pin "$GNUTLS_PIN" --so-pin "$GNUTLS_SO_PIN"
+            tedge hsm init --label "$TOKEN_LABEL" --pin "$PIN" --so-pin "$SO_PIN"
             ;;
         nitrokey)
             # Nitrokey (SmartCard-HSM) tokens ship pre-initialized, so the token itself does not
