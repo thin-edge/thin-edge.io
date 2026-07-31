@@ -490,17 +490,17 @@ curl -f -X DELETE http://localhost:8000/te/v1/entities/device/child01///twin
 
 ## Get exposed configuration
 
-Each entity that owns `tedge_config` settings (e.g. `tedge-agent`, or a cloud mapper such as
-`tedge-mapper-c8y`) publishes any setting explicitly marked exposable as a retained `config` MQTT
-message under its own service topic (see the [MQTT API reference](../../references/mqtt-api.md#configuration)).
-The agent collects these as an ordinary MQTT subscriber and serves them as a read-only view over HTTP.
+The agent and the mappers publish a subset of their configuration
+as retained `config` MQTT messages
+(see the [MQTT API reference](../../references/mqtt-api.md#configuration)).
+The agent collects the `config` messages of all the services
+and serves them over HTTP,
+so that the configuration of each entity can be queried individually.
 
-This view is read-only: `PUT`, `PATCH`, and `DELETE` on a `config` resource path are rejected.
-Configuration can only be changed by its owning component, via `tedge config set` and a restart.
-
-A configuration key that is not marked exposable and a key that does not exist at all are
-indistinguishable here: both return `404 Not Found`, so the response reveals nothing about which
-non-exposed settings exist.
+This view is read-only: any other method (`POST`, `PUT`, `DELETE` etc)
+returns `405 Method Not Allowed`.
+A setting can only be changed with `tedge config set`,
+and the new value is published only once its owning service is restarted.
 
 ### Get a single configuration value
 
@@ -514,6 +514,12 @@ GET /te/v1/entities/{topic-id}/config/{key}
 
 * 200: OK
 * 404: Not Found (the key is not exposed, or does not exist)
+
+:::note
+A key that is not exposed and a key that does not exist at all
+are indistinguishable here: both return `404 Not Found`.
+So the response tells nothing about the settings that are not exposed.
+:::
 
 #### Example: Get the agent's device.id setting
 
