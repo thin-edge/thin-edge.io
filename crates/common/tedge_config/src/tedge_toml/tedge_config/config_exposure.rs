@@ -130,11 +130,6 @@ mod tests {
         let core = exposed_core_config(&reader);
         let (_, host) = core.iter().find(|(k, _)| k == "mqtt.client.host").unwrap();
         assert_eq!(host.as_deref(), Some("127.0.0.1"));
-
-        // c8y.url has no default, so with no config it should be unset
-        let cloud = exposed_cloud_config(&reader, CloudType::C8y, None).unwrap();
-        let (_, url) = cloud.iter().find(|(k, _)| k == "url").unwrap();
-        assert_eq!(url, &None);
     }
 
     #[test]
@@ -181,6 +176,16 @@ mod tests {
         assert!(cloud
             .iter()
             .any(|(k, v)| k == "url" && v.as_deref() == Some("edge.c8y.io")));
+    }
+
+    #[test]
+    fn cloud_config_reports_none_for_unset_exposable_keys() {
+        let reader = config_reader("");
+        let cloud = exposed_cloud_config(&reader, CloudType::C8y, None).unwrap();
+
+        // c8y.url has no default, so with no config it should be unset
+        let (_, url) = cloud.iter().find(|(k, _)| k == "url").unwrap();
+        assert_eq!(url, &None);
     }
 
     #[test]
@@ -231,7 +236,7 @@ mod tests {
         for key in secret_keys {
             let parsed: ReadableKey = key
                 .parse()
-                .unwrap_or_else(|e| panic!("failed to parse known configuration key '{key}': {e}"));
+                .expect(&format!("failed to parse known configuration key '{key}'"));
             assert!(
                 !parsed.is_exposable(),
                 "'{key}' holds sensitive material and must never be marked #[tedge_config(exposable)]"
