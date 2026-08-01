@@ -1,0 +1,10 @@
+[Unit]
+Description=A service the service command tests can start, stop and restart
+
+[Service]
+Type=exec
+ExecStart=/bin/sleep infinity
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
