@@ -149,6 +149,8 @@ and combined them with the builtin workflows implemented by the agent itself.
 Each workflow is defined using a TOML file stored in `/etc/tedge/operations`. Each specifies:
 - the command name that it should trigger on
   such as `firmware_update` or `restart`
+- optionally, the [type of entity](#workflow-entity-type) the workflow applies to,
+  a device unless stated otherwise
 - the list of states
 - for each state:
   - the state name as defined by the operation API
@@ -209,11 +211,54 @@ on_error = "failed"
 %%te%% combines all these workflows to determine what has to be done
 when a state message is published for a command on a topic matching the global topic filter for commands,
 i.e. `te/+/+/+/+/cmd/+/+`.
-- Each running instance of the __tedge_agent__ reacts only on commands targeting its own device.
-- If a user-defined workflow has been defined for this operation, then this workflow is used to determine the required action.
+- Each running instance of the __tedge_agent__ reacts only on commands targeting its own device
+  or one of the services of that device.
+- If a user-defined workflow has been defined for this operation and this entity type,
+  then this workflow is used to determine the required action.
 - If no workflow has been defined by the user for this operation, then the builtin workflow is used.
 - If there is no workflow or no defined action for the current state,
   then the __tedge_agent__ simply waits for another component to take over the command.
+
+### Scoping a workflow to an entity type {#workflow-entity-type}
+
+The same operation name can mean two different things depending on what it is addressed to.
+Restarting a device is not restarting one of its services.
+
+A workflow therefore declares the type of entity it applies to, with a `type` field:
+
+```toml title="file: service_restart.toml"
+operation = "restart"
+type = "service"
+
+[init]
+  action = "proceed"
+  on_success = "executing"
+```
+
+`type` takes one of the entity `@type` values: `device`, `child-device` or `service`.
+It defaults to `device`, so a workflow written before this field existed keeps its behaviour.
+
+A workflow is only used for commands addressed to an entity of the declared type.
+A `restart` workflow with `type = "service"` and a `restart` workflow without `type`
+are two distinct workflows, and neither drives the commands of the other.
+
+The file name plays no role in any of this.
+An operation name comes from the `operation` field inside the file, never from the file name,
+so two workflows for the same operation only have to be in two files with different names.
+The workflows %%te%% ships for [service commands](./service-commands.md#shipped-workflows)
+are named `service_restart.toml`, `service_stop.toml` and `service_start.toml` for readability only.
+
+:::caution
+The type `child-device` is currently not supported yet.
+
+The type a target is matched against is the `@type` it was registered with,
+with one exception: the device the agent runs on is always matched as `device`.
+An agent running on a child device registers itself as a `child-device` of the main device,
+so matching it on its registered type would leave it unable to find its own workflows.
+The consequence is that `type = "child-device"` matches nothing today.
+The value is kept for the case it is meant for — an agent driving the workflows of another device —
+which is not supported yet, and loading such a workflow is logged as a warning.
+:::
 
 ### Script Execution
 

@@ -17,11 +17,18 @@ Commands:
   config           Configure Thin Edge
   connect          Connect to cloud provider
   disconnect       Remove bridge connection for a provider
+  diag             Collect diagnostic information to help with debugging
   reconnect        Reconnect command, calls disconnect followed by connect
   refresh-bridges  Refresh all currently active mosquitto bridges
   upload           Upload files to the cloud
   mqtt             Publish a message on a topic and subscribe a topic
+  http             Send HTTP requests to local thin-edge HTTP servers
+  flows            Monitor and test flows
+  mapper           Manage and inspect mappers
+  service          Run an action on a system service, whatever manages it
   run              Run thin-edge services and plugins
+  completions      
+  bridge           
   help             Print this message or the help of the given subcommand(s)
 
 Options:
@@ -36,9 +43,7 @@ Options:
       --log-level <LOG_LEVEL>
           Configures the logging level.
           
-          One of error/warn/info/debug/trace.
-          Logs with verbosity lower or equal to the selected level will be printed,
-          i.e. warn prints ERROR and WARN logs and trace prints logs of all levels.
+          One of error/warn/info/debug/trace. Logs with verbosity lower or equal to the selected level will be printed, i.e. warn prints ERROR and WARN logs and trace prints logs of all levels.
           
           Overrides `--debug`
 

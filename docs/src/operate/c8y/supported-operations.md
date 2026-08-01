@@ -41,6 +41,27 @@ For all other operation types, the mapper can execute a custom operation plugin 
 The `Supported Operations API` of the Cumulocity mapper can be used to add support for these custom operations,
 or when the user wants to handle any of the inbuilt operations differently than how the `tedge-agent` handles it.
 
+### Service operations
+
+A service running on an IoT device can support commands such as start, stop and restart.
+
+The Cumulocity mapper maps every command targeting a service entity
+to the `c8y_ServiceCommand` operation.
+Examples:
+
+| Cumulocity Service Command | Tedge Command |
+| ----------|---------------|
+| `RESTART` | `te/<service-topic-id>/cmd/restart` |
+| `START` | `te/<service-topic-id>/cmd/start` |
+| `STOP` | `te/<service-topic-id>/cmd/stop` |
+
+:::note
+On a **service** entity, every `cmd/<action>` capability is a
+[service command](./service-commands.md),
+so a service declaring `cmd/restart` gets `RESTART` in `c8y_SupportedServiceCommands`,
+not the `c8y_Restart` operation.
+:::
+
 ### Supported Operations API
 
 The Supported Operations API utilises the file system to add or remove operations.
