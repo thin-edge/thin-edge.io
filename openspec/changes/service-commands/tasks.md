@@ -85,10 +85,10 @@
 
 ## 10. Integration tests
 
-- [ ] 10.1 Add `tests/RobotFramework/tests/cumulocity/service_command/` covering an init-managed service end to end: capability declaration, `c8y_SupportedServiceCommands`, a RESTART operation, and the `506` result
-- [ ] 10.2 Cover a service plugin type end to end with a test plugin, including a custom action
-- [ ] 10.3 Cover the rejections: `stop` of tedge-agent, `stop` of a cloud mapper, and an undeclared action
-- [ ] 10.4 Cover the agent self-restart case
+- [x] 10.1 Add `tests/RobotFramework/tests/cumulocity/service_commands/service_commands.robot` covering an init-managed service end to end: capability declaration, `c8y_SupportedServiceCommands`, a RESTART operation, and the `506` result. The service is a systemd unit the test installs, named exactly as its entity topic identifier names it. Also covers withdrawing an action and a `STOP` then `START` pair
+- [x] 10.2 Cover a service plugin type end to end with a test plugin, in `service_plugin.robot`: the standard `restart`, the custom action `pause` with a workflow of its own, exit code `2` reported as an unsupported action, the name and the type taken from the registered entity rather than from the operation, the plugin directory owned by root with mode `755`, and the two `tedge service` command line paths
+- [x] 10.3 Cover the rejections: `stop` of tedge-agent, `stop` of a cloud mapper, an undeclared action, and a `command` value that is not a valid action name
+- [x] 10.4 Cover the agent self-restart case, checking that the agent process really changed and that the command reached `successful` exactly once
 
 ## 11. Update the design decision record
 
