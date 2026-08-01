@@ -289,6 +289,7 @@ impl Agent {
             &mut script_runner,
             &mut fs_watch_actor_builder,
             &mut downloader_actor_builder,
+            &mut uploader_actor_builder,
         );
         workflow_actor_builder.register_builtin_operation(&mut restart_actor_builder);
         workflow_actor_builder.register_builtin_operation(&mut software_update_builder);
