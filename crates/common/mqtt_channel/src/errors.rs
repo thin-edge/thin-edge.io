@@ -1,5 +1,6 @@
 use rumqttc::tokio_rustls::rustls;
 use rumqttc::ConnectReturnCode;
+use std::time::Duration;
 
 /// An MQTT related error
 #[derive(thiserror::Error, Debug)]
@@ -24,6 +25,9 @@ pub enum MqttError {
 
     #[error("MQTT connection rejected: {0:?}")]
     ConnectionRejected(rumqttc::ConnectReturnCode),
+
+    #[error("MQTT connection timed out after {timeout:?}")]
+    ConnectionTimeout { timeout: Duration },
 
     #[error("MQTT subscription failure")]
     // The MQTT specs are mysterious on the possible cause of such a failure

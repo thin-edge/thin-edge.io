@@ -241,8 +241,28 @@ impl Connection {
             config.broker.host, config.broker.port, config.session_name
         );
 
+        // None / zero means retry forever (historical behaviour).
+        let connection_timeout = config.connection_timeout.filter(|d| !d.is_zero());
+        let started_at = tokio::time::Instant::now();
+
         loop {
-            match event_loop.poll().await {
+            if let Some(timeout) = connection_timeout {
+                if started_at.elapsed() >= timeout {
+                    return Err(MqttError::ConnectionTimeout { timeout });
+                }
+            }
+
+            let poll_result = if let Some(timeout) = connection_timeout {
+                let remaining = timeout.saturating_sub(started_at.elapsed());
+                match tokio::time::timeout(remaining, event_loop.poll()).await {
+                    Ok(result) => result,
+                    Err(_) => return Err(MqttError::ConnectionTimeout { timeout }),
+                }
+            } else {
+                event_loop.poll().await
+            };
+
+            match poll_result {
                 Ok(Event::Incoming(Packet::ConnAck(ack))) => {
                     if let Some(err) = MqttError::maybe_connection_error(&ack) {
                         return Err(err);
@@ -287,7 +307,16 @@ impl Connection {
                     // Errors on send are ignored: it just means the client has closed the receiving channel.
                     let _ = error_sender.send(err.into()).await;
 
-                    Connection::do_pause().await;
+                    if let Some(timeout) = connection_timeout {
+                        let remaining = timeout.saturating_sub(started_at.elapsed());
+                        if remaining.is_zero() {
+                            return Err(MqttError::ConnectionTimeout { timeout });
+                        }
+                        // Do not sleep past the connection deadline.
+                        sleep(remaining.min(Duration::from_secs(1))).await;
+                    } else {
+                        Connection::do_pause().await;
+                    }
                 }
                 _ => (),
             }
