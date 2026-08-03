@@ -1,5 +1,3 @@
-use std::convert::Infallible;
-
 use async_trait::async_trait;
 use http::header::HeaderName;
 use http::header::HeaderValue;
@@ -7,8 +5,6 @@ use http::HeaderMap;
 use http::Method;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
-use http_body_util::Empty;
-use http_body_util::Full;
 use hyper::body::Bytes;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
@@ -39,7 +35,7 @@ pub enum HttpError {
 }
 
 type Body = BoxBody<Bytes, hyper::Error>;
-pub type HttpRequest = http::Request<Body>;
+pub type HttpRequest = http::Request<Option<Bytes>>;
 
 #[derive(Debug)]
 pub struct HttpResponse {
@@ -61,18 +57,14 @@ pub type HttpBytes = hyper::body::Bytes;
 /// An Http Request builder
 pub struct HttpRequestBuilder {
     inner: http::request::Builder,
-    body: Result<Body, HttpError>,
-}
-
-fn infallible<T>(i: Infallible) -> T {
-    match i {}
+    body: Result<Bytes, HttpError>,
 }
 
 impl HttpRequestBuilder {
     /// Build the request
     pub fn build(self) -> Result<HttpRequest, HttpError> {
         self.body
-            .and_then(|body| self.inner.body(body).map_err(|err| err.into()))
+            .and_then(|body| self.inner.body(Some(body)).map_err(HttpError::from))
     }
 
     /// Start to build a GET request
@@ -83,7 +75,7 @@ impl HttpRequestBuilder {
     {
         HttpRequestBuilder {
             inner: hyper::Request::get(uri),
-            body: Ok(Empty::new().map_err(infallible).boxed()),
+            body: Ok(Bytes::new()),
         }
     }
 
@@ -95,7 +87,7 @@ impl HttpRequestBuilder {
     {
         HttpRequestBuilder {
             inner: hyper::Request::post(uri),
-            body: Ok(Empty::new().map_err(infallible).boxed()),
+            body: Ok(Bytes::new()),
         }
     }
 
@@ -107,7 +99,7 @@ impl HttpRequestBuilder {
     {
         HttpRequestBuilder {
             inner: hyper::Request::put(uri),
-            body: Ok(Empty::new().map_err(infallible).boxed()),
+            body: Ok(Bytes::new()),
         }
     }
 
@@ -119,7 +111,7 @@ impl HttpRequestBuilder {
     {
         HttpRequestBuilder {
             inner: hyper::Request::delete(uri),
-            body: Ok(Empty::new().map_err(infallible).boxed()),
+            body: Ok(Bytes::new()),
         }
     }
 
@@ -149,15 +141,18 @@ impl HttpRequestBuilder {
     /// Send a JSON body
     pub fn json<T: serde::Serialize + ?Sized>(self, json: &T) -> Self {
         let body = serde_json::to_vec(json)
-            .map(|bytes| Full::new(Bytes::from(bytes)).map_err(infallible).boxed())
-            .map_err(|err| err.into());
+            .map(Bytes::from)
+            .map_err(HttpError::from);
         HttpRequestBuilder { body, ..self }
     }
 
     /// Send a  body
-    pub fn body(self, content: impl Into<Body>) -> Self {
-        let body = Ok(content.into());
-        HttpRequestBuilder { body, ..self }
+    pub fn body(self, content: impl Into<Bytes>) -> Self {
+        let body = content.into();
+        HttpRequestBuilder {
+            body: Ok(body),
+            ..self
+        }
     }
 }
 
