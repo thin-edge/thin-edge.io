@@ -18,7 +18,7 @@ on_error = "failed"
 action = "upload"
 input.url = "${.payload.tedgeUrl}"
 on_success = "successful"
-on_error = "failed"
+on_error = { status = "failed", reason = "config-manager failed uploading configuration snapshot: ${.payload.tedgeUrl}" }
 
 [successful]
 action = "cleanup"
