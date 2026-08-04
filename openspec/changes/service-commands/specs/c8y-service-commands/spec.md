@@ -75,10 +75,11 @@ For a valid operation, the mapper SHALL publish a thin-edge command with:
   so lowercasing the value it sends gives back the action name the service declared.
   The action is named by the topic only;
   the mapper SHALL NOT copy the cloud's `command` value into the thin-edge payload;
-- `serviceName` derived from the resolved entity topic identifier, not from the cloud payload,
-  since the cloud value may be a display name.
-  A custom topic scheme carries no service name in the topic identifier,
-  in which case the name given at registration is used;
+- `serviceName` taken from the `serviceName` value of the operation payload.
+  Cumulocity holds one name per service, the one the mapper published when registering it,
+  so this is the name a backend is asked for.
+  The target is resolved from the external id and never from that name,
+  so the command is published on the topic of the resolved service whatever the name says;
 - `serviceType` taken from the service's registration data,
   falling back to the `serviceType` value in the operation payload,
   and to the default type `service` when the service was registered without a type;
@@ -100,9 +101,11 @@ For a valid operation, the mapper SHALL publish a thin-edge command with:
   and the operation payload carries no usable `serviceType`
 - **THEN** the published command SHALL carry the default type `service`
 
-#### Scenario: The service name comes from the entity, not the payload
-- **WHEN** the operation payload's `serviceName` is a display name differing from the entity name
-- **THEN** the published command SHALL carry the name derived from the resolved entity topic identifier
+#### Scenario: The service name comes from the payload
+- **WHEN** the operation payload's `serviceName` differs from the service segment
+  of the resolved entity's topic identifier
+- **THEN** the published command SHALL carry the name from the payload,
+  on the topic of the resolved entity
 
 ### Requirement: The mapper rejects invalid c8y_ServiceCommand operations
 
@@ -113,7 +116,15 @@ and SHALL NOT publish any thin-edge command, when:
 - the requested command, compared case-insensitively,
   is not among the commands the target service has declared;
 - the lowercased `command` value does not match the action name rule `[a-z][a-z0-9_]+`,
-  which is what `tedge service` accepts.
+  which is what `tedge service` accepts;
+- the operation carries no `serviceName`, or one a backend could misread.
+  The name is checked against the same rule as the service name of `tedge service`,
+  so the reason reaches the operator instead of a generic backend failure.
+  Cumulocity always names the service,
+  hence a missing name is reported the same way as an invalid one;
+- the service type, whether it comes from the registration data or from the operation payload,
+  does not match the service type rule of `tedge service`,
+  since it names a file under the service plugin directory.
 
 The failure SHALL be reported on the SmartREST topic of the target service,
 or on the topic of the main device when the target itself cannot be resolved.
@@ -133,6 +144,16 @@ or on the topic of the main device when the target itself cannot be resolved.
 #### Scenario: A malformed command value is refused
 - **WHEN** the operation's `command` is empty, carries a space,
   or once lowercased contains a character outside `[a-z0-9_]`
+- **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
+
+#### Scenario: A service name a backend could misread is refused
+- **WHEN** the operation's `serviceName` is absent or empty,
+  starts with `-`, or holds a character outside `[A-Za-z0-9_.@-]`
+- **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
+
+#### Scenario: A service type naming no plugin file is refused
+- **WHEN** the resolved service type holds a character outside `[a-z0-9_-]`,
+  whether the service registered it or the operation carries it
 - **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
 
 ### Requirement: The mapper reports the service command status back to Cumulocity

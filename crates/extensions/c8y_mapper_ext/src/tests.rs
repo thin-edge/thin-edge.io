@@ -2872,7 +2872,7 @@ async fn declare_and_trigger_a_service_action(
         json!({
             "id": "1234",
             "status": "PENDING",
-            "c8y_ServiceCommand": {"command": "RESTART"},
+            "c8y_ServiceCommand": {"command": "RESTART", "serviceName": "collectd"},
             "externalSource": {
                 "externalId": "test-device:device:main:service:collectd",
                 "type": "c8y_Serial"

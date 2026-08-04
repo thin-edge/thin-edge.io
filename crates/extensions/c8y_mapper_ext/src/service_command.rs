@@ -25,6 +25,8 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::service_command::validate_action_name;
+use tedge_api::service_command::validate_service_name;
+use tedge_api::service_command::validate_service_type;
 use tedge_api::service_command::DEFAULT_SERVICE_TYPE;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::CommandStatus;
@@ -187,12 +189,18 @@ impl CumulocityConverter {
             return self.fail_service_command(Some(target), op_id, &reason);
         }
 
-        // The name the backend running the action knows, which is not the name Cumulocity sends:
-        // that one can be a display name
-        let service_name = target
-            .topic_id()
-            .default_service_name()
-            .unwrap_or_else(|| target.display_name());
+        // The name of the service to act on, as the operation gives it. Cumulocity holds one name
+        // per service, the very name thin-edge published when it registered the service, so this
+        // is the name a backend is asked for. It is validated here rather than left to the backend,
+        // so that a name a backend could misread is reported as the reason of the failed operation.
+        let service_name = request.service_name.as_deref().unwrap_or_default();
+        if let Err(err) = validate_service_name(service_name) {
+            let reason = format!(
+                "{} cannot run the '{action}' action: {err}",
+                target_xid.as_ref()
+            );
+            return self.fail_service_command(Some(target), op_id, &reason);
+        }
 
         // The type selects the backend, so what the service registered itself with wins. The value
         // Cumulocity sends is only used for a service registered with no type of its own.
@@ -205,6 +213,16 @@ impl CumulocityConverter {
                     .filter(|service_type| !service_type.is_empty())
             })
             .unwrap_or(DEFAULT_SERVICE_TYPE);
+
+        // Whichever of the two it comes from, the type names a file in the service plugin
+        // directory, so it is validated for the same reason the name is
+        if let Err(err) = validate_service_type(service_type) {
+            let reason = format!(
+                "{} cannot run the '{action}' action: {err}",
+                target_xid.as_ref()
+            );
+            return self.fail_service_command(Some(target), op_id, &reason);
+        }
 
         let topic = self.mqtt_schema.topic_for(
             target.topic_id(),
@@ -466,7 +484,11 @@ mod tests {
 
         // The action is the lowercased command name, and it is named by the topic only
         assert_messages_matching(
-            &trigger(&mut converter, json!({"command": "RESTART"})).await,
+            &trigger(
+                &mut converter,
+                json!({"command": "RESTART", "serviceName": "collectd"}),
+            )
+            .await,
             [(
                 RESTART_CMD_TOPIC,
                 json!({
@@ -490,7 +512,7 @@ mod tests {
         assert_messages_matching(
             &trigger(
                 &mut converter,
-                json!({"command": "RESTART", "serviceType": "systemd"}),
+                json!({"command": "RESTART", "serviceName": "collectd", "serviceType": "systemd"}),
             )
             .await,
             [(
@@ -515,7 +537,7 @@ mod tests {
         assert_messages_matching(
             &trigger(
                 &mut converter,
-                json!({"command": "RESTART", "serviceType": "container"}),
+                json!({"command": "RESTART", "serviceName": "collectd", "serviceType": "container"}),
             )
             .await,
             [(
@@ -531,25 +553,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_name_of_the_service_is_never_a_display_name() {
+    async fn the_name_of_the_service_comes_from_the_operation() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
-        register_typed_service(&mut converter, json!({"name": "Collectd Daemon"})).await;
+        register_typed_service(&mut converter, json!({"name": "Collectd-Daemon"})).await;
         declare(&mut converter, "restart").await;
 
-        // Neither the name displayed by Cumulocity nor the one displayed on the service twin
-        // names the service for the backend running the action
+        // The name given at registration is the name Cumulocity holds for that service, and the
+        // one it sends back. The target is resolved from the external id, not from that name, so
+        // the command still goes to the topic of the registered service
         assert_messages_matching(
             &trigger(
                 &mut converter,
-                json!({"command": "RESTART", "serviceName": "Collectd Daemon"}),
+                json!({"command": "RESTART", "serviceName": "Collectd-Daemon"}),
             )
             .await,
             [(
                 RESTART_CMD_TOPIC,
                 json!({
                     "status": "init",
-                    "serviceName": "collectd",
+                    "serviceName": "Collectd-Daemon",
                     "serviceType": "service",
                 })
                 .into(),
@@ -601,6 +624,64 @@ mod tests {
         let messages = trigger(&mut converter, request).await;
 
         assert_operation_failed(&messages, SMARTREST_TOPIC, "Invalid action name");
+    }
+
+    #[test_case(json!({"command": "RESTART"}); "missing")]
+    #[test_case(json!({"command": "RESTART", "serviceName": ""}); "empty")]
+    #[test_case(json!({"command": "RESTART", "serviceName": "--now"}); "looking like an option")]
+    #[test_case(json!({"command": "RESTART", "serviceName": "collectd;reboot"}); "with a shell separator")]
+    #[tokio::test]
+    async fn a_name_no_backend_can_be_asked_for_fails_the_operation(request: serde_json::Value) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "restart").await;
+
+        // Cumulocity always names the service, so a missing name is reported like an invalid one
+        let messages = trigger(&mut converter, request).await;
+
+        assert_operation_failed(&messages, SMARTREST_TOPIC, "Invalid service name");
+    }
+
+    #[tokio::test]
+    async fn a_type_naming_no_plugin_file_fails_the_operation() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "restart").await;
+
+        let messages = trigger(
+            &mut converter,
+            json!({
+                "command": "RESTART",
+                "serviceName": "collectd",
+                "serviceType": "../../bin/sh",
+            }),
+        )
+        .await;
+
+        assert_operation_failed(&messages, SMARTREST_TOPIC, "Invalid service type");
+    }
+
+    #[tokio::test]
+    async fn a_type_naming_no_plugin_file_is_refused_from_the_registration_too() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_typed_service(&mut converter, json!({"type": "../../bin/sh"})).await;
+        declare(&mut converter, "restart").await;
+
+        // The registered type wins over the payload, so it is the one to check
+        let messages = trigger(
+            &mut converter,
+            json!({
+                "command": "RESTART",
+                "serviceName": "collectd",
+                "serviceType": "container",
+            }),
+        )
+        .await;
+
+        assert_operation_failed(&messages, SMARTREST_TOPIC, "Invalid service type");
     }
 
     async fn register_service(converter: &mut CumulocityConverter) {

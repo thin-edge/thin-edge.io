@@ -179,13 +179,17 @@ This part deliberately reuses existing mapper mechanisms; no new concepts are in
   * the command topic is built from the lowercased `command` value.
     The action is named by the topic only:
     the cloud's `command` value is not copied into the thin-edge payload;
-  * `serviceName` is derived from the resolved entity topic id, not from the cloud payload
-    (the cloud value may be a display name);
+  * `serviceName` is taken from the cloud payload.
+    Cumulocity holds one name per service, the one thin-edge published when registering it,
+    so this is the name a backend is asked for.
+    It is validated like the service name of `tedge service`,
+    and an absent or invalid name fails the cloud operation;
   * `serviceType` is taken from the service's registration data (its `type` property),
     falling back to the payload value.
     Declaring the service type at registration is optional today,
     but effectively becomes mandatory for services using this feature:
     a service registered without a type is dispatched as the default type `service` (init-managed).
+    It is validated the same way, after being resolved.
 * **Status → Cumulocity.**
   * The existing command-status mapping (SmartREST `501`–`506`) and the service's own SmartREST topic are reused.
 

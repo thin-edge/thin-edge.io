@@ -197,9 +197,11 @@ pub struct C8yServiceCommand {
     /// The action to run on the service
     pub command: String,
 
-    /// The name Cumulocity displays for the target service
+    /// The name of the target service, the one held by its managed object
     ///
-    /// This can be a display name, so it names no service for a backend running an action.
+    /// Cumulocity always sends it, so a reader can reject an operation carrying none. The field
+    /// stays optional here because a failure to parse this object is only logged, which would
+    /// leave such an operation pending forever instead of failing it.
     #[serde(default)]
     pub service_name: Option<String>,
 
