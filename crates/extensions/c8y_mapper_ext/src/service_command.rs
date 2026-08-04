@@ -200,7 +200,7 @@ impl CumulocityConverter {
         // per service, the very name thin-edge published when it registered the service, so this
         // is the name a backend is asked for. It is validated here rather than left to the backend,
         // so that a name a backend could misread is reported as the reason of the failed operation.
-        let service_name = request.service_name.as_deref().unwrap_or_default();
+        let service_name = request.service_name.as_str();
         if let Err(err) = validate_service_name(service_name) {
             let reason = format!(
                 "{} cannot run the '{action}' action: {err}",
@@ -213,12 +213,7 @@ impl CumulocityConverter {
         // Cumulocity sends is only used for a service registered with no type of its own.
         let service_type = target
             .registered_type()
-            .or_else(|| {
-                request
-                    .service_type
-                    .as_deref()
-                    .filter(|service_type| !service_type.is_empty())
-            })
+            .or_else(|| Some(request.service_type.as_str()).filter(|ty| !ty.is_empty()))
             .unwrap_or(DEFAULT_SERVICE_TYPE);
 
         // Whichever of the two it comes from, the type names a file in the service plugin
@@ -501,11 +496,37 @@ mod tests {
         assert_messages_matching(
             &trigger(
                 &mut converter,
-                json!({"command": "RESTART", "serviceName": "collectd"}),
+                json!({"command": "RESTART", "serviceName": "collectd", "serviceType": ""}),
             )
             .await,
             [(
                 RESTART_CMD_TOPIC,
+                json!({
+                    "status": "init",
+                    "serviceName": "collectd",
+                    "serviceType": "service",
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
+    async fn an_action_named_with_a_dash_survives_the_round_trip() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "is-active").await;
+
+        // The name is declared uppercased and comes back uppercased, and `-` survives both
+        assert_messages_matching(
+            &trigger(
+                &mut converter,
+                json!({"command": "IS-ACTIVE", "serviceName": "collectd", "serviceType": ""}),
+            )
+            .await,
+            [(
+                "te/device/main/service/collectd/cmd/is-active/c8y-mapper-16574089",
                 json!({
                     "status": "init",
                     "serviceName": "collectd",
@@ -580,7 +601,7 @@ mod tests {
         assert_messages_matching(
             &trigger(
                 &mut converter,
-                json!({"command": "RESTART", "serviceName": "Collectd-Daemon"}),
+                json!({"command": "RESTART", "serviceName": "Collectd-Daemon", "serviceType": ""}),
             )
             .await,
             [(
@@ -607,7 +628,7 @@ mod tests {
         let messages = trigger_on(
             &mut converter,
             "unknown-service",
-            json!({"command": "RESTART"}),
+            json!({"command": "RESTART", "serviceName": "collectd", "serviceType": "service"}),
         )
         .await;
 
@@ -626,7 +647,7 @@ mod tests {
         let messages = trigger_on(
             &mut converter,
             "test-device",
-            json!({"command": "RESTART", "serviceName": "collectd"}),
+            json!({"command": "RESTART", "serviceName": "collectd", "serviceType": "service"}),
         )
         .await;
 
@@ -640,14 +661,18 @@ mod tests {
         register_service(&mut converter).await;
         declare(&mut converter, "start").await;
 
-        let messages = trigger(&mut converter, json!({"command": "RESTART"})).await;
+        let messages = trigger(
+            &mut converter,
+            json!({"command": "RESTART", "serviceName": "collectd", "serviceType": "service"}),
+        )
+        .await;
 
         assert_operation_failed(&messages, SMARTREST_TOPIC, "has not declared the 'restart'");
     }
 
-    #[test_case(json!({"command": ""}); "empty")]
-    #[test_case(json!({"command": "do something"}); "with a space")]
-    #[test_case(json!({"command": "RESTART-NOW"}); "with a dash")]
+    #[test_case(json!({"command": "", "serviceName": "collectd", "serviceType": "service"}); "empty")]
+    #[test_case(json!({"command": "do something", "serviceName": "collectd", "serviceType": "service"}); "with a space")]
+    #[test_case(json!({"command": "RESTART.NOW", "serviceName": "collectd", "serviceType": "service"}); "with a dot")]
     #[tokio::test]
     async fn a_command_naming_no_action_fails_the_operation(request: serde_json::Value) {
         let tmp_dir = TempTedgeDir::new();
@@ -661,10 +686,8 @@ mod tests {
         assert_operation_failed(&messages, SMARTREST_TOPIC, "Invalid action name");
     }
 
-    #[test_case(json!({"command": "RESTART"}); "missing")]
-    #[test_case(json!({"command": "RESTART", "serviceName": ""}); "empty")]
-    #[test_case(json!({"command": "RESTART", "serviceName": "--now"}); "looking like an option")]
-    #[test_case(json!({"command": "RESTART", "serviceName": "collectd;reboot"}); "with a shell separator")]
+    #[test_case(json!({"command": "RESTART", "serviceName": "", "serviceType": "service"}); "empty")]
+    #[test_case(json!({"command": "RESTART", "serviceName": "--now", "serviceType": "service"}); "looking like an option")]
     #[tokio::test]
     async fn a_name_no_backend_can_be_asked_for_fails_the_operation(request: serde_json::Value) {
         let tmp_dir = TempTedgeDir::new();
@@ -672,10 +695,37 @@ mod tests {
         register_service(&mut converter).await;
         declare(&mut converter, "restart").await;
 
-        // Cumulocity always names the service, so a missing name is reported like an invalid one
         let messages = trigger(&mut converter, request).await;
 
         assert_operation_failed(&messages, SMARTREST_TOPIC, "Invalid service name");
+    }
+
+    #[test_case("dbus-:1.2-org.freedesktop.problems@0"; "a systemd unit name holding a colon")]
+    #[test_case("Nginx Web Server"; "a display name holding spaces")]
+    #[test_case("collectd;reboot"; "holding a shell separator")]
+    #[tokio::test]
+    async fn a_name_the_device_registered_reaches_the_command(service_name: &str) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_typed_service(&mut converter, json!({ "name": service_name })).await;
+        declare(&mut converter, "restart").await;
+
+        assert_messages_matching(
+            &trigger(
+                &mut converter,
+                json!({"command": "RESTART", "serviceName": service_name, "serviceType": ""}),
+            )
+            .await,
+            [(
+                RESTART_CMD_TOPIC,
+                json!({
+                    "status": "init",
+                    "serviceName": service_name,
+                    "serviceType": "service",
+                })
+                .into(),
+            )],
+        );
     }
 
     #[tokio::test]

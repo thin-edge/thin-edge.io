@@ -171,8 +171,7 @@ pub struct C8yRestart {}
 
 /// Representation of c8y_ServiceCommand JSON object
 ///
-/// This is the single operation triggering any action of a service.
-/// The action to run is named by `command`, uppercased by the Cumulocity convention.
+/// Cumulocity addresses this operation to a service, not to a device.
 ///
 /// ```rust
 /// use c8y_api::json_c8y_deserializer::C8yServiceCommand;
@@ -188,26 +187,15 @@ pub struct C8yRestart {}
 /// let req: C8yServiceCommand = serde_json::from_str(data).unwrap();
 ///
 /// assert_eq!(req.command, "RESTART");
-/// assert_eq!(req.service_name.as_deref(), Some("collectd"));
-/// assert_eq!(req.service_type.as_deref(), Some("container"));
+/// assert_eq!(req.service_name, "collectd");
+/// assert_eq!(req.service_type, "container");
 /// ```
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct C8yServiceCommand {
-    /// The action to run on the service
     pub command: String,
-
-    /// The name of the target service, the one held by its managed object
-    ///
-    /// Cumulocity always sends it, so a reader can reject an operation carrying none. The field
-    /// stays optional here because a failure to parse this object is only logged, which would
-    /// leave such an operation pending forever instead of failing it.
-    #[serde(default)]
-    pub service_name: Option<String>,
-
-    /// The type of the target service, telling which backend can run the action
-    #[serde(default)]
-    pub service_type: Option<String>,
+    pub service_name: String,
+    pub service_type: String,
 }
 
 /// Representation of c8y_SoftwareUpdate JSON object

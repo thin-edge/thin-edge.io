@@ -2886,7 +2886,11 @@ async fn a_failed_service_command_is_reported_with_its_reason() {
         json!({
             "id": "1234",
             "status": "PENDING",
-            "c8y_ServiceCommand": {"command": "RESTART", "serviceName": "collectd"},
+            "c8y_ServiceCommand": {
+                "command": "RESTART",
+                "serviceName": "collectd",
+                "serviceType": "service"
+            },
             "externalSource": {
                 "externalId": "test-device:device:main:service:collectd",
                 "type": "c8y_Serial"

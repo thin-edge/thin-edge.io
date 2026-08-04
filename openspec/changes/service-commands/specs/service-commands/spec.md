@@ -11,8 +11,8 @@ One topic SHALL be used per command, so that each command can have its own workf
 the five an init system defines in `system.toml`,
 or any custom command name chosen by the service owner.
 
-An action name SHALL match `[a-z][a-z0-9_]+`:
-lowercase letters, digits and `_`, starting with a letter.
+An action name SHALL match `[a-z][a-z0-9_-]*`:
+lowercase letters, digits, `_` and `-`, starting with a letter.
 MQTT topic names are case-sensitive and do accept spaces,
 so this is a restriction thin-edge puts on itself, not one the protocol imposes.
 A name carrying spaces or mixed case, such as `do something` or `doSomething`,

@@ -57,18 +57,14 @@ will be interpreted as
 | `disable`      | The command to disable a service by the init system                                                  |
 | `is_active`    | The command to check if the service is running by the init system                                    |
 
-The five keys that act on a service — `restart`, `stop`, `start`, `enable` and `disable` —
-are the **actions** of this init system.
-They can be run on any service with
+Every key except `name` is an **action** of this init system,
+and can be run with
 [`tedge service <action> <service-name>`](./cli/tedge-service.md).
-
-`name`, `is_available` and `is_active` are reserved:
-they name the init system or query a state rather than act on a service,
-so they are not actions and cannot be run that way.
 
 ## Custom actions
 
-An init system may support more than the five standard actions.
+An init system may support more than the five standard actions
+`restart`, `stop`, `start`, `enable` and `disable`.
 A custom action is added as a plain key of `[init]`,
 with the same form as the others: an argv list with a `{}` placeholder for the service name.
 
@@ -93,8 +89,8 @@ reload = ["/bin/systemctl", "reload", "{}"]
 sudo tedge service reload nginx
 ```
 
-An action name is a single lowercase token, matching `[a-z][a-z0-9_]+`:
-lowercase letters, digits and `_`, starting with a letter.
+An action name is a single lowercase token, matching `[a-z][a-z0-9_-]*`:
+lowercase letters, digits, `_` and `-`, starting with a letter.
 
 :::caution
 `[init]` accepts any key, so a misspelled key is read as a custom action rather than rejected.

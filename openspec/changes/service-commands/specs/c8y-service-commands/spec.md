@@ -115,7 +115,7 @@ and SHALL NOT publish any thin-edge command, when:
 - the target entity cannot be resolved from `externalSource.externalId`;
 - the requested command, compared case-insensitively,
   is not among the commands the target service has declared;
-- the lowercased `command` value does not match the action name rule `[a-z][a-z0-9_]+`,
+- the lowercased `command` value does not match the action name rule `[a-z][a-z0-9_-]*`,
   which is what `tedge service` accepts;
 - the operation carries no `serviceName`, or one a backend could misread.
   The name is checked against the same rule as the service name of `tedge service`,
@@ -148,7 +148,7 @@ which owns no operation created for a service.
 
 #### Scenario: A malformed command value is refused
 - **WHEN** the operation's `command` is empty, carries a space,
-  or once lowercased contains a character outside `[a-z0-9_]`
+  or once lowercased contains a character outside `[a-z0-9_-]`
 - **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
 
 #### Scenario: A service name a backend could misread is refused
