@@ -517,6 +517,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_action_named_with_a_dash_survives_the_round_trip() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "is-active").await;
+
+        // The name is declared uppercased and comes back uppercased, and `-` survives both
+        assert_messages_matching(
+            &trigger(
+                &mut converter,
+                json!({"command": "IS-ACTIVE", "serviceName": "collectd"}),
+            )
+            .await,
+            [(
+                "te/device/main/service/collectd/cmd/is-active/c8y-mapper-16574089",
+                json!({
+                    "status": "init",
+                    "serviceName": "collectd",
+                    "serviceType": "service",
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[tokio::test]
     async fn the_type_of_the_registration_wins_over_the_type_of_the_payload() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
@@ -647,7 +673,7 @@ mod tests {
 
     #[test_case(json!({"command": ""}); "empty")]
     #[test_case(json!({"command": "do something"}); "with a space")]
-    #[test_case(json!({"command": "RESTART-NOW"}); "with a dash")]
+    #[test_case(json!({"command": "RESTART.NOW"}); "with a dot")]
     #[tokio::test]
     async fn a_command_naming_no_action_fails_the_operation(request: serde_json::Value) {
         let tmp_dir = TempTedgeDir::new();

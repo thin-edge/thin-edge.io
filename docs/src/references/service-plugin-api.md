@@ -95,7 +95,7 @@ and all execution is argv-based: no argument is ever interpolated into a shell c
 
 | Argument     | Rule                                                                          |
 |--------------|---------------------------------------------------------------------------------|
-| action       | `[a-z][a-z0-9_]+`, at most 64 characters. Neither a space nor a leading `-`    |
+| action       | `[a-z][a-z0-9_-]*`, at most 64 characters. Neither a space nor a leading `-`   |
 | service name | `[A-Za-z0-9_.@-]+`, at most 128 characters, not starting with `-`              |
 | service type | `[a-z0-9_-]+`, at most 64 characters, so it cannot escape the plugin directory |
 
@@ -107,7 +107,7 @@ A rejected argument fails the command without any backend being invoked.
   named exactly after the service type it handles, with no extension.
 * It is invoked as `<plugin> <action> <service-name>`,
   where `<action>` is `start`, `stop`, `restart`, or any action the plugin defines itself.
-* An action name is a single lowercase token, matching `[a-z][a-z0-9_]+`.
+* An action name is a single lowercase token, matching `[a-z][a-z0-9_-]*`.
   The plugin receives the name exactly as the service declared it on its
   [`cmd/<action>` topic](./agent/service-commands.md#actions),
   and never has to accept another spelling of it.

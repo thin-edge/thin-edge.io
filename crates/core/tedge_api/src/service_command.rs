@@ -7,6 +7,16 @@
 //!
 //! A service name is checked by the same two, for the same reason:
 //! the mapper takes it from the cloud operation and the CLI passes it to a backend.
+//!
+//! The action name rule is the largest set of characters that survives every step a name takes:
+//!
+//! - the c8y mapper lowercases the command name it receives from the cloud, so a name must be
+//!   unchanged by lowercasing: no uppercase letter;
+//! - the name is a segment of the `cmd/<action>` topic: no `/`, `+`, `#` and no space;
+//! - the name is passed as one argument to an init tool or to a service plugin: no leading `-`;
+//! - the name is a key of `[init]` in `system.toml`, so it must be a TOML bare key, which accepts
+//!   only letters, digits, `_` and `-`. This is what leaves `.` and `@` out, even though a service
+//!   name accepts both.
 
 /// The longest accepted action name.
 const MAX_ACTION_NAME_LEN: usize = 64;
@@ -25,20 +35,22 @@ pub const DEFAULT_SERVICE_TYPE: &str = "service";
 
 /// Tells whether a name can be used as a service command action.
 ///
-/// A name is a single lowercase token: `[a-z][a-z0-9_]+`, of bounded length.
+/// A name is a single lowercase token: `[a-z][a-z0-9_-]*`, of bounded length.
 /// MQTT topic names are case-sensitive and do accept spaces, so this is a restriction
 /// thin-edge puts on itself, to keep an action name unchanged along the way from a cloud
 /// command name to a topic segment and then to the argument of a command line.
+/// See the module documentation for what each character of the rule comes from.
 ///
 /// ```
 /// use tedge_api::service_command::is_valid_action_name;
 ///
 /// assert!(is_valid_action_name("restart"));
 /// assert!(is_valid_action_name("collect_measurements"));
+/// assert!(is_valid_action_name("is-active"));
 ///
 /// assert!(!is_valid_action_name("RESTART"));
 /// assert!(!is_valid_action_name("do something"));
-/// assert!(!is_valid_action_name("restart-now"));
+/// assert!(!is_valid_action_name("-restart"));
 /// ```
 pub fn is_valid_action_name(name: &str) -> bool {
     validate_action_name(name).is_ok()
@@ -63,17 +75,14 @@ pub fn validate_action_name(name: &str) -> Result<(), InvalidActionName> {
             "an action name cannot be longer than {MAX_ACTION_NAME_LEN} characters"
         ));
     }
-    if name.len() < 2 {
-        return invalid("an action name is at least 2 characters long");
-    }
     if !name.starts_with(|c: char| c.is_ascii_lowercase()) {
         return invalid("an action name starts with a lowercase letter");
     }
     if !name
         .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
     {
-        return invalid("an action name only holds lowercase letters, digits and '_'");
+        return invalid("an action name only holds lowercase letters, digits, '_' and '-'");
     }
 
     Ok(())
@@ -88,14 +97,21 @@ pub struct InvalidActionName {
 
 /// Check that a name can be used as the name of a service.
 ///
-/// A service name is passed to an init tool or to a service plugin as one argument of a command
-/// line, so it must not be read as an option and must hold no shell metacharacter, even though
-/// nothing runs it through a shell. Return the reason why not, ready to be reported to whoever
-/// provided the name.
+/// A service name comes from the cloud and is passed as one argument to an init tool or to a
+/// service plugin, so it must not be read as an option: nothing stops a name from being `--now`.
+///
+/// thin-edge itself never builds a shell command line, but it cannot promise that of the backends
+/// it calls. An `[init]` template is an argv list the user writes, so it can be
+/// `["/bin/sh", "-c", "systemctl restart {}"]`, and a service plugin may be a shell script that
+/// uses its arguments unquoted. So the rule below is a whitelist of the characters a real service
+/// name needs, not a list of the characters known to be dangerous.
+///
+/// Return the reason why not, ready to be reported to whoever provided the name.
 ///
 /// Unlike an action name, a service name is not lowercased and does accept `.`, `@` and `-`:
 /// it names a unit, a container or whatever the backend manages, and thin-edge does not choose
-/// how those are named.
+/// how those are named. Being a whitelist, the rule is still narrower than those backends:
+/// a systemd unit name may hold `:`, and this rule does not accept it.
 ///
 /// ```
 /// use tedge_api::service_command::validate_service_name;
@@ -201,18 +217,21 @@ mod tests {
     #[test_case("collect_measurements")]
     #[test_case("action_2")]
     #[test_case("ab")]
+    #[test_case("is-active"; "with a dash")]
+    #[test_case("r"; "single char")]
     fn accepted(name: &str) {
         assert!(is_valid_action_name(name), "{name} should be accepted");
     }
 
     #[test_case(""; "empty")]
-    #[test_case("r"; "single char")]
     #[test_case("RESTART"; "uppercase")]
     #[test_case("myCommand"; "mixed case")]
     #[test_case("do something"; "with a space")]
     #[test_case("restart "; "with a trailing space")]
-    #[test_case("restart-now"; "with a dash")]
+    #[test_case("restart.now"; "with a dot")]
+    #[test_case("restart@now"; "with an at sign")]
     #[test_case("_restart"; "starting with an underscore")]
+    #[test_case("-restart"; "starting with a dash")]
     #[test_case("2restart"; "starting with a digit")]
     #[test_case("restart/now"; "with a topic separator")]
     #[test_case("restart#"; "with a topic wildcard")]

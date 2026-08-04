@@ -24,12 +24,12 @@ a `restart` service command restarts a single service of that device.
 ## Actions
 
 An action is named by the topic it is declared on, and nowhere else.
-The name is a single lowercase token, matching `[a-z][a-z0-9_]+`:
-lowercase letters, digits and `_`, starting with a letter, at most 64 characters.
+The name is a single lowercase token, matching `[a-z][a-z0-9_-]*`:
+lowercase letters, digits, `_` and `-`, starting with a letter, at most 64 characters.
 
 MQTT topic names are case-sensitive and do accept spaces,
 so this rule is a restriction %%te%% puts on itself, not one the protocol imposes.
-A name such as `RESTART`, `do something` or `restart-now` is rejected wherever it enters the system.
+A name such as `RESTART` or `do something` is rejected wherever it enters the system.
 This is what lets an action name stay the same
 from a cloud command name, to a topic segment, to the argument of a command line.
 

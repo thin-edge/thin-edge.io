@@ -9,7 +9,7 @@ tedge service <action> <service-name> [--service-type <type>]
 ```
 
 `<action>` names the action to perform, for example `start`, `stop` or `restart`.
-It is a single lowercase token, matching `[a-z][a-z0-9_]+`,
+It is a single lowercase token, matching `[a-z][a-z0-9_-]*`,
 the same rule that applies to the `cmd/<action>` topic segment.
 `<service-name>` is the name of the service to act on.
 `--service-type` selects the execution backend and SHALL default to `service` when omitted.
@@ -128,7 +128,7 @@ The plugin SHALL report its outcome through its exit code:
 `tedge service` SHALL propagate the plugin's outcome:
 exit `0` on `0`, the "not supported" outcome on `2`, and a failure otherwise.
 
-An action name is a single lowercase token, `[a-z][a-z0-9_]+`,
+An action name is a single lowercase token, `[a-z][a-z0-9_-]*`,
 so a plugin SHALL name the actions it defines within that rule.
 It receives the name exactly as the service declared it,
 and SHALL NOT have to accept any other spelling of it.
@@ -150,7 +150,7 @@ and SHALL NOT have to accept any other spelling of it.
 Since `tedge service` runs as root, it SHALL validate every argument before use,
 and SHALL reject an invalid argument without invoking any backend.
 
-- the action SHALL be of bounded length and SHALL match `[a-z][a-z0-9_]+`.
+- the action SHALL be of bounded length and SHALL match `[a-z][a-z0-9_-]*`.
   The rule allows neither a space nor a leading `-`,
   so the action can be neither read as an option nor mistaken for a command line to run;
 - the service name SHALL be non-empty, of bounded length,

@@ -230,7 +230,7 @@ thin-edge does not need to follow Cumulocity's shape;
 `command` is the cloud's word and stays inside the mapper.
 
 Nothing is lost with the field, because an action name is a single lowercase token,
-`[a-z][a-z0-9_]+`.
+`[a-z][a-z0-9_-]*`.
 MQTT topic names are case-sensitive and do accept spaces,
 so this is a restriction thin-edge puts on itself:
 a name such as `do something` or `doSomething` is out of scope,
@@ -253,7 +253,7 @@ build the command, publish it.
 
 The difference from the existing operations is that the thin-edge operation name is not fixed:
 it comes from the lowercased `command` value in the payload.
-So the name is validated against the action name rule `[a-z][a-z0-9_]+`,
+So the name is validated against the action name rule `[a-z][a-z0-9_-]*`,
 the same rule `tedge service` applies, before it is used to build a topic,
 and it is checked against the set of commands the service has declared.
 Both the mapper and the CLI need that rule, so it lives in `tedge_api` and is used by both.
@@ -296,6 +296,57 @@ A handler module for the new operation type is added alongside the existing ones
 Alternative considered: a shipped custom operation handler file with `on_fragment = "c8y_ServiceCommand"`.
 Rejected in 0011: the feature also needs the `c8y_SupportedServiceCommands` fragment,
 and operation files for services are not reloaded dynamically.
+
+### Take the action name rule from the steps a name has to survive
+
+An action name is `[a-z][a-z0-9_-]*`:
+lowercase letters, digits, `_` and `-`, starting with a letter, of bounded length.
+The rule is not a matter of taste.
+It is the largest set of characters left once every step a name takes has had its say:
+
+- the c8y mapper lowercases the command name the cloud sends,
+  so a name must be unchanged by lowercasing → no uppercase letter;
+- the name is a segment of the `cmd/<action>` topic → no `/`, `+`, `#` and no space;
+- the name is passed as one argument to an init tool or to a service plugin
+  → no leading `-`, and no shell metacharacter;
+- the name is a key of `[init]` in `system.toml`, so it has to be a TOML bare key,
+  which accepts only letters, digits, `_` and `-` → this is what leaves `.` and `@` out.
+
+That is why the three rules of this change differ,
+and the action name is the only one of the three derived this way.
+
+A service type has one constraint of its own:
+it names a file under the plugin directory, so it holds no `/` and is neither `.` nor `..`.
+The rest of its rule follows the action name's, so that one spelling of a type names one plugin.
+
+A service name (`[A-Za-z0-9_.@-]`, no leading `-`) is not derived at all, it is a whitelist.
+Only the leading `-` comes from a step the name takes:
+the `{}` of an `[init]` template is replaced one argv element at a time
+(`general_manager.rs:159`), so a name holding a space cannot become two arguments,
+but a name of `--now` does become an option of the init tool.
+The rest is a whitelist because the name comes from the cloud
+and then reaches code thin-edge does not own.
+An `[init]` template is an argv list the user writes, so it can be
+`["/bin/sh", "-c", "systemctl restart {}"]`,
+and a service plugin may be a shell script that uses its arguments unquoted.
+thin-edge never builds a shell command line itself, but it cannot promise that of a backend.
+So the rule lists the characters a real service name needs —
+`.` for the suffix of a unit name, `@` for a template instance such as `getty@tty1`,
+`-` and `_` for both unit and container names —
+instead of listing the characters known to be dangerous.
+Being a whitelist, it is narrower than the backends themselves:
+a systemd unit name may hold `:` and this rule does not accept it.
+That is deliberate.
+A character is added when a name that needs it turns up,
+and adding one is a security review rather than a matter of taste.
+
+Allowing `-` also gives a way around the reserved keys of `[init]`.
+`name`, `is_available` and `is_active` are named fields of the table,
+so they never reach the custom action map and are not dispatchable:
+a user who wants an "is active" action can name it `is-active`.
+
+No lower bound is put on the length beyond being non-empty.
+A one-letter name breaks none of the steps above.
 
 ### Add custom actions as plain keys of `[init]`
 
@@ -408,7 +459,7 @@ and `/usr/bin/tedge` is already covered by the shipped rule.
   On a child device this makes service commands depend on the connection to the main device,
   which is the same dependency the file transfer service already has.
 - `tedge service` runs as root and takes an action name that originates in the cloud
-  → the name is validated against `[a-z][a-z0-9_]+` before any backend is selected, and all
+  → the name is validated against `[a-z][a-z0-9_-]*` before any backend is selected, and all
   execution is argv-based, so the value cannot become extra arguments or a shell fragment.
 
 ## Migration Plan

@@ -113,8 +113,8 @@ A service command is addressed as below:
   -> Add `type = "service"` filter in the workflow definition.
 * (c8y) The c8y mapper has to aggregate an open set of `cmd/<action>` topics into one `c8y_SupportedServiceCommands` list.
 
-An action name must match `[a-z][a-z0-9_]+`:
-lowercase letters, digits and `_`, starting with a letter.
+An action name must match `[a-z][a-z0-9_-]*`:
+lowercase letters, digits, `_` and `-`, starting with a letter.
 MQTT topic names are case-sensitive and do accept spaces,
 so this is a restriction thin-edge puts on itself, not one the protocol imposes.
 A name with spaces or mixed case, such as `do something` or `doSomething`,
@@ -285,7 +285,7 @@ and are not dispatchable as actions.
 * exit `0` on success;
   `2`, reserved for this meaning, when the action is not supported by this plugin;
   any other non-zero code on failure, with the reason on stderr.
-* an action a plugin defines is named within the `[a-z][a-z0-9_]+` rule.
+* an action a plugin defines is named within the `[a-z][a-z0-9_-]*` rule.
   The plugin receives the name exactly as the service declared it,
   and does not have to accept another spelling of it.
 
@@ -633,7 +633,7 @@ input.serviceName = "${.payload.c8y_ServiceCommand.serviceName}"
   It runs as root via the already-shipped sudoers rule for `/usr/bin/tedge`.
   Consequently:
   * the action name is validated as a **single token**
-    (bounded length, `[a-z][a-z0-9_]+`):
+    (bounded length, `[a-z][a-z0-9_-]*`):
     no whitespace or shell metacharacters, and no leading `-`,
     so a cloud-provided custom action cannot inject extra arguments or options
     into the init tool or a plugin.
