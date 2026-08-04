@@ -1,6 +1,7 @@
 use anyhow::Context;
 use camino::Utf8Path;
 use clap::ValueEnum;
+use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfig;
 use tedge_p11::pkcs11::CreateKeyParams;
@@ -314,7 +315,8 @@ impl CreateKeyHsmCmd {
             }
         }
 
-        if let Err(e) = save_key_uri_to_config(config, self.cloud.as_ref(), &uri).await {
+        if let Err(e) = save_key_uri_to_config(config, self.cloud.as_ref(), &uri, &*cryptoki).await
+        {
             warn!(?e, "Failed to save public key URI to tedge-config. You may need to enter key URI in tedge-config manually to use the new key.")
         }
 
@@ -322,12 +324,42 @@ impl CreateKeyHsmCmd {
     }
 }
 
+/// Saves the key URI to the `device.key_uri` config setting of the selected cloud, so the key is
+/// used for subsequent connections.
+///
+/// An existing selection of a working key is never overwritten: if the setting already points to a
+/// different key that still exists on the token, the config is left unchanged and the `tedge
+/// config set` command to switch to the new key is printed instead. A URI pointing to a key that
+/// no longer exists is overwritten (with a note), since keeping it would select nothing.
 async fn save_key_uri_to_config(
     config: TEdgeConfig,
     cloud: Option<&Cloud>,
     uri: &str,
+    cryptoki: &dyn tedge_p11::service::TedgeP11Service,
 ) -> anyhow::Result<()> {
     let key = extract_device_id_for_cloud(cloud)?;
+
+    let current = key
+        .to_cow_str()
+        .parse::<ReadableKey>()
+        .ok()
+        .and_then(|k| config.read_string(&k).ok());
+    if let Some(current) = current {
+        if current == uri {
+            eprintln!("The `{key}` configuration setting already points to this key.");
+            return Ok(());
+        }
+        if cryptoki.get_public_key_pem(Some(&current)).is_ok() {
+            eprintln!("The `{key}` configuration setting was left unchanged, as it points to another existing key:");
+            eprintln!("  currently selected key: {current}");
+            eprintln!("  newly created key:      {uri}");
+            eprintln!("To select the new key, run:");
+            eprintln!("  tedge config set {key} \"{uri}\"");
+            return Ok(());
+        }
+        eprintln!("Note: `{key}` pointed to a key that no longer exists on the token: {current}");
+    }
+
     config
         .update_toml(&|dto, _reader| {
             let r = dto.try_update_str(&key, uri).map_err(|e| e.into());
@@ -445,6 +477,153 @@ mod tests {
 
     use super::*;
 
+    /// A [`TedgeP11Service`] stub where only [`get_public_key_pem`] works: it succeeds for the
+    /// URIs listed in `existing_keys` and fails for anything else.
+    ///
+    /// [`TedgeP11Service`]: tedge_p11::service::TedgeP11Service
+    /// [`get_public_key_pem`]: tedge_p11::service::TedgeP11Service::get_public_key_pem
+    struct FakeCryptoki {
+        existing_keys: Vec<&'static str>,
+    }
+
+    impl tedge_p11::service::TedgeP11Service for FakeCryptoki {
+        fn get_public_key_pem(&self, uri: Option<&str>) -> anyhow::Result<String> {
+            match uri {
+                Some(uri) if self.existing_keys.contains(&uri) => Ok("PEM".to_string()),
+                _ => anyhow::bail!("no key found"),
+            }
+        }
+
+        fn choose_scheme(
+            &self,
+            _: tedge_p11::service::ChooseSchemeRequest,
+        ) -> anyhow::Result<tedge_p11::service::ChooseSchemeResponse> {
+            unimplemented!()
+        }
+
+        fn sign(
+            &self,
+            _: tedge_p11::service::SignRequestWithSigScheme,
+        ) -> anyhow::Result<tedge_p11::service::SignResponse> {
+            unimplemented!()
+        }
+
+        fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
+            unimplemented!()
+        }
+
+        fn list_tokens(&self) -> anyhow::Result<tedge_p11::service::ListTokensResponse> {
+            unimplemented!()
+        }
+
+        fn list_keys(
+            &self,
+            _: tedge_p11::service::ListKeysRequest,
+        ) -> anyhow::Result<tedge_p11::service::ListKeysResponse> {
+            unimplemented!()
+        }
+
+        fn change_pin(
+            &self,
+            _: tedge_p11::service::ChangePinRequest,
+        ) -> anyhow::Result<tedge_p11::service::ChangePinResponse> {
+            unimplemented!()
+        }
+
+        fn delete_key(
+            &self,
+            _: tedge_p11::service::DeleteKeyRequest,
+        ) -> anyhow::Result<tedge_p11::service::DeleteKeyResponse> {
+            unimplemented!()
+        }
+
+        fn create_key(
+            &self,
+            _: CreateKeyRequest,
+        ) -> anyhow::Result<tedge_p11::service::CreateKeyResponse> {
+            unimplemented!()
+        }
+
+        fn init_token(
+            &self,
+            _: InitTokenRequest,
+        ) -> anyhow::Result<tedge_p11::service::InitTokenResponse> {
+            unimplemented!()
+        }
+    }
+
+    #[tokio::test]
+    async fn does_not_overwrite_key_uri_pointing_to_another_existing_key() {
+        let tempdir = TempTedgeDir::new();
+        tempdir
+            .file("tedge.toml")
+            .with_raw_content("[device]\nkey_uri = \"pkcs11:token=tedge;object=old-key\"\n");
+        let config = TEdgeConfig::load(tempdir.path()).await.unwrap();
+        let cryptoki = FakeCryptoki {
+            existing_keys: vec!["pkcs11:token=tedge;object=old-key"],
+        };
+
+        save_key_uri_to_config(config, None, "pkcs11:token=tedge;object=new-key", &cryptoki)
+            .await
+            .unwrap();
+
+        let config = TEdgeConfig::load(tempdir.path()).await.unwrap();
+        assert_eq!(
+            config
+                .read_string(&"device.key_uri".parse().unwrap())
+                .unwrap(),
+            "pkcs11:token=tedge;object=old-key"
+        );
+    }
+
+    #[tokio::test]
+    async fn overwrites_key_uri_pointing_to_a_key_that_no_longer_exists() {
+        let tempdir = TempTedgeDir::new();
+        tempdir
+            .file("tedge.toml")
+            .with_raw_content("[device]\nkey_uri = \"pkcs11:token=tedge;object=deleted-key\"\n");
+        let config = TEdgeConfig::load(tempdir.path()).await.unwrap();
+        let cryptoki = FakeCryptoki {
+            existing_keys: vec![],
+        };
+
+        save_key_uri_to_config(config, None, "pkcs11:token=tedge;object=new-key", &cryptoki)
+            .await
+            .unwrap();
+
+        let config = TEdgeConfig::load(tempdir.path()).await.unwrap();
+        assert_eq!(
+            config
+                .read_string(&"device.key_uri".parse().unwrap())
+                .unwrap(),
+            "pkcs11:token=tedge;object=new-key"
+        );
+    }
+
+    #[tokio::test]
+    async fn keeps_key_uri_already_pointing_to_the_key() {
+        let tempdir = TempTedgeDir::new();
+        tempdir
+            .file("tedge.toml")
+            .with_raw_content("[device]\nkey_uri = \"pkcs11:token=tedge;object=my-key\"\n");
+        let config = TEdgeConfig::load(tempdir.path()).await.unwrap();
+        let cryptoki = FakeCryptoki {
+            existing_keys: vec!["pkcs11:token=tedge;object=my-key"],
+        };
+
+        save_key_uri_to_config(config, None, "pkcs11:token=tedge;object=my-key", &cryptoki)
+            .await
+            .unwrap();
+
+        let config = TEdgeConfig::load(tempdir.path()).await.unwrap();
+        assert_eq!(
+            config
+                .read_string(&"device.key_uri".parse().unwrap())
+                .unwrap(),
+            "pkcs11:token=tedge;object=my-key"
+        );
+    }
+
     #[tokio::test]
     async fn saves_uri_under_correct_key() {
         let tempdir = TempTedgeDir::new();
@@ -502,7 +681,10 @@ mod tests {
 
     async fn assert_saves_under_key(cloud: Option<&Cloud>, key: &str, tempdir: &TempTedgeDir) {
         let config = TEdgeConfig::load(tempdir.path()).await.unwrap();
-        save_key_uri_to_config(config, cloud, "pkcs11:hello")
+        let cryptoki = FakeCryptoki {
+            existing_keys: vec![],
+        };
+        save_key_uri_to_config(config, cloud, "pkcs11:hello", &cryptoki)
             .await
             .unwrap();
 

@@ -135,8 +135,9 @@ Create private key
     END
     Should Contain    ${output}    Label: ${label}
 
-    ${key_uri}=    Execute Command    tedge config get device.key_uri    strip=True
-    Should Contain    ${create_key_output}    ${key_uri}
+    # the URI of the created key is reported. Note that only the first created key is saved to
+    # device.key_uri: subsequent invocations leave the existing working selection unchanged.
+    Should Contain    ${create_key_output}    object=${label}
 
 List keys filtered by label or id
     [Documentation]    `tedge hsm list-keys` can narrow the listing to keys with a given label or
@@ -173,6 +174,40 @@ List keys filtered by label or id
     ...    stdout=False
     ...    stderr=True
     Should Contain    ${stderr}    use only one
+
+Do not overwrite a key_uri that points to another existing key
+    [Documentation]    When device.key_uri already selects a key that exists on the token,
+    ...    creating another key must not silently replace the selection; the command to switch
+    ...    is printed instead.
+    ${before}=    Execute Command    tedge config get device.key_uri    strip=True
+
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm create-key --type ecdsa --label protection-test-key "${TOKEN_URI}"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    was left unchanged, as it points to another existing key
+    Should Contain    ${stderr}    tedge config set device.key_uri
+
+    ${after}=    Execute Command    tedge config get device.key_uri    strip=True
+    Should Be Equal    ${before}    ${after}
+
+Update key_uri when it points to a key that no longer exists
+    [Documentation]    A key_uri pointing at a key that is not present on the token selects
+    ...    nothing, so it is repaired to point at the newly created key (with a note).
+    Execute Command
+    ...    cmd=tedge config set device.key_uri "pkcs11:token=create-key-token;object=deleted-key"
+
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm create-key --type ecdsa --label replacement-key "${TOKEN_URI}"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    pointed to a key that no longer exists
+    Should Contain    ${stderr}    was updated with the newly created key's URI
+
+    ${after}=    Execute Command    tedge config get device.key_uri    strip=True
+    Should Contain    ${after}    object=replacement-key
 
 Custom Setup
     [Arguments]    ${tedge_p11_server_version}

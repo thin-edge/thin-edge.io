@@ -66,7 +66,10 @@ pub enum TEdgeHsmCli {
     ///
     /// After the key is generated (or reused), tedge config is updated to use the key using the
     /// `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting
-    /// for that cloud, e.g. `create-key c8y` will write to `c8y.device.key_uri`.
+    /// for that cloud, e.g. `create-key c8y` will write to `c8y.device.key_uri`. However, if the
+    /// setting already points to a different key that exists on the token, it is left unchanged
+    /// so a working key selection is never silently replaced; the `tedge config set` command to
+    /// switch to the new key is printed instead.
     CreateKey(CreateKeyArgs),
 
     /// Change or reset the user PIN of a PKCS #11 token.
