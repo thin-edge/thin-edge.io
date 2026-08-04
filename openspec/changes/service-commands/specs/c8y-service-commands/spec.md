@@ -126,12 +126,17 @@ and SHALL NOT publish any thin-edge command, when:
   does not match the service type rule of `tedge service`,
   since it names a file under the service plugin directory.
 
-The failure SHALL be reported on the SmartREST topic of the target service,
-or on the topic of the main device when the target itself cannot be resolved.
+The failure SHALL be reported on the SmartREST topic of the target,
+the very topic Cumulocity created the operation on.
+A target that cannot be resolved SHALL be addressed by the external id the operation carries,
+as the service a service command always names.
+The failure SHALL NOT be reported on the topic of the main device,
+which owns no operation created for a service.
 
 #### Scenario: The target cannot be resolved
 - **WHEN** the operation's external id matches no known entity
-- **THEN** the mapper SHALL fail the operation with a reason naming the unresolvable target
+- **THEN** the mapper SHALL fail the operation with a reason naming the unresolvable target,
+  on `c8y/s/us/<external-id>`
 
 #### Scenario: An undeclared command is refused
 - **WHEN** the operation requests a command the target service has not declared
