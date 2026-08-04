@@ -54,7 +54,13 @@ impl BuildCommand for TEdgeServiceOpt {
             action: self.action,
             service_name: self.service_name,
             service_type: self.service_type,
-            plugin_dir: config.service.plugin_dir.clone(),
+            plugin_paths: config
+                .service
+                .plugin_paths
+                .0
+                .iter()
+                .map(Utf8PathBuf::from)
+                .collect(),
         }
         .into_boxed())
     }
@@ -65,7 +71,7 @@ pub struct ServiceActionCommand {
     action: String,
     service_name: String,
     service_type: String,
-    plugin_dir: Utf8PathBuf,
+    plugin_paths: Vec<Utf8PathBuf>,
 }
 
 #[async_trait::async_trait]
@@ -131,7 +137,7 @@ impl ServiceActionCommand {
 
     /// Run the action through the service plugin named after the service type
     async fn run_plugin_action(&self) -> Result<(), ServiceActionError> {
-        let plugin = self.plugin_dir.join(&self.service_type);
+        let plugin = self.find_plugin()?;
 
         // Execution is argv-based: no argument can become a shell fragment
         let output = tokio::process::Command::new(&plugin)
@@ -143,12 +149,6 @@ impl ServiceActionCommand {
 
         let output = match output {
             Ok(output) => output,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                return Err(ServiceActionError::NotSupported(format!(
-                    "No service plugin for the service type '{}': {plugin} does not exist",
-                    self.service_type
-                )))
-            }
             Err(err) => {
                 return Err(ServiceActionError::PluginNotExecutable {
                     plugin,
@@ -180,6 +180,24 @@ impl ServiceActionCommand {
             }),
             None => Err(ServiceActionError::PluginKilled { plugin }),
         }
+    }
+
+    /// The plugin named after the service type,
+    /// taken from the first configured directory that holds one
+    fn find_plugin(&self) -> Result<Utf8PathBuf, ServiceActionError> {
+        self.plugin_paths
+            .iter()
+            .map(|dir| dir.join(&self.service_type))
+            .find(|plugin| plugin.is_file())
+            .ok_or_else(|| {
+                let dirs: Vec<&str> = self.plugin_paths.iter().map(|dir| dir.as_str()).collect();
+                ServiceActionError::NotSupported(format!(
+                    "No service plugin for the service type '{}': no '{}' file in {}",
+                    self.service_type,
+                    self.service_type,
+                    dirs.join(", ")
+                ))
+            })
     }
 }
 
@@ -265,7 +283,7 @@ mod tests {
             action: action.to_string(),
             service_name: service_name.to_string(),
             service_type: service_type.to_string(),
-            plugin_dir: "/usr/share/tedge/service-plugins".into(),
+            plugin_paths: vec!["/usr/share/tedge/service-plugins".into()],
         }
     }
 
@@ -295,7 +313,7 @@ esac
         service_plugin(plugin_dir, "container");
 
         let mut cmd = command("restart", "nodered", "container");
-        cmd.plugin_dir = plugin_dir.to_path_buf();
+        cmd.plugin_paths = vec![plugin_dir.to_path_buf()];
 
         assert!(cmd.run_plugin_action().await.is_ok());
     }
@@ -307,7 +325,7 @@ esac
         service_plugin(plugin_dir, "container");
 
         let mut cmd = command("reload", "nodered", "container");
-        cmd.plugin_dir = plugin_dir.to_path_buf();
+        cmd.plugin_paths = vec![plugin_dir.to_path_buf()];
 
         let err = cmd.run_plugin_action().await.unwrap_err();
 
@@ -325,7 +343,7 @@ esac
         let plugin = service_plugin(plugin_dir, "container");
 
         let mut cmd = command("stop", "nodered", "container");
-        cmd.plugin_dir = plugin_dir.to_path_buf();
+        cmd.plugin_paths = vec![plugin_dir.to_path_buf()];
 
         let err = cmd.run_plugin_action().await.unwrap_err();
 
@@ -344,8 +362,8 @@ esac
         config_dir.file("system.toml").with_raw_content(&format!(
             r#"[init]
 name = "test"
-is_available = ["/bin/true"]
-is_active = ["/bin/true"]
+is_available = ["/usr/bin/touch", "{done}.is_available"]
+is_active = {}
 start = {}
 stop = {}
 restart = {}
@@ -353,6 +371,7 @@ enable = {}
 disable = {}
 reload = {}
 "#,
+            touch("is_active"),
             touch("start"),
             touch("stop"),
             touch("restart"),
@@ -403,40 +422,130 @@ reload = {}
         assert_matches!(err, ServiceActionError::NotSupported(_));
         // The error tells which actions this init system does define
         assert!(
-            err.to_string()
-                .contains("Known actions: disable, enable, reload, restart, start, stop"),
+            err.to_string().contains(
+                "Known actions: disable, enable, is_active, is_available, reload, restart, start, stop"
+            ),
             "{err}"
         );
     }
 
     #[tokio::test]
-    async fn a_reserved_key_is_not_dispatchable_as_an_action() {
+    async fn a_state_query_template_is_run_by_the_init_system() {
+        let config_dir = TempTedgeDir::new();
+        let done = init_system(&config_dir);
+
+        let cmd = command("is_active", "nginx", "service");
+        cmd.run_init_system_action(config_dir.utf8_path())
+            .await
+            .unwrap();
+
+        assert!(Utf8PathBuf::from(format!("{done}.is_active.nginx")).exists());
+    }
+
+    #[tokio::test]
+    async fn the_is_available_template_is_run_without_a_service_name() {
+        let config_dir = TempTedgeDir::new();
+        let done = init_system(&config_dir);
+
+        let cmd = command("is_available", "nginx", "service");
+        cmd.run_init_system_action(config_dir.utf8_path())
+            .await
+            .unwrap();
+
+        assert!(Utf8PathBuf::from(format!("{done}.is_available")).exists());
+    }
+
+    #[tokio::test]
+    async fn a_state_query_answering_no_is_a_failure_not_an_unsupported_action() {
+        let config_dir = TempTedgeDir::new();
+        config_dir.file("system.toml").with_raw_content(
+            r#"[init]
+name = "test"
+is_available = ["/bin/true"]
+is_active = ["/bin/false", "{}"]
+restart = ["/bin/true", "{}"]
+stop = ["/bin/true", "{}"]
+enable = ["/bin/true", "{}"]
+disable = ["/bin/true", "{}"]
+"#,
+        );
+
+        let cmd = command("is_active", "nginx", "service");
+        let err = cmd
+            .run_init_system_action(config_dir.utf8_path())
+            .await
+            .unwrap_err();
+
+        assert_matches!(
+            err,
+            ServiceActionError::InitSystem(SystemServiceError::ServiceCommandFailedWithCode {
+                code: 1,
+                ..
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn the_name_key_is_not_dispatchable_as_an_action() {
         let config_dir = TempTedgeDir::new();
         init_system(&config_dir);
 
-        for reserved in ["is_active", "is_available", "name"] {
-            let cmd = command(reserved, "collectd", "service");
-            let err = cmd
-                .run_init_system_action(config_dir.utf8_path())
-                .await
-                .unwrap_err();
+        let cmd = command("name", "collectd", "service");
+        let err = cmd
+            .run_init_system_action(config_dir.utf8_path())
+            .await
+            .unwrap_err();
 
-            assert_matches!(err, ServiceActionError::NotSupported(_), "{reserved}");
-        }
+        assert_matches!(err, ServiceActionError::NotSupported(_));
     }
 
     #[tokio::test]
     async fn a_missing_plugin_is_reported_as_not_supported() {
         let mut cmd = command("restart", "nodered", "container");
-        cmd.plugin_dir = "/no/such/directory".into();
+        cmd.plugin_paths = vec!["/no/such/directory".into(), "/nor/this/one".into()];
 
         let err = cmd.run_plugin_action().await.unwrap_err();
 
         assert_matches!(err, ServiceActionError::NotSupported(_));
+        // The error names every directory that was searched
         assert_eq!(
             err.to_string(),
-            "No service plugin for the service type 'container': /no/such/directory/container does not exist"
+            "No service plugin for the service type 'container': no 'container' file in /no/such/directory, /nor/this/one"
         );
+    }
+
+    #[test]
+    fn the_plugin_of_the_first_directory_holding_one_is_used() {
+        let dir = TempTedgeDir::new();
+        let first = dir.dir("first");
+        let second = dir.dir("second");
+        let plugin = service_plugin(first.utf8_path(), "container");
+        service_plugin(second.utf8_path(), "container");
+
+        let mut cmd = command("restart", "nodered", "container");
+        cmd.plugin_paths = vec![
+            first.utf8_path().to_path_buf(),
+            second.utf8_path().to_path_buf(),
+        ];
+
+        assert_eq!(cmd.find_plugin().unwrap(), plugin);
+    }
+
+    #[test]
+    fn a_directory_holding_no_such_plugin_is_skipped() {
+        let dir = TempTedgeDir::new();
+        let first = dir.dir("first");
+        let second = dir.dir("second");
+        let plugin = service_plugin(second.utf8_path(), "container");
+
+        let mut cmd = command("restart", "nodered", "container");
+        cmd.plugin_paths = vec![
+            "/no/such/directory".into(),
+            first.utf8_path().to_path_buf(),
+            second.utf8_path().to_path_buf(),
+        ];
+
+        assert_eq!(cmd.find_plugin().unwrap(), plugin);
     }
 
     #[test]

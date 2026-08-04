@@ -349,12 +349,15 @@ which already uses `0` for success and `2` for "this plugin skipped it":
 `0` success, `2` command not supported for this service type, other non-zero failure.
 The plugin's own `2` is propagated unchanged.
 
-The plugin directory is a new key of the existing `service` table,
-`service.plugin_dir` (`crates/common/tedge_config/src/tedge_toml/tedge_config.rs:1327`),
+The plugin directories are a new key of the existing `service` table,
+`service.plugin_paths` (`crates/common/tedge_config/src/tedge_toml/tedge_config.rs:1327`),
 defaulting to `/usr/share/tedge/service-plugins`.
-It is a single directory, not a search path like `log.plugin_paths`,
-because a plugin is picked by its exact name, the service type,
-so a second directory would only raise the question of which plugin wins.
+It is a `TemplatesSet`, a comma-separated list of directories,
+the same name and shape as `diag.plugin_paths`, `log.plugin_paths`
+and `configuration.plugin_paths`,
+so an administrator can add a directory of their own next to the shipped one.
+A plugin is picked by its exact name, the service type,
+from the first directory that holds one, as it is for the other three.
 Packaging adds the directory to `configuration/package_manifests/nfpm.tedge.yaml`
 with mode `0755`, following the `log-plugins` and `config-plugins` entries.
 It must **not** be added to the chown list in `package_scripts/tedge/preinst:102`,

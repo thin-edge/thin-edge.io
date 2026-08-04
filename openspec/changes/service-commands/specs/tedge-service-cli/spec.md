@@ -44,8 +44,9 @@ No new privileged surface is added.
 
 - the default type `service` SHALL be handled by the built-in init-system abstraction
   configured in `/etc/tedge/system.toml`;
-- any other type `<type>` SHALL be handled by the service plugin at
-  `/usr/share/tedge/service-plugins/<type>`;
+- any other type `<type>` SHALL be handled by the service plugin named `<type>`,
+  taken from the first directory of `service.plugin_paths` that holds one,
+  `/usr/share/tedge/service-plugins` per default;
 - when no backend can handle the request — no action template for the `service` type,
   or no plugin file for the given type — the command SHALL fail
   with the "not supported" exit code and an error message naming the action and the service type.
@@ -62,9 +63,14 @@ The CLI SHALL pass the action through unchanged.
 - **WHEN** `tedge service restart nodered --service-type container` is run
 - **THEN** it SHALL run `/usr/share/tedge/service-plugins/container restart nodered`
 
+#### Scenario: A plugin is taken from the first directory holding one
+- **WHEN** `tedge service restart nodered --service-type container` is run
+  and more than one directory of `service.plugin_paths` holds a `container` file
+- **THEN** it SHALL run the one from the first of those directories
+
 #### Scenario: No plugin installed for the type
 - **WHEN** `tedge service restart nodered --service-type container` is run
-  and `/usr/share/tedge/service-plugins/container` does not exist
+  and no directory of `service.plugin_paths` holds a `container` file
 - **THEN** the command SHALL fail with the "not supported" exit code and an error message naming the type
 
 #### Scenario: No action template for the default type
@@ -106,8 +112,9 @@ SHALL remain reserved and SHALL NOT be dispatchable as actions.
 
 ### Requirement: Service plugin contract
 
-A service plugin SHALL be an executable file at `/usr/share/tedge/service-plugins/<service-type>`,
-named after the service type it handles.
+A service plugin SHALL be an executable file named after the service type it handles,
+installed in one of the directories of `service.plugin_paths`,
+`/usr/share/tedge/service-plugins` per default.
 
 `tedge service` SHALL invoke it as `<plugin> <action> <service-name>`,
 where `<action>` is `start`, `stop`, `restart` or an action the plugin defines itself.
