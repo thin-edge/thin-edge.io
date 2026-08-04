@@ -1,0 +1,33 @@
+# Preserve the built-in get and upload steps while inserting a custom workflow step.
+operation = "config_snapshot"
+on_error = "failed"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "echo custom-snapshot-workflow > /tmp/config_snapshot_workflow.log"
+on_success = "get"
+on_error = "failed"
+
+[get]
+action = "builtin:config_snapshot:get"
+on_success = "upload"
+on_error = "failed"
+
+[upload]
+action = "upload"
+input.url = "${.payload.tedgeUrl}"
+on_success = "successful"
+on_error = "upload_failed"
+
+[upload_failed]
+action = "proceed"
+on_success = { status = "failed", reason = "config-manager failed uploading configuration snapshot: ${.payload.tedgeUrl}" }
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
