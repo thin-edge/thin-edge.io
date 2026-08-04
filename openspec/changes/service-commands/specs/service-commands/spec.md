@@ -6,7 +6,9 @@ A service entity SHALL declare a supported command by publishing a retained capa
 on `te/device/<device>/service/<service>/cmd/<action>` with an empty JSON object `{}` as payload.
 One topic SHALL be used per command, so that each command can have its own workflow.
 
-`<action>` SHALL be one of the standard commands `start`, `stop`, `restart`,
+`<action>` SHALL be one of the standard commands
+`start`, `stop`, `restart`, `enable` and `disable`,
+the five an init system defines in `system.toml`,
 or any custom command name chosen by the service owner.
 
 An action name SHALL match `[a-z][a-z0-9_]+`:

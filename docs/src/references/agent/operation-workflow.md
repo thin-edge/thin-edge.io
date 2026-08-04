@@ -246,7 +246,7 @@ The file name plays no role in any of this.
 An operation name comes from the `operation` field inside the file, never from the file name,
 so two workflows for the same operation only have to be in two files with different names.
 The workflows %%te%% ships for [service commands](./service-commands.md#shipped-workflows)
-are named `service_restart.toml`, `service_stop.toml` and `service_start.toml` for readability only.
+are named `service_<action>.toml` for readability only.
 
 :::caution
 The type `child-device` is currently not supported yet.

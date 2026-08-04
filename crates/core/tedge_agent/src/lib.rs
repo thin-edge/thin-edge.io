@@ -32,7 +32,6 @@ mod entity_manager;
 mod http_server;
 mod operation_workflows;
 mod restart_manager;
-mod service_workflows;
 mod software_manager;
 mod state_repository;
 mod twin_manager;

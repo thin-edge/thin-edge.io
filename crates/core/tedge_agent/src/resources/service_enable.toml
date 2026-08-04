@@ -1,0 +1,39 @@
+# The `enable` action of a service.
+#
+# The action is run by `tedge service`, which dispatches it to whatever manages that service:
+# the init system for the default service type, a service plugin for any other type.
+#
+# Enabling a service makes it start on its own from now on. It does not start it now, so a service
+# can be enabled while it is stopped.
+#
+# This file is a template: tedge-agent creates it if it is missing, and never overwrites it once
+# it differs from `service_enable.toml.template`, which always holds the shipped definition.
+
+operation = "enable"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "execute"
+
+[execute]
+script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type ${.payload.serviceType}"
+# Shorter than the timeout of `start` and `stop`: nothing waits for the service to change state
+timeout_second = 60
+on_exit.0 = "successful"
+# A reason has to be given per exit code: the reason given by the backend goes to the operation
+# log, and only what a script prints on stdout can update the state of a command
+on_exit.1 = { status = "failed", reason = "The action failed, see the operation log for the reason given by the backend" }
+on_exit.2 = { status = "failed", reason = "This action is not supported for that type of service" }
+on_exit.3-255 = { status = "failed", reason = "The action failed, see the operation log for the reason given by the backend" }
+on_kill = { status = "failed", reason = "The action did not complete in time and was cancelled" }
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

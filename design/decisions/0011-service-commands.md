@@ -65,7 +65,8 @@ is **who executes a service command, and how**.
 * A **cloud-agnostic** thin-edge interface:
   services declare which actions they support and receive them on the standard `te/.../cmd/...` topics.
   The Cumulocity specifics live entirely in the c8y mapper.
-* Support the standard actions `start`, `stop`, `restart`, plus **custom actions**:
+* Support the standard actions `start`, `stop`, `restart`, `enable` and `disable`,
+  the five an init system defines in `system.toml`, plus **custom actions**:
   Cumulocity allows arbitrary command names in `c8y_SupportedServiceCommands`,
   and a service owner can define its own.
 * Works both for init-managed services (abstracted by `system.toml`)
