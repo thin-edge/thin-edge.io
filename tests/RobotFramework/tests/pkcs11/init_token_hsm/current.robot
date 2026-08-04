@@ -32,3 +32,12 @@ hsm init is idempotent
 
 Can initialize a specific slot by URI
     Initialize a specific slot by URI
+
+hsm delete-key deletes a key from the token
+    Delete a key with hsm delete-key
+
+hsm change-pin changes the user PIN and keeps the config in sync
+    Change the user PIN with hsm change-pin
+
+hsm change-pin --reset resets the user PIN using the SO PIN
+    Reset the user PIN using the Security Officer PIN

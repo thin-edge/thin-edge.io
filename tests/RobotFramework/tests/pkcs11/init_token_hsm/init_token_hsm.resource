@@ -157,6 +157,96 @@ Initialize a specific slot by URI
     ${count}=    Get Count    ${tokens}    token=slot-token
     Should Be Equal As Integers    ${count}    1
 
+Delete a key with hsm delete-key
+    [Documentation]    delete-key destroys the key objects matching a label, asks for confirmation,
+    ...    refuses to delete the configured signing key, and is idempotent.
+    Execute Command    cmd=tedge hsm create-key --type ecdsa --label doomed-key "pkcs11:token=tedge"
+
+    # without --force and no confirmation on stdin, nothing is deleted
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm delete-key --label doomed-key "pkcs11:token=tedge" </dev/null
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    Aborted; no keys were deleted.
+    ${privkeys}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=tedge"
+    Should Contain    ${privkeys}    Label: doomed-key
+
+    # deleting the key referenced by device.key_uri is refused
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm delete-key --label auto-key
+    ...    exp_exit_code=!0
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    Refusing to delete
+    Should Contain    ${stderr}    device.key_uri
+
+    # confirming the prompt deletes the private and public key objects
+    ${stderr}=    Execute Command
+    ...    cmd=echo y | tedge hsm delete-key --label doomed-key "pkcs11:token=tedge"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    Deleted
+    ${privkeys}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=tedge"
+    Should Not Contain    ${privkeys}    Label: doomed-key
+
+    # deleting an absent key is a no-op success
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm delete-key --force --label doomed-key "pkcs11:token=tedge"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    No matching key was found; nothing to delete.
+
+Change the user PIN with hsm change-pin
+    [Documentation]    change-pin changes the user PIN of the selected token and keeps
+    ...    device.cryptoki.pin in sync. With several initialized tokens, the token must be
+    ...    selected explicitly by URI.
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm change-pin --new-pin 654321 --current-pin 123456
+    ...    exp_exit_code=!0
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    Found multiple initialized tokens
+
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm change-pin --new-pin 654321 --current-pin 123456 "pkcs11:token=tedge"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    was changed
+    Should Contain    ${stderr}    device.cryptoki.pin
+
+    # the new PIN is required to log in to the token
+    ${privkeys}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=654321 --list-privkeys "pkcs11:token=tedge"
+    Should Contain    ${privkeys}    Label: auto-key
+
+    # the configured PIN was kept in sync
+    ${pin}=    Execute Command    tedge config get device.cryptoki.pin    strip=True
+    Should Be Equal    ${pin}    654321
+
+Reset the user PIN using the Security Officer PIN
+    [Documentation]    change-pin --reset recovers a token whose user PIN is unknown, using the SO
+    ...    PIN. The token was auto-initialized without --so-pin, so its SO PIN defaulted to the
+    ...    user PIN it was created with (123456).
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm change-pin --reset --new-pin 123456 --so-pin 123456 "pkcs11:token=tedge"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    was reset
+
+    ${privkeys}=    Execute Command
+    ...    cmd=p11tool --login --set-pin=123456 --list-privkeys "pkcs11:token=tedge"
+    Should Contain    ${privkeys}    Label: auto-key
+
+    ${pin}=    Execute Command    tedge config get device.cryptoki.pin    strip=True
+    Should Be Equal    ${pin}    123456
+
 Custom Setup
     [Arguments]    ${tedge_p11_server_version}
     ${DEVICE_SN}=    Setup    register=${False}
