@@ -31,9 +31,14 @@ The service type selects the backend that runs the action.
 | `service` (default)   | The init system, as configured in [`system.toml`](./init-system-configuration.md)  |
 | any other type `<t>`  | The service plugin `<plugin-dir>/<t>`                                              |
 
-The plugin directory is the `tedge config` value `service.plugin_dir`,
-`/usr/share/tedge/service-plugins` per default.
-It is a single directory, not a search path: a plugin is picked by its exact name.
+The plugin directories are the `tedge config` value `service.plugin_paths`,
+a comma-separated list, `/usr/share/tedge/service-plugins` per default.
+A plugin is picked by its exact name, the service type,
+from the first directory that holds one:
+
+```sh
+sudo tedge config set service.plugin_paths /usr/local/share/tedge/service-plugins,/usr/share/tedge/service-plugins
+```
 
 ```sh
 # Handled by the init system, e.g. systemctl restart collectd
@@ -120,10 +125,10 @@ A rejected argument fails the command without any backend being invoked.
   so that the output of a plugin is never read as a state update.
 
 :::caution
-The plugin directory must stay owned by `root` and must not be writable by the `tedge` user.
+Every plugin directory must stay owned by `root` and must not be writable by the `tedge` user.
 `tedge service` runs the plugin as root,
 so a writable directory would let that user run arbitrary code as root.
-Packaging creates the directory with mode `755`,
+Packaging creates the shipped directory with mode `755`,
 and deliberately leaves it out of the files it gives to the `tedge` user.
 :::
 
