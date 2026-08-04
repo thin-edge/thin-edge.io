@@ -357,6 +357,7 @@ impl BuildCommand for TEdgeCertCli {
                     csr_template,
                     user: user.clone(),
                     group: group.clone(),
+                    cloud: Some(Cloud::c8y(profile.clone())),
                 };
                 cmd.into_boxed()
             }
@@ -507,6 +508,12 @@ pub enum DownloadCertCli {
     /// - Upload this CSR on Cumulocity, using the provided device identifier and security token
     /// - Loop till the device is registered by an administrator and the CSR accepted
     /// - Download and store the certificate created by Cumulocity
+    ///
+    /// When thin-edge is configured to use an HSM (see
+    /// https://thin-edge.github.io/thin-edge.io/references/hsm-support), the CSR is signed by the
+    /// private key on the PKCS #11 token. If the token verifiably holds no key yet, one is created
+    /// automatically (initializing the token if needed, as with `tedge hsm create-key`) and
+    /// selected via the `key_uri` config setting.
     ///
     /// Use the following settings from the config:
     /// - c8y.http  HTTP Endpoint to the Cumulocity tenant, with optional port

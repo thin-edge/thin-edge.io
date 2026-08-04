@@ -488,3 +488,20 @@ Options:
 
 Now you're free to use the new key to either request a signed certificate using a CSR or to create a
 self-signed certificate.
+
+:::note
+
+`tedge cert download c8y` creates a key automatically (as if running `tedge hsm create-key`,
+including initializing the token if needed) when the PKCS #11 token verifiably holds no private key
+yet, so a fresh device with a single HSM can be provisioned with just:
+
+```sh
+tedge cert download c8y --device-id "$DEVICE_ID" --one-time-password "$PASSWORD"
+```
+
+The automatic key creation stays predictable by only handling the unambiguous case: if the HSM
+can't be inspected (e.g. due to a wrong PIN), if the token holds keys but none matches the
+configured `key_uri`, or if several tokens are available, the command fails and lists the options
+instead of guessing.
+
+:::

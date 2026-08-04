@@ -22,8 +22,8 @@ Tedge cert download error
     ...    stdout=False
     ...    stderr=True
     ...    exp_exit_code=!0
-    Should Contain    ${stderr}    0: Fail to create the device CSR /etc/tedge/device-certs/tedge.csr
-    Should Contain    ${stderr}    1: Failed to obtain PEM of PKCS11 public key
+    # the key lookup now happens before the CSR is generated, so the error chain starts there
+    Should Contain    ${stderr}    Failed to find a private key to sign the CSR
     Should Contain
     ...    ${stderr}
-    ...    2: tedge-p11-server wasn't able to understand the request, perhaps because its version is too old
+    ...    tedge-p11-server wasn't able to understand the request, perhaps because its version is too old

@@ -196,6 +196,19 @@ impl Command for CreateKeyHsmCmd {
     }
 
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
+        self.ensure_key(config).await?;
+        Ok(())
+    }
+}
+
+impl CreateKeyHsmCmd {
+    /// Ensures a usable keypair exists on the token and returns its URI.
+    ///
+    /// This is the body of `tedge hsm create-key`, also reused by `tedge cert download` to create
+    /// a key automatically when none exists yet: the token is auto-discovered (initializing it if
+    /// needed), an existing key with the same label is reused, and the key URI is saved to tedge
+    /// config.
+    pub(crate) async fn ensure_key(&self, config: TEdgeConfig) -> anyhow::Result<String> {
         let key = match self.r#type {
             KeyType::Rsa => KeyTypeParams::Rsa {
                 bits: self.bits.into(),
@@ -240,13 +253,10 @@ impl Command for CreateKeyHsmCmd {
                     }
                     // Multiple tokens: the choice is ambiguous, ask the user to select one.
                     _ => {
-                        eprintln!(
-                            "No token URL was provided for this operation; the available tokens are:"
+                        anyhow::bail!(
+                            "No token URL was provided for this operation; the available tokens are:\n{}",
+                            tokens.join("\n")
                         );
-                        for token_uri in tokens {
-                            eprintln!("{token_uri}");
-                        }
-                        std::process::exit(1);
                     }
                 }
             }
@@ -308,7 +318,7 @@ impl Command for CreateKeyHsmCmd {
             warn!(?e, "Failed to save public key URI to tedge-config. You may need to enter key URI in tedge-config manually to use the new key.")
         }
 
-        Ok(())
+        Ok(uri)
     }
 }
 
