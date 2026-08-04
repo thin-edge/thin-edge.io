@@ -33,7 +33,8 @@ A name such as `RESTART`, `do something` or `restart-now` is rejected wherever i
 This is what lets an action name stay the same
 from a cloud command name, to a topic segment, to the argument of a command line.
 
-`start`, `stop` and `restart` are the standard actions, the ones %%te%% ships a workflow for.
+`start`, `stop`, `restart`, `enable` and `disable` are the standard actions,
+the ones %%te%% ships a workflow for.
 Any other name is a custom action, supported by whatever runs it.
 
 ## MQTT API
@@ -116,8 +117,9 @@ so it leaves the command untouched rather than driving a state machine it may no
 
 ## Shipped workflows
 
-`tedge-agent` installs a workflow for each standard action in 
-`/etc/tedge/operations/service_start.toml`, `service_stop.toml` and `service_restart.toml`.
+`tedge-agent` installs a workflow for each standard action in
+`/etc/tedge/operations/service_start.toml`, `service_stop.toml`, `service_restart.toml`,
+`service_enable.toml` and `service_disable.toml`.
 Each declares `type = "service"`, which is what scopes it to service entities.
 See [scoping a workflow by entity type](./operation-workflow.md#workflow-entity-type).
 
@@ -129,11 +131,13 @@ sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type
 
 Exit code `0` moves the command to `successful`, any other code to `failed`,
 with the reason given by the backend written to the operation log.
-The step carries a 180 second timeout,
+The step carries a timeout, so a backend that never returns
+ends as a failed command rather than a stuck one:
+180 seconds for `start`, `stop` and `restart`,
 twice what systemd itself waits to stop and to start a unit,
-so a backend that never returns ends as a failed command rather than a stuck one.
+and 60 seconds for `enable` and `disable`, which wait for no service to change state.
 
-These three files are installed as *templates*:
+These five files are installed as *templates*:
 each is created when missing, and never overwritten once it differs from the shipped copy.
 An administrator can adapt a workflow, or delete it to disable the action altogether,
 and an upgrade will not restore it.

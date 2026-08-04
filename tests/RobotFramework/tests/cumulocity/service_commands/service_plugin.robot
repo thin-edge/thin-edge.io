@@ -34,14 +34,14 @@ Declares the actions of the service to Cumulocity
 
 Runs a standard action through the plugin of the service type
     Clear Plugin Log
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    {"command":"RESTART","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Plugin Should Have Been Called With    restart ${SERVICE_NAME}
 
 Runs a custom action through the plugin
     Clear Plugin Log
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    {"command":"PAUSE","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Plugin Should Have Been Called With    pause ${SERVICE_NAME}
@@ -50,7 +50,7 @@ Takes the service name from the operation
     [Documentation]    The name reaches the plugin as Cumulocity sends it. The target is resolved
     ...    from the external id, so the command is still published on the topic of that service.
     Clear Plugin Log
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    {"command":"RESTART","serviceName":"Node-RED","serviceType":"${SERVICE_TYPE}"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
 
@@ -64,7 +64,7 @@ Takes the service type from the registered entity
     [Documentation]    The type Cumulocity sends is only a fallback: the type the service
     ...    registered itself with selects the backend.
     Clear Plugin Log
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    {"command":"RESTART","serviceName":"${SERVICE_NAME}","serviceType":"service"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
 
@@ -76,7 +76,7 @@ Takes the service type from the registered entity
 
 Reports an action the plugin does not support
     Clear Plugin Log
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    {"command":"STOP","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
     Cumulocity.Operation Should Be FAILED
     ...    ${operation}
@@ -113,7 +113,7 @@ Custom Setup
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
     Execute Command
-    ...    tedge http post /te/v1/entities '{"@topic-id":"device/main/service/${SERVICE_NAME}","@parent":"device/main//","@type":"service","name":"${SERVICE_NAME}","type":"${SERVICE_TYPE}"}'
+    ...    tedge mqtt pub --retain te/device/main/service/${SERVICE_NAME} '{"@type":"service","name":"${SERVICE_NAME}","type":"${SERVICE_TYPE}"}'
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
 
     Declare Action    restart
@@ -136,7 +136,7 @@ Managed Object Service Commands Should Be
     ${wanted}=    Evaluate    sorted($expected)
     Should Be Equal    ${actual}    ${wanted}
 
-Run Service Command
+Create Service Command Operation
     [Arguments]    ${fragment}
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
     ${operation}=    Cumulocity.Create Operation

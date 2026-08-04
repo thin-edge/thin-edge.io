@@ -129,7 +129,8 @@ and deliberately leaves it out of the files it gives to the `tedge` user.
 
 ## Example plugin
 
-A plugin for the `container` service type, handling the standard actions
+A plugin for the `container` service type,
+handling `start`, `stop` and `restart`,
 plus the custom actions `pause` and `unpause`.
 
 ```sh title="file: /usr/share/tedge/service-plugins/container"

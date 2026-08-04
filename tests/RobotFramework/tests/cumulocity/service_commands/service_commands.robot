@@ -35,32 +35,48 @@ Withdraws an action from Cumulocity
     Supported Service Commands Should Be    ${SERVICE_XID}    RESTART    START    STOP
 
 Restarts a service managed by the init system
-    ${before}=    Main PID Of    ${SERVICE_NAME}
-    ${operation}=    Run Service Command
+    ${before}=    Get Service PID    ${SERVICE_NAME}
+    ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
     ...    {"command":"RESTART","serviceName":"${SERVICE_NAME}","serviceType":"service"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
 
-    ${after}=    Main PID Of    ${SERVICE_NAME}
+    ${after}=    Get Service PID    ${SERVICE_NAME}
     Should Not Be Equal    ${before}    ${after}    The service was not restarted
 
 Stops and starts a service managed by the init system
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
     ...    {"command":"STOP","serviceName":"${SERVICE_NAME}","serviceType":"service"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    ${state}=    Execute Command    systemctl is-active ${SERVICE_NAME}    strip=${True}    ignore_exit_code=${True}
-    Should Be Equal    ${state}    inactive
+    Service Should Be Stopped    ${SERVICE_NAME}
 
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
     ...    {"command":"START","serviceName":"${SERVICE_NAME}","serviceType":"service"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    ${state}=    Execute Command    systemctl is-active ${SERVICE_NAME}    strip=${True}
-    Should Be Equal    ${state}    active
+    Service Should Be Running    ${SERVICE_NAME}
+
+Enables and disables a service managed by the init system
+    Declare Action    ${SERVICE_NAME}    enable
+    Declare Action    ${SERVICE_NAME}    disable
+    Supported Service Commands Should Be
+    ...    ${SERVICE_XID}    DISABLE    ENABLE    RESTART    START    STOP
+
+    ${operation}=    Create Service Command Operation
+    ...    ${SERVICE_XID}
+    ...    {"command":"ENABLE","serviceName":"${SERVICE_NAME}","serviceType":"service"}
+    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Service Should Be Enabled    ${SERVICE_NAME}
+
+    ${operation}=    Create Service Command Operation
+    ...    ${SERVICE_XID}
+    ...    {"command":"DISABLE","serviceName":"${SERVICE_NAME}","serviceType":"service"}
+    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+    Service Should Be Disabled    ${SERVICE_NAME}
 
 Rejects an action the service has not declared
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
     ...    {"command":"COLLECT_MEASUREMENTS","serviceName":"${SERVICE_NAME}","serviceType":"service"}
     Cumulocity.Operation Should Be FAILED
@@ -70,7 +86,7 @@ Rejects an action the service has not declared
     Should Not Have MQTT Messages    te/device/main/service/${SERVICE_NAME}/cmd/collect_measurements/+
 
 Rejects a command that is not a valid action name
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
     ...    {"command":"Do Something","serviceName":"${SERVICE_NAME}","serviceType":"service"}
     Cumulocity.Operation Should Be FAILED
@@ -79,7 +95,7 @@ Rejects a command that is not a valid action name
     ...    timeout=60
 
 Rejects a service name a backend could misread
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
     ...    {"command":"RESTART","serviceName":"--now","serviceType":"service"}
     Cumulocity.Operation Should Be FAILED
@@ -87,13 +103,12 @@ Rejects a service name a backend could misread
     ...    failure_reason=.*Invalid service name '--now'.*
     ...    timeout=60
 
-    # The command topic carries the operation id, so this names the command of this operation only
     ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
     Should Not Have MQTT Messages
     ...    te/device/main/service/${SERVICE_NAME}/cmd/restart/c8y-mapper-${operation_id}
 
 Rejects a service type that names no plugin file
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
     ...    {"command":"RESTART","serviceName":"${SERVICE_NAME}","serviceType":"../../bin/sh"}
     Cumulocity.Operation Should Be FAILED
@@ -107,7 +122,7 @@ Rejects a service type that names no plugin file
 
 Refuses to stop tedge-agent
     Declare Action    tedge-agent    stop
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    ${AGENT_XID}
     ...    {"command":"STOP","serviceName":"tedge-agent","serviceType":"service"}
     Cumulocity.Operation Should Be FAILED
@@ -118,7 +133,7 @@ Refuses to stop tedge-agent
 
 Refuses to stop a mapper connected to a cloud
     Declare Action    tedge-mapper-c8y    stop
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    ${MAPPER_XID}
     ...    {"command":"STOP","serviceName":"tedge-mapper-c8y","serviceType":"service"}
     Cumulocity.Operation Should Be FAILED
@@ -131,15 +146,15 @@ Restarts tedge-agent itself
     [Documentation]    tedge-agent is what runs the command, so it asks its runtime to stop and
     ...    completes the command exactly once when the workflow resumes.
     Declare Action    tedge-agent    restart
-    ${before}=    Main PID Of    tedge-agent
+    ${before}=    Get Service PID    tedge-agent
 
-    ${operation}=    Run Service Command
+    ${operation}=    Create Service Command Operation
     ...    ${AGENT_XID}
     ...    {"command":"RESTART","serviceName":"tedge-agent","serviceType":"service"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=180
 
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
-    ${after}=    Main PID Of    tedge-agent
+    ${after}=    Get Service PID    tedge-agent
     Should Not Be Equal    ${before}    ${after}    tedge-agent was not restarted
 
 
@@ -163,11 +178,8 @@ Custom Setup
     Declare Action    ${SERVICE_NAME}    restart
 
 Register Service
-    [Documentation]    Registered with no type of its own, so it takes the default type `service`,
-    ...    the one the init system handles
     [Arguments]    ${name}
-    Execute Command
-    ...    tedge http post /te/v1/entities '{"@topic-id":"device/main/service/${name}","@parent":"device/main//","@type":"service","name":"${name}"}'
+    Execute Command    tedge mqtt pub --retain te/device/main/service/${name} '{"name":"${name}","@type":"service"}'
     Cumulocity.External Identity Should Exist    ${DEVICE_SN}:device:main:service:${name}    show_info=${False}
 
 Declare Action
@@ -179,8 +191,6 @@ Withdraw Action
     Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${name}/cmd/${action} ''
 
 Supported Service Commands Should Be
-    [Documentation]    The array is republished in full on every change, so it is compared as a
-    ...    whole. Its order is the order the capabilities were seen in, which is not fixed.
     [Arguments]    ${external_id}    @{expected}
     Cumulocity.External Identity Should Exist    ${external_id}    show_info=${False}
     Wait Until Keyword Succeeds    30x    2s    Managed Object Service Commands Should Be    @{expected}
@@ -192,17 +202,10 @@ Managed Object Service Commands Should Be
     ${wanted}=    Evaluate    sorted($expected)
     Should Be Equal    ${actual}    ${wanted}
 
-Run Service Command
-    [Documentation]    Create the c8y_ServiceCommand operation on the given service, as an
-    ...    operator does from the Cumulocity service list.
+Create Service Command Operation
     [Arguments]    ${external_id}    ${fragment}
     Cumulocity.External Identity Should Exist    ${external_id}    show_info=${False}
     ${operation}=    Cumulocity.Create Operation
     ...    fragments={"c8y_ServiceCommand":${fragment}}
     ...    description=Service command
     RETURN    ${operation}
-
-Main PID Of
-    [Arguments]    ${name}
-    ${pid}=    Execute Command    systemctl show -p MainPID --value ${name}    strip=${True}
-    RETURN    ${pid}
