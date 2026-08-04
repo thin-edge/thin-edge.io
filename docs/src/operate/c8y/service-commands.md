@@ -97,11 +97,10 @@ tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/restart/c8y-mapper-
 ```
 
 - The **action** comes from the lowercased `command` value, and it names the topic.
-- The **service name** comes from the resolved entity, not from the operation.
-  What Cumulocity sends there can be a display name, which names no service for a backend.
-  Under a [custom topic scheme](/contribute/design/mqtt-topic-design.md#using-custom-identifier-schemas),
-  where the topic identifier carries no service name,
-  the name the service was registered with is used.
+- The **service name** comes from the operation.
+  It is the service name %%te%% published when registering it:
+  the `name` of the [service registration message](../../references/mqtt-api.md#entity-registration),
+  or the service segment of the topic identifier when the registration carries no `name`.
 - The **service type** is the one the service registered itself with,
   in the `type` field of the [service registration message](../../references/mqtt-api.md#entity-registration).
   The default type `service` is used when that field is absent.
@@ -118,6 +117,8 @@ An operation is failed straight away, with no %%te%% command published, when:
 - the target service cannot be resolved.
 - the action is not one the service has declared —
   compared case-insensitively, so `RESTART` matches a declared `restart`.
+- the operation's `serviceName` or `serviceType` breaks the
+  [rule for that argument](../../references/service-plugin-api.md#validating-the-arguments).
 
 ## Removing an action
 

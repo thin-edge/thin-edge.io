@@ -46,18 +46,29 @@ Runs a custom action through the plugin
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Plugin Should Have Been Called With    pause ${SERVICE_NAME}
 
-Takes the name and the type from the registered entity
-    [Documentation]    What Cumulocity sends can be a display name, and the type it sends is only
-    ...    a fallback: the type the service registered itself with selects the backend.
+Takes the service name from the operation
+    [Documentation]    The name reaches the plugin as Cumulocity sends it. The target is resolved
+    ...    from the external id, so the command is still published on the topic of that service.
     Clear Plugin Log
     ${operation}=    Run Service Command
-    ...    {"command":"RESTART","serviceName":"Node-RED","serviceType":"service"}
+    ...    {"command":"RESTART","serviceName":"Node-RED","serviceType":"${SERVICE_TYPE}"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
 
     ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
     Should Have MQTT Messages
     ...    te/device/main/service/${SERVICE_NAME}/cmd/restart/c8y-mapper-${operation_id}
-    ...    message_contains="serviceName":"${SERVICE_NAME}"
+    ...    message_contains="serviceName":"Node-RED"
+    Plugin Should Have Been Called With    restart Node-RED
+
+Takes the service type from the registered entity
+    [Documentation]    The type Cumulocity sends is only a fallback: the type the service
+    ...    registered itself with selects the backend.
+    Clear Plugin Log
+    ${operation}=    Run Service Command
+    ...    {"command":"RESTART","serviceName":"${SERVICE_NAME}","serviceType":"service"}
+    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
     Should Have MQTT Messages
     ...    te/device/main/service/${SERVICE_NAME}/cmd/restart/c8y-mapper-${operation_id}
     ...    message_contains="serviceType":"${SERVICE_TYPE}"

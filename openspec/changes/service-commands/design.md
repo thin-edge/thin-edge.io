@@ -258,6 +258,34 @@ the same rule `tedge service` applies, before it is used to build a topic,
 and it is checked against the set of commands the service has declared.
 Both the mapper and the CLI need that rule, so it lives in `tedge_api` and is used by both.
 
+The `serviceName` of the operation is taken as it comes.
+Cumulocity holds one name per service:
+the very name the mapper published in the `102` message that created it (`converter.rs:335`),
+which is the `name` of the entity registration message,
+or the service segment of the topic identifier when the registration carries no name.
+The cloud sends thin-edge's own value back.
+
+The mapper does not replace it by a value derived from the entity.
+Nothing in the registration data means "the name the backend knows":
+neither the `name` nor the topic segment is guaranteed to be it,
+so picking one of them would be a guess, and a silent one —
+the operator would read one name on the operation
+while a backend was asked for another.
+Which name a service is reachable by is a contract on whoever registers it.
+
+The shape of the name is checked, against the service name rule `tedge service` applies,
+which lives in `tedge_api` next to the action name rule.
+A name a backend could misread then fails the operation with that as its reason,
+instead of failing later with the generic reason of a workflow step.
+An absent name is reported the same way, Cumulocity always sending one.
+
+The service type is checked the same way, and for the same reason.
+It is checked after being resolved, not as it arrives,
+since the type of the registration wins over the type of the payload
+and both name a file under the service plugin directory.
+All three rules — action, service name, service type — therefore live in `tedge_api`
+and are applied by the mapper and by the CLI alike.
+
 Status reporting needs no new mapping.
 `OperationContext::update` (`crates/extensions/c8y_mapper_ext/src/operations/handlers/mod.rs:77`)
 already publishes `501`-`506` on a topic derived from the entity,

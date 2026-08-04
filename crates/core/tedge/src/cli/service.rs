@@ -5,7 +5,11 @@ use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::process::Stdio;
 use tedge_api::service_command::validate_action_name;
+use tedge_api::service_command::validate_service_name;
+use tedge_api::service_command::validate_service_type;
 use tedge_api::service_command::InvalidActionName;
+use tedge_api::service_command::InvalidServiceName;
+use tedge_api::service_command::InvalidServiceType;
 use tedge_api::service_command::DEFAULT_SERVICE_TYPE;
 use tedge_api::workflow::BEGIN_TEDGE_MARKER;
 use tedge_api::workflow::END_TEDGE_MARKER;
@@ -20,9 +24,6 @@ const INIT_SERVICE_TYPE: &str = DEFAULT_SERVICE_TYPE;
 /// The exit code telling the caller that the action is not supported for that service type,
 /// as opposed to an action that was run and failed. Same meaning as for the diag plugins.
 const NOT_SUPPORTED_EXIT_CODE: i32 = 2;
-
-const MAX_SERVICE_NAME_LEN: usize = 128;
-const MAX_SERVICE_TYPE_LEN: usize = 64;
 
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct TEdgeServiceOpt {
@@ -191,11 +192,11 @@ enum ServiceActionError {
     #[error(transparent)]
     InvalidActionName(#[from] InvalidActionName),
 
-    #[error("Invalid service name '{name}': {reason}")]
-    InvalidServiceName { name: String, reason: String },
+    #[error(transparent)]
+    InvalidServiceName(#[from] InvalidServiceName),
 
-    #[error("Invalid service type '{ty}': {reason}")]
-    InvalidServiceType { ty: String, reason: String },
+    #[error(transparent)]
+    InvalidServiceType(#[from] InvalidServiceType),
 
     #[error(transparent)]
     InitSystem(#[from] SystemServiceError),
@@ -251,63 +252,6 @@ fn failure_reason(stderr: &str) -> String {
     }
 }
 
-/// A service name is passed to the init tool or to a plugin, so it must not be read as an option
-fn validate_service_name(name: &str) -> Result<(), ServiceActionError> {
-    let invalid = |reason: &str| {
-        Err(ServiceActionError::InvalidServiceName {
-            name: name.to_string(),
-            reason: reason.to_string(),
-        })
-    };
-
-    if name.is_empty() {
-        return invalid("a service name cannot be empty");
-    }
-    if name.len() > MAX_SERVICE_NAME_LEN {
-        return invalid(&format!(
-            "a service name cannot be longer than {MAX_SERVICE_NAME_LEN} characters"
-        ));
-    }
-    if name.starts_with('-') {
-        return invalid("a service name cannot start with '-'");
-    }
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '@' | '-'))
-    {
-        return invalid("a service name only holds letters, digits, '_', '.', '@' and '-'");
-    }
-
-    Ok(())
-}
-
-/// A service type selects a file in the plugin directory, so it must not allow path traversal
-fn validate_service_type(ty: &str) -> Result<(), ServiceActionError> {
-    let invalid = |reason: &str| {
-        Err(ServiceActionError::InvalidServiceType {
-            ty: ty.to_string(),
-            reason: reason.to_string(),
-        })
-    };
-
-    if ty.is_empty() {
-        return invalid("a service type cannot be empty");
-    }
-    if ty.len() > MAX_SERVICE_TYPE_LEN {
-        return invalid(&format!(
-            "a service type cannot be longer than {MAX_SERVICE_TYPE_LEN} characters"
-        ));
-    }
-    if !ty
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
-    {
-        return invalid("a service type only holds lowercase letters, digits, '_' and '-'");
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,7 +259,6 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use tedge_api::workflow::extract_script_output;
     use tedge_test_utils::fs::TempTedgeDir;
-    use test_case::test_case;
 
     fn command(action: &str, service_name: &str, service_type: &str) -> ServiceActionCommand {
         ServiceActionCommand {
@@ -324,47 +267,6 @@ mod tests {
             service_type: service_type.to_string(),
             plugin_dir: "/usr/share/tedge/service-plugins".into(),
         }
-    }
-
-    #[test_case("collectd")]
-    #[test_case("c8y-firmware-plugin")]
-    #[test_case("getty@tty1")]
-    #[test_case("my.service")]
-    fn accepted_service_names(name: &str) {
-        assert!(validate_service_name(name).is_ok(), "{name}");
-    }
-
-    #[test_case(""; "empty")]
-    #[test_case("--now"; "looking like an option")]
-    #[test_case("collectd stop"; "with a space")]
-    #[test_case("collectd;reboot"; "with a shell separator")]
-    #[test_case("../collectd"; "with a path")]
-    fn rejected_service_names(name: &str) {
-        assert_matches!(
-            validate_service_name(name),
-            Err(ServiceActionError::InvalidServiceName { .. }),
-            "{name}"
-        );
-    }
-
-    #[test_case("service")]
-    #[test_case("container")]
-    #[test_case("my_type-2")]
-    fn accepted_service_types(ty: &str) {
-        assert!(validate_service_type(ty).is_ok(), "{ty}");
-    }
-
-    #[test_case(""; "empty")]
-    #[test_case("Container"; "with an uppercase letter")]
-    #[test_case("../../bin/sh"; "with a path traversal")]
-    #[test_case("sub/type"; "with a path separator")]
-    #[test_case(".."; "parent directory")]
-    fn rejected_service_types(ty: &str) {
-        assert_matches!(
-            validate_service_type(ty),
-            Err(ServiceActionError::InvalidServiceType { .. }),
-            "{ty}"
-        );
     }
 
     /// A plugin reporting what it was called with, and exiting as the action asks
@@ -594,11 +496,11 @@ reload = {}
         );
         assert_matches!(
             command("restart", "--now", "service").validate(),
-            Err(ServiceActionError::InvalidServiceName { .. })
+            Err(ServiceActionError::InvalidServiceName(_))
         );
         assert_matches!(
             command("restart", "collectd", "../../bin/sh").validate(),
-            Err(ServiceActionError::InvalidServiceType { .. })
+            Err(ServiceActionError::InvalidServiceType(_))
         );
         assert!(command("restart", "collectd", "container")
             .validate()

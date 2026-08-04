@@ -78,6 +78,33 @@ Rejects a command that is not a valid action name
     ...    failure_reason=.*cannot run the command 'Do Something'.*
     ...    timeout=60
 
+Rejects a service name a backend could misread
+    ${operation}=    Run Service Command
+    ...    ${SERVICE_XID}
+    ...    {"command":"RESTART","serviceName":"--now","serviceType":"service"}
+    Cumulocity.Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=.*Invalid service name '--now'.*
+    ...    timeout=60
+
+    # The command topic carries the operation id, so this names the command of this operation only
+    ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
+    Should Not Have MQTT Messages
+    ...    te/device/main/service/${SERVICE_NAME}/cmd/restart/c8y-mapper-${operation_id}
+
+Rejects a service type that names no plugin file
+    ${operation}=    Run Service Command
+    ...    ${SERVICE_XID}
+    ...    {"command":"RESTART","serviceName":"${SERVICE_NAME}","serviceType":"../../bin/sh"}
+    Cumulocity.Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=.*Invalid service type '../../bin/sh'.*
+    ...    timeout=60
+
+    ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
+    Should Not Have MQTT Messages
+    ...    te/device/main/service/${SERVICE_NAME}/cmd/restart/c8y-mapper-${operation_id}
+
 Refuses to stop tedge-agent
     Declare Action    tedge-agent    stop
     ${operation}=    Run Service Command
@@ -125,8 +152,8 @@ Custom Setup
     Set Suite Variable    $MAPPER_XID    ${sn}:device:main:service:tedge-mapper-c8y
     Cumulocity.External Identity Should Exist    ${sn}    show_info=${False}
 
-    # A service the init system manages, named exactly as its entity topic identifier names it,
-    # since that is the name the command carries to the backend
+    # A service the init system manages, registered under the very name the init system knows,
+    # since that is the name Cumulocity sends back and the command carries to the backend
     ThinEdgeIO.Transfer To Device    ${CURDIR}/dummy-service.service    /etc/systemd/system/
     Execute Command    systemctl daemon-reload && systemctl start ${SERVICE_NAME}
 
