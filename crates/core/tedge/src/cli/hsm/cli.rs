@@ -45,6 +45,9 @@ pub enum TEdgeHsmCli {
     ///
     /// The token is auto-discovered when no URI is given. Listing private keys requires a login, so
     /// the configured PIN (or `--pin`) is used.
+    ///
+    /// The listing can be narrowed to keys with a given label or id using the `--label` and `--id`
+    /// flags, or equivalently by passing a URI carrying `object=` or `id=` attributes.
     ListKeys(ListKeysArgs),
 
     /// Generate a new keypair on the PKCS #11 token and select it to be used.

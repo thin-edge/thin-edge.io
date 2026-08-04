@@ -32,3 +32,6 @@ Saves public key to file using --outfile-pubkey flag
 
 Deprecated cert create-key-hsm alias still works
     Deprecated cert create-key-hsm alias still works
+
+Can list keys filtered by label or id
+    List keys filtered by label or id

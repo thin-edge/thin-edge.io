@@ -126,7 +126,7 @@ mod signing;
 pub use signing::Pkcs11Signer;
 pub use signing::SigScheme;
 
-mod uri;
+pub mod uri;
 
 /// Parameters used when opening a session.
 #[derive(Debug, Clone)]

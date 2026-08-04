@@ -138,6 +138,42 @@ Create private key
     ${key_uri}=    Execute Command    tedge config get device.key_uri    strip=True
     Should Contain    ${create_key_output}    ${key_uri}
 
+List keys filtered by label or id
+    [Documentation]    `tedge hsm list-keys` can narrow the listing to keys with a given label or
+    ...    id, either via the --label/--id flags or via `object=`/`id=` URI attributes.
+    ${output}=    Execute Command    cmd=tedge hsm list-keys --label ec-256 "${TOKEN_URI}"    strip=True
+    Should Contain    ${output}    Label: ec-256
+    Should Not Contain    ${output}    Label: rsa-2048
+
+    # equivalent filtering via the object= URI attribute
+    ${output}=    Execute Command
+    ...    cmd=tedge hsm list-keys "pkcs11:token=create-key-token;object=ec-256"
+    ...    strip=True
+    Should Contain    ${output}    Label: ec-256
+    Should Not Contain    ${output}    Label: rsa-2048
+
+    # filter by key id (my-key was created with --id 010203)
+    ${output}=    Execute Command    cmd=tedge hsm list-keys --id 010203 "${TOKEN_URI}"    strip=True
+    Should Contain    ${output}    Label: my-key
+    Should Not Contain    ${output}    Label: ec-256
+
+    # a filter matching nothing reports it
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm list-keys --label does-not-exist "${TOKEN_URI}"
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    No keys matching the given filters were found on the token.
+
+    # giving the same filter via flag and URI attribute is ambiguous and rejected
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm list-keys --label x "pkcs11:token=create-key-token;object=y"
+    ...    exp_exit_code=!0
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    use only one
+
 Custom Setup
     [Arguments]    ${tedge_p11_server_version}
     ${DEVICE_SN}=    Setup    register=${False}
