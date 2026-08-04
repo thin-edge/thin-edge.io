@@ -228,19 +228,21 @@ impl TedgeP11Service for Cryptoki {
     }
 
     fn list_tokens(&self) -> anyhow::Result<ListTokensResponse> {
-        // Enumerate the tokens without reinitializing the PKCS #11 module first. Reloading the
-        // module (C_Finalize + C_Initialize) on every call churns the connection to physical
-        // readers - e.g. a CCID smartcard reached via pcscd - and can hang them. Only fall back to
-        // a one-shot reinit-and-retry when nothing is found, which is the case where a token was
-        // just attached or initialized and the cached slot list may be stale.
-        let tokens = self.collect_token_details()?;
-        if !tokens.is_empty() {
-            return Ok(ListTokensResponse { tokens });
-        }
-        let _ = self.reinit();
-        Ok(ListTokensResponse {
-            tokens: self.collect_token_details()?,
-        })
+        let tokens = self
+            .snapshot_tokens()?
+            .into_iter()
+            .map(|(slot, info)| TokenDetails {
+                slot: slot.id(),
+                label: info.label().to_string(),
+                model: info.model().to_string(),
+                manufacturer: info.manufacturer_id().to_string(),
+                serial: info.serial_number().to_string(),
+                initialized: info.token_initialized(),
+                // An uninitialized token has no label or serial, so its URI selects the slot id.
+                uri: export_slot_uri(slot, &info),
+            })
+            .collect();
+        Ok(ListTokensResponse { tokens })
     }
 
     #[instrument(skip_all)]
@@ -341,9 +343,8 @@ impl TedgeP11Service for Cryptoki {
                 let Ok(info) = context.get_token_info(*slot) else {
                     return false;
                 };
-                (wanted_label.is_none() || wanted_label.is_some_and(|l| info.label() == l))
-                    && (wanted_serial.is_none()
-                        || wanted_serial.is_some_and(|s| info.serial_number() == s))
+                wanted_label.is_none_or(|l| info.label() == l)
+                    && wanted_serial.is_none_or(|s| info.serial_number() == s)
             })
             .collect();
 
@@ -475,14 +476,11 @@ impl TedgeP11Service for Cryptoki {
     #[instrument(skip_all)]
     fn init_token(&self, request: InitTokenRequest) -> anyhow::Result<InitTokenResponse> {
         let label = request.label;
-        // The user PIN is the one used by all subsequent operations. The SO PIN is only needed to
-        // initialize the token; when not provided we reuse the user PIN, which works out of the box
-        // for tokens that don't enforce distinct PINs (e.g. SoftHSM2).
+        // The SO PIN is only needed to initialize the token; when not provided, the user PIN is
+        // reused, which works for tokens that don't enforce distinct PINs (e.g. SoftHSM2).
         let user_pin = request.pin.unwrap_or_else(|| self.config.pin.clone());
         let so_pin = request.so_pin.unwrap_or_else(|| user_pin.clone());
 
-        // Inspect the tokens without reinitializing the module first (reinit churns physical
-        // readers); `snapshot_tokens` reinit-retries only if nothing is present.
         let tokens = self.snapshot_tokens()?;
         // A token that is initialized and has a user PIN is ready to use as-is.
         let is_usable = |i: &TokenInfo| i.token_initialized() && i.user_pin_initialized();
@@ -513,10 +511,8 @@ impl TedgeP11Service for Cryptoki {
 
                 let (slot, info) = match matching.as_slice() {
                     [entry] => *entry,
-                    // An explicitly given URI has to match: guessing what the user meant instead
-                    // would be surprising. Note that slot ids are transient (initializing a token
-                    // can renumber the slots), so a slot URI may go stale; re-runnable scripts
-                    // should omit the URI and rely on the label-based auto-discovery instead.
+                    // Note: slot ids are transient (initializing a token can renumber the slots),
+                    // so a stored slot URI may go stale and stop matching.
                     [] => anyhow::bail!(
                         "No token matching the given URI was found. Use `tedge hsm list-tokens` \
                          to see the available tokens."
@@ -548,10 +544,9 @@ impl TedgeP11Service for Cryptoki {
                     slot.id(),
                     info.label()
                 );
-                // The URI selects a free slot, but a token with the requested label already
-                // exists: the user's intention is already met, so return the existing token
-                // instead of initializing a second one with a duplicate label, which would break
-                // label-based selection. This keeps re-running the same command idempotent.
+                // The URI selects a free slot, but a usable token with the requested label
+                // already exists: return it instead of creating a duplicate label, which would
+                // break label-based selection.
                 if let Some((_, existing)) = usable_with_label() {
                     return Ok(InitTokenResponse {
                         uri: export_session_uri(existing),
@@ -588,10 +583,9 @@ impl TedgeP11Service for Cryptoki {
                              URI:\n{uris}"
                         );
                     }
-                    // No slot to initialize. Fall back to reusing an existing usable token if there
-                    // is exactly one - e.g. a pre-initialized Nitrokey/SmartCard-HSM, which ships
-                    // with a token whose label differs from --label and never exposes an
-                    // uninitialized slot. This keeps `init` idempotent and uniform across HSM types.
+                    // No slot to initialize. Fall back to reusing an existing usable token if
+                    // there is exactly one - e.g. a pre-initialized Nitrokey/SmartCard-HSM, which
+                    // never exposes an uninitialized slot.
                     [] => {
                         let usable: Vec<&(Slot, TokenInfo)> =
                             tokens.iter().filter(|(_, i)| is_usable(i)).collect();
@@ -721,41 +715,6 @@ impl Cryptoki {
         read()
     }
 
-    /// Enumerate the tokens currently present, reading only public metadata. Does not reinitialize
-    /// the module, so it is safe to call repeatedly against a physical reader.
-    fn collect_token_details(&self) -> anyhow::Result<Vec<TokenDetails>> {
-        let context = match self.context.lock() {
-            Ok(c) => c,
-            Err(e) => e.into_inner(),
-        };
-        let slots = context
-            .get_slots_with_token()
-            .context("Failed to list slots with a token")?;
-
-        let mut tokens = Vec::with_capacity(slots.len());
-        for slot in slots {
-            let info = match context.get_token_info(slot) {
-                Ok(info) => info,
-                Err(e) => {
-                    error!(?e, slot = slot.id(), "Failed to get_token_info for slot");
-                    continue;
-                }
-            };
-            tokens.push(TokenDetails {
-                slot: slot.id(),
-                label: info.label().to_string(),
-                model: info.model().to_string(),
-                manufacturer: info.manufacturer_id().to_string(),
-                serial: info.serial_number().to_string(),
-                initialized: info.token_initialized(),
-                // Report the URI that actually selects this slot: an uninitialized token has no
-                // label or serial to be selected by, only its slot id.
-                uri: export_slot_uri(slot, &info),
-            });
-        }
-        Ok(tokens)
-    }
-
     /// Reinitializes the PKCS11 library.
     ///
     /// In some libraries, if the slot list changes, this change might not be visible until C_Initialize is called
@@ -819,9 +778,8 @@ impl Cryptoki {
         // Reload the module and retry only if the key couldn't be found, i.e.:
         // - we didn't find a slot with the token that matches the URI
         // - we didn't find an object on the token that matches the URI
-        // and only if we haven't reloaded recently: reloading (C_Finalize + C_Initialize) can pick
-        // up a re-inserted token, but it churns a physical reader's connection, so a mapper
-        // repeatedly retrying to sign must not trigger a reload on every attempt.
+        // Reloads are rate-limited (see `should_reinit`) so a client repeatedly retrying to sign
+        // doesn't churn the module on every attempt.
         let recoverable = {
             let msg = format!("{err:#}");
             msg.contains("Didn't find a slot to use") || msg.contains("Failed to find a key")

@@ -82,18 +82,14 @@ impl Command for InitTokenHsmCmd {
             uri: self.uri.clone(),
         })?;
 
-        // Human-readable status goes to stderr, so that stdout carries only the token URI and the
-        // command can be used in scripts, e.g. `URI=$(tedge hsm init)`. Report the resulting token
-        // by its URI rather than the requested --label, since an existing token may have been
-        // reused (e.g. a pre-initialized Nitrokey whose label differs from --label).
+        // Status goes to stderr; stdout carries only the token URI so the command can be used in
+        // scripts, e.g. `URI=$(tedge hsm init)`. The URI identifies the resulting token, which may
+        // be an existing token that was reused (whose label can differ from --label).
         eprintln!("A PKCS #11 token is initialized and ready to use.");
         eprintln!(
             "You can now create a keypair on it, e.g. `tedge hsm create-key \"{}\"`.",
             response.uri
         );
-
-        // The token URI is the machine-readable output of this command: print it (and nothing else)
-        // to stdout.
         println!("{}", response.uri);
 
         Ok(())

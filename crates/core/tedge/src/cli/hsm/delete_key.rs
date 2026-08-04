@@ -7,6 +7,7 @@ use tedge_p11::service::DeleteKeyRequest;
 use tedge_p11::CryptokiConfig;
 use tedge_p11::SecretString;
 
+use super::create_key::encode_id_attr;
 use super::create_key::encode_uri_attr;
 use super::create_key::parse_id;
 use crate::command::Command;
@@ -149,11 +150,7 @@ fn build_selector_uri(token: Option<&str>, label: Option<&str>, id: Option<&[u8]
         push(&mut uri, &format!("object={}", encode_uri_attr(label)));
     }
     if let Some(id) = id {
-        let mut attr = String::from("id=");
-        for byte in id {
-            attr.push_str(&format!("%{byte:02X}"));
-        }
-        push(&mut uri, &attr);
+        push(&mut uri, &format!("id={}", encode_id_attr(id)));
     }
     uri
 }
@@ -170,13 +167,7 @@ fn active_key_match(
         return None;
     }
     let object_frag = label.map(|l| format!("object={}", encode_uri_attr(l)));
-    let id_frag = id.map(|id| {
-        let mut s = String::from("id=");
-        for byte in id {
-            s.push_str(&format!("%{byte:02X}"));
-        }
-        s
-    });
+    let id_frag = id.map(|id| format!("id={}", encode_id_attr(id)));
 
     let settings = [
         "device.key_uri",

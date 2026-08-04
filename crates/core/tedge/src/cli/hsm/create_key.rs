@@ -264,8 +264,7 @@ impl CreateKeyHsmCmd {
         };
 
         // Unless --force-new is given, reuse an existing key with the same label (and id, if
-        // provided) instead of creating a duplicate. This makes the command idempotent, which is
-        // handy for re-runnable provisioning scripts.
+        // provided) instead of creating a duplicate, keeping the command idempotent.
         let existing = if self.force_new {
             None
         } else {
@@ -419,11 +418,14 @@ fn existing_key_uri(token_uri: &str, label: &str, id: Option<&[u8]>) -> String {
     let mut uri = format!("{token_uri};object={}", encode_uri_attr(label));
     if let Some(id) = id {
         uri.push_str(";id=");
-        for byte in id {
-            uri.push_str(&format!("%{byte:02X}"));
-        }
+        uri.push_str(&encode_id_attr(id));
     }
     uri
+}
+
+/// Percent-encodes a key id as a PKCS #11 `id=` attribute value, e.g. `%01%AB`.
+pub(crate) fn encode_id_attr(id: &[u8]) -> String {
+    id.iter().map(|byte| format!("%{byte:02X}")).collect()
 }
 
 /// Percent-encodes a PKCS #11 URI attribute value (RFC 7512), encoding any character that is not

@@ -98,9 +98,8 @@ impl Command for DownloadCertCmd {
 
 impl DownloadCertCmd {
     async fn download_device_certificate(&self, config: TEdgeConfig) -> Result<(), Error> {
-        // Signing a CSR requires a private key; when using an HSM, create one automatically if
-        // the token doesn't hold one yet, so a fresh device can be provisioned with this command
-        // alone. Resolved before prompting for registration data so failures surface early.
+        // When using an HSM, ensure the private key that will sign the CSR exists. Resolved
+        // before prompting for registration data so failures surface early.
         let key = if self.generate_csr {
             self.ensure_key_exists(config).await?
         } else {
@@ -287,13 +286,10 @@ impl DownloadCertCmd {
         };
         let new_key_uri = create_key.ensure_key(config).await?;
 
-        // Point the CSR generation at the newly created key. The config was updated by
-        // `ensure_key` already, but this command runs with the config read at startup.
-        //
-        // NOTE: `ensure_key` skips the config update when the configured URI points to another
-        // existing key, which would leave `tedge connect` using a key different from the one the
-        // downloaded certificate is issued for. That cannot happen here: this point is only
-        // reached after verifying the token holds no private keys at all.
+        // Point the CSR generation at the newly created key: `ensure_key` updated the config, but
+        // this command still runs with the config read at startup. (`ensure_key` only skips the
+        // config update when the configured URI points to another existing key, which can't be
+        // the case here: the token held no private keys at all.)
         let mut cryptoki_config = cryptoki_config.clone();
         let uri = match &mut cryptoki_config {
             CryptokiConfig::Direct(direct) => &mut direct.uri,
