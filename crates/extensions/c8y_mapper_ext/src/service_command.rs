@@ -9,7 +9,6 @@
 //! command `RESTART`, not the device operation `c8y_Restart`.
 
 use crate::converter::CumulocityConverter;
-use crate::entity_cache::CloudEntityMetadata;
 use crate::error::ConversionError;
 use c8y_api::json_c8y_deserializer::C8yServiceCommand;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
@@ -21,6 +20,7 @@ use serde_json::json;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
+use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::OperationType;
@@ -169,7 +169,14 @@ impl CumulocityConverter {
         let target_xid: EntityExternalId = device_xid.into();
         let target = match self.entity_cache.try_get_by_external_id(&target_xid) {
             Ok(target) => target,
-            Err(err) => return self.fail_service_command(None, op_id, &err.to_string()),
+            Err(err) => {
+                return self.fail_service_command(
+                    &target_xid,
+                    EntityType::Service,
+                    op_id,
+                    &err.to_string(),
+                )
+            }
         };
 
         let action = request.command.to_lowercase();
@@ -179,14 +186,14 @@ impl CumulocityConverter {
                 target_xid.as_ref(),
                 request.command
             );
-            return self.fail_service_command(Some(target), op_id, &reason);
+            return self.fail_service_command(&target_xid, target.r#type(), op_id, &reason);
         }
         if !self.service_commands.declares(target.topic_id(), &action) {
             let reason = format!(
                 "{} has not declared the '{action}' action",
                 target_xid.as_ref()
             );
-            return self.fail_service_command(Some(target), op_id, &reason);
+            return self.fail_service_command(&target_xid, target.r#type(), op_id, &reason);
         }
 
         // The name of the service to act on, as the operation gives it. Cumulocity holds one name
@@ -199,7 +206,7 @@ impl CumulocityConverter {
                 "{} cannot run the '{action}' action: {err}",
                 target_xid.as_ref()
             );
-            return self.fail_service_command(Some(target), op_id, &reason);
+            return self.fail_service_command(&target_xid, target.r#type(), op_id, &reason);
         }
 
         // The type selects the backend, so what the service registered itself with wins. The value
@@ -221,7 +228,7 @@ impl CumulocityConverter {
                 "{} cannot run the '{action}' action: {err}",
                 target_xid.as_ref()
             );
-            return self.fail_service_command(Some(target), op_id, &reason);
+            return self.fail_service_command(&target_xid, target.r#type(), op_id, &reason);
         }
 
         let topic = self.mqtt_schema.topic_for(
@@ -243,22 +250,30 @@ impl CumulocityConverter {
 
     /// Tell Cumulocity that a service command failed, no command being published for it.
     ///
-    /// The failure is reported on the topic of the target service, or on the topic of the main
-    /// device when the target itself could not be resolved.
+    /// The failure is reported on the SmartREST topic of the target, the very topic Cumulocity
+    /// created the operation on. A target that could not be resolved is addressed as the service
+    /// a service command always names: its external id is known even when nothing else about it
+    /// is, and the main device owns no operation created for a service.
     fn fail_service_command(
         &self,
-        target: Option<&CloudEntityMetadata>,
+        target_xid: &EntityExternalId,
+        entity_type: EntityType,
         op_id: &str,
         reason: &str,
     ) -> Vec<MqttMessage> {
         error!("Rejecting a {C8Y_SERVICE_COMMAND} operation: {reason}");
 
         let prefix = &self.config.bridge_config.c8y_prefix;
-        let topic = target
-            .and_then(|target| {
-                C8yTopic::smartrest_response_topic(&target.external_id, &target.r#type(), prefix)
-            })
-            .unwrap_or_else(|| C8yTopic::upstream_topic(prefix));
+        let Some(topic) = C8yTopic::smartrest_response_topic(target_xid, &entity_type, prefix)
+        else {
+            // Unlike every other external id the mapper publishes on, this one is not pre-validated:
+            // it is whatever the cloud addressed the operation to
+            error!(
+                "Not reporting the failure to Cumulocity: '{}' names no SmartREST topic",
+                target_xid.as_ref()
+            );
+            return vec![];
+        };
 
         let (executing, failed) = if self.config.smartrest_use_operation_id {
             (
@@ -587,7 +602,8 @@ mod tests {
         register_service(&mut converter).await;
         declare(&mut converter, "restart").await;
 
-        // Nothing is known of that target, so the failure is reported on the main device topic
+        // Nothing else is known of that target, but its external id names the topic Cumulocity
+        // created the operation on
         let messages = trigger_on(
             &mut converter,
             "unknown-service",
@@ -595,7 +611,26 @@ mod tests {
         )
         .await;
 
-        assert_operation_failed(&messages, "c8y/s/us", "unknown-service");
+        assert_operation_failed(&messages, "c8y/s/us/unknown-service", "unknown-service");
+    }
+
+    #[tokio::test]
+    async fn an_operation_addressed_to_the_main_device_is_failed_on_its_own_topic() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_service(&mut converter).await;
+        declare(&mut converter, "restart").await;
+
+        // A device declares no service action, so such an operation is refused. It is reported
+        // where Cumulocity created it, and the main device's own topic carries no external id
+        let messages = trigger_on(
+            &mut converter,
+            "test-device",
+            json!({"command": "RESTART", "serviceName": "collectd"}),
+        )
+        .await;
+
+        assert_operation_failed(&messages, "c8y/s/us", "has not declared");
     }
 
     #[tokio::test]
