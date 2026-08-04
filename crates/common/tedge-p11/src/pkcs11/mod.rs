@@ -444,17 +444,31 @@ impl TedgeP11Service for Cryptoki {
             .find_objects(&template)
             .context("Failed to find key objects to delete")?;
 
+        // Attempt to destroy every matching object even if some fail, so one failure doesn't
+        // leave the others behind; as delete is idempotent, a re-run retries only what's left.
         let mut deleted = Vec::with_capacity(objects.len());
+        let mut failed = Vec::new();
         for object in objects {
             // Read the URI before destroying the object so it can be reported back.
             let uri = session
                 .export_object_uri(object)
                 .unwrap_or_else(|_| "<unknown object>".to_string());
-            session
-                .session
-                .destroy_object(object)
-                .with_context(|| format!("Failed to destroy object {uri}"))?;
-            deleted.push(uri);
+            match session.session.destroy_object(object) {
+                Ok(()) => deleted.push(uri),
+                Err(e) => failed.push(format!("{uri}: {e}")),
+            }
+        }
+
+        if !failed.is_empty() {
+            let deleted_note = if deleted.is_empty() {
+                String::new()
+            } else {
+                format!("\nSuccessfully destroyed:\n{}", deleted.join("\n"))
+            };
+            anyhow::bail!(
+                "Failed to destroy some key objects:\n{}{deleted_note}",
+                failed.join("\n")
+            );
         }
 
         Ok(DeleteKeyResponse { deleted })
