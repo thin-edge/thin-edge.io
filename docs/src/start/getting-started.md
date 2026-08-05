@@ -155,13 +155,7 @@ A Tenant Manager must create a CA certificate for the tenant before devices can 
 
 To register and download the device certificate using the Cumulocity Certificate Authority:
 
-1. In the Cumulocity *Device Management* UI, go to *Devices* &rarr; *Registration*, click *Register device* &rarr; *General*, and select *"Create device certificates during device registration"*. Enter the device ID and a one-time password, then click *Next*.
-
-    :::tip
-    Make a note of the one-time password — you will need it on the device.
-    :::
-
-1. On the device, run the following command to download the certificate:
+1. On the device, run the following command to request the certificate:
 
     <UserContext>
 
@@ -171,7 +165,28 @@ To register and download the device certificate using the Cumulocity Certificate
 
     </UserContext>
 
-    You will be prompted for the one-time password set in the previous step.
+    A one-time password is generated, and the URL of the Cumulocity device registration page is printed:
+
+    ```text title="Output"
+    Register the device on example.cumulocity.com:
+
+        device id:         my-device-01
+        one-time password: CTodKOt02iaKIp6s9gTkECS5rkq0vnxv
+
+        Open the following URL to register the device:
+
+        https://example.cumulocity.com/apps/devicemanagement/index.html#/deviceregistration?externalId=my-device-01&one-time-password=CTodKOt02iaKIp6s9gTkECS5rkq0vnxv
+
+    Waiting for the device to be registered ...
+    ```
+
+1. Open the printed URL in a browser and complete the device registration form.
+
+    The device id and the one-time password are pre-filled from the URL. Once the device is registered, the command running on the device downloads and stores the certificate.
+
+    :::tip
+    If the device has already been registered in Cumulocity, use `--prompt` to be asked for the one-time password given during the registration.
+    :::
 
 ### Connect
 
