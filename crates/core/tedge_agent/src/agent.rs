@@ -21,6 +21,7 @@ use anyhow::Context;
 use camino::Utf8PathBuf;
 use certificate::CloudHttpConfig;
 use reqwest::Identity;
+use serde_json::json;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -90,7 +91,7 @@ pub(crate) struct AgentConfig {
     pub capabilities: Capabilities,
     pub log_plugin_dirs: Vec<Utf8PathBuf>,
     pub config_plugin_dirs: Vec<Utf8PathBuf>,
-    pub exposed_config: Vec<(String, Option<String>)>,
+    pub exposed_config: Vec<(String, Option<serde_json::Value>)>,
     entity_auto_register: bool,
     entity_store_clean_start: bool,
 }
@@ -124,8 +125,8 @@ impl AgentConfig {
         let mut exposed_config = tedge_config::tedge_toml::exposed_core_config(&tedge_config);
         for (key, value) in exposed_config.iter_mut() {
             match key.as_str() {
-                "mqtt.topic_root" => *value = Some(mqtt_topic_root.to_string()),
-                "mqtt.device_topic_id" => *value = Some(mqtt_device_topic_id.to_string()),
+                "mqtt.topic_root" => *value = Some(json!(mqtt_topic_root.as_ref())),
+                "mqtt.device_topic_id" => *value = Some(json!(mqtt_device_topic_id.as_str())),
                 _ => {}
             }
         }
