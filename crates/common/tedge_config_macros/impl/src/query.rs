@@ -56,6 +56,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
     let fromstr_writable = generate_fromstr_writable(parse_quote!(WritableKey), &writable_args);
     let fromstr_dto = generate_fromstr_writable(parse_quote!(DtoKey), &dto_args);
     let read_string = generate_string_readers(&reader_paths);
+    let read_exposed_value = generate_exposed_value_readers(&reader_paths);
     let write_string = generate_string_writers(
         &reader_paths
             .iter()
@@ -119,6 +120,7 @@ pub fn generate_writable_keys(items: &[FieldOrGroup]) -> TokenStream {
         #fromstr_writable
         #fromstr_dto
         #read_string
+        #read_exposed_value
         #write_string
         #readable_keys_iter
         #readonly_keys_iter
@@ -809,6 +811,88 @@ fn generate_string_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
     quote! {
         impl TEdgeConfigReader {
             pub fn read_string(&self, key: &ReadableKey) -> Result<String, ReadError> {
+                match key {
+                    #(#arms)*
+                    #fallback_branch
+                }
+            }
+        }
+    }
+}
+
+/// Generates [TEdgeConfigReader::read_exposed_value], the typed counterpart to
+/// [generate_string_readers]' `read_string`.
+///
+/// Only fields marked `#[tedge_config(exposable)]` get an arm: the values these keys hold are the
+/// only ones ever published to external clients, so they are the only ones that need a
+/// representation preserving the type declared in `tedge.toml`. Restricting the arms this way also
+/// keeps the `Serialize` requirement scoped to the allowlist, rather than every configuration type.
+fn generate_exposed_value_readers(paths: &[VecDeque<&FieldOrGroup>]) -> TokenStream {
+    let exposable_paths = paths
+        .iter()
+        .filter(|path| {
+            path.back()
+                .and_then(|fog| fog.field())
+                .is_some_and(|field| field.exposable())
+        })
+        .collect::<Vec<_>>();
+    let enum_variants = exposable_paths.iter().map(|path| enum_variant(path));
+    let arms =
+        exposable_paths
+            .iter()
+            .zip(enum_variants)
+            .map(|(path, configuration_key)| -> syn::Arm {
+                let field = path
+                    .back()
+                    .expect("Path must have a back as it is nonempty")
+                    .field()
+                    .expect("Back of path is guaranteed to be a field");
+                let segments = generate_field_accessor(path, "try_get", true);
+                let to_value = quote_spanned!(field.ty().span()=>
+                    ::serde_json::to_value(value)
+                        .expect("an exposable configuration value is always serializable")
+                );
+                let match_variant = configuration_key.match_read_write;
+                let value = if field.read_only().is_some() || field.reader_function().is_some() {
+                    if extract_type_from_result(field.ty()).is_some() {
+                        quote!(self.#(#segments).*()?)
+                    } else {
+                        quote!(self.#(#segments).*())
+                    }
+                } else if field.has_guaranteed_default() {
+                    quote!(&self.#(#segments).*)
+                } else {
+                    quote!(self.#(#segments).*.or_config_not_set()?)
+                };
+                parse_quote! {
+                    ReadableKey::#match_variant => {
+                        let value = #value;
+                        Ok(Some(#to_value))
+                    },
+                }
+            });
+    // `arms` above only covers `exposable_paths`, so a `_ => Ok(None)` catch-all is needed to
+    // handle every non-exposable key whenever at least one exists. But if every path happens to
+    // be exposable, `arms` already has one arm per `ReadableKey` variant, making the match
+    // exhaustive on its own; adding the catch-all in that case would make it an unreachable
+    // pattern and fail to compile.
+    let fallback_branch: Option<syn::Arm> = if paths.is_empty() {
+        Some(parse_quote!(_ => unreachable!("ReadableKey is uninhabited")))
+    } else if exposable_paths.len() != paths.len() {
+        Some(parse_quote!(_ => Ok(None)))
+    } else {
+        None
+    };
+    quote! {
+        impl TEdgeConfigReader {
+            /// The current value of an exposable configuration key, as a JSON value preserving the
+            /// type the key has in `tedge.toml`.
+            ///
+            /// `Ok(None)` means the key is outside the `#[tedge_config(exposable)]` allowlist: a
+            /// non-exposable key deliberately has no typed representation here. An unset or
+            /// underivable exposable key is an `Err`, exactly as with
+            /// [read_string](Self::read_string).
+            pub fn read_exposed_value(&self, key: &ReadableKey) -> Result<Option<::serde_json::Value>, ReadError> {
                 match key {
                     #(#arms)*
                     #fallback_branch
@@ -1913,6 +1997,128 @@ mod tests {
 
         pretty_assertions::assert_eq!(
             prettyplease::unparse(&parse_quote!(#impl_block)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    fn exposed_value_reader_impl(input: &crate::input::Configuration) -> syn::File {
+        let paths = configuration_paths_from(&input.groups, Mode::Reader);
+        let mut file: syn::File = syn::parse2(generate_exposed_value_readers(&paths)).unwrap();
+
+        // Remove doc comments from items, so the tests assert on the generated logic only
+        for item in &mut file.items {
+            if let syn::Item::Impl(r#impl) = item {
+                for item in &mut r#impl.items {
+                    if let syn::ImplItem::Fn(f) = item {
+                        f.attrs.retain(|a| *a.path().get_ident().unwrap() != "doc");
+                    }
+                }
+            }
+        }
+
+        file
+    }
+
+    #[test]
+    fn read_exposed_value_generates_an_arm_for_a_plain_exposable_field() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                #[tedge_config(exposable)]
+                id: String,
+
+                key_path: String,
+            }
+        );
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReader {
+                pub fn read_exposed_value(
+                    &self,
+                    key: &ReadableKey,
+                ) -> Result<Option<::serde_json::Value>, ReadError> {
+                    match key {
+                        ReadableKey::DeviceId => {
+                            let value = self.device.id.or_config_not_set()?;
+                            Ok(Some(
+                                ::serde_json::to_value(value)
+                                    .expect("an exposable configuration value is always serializable"),
+                            ))
+                        }
+                        _ => Ok(None),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&exposed_value_reader_impl(&input)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    #[test]
+    fn read_exposed_value_generates_an_arm_for_a_profiled_exposable_field() {
+        let input: crate::input::Configuration = parse_quote!(
+            #[tedge_config(multi)]
+            c8y: {
+                #[tedge_config(exposable)]
+                url: String,
+
+                credentials_path: String,
+            }
+        );
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReader {
+                pub fn read_exposed_value(
+                    &self,
+                    key: &ReadableKey,
+                ) -> Result<Option<::serde_json::Value>, ReadError> {
+                    match key {
+                        ReadableKey::C8yUrl(key0) => {
+                            let value = self.c8y.try_get(key0.as_deref())?.url.or_config_not_set()?;
+                            Ok(Some(
+                                ::serde_json::to_value(value)
+                                    .expect("an exposable configuration value is always serializable"),
+                            ))
+                        }
+                        _ => Ok(None),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&exposed_value_reader_impl(&input)),
+            prettyplease::unparse(&expected)
+        );
+    }
+
+    /// A key outside the allowlist has no arm of its own, so it can only ever reach the catch-all.
+    /// This is what keeps a non-exposable value from having a typed representation at all.
+    #[test]
+    fn read_exposed_value_returns_none_for_an_unmarked_field() {
+        let input: crate::input::Configuration = parse_quote!(
+            device: {
+                key_path: String,
+            }
+        );
+
+        let expected = parse_quote! {
+            impl TEdgeConfigReader {
+                pub fn read_exposed_value(
+                    &self,
+                    key: &ReadableKey,
+                ) -> Result<Option<::serde_json::Value>, ReadError> {
+                    match key {
+                        _ => Ok(None),
+                    }
+                }
+            }
+        };
+
+        pretty_assertions::assert_eq!(
+            prettyplease::unparse(&exposed_value_reader_impl(&input)),
             prettyplease::unparse(&expected)
         );
     }

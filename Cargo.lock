@@ -5223,6 +5223,7 @@ dependencies = [
  "reqwest",
  "rustls",
  "serde",
+ "serde_json",
  "strum",
  "strum_macros",
  "tedge_api",
