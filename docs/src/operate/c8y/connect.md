@@ -68,7 +68,46 @@ The recommended approach is to use the [Cumulocity Certificate Authority](#cumul
 
 The [Cumulocity Certificate Authority](https://cumulocity.com/docs/device-certificate-authentication/certificate-authority/) feature requires a Tenant Manager to first create a CA certificate for the tenant before devices can use it. Please read the [Certificate Management Reference Guide](../../../references/certificate-management#enable-cumulocity-certificate-authority) for setup instructions.
 
-Devices can be registered by using the Cumulocity Device Management UI or by using Cumulocity's REST API which is demonstrated via the usage of the command line tool, [go-c8y-cli](https://c8y.app/). The following sections detail the steps on how to register a device using both of these methods, however both are functionally the same as they all utilize the same Cumulocity API.
+Devices can be registered from the device itself, by using the Cumulocity Device Management UI, or by using Cumulocity's REST API which is demonstrated via the usage of the command line tool, [go-c8y-cli](https://c8y.app/). The following sections detail the steps on how to register a device using each of these methods, however they are functionally the same as they all utilize the same Cumulocity API.
+
+#### Registering a device from the device (Recommended) {#cumulocity-ca-register-device}
+
+The quickest way to register a device is to start from the device itself. %%te%% generates a one-time password and prints the URL of the Cumulocity device registration page, pre-filled with the device id and the one-time password.
+
+1. On the device, request the certificate
+
+    <UserContext>
+
+    ```sh title="on the device"
+    sudo tedge cert download c8y --device-id "$DEVICE_ID"
+    ```
+
+    </UserContext>
+
+    ```text title="Output"
+    Register the device on example.cumulocity.com:
+
+        device id:         my-device-01
+        one-time password: CTodKOt02iaKIp6s9gTkECS5rkq0vnxv
+
+        Open the following URL to register the device:
+
+        https://example.cumulocity.com/apps/devicemanagement/index.html#/deviceregistration?externalId=my-device-01&one-time-password=CTodKOt02iaKIp6s9gTkECS5rkq0vnxv
+
+    Waiting for the device to be registered ...
+    ```
+
+    The command keeps polling Cumulocity until the device is registered, so it can be left running whilst performing the next step.
+
+1. Open the printed URL in a browser and complete the device registration form
+
+    The device id and the one-time password are pre-filled from the URL, so there is nothing to copy from the device.
+
+    Once the device is registered, the running command downloads and stores the device certificate.
+
+:::note
+The registration URL contains the one-time password. Use the `--no-registration-url` flag (or set the `DEVICE_NO_REGISTRATION_URL` environment variable) to not print it, for instance when the command output is logged. The generated one-time password is still displayed, as it is required to register the device.
+:::
 
 #### Registering a device using the Device Management UI {#cumulocity-ca-register-ui}
 
@@ -113,17 +152,17 @@ The following steps detail how to register a device using the Cumulocity [Device
 
     </BrowserWindow>
 
-1. On the device, run the following command to download the device's certificate (you will be prompted for the one-time password)
+1. On the device, run the following command to download the device's certificate, using the one-time password given during the registration
 
     <UserContext>
 
     ```sh
-    sudo tedge cert download c8y --device-id "$DEVICE_ID"
-
-    # Or provide the one-time password via the flag
     sudo tedge cert download c8y \
         --device-id "$DEVICE_ID" \
         --one-time-password "$DEVICE_ONE_TIME_PASSWORD"
+
+    # Or be prompted for the one-time password, so it is not stored in the shell history
+    sudo tedge cert download c8y --device-id "$DEVICE_ID" --prompt
     ```
 
     </UserContext>
@@ -158,17 +197,17 @@ go-c8y-cli simply uses the Cumulocity REST API to perform the actions, this mean
 
     </UserContext>
 
-1. On the device, run the following command to download the device's certificate (you will be prompted for the one-time password)
+1. On the device, run the following command to download the device's certificate, using the one-time password given during the registration
 
     <UserContext>
 
     ```sh title="on the device"
-    sudo tedge cert download c8y --device-id "$DEVICE_ID"
-
-    # Or provide the one-time password via the flag
     sudo tedge cert download c8y \
         --device-id "$DEVICE_ID" \
         --one-time-password "$DEVICE_ONE_TIME_PASSWORD"
+
+    # Or be prompted for the one-time password, so it is not stored in the shell history
+    sudo tedge cert download c8y --device-id "$DEVICE_ID" --prompt
     ```
 
     </UserContext>

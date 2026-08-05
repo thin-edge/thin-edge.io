@@ -80,6 +80,10 @@ The device registration is a two step operation:
 The two steps, device registration on the tenant and certificate download request, can be done in a different order,
 the device generating a one-time password that is communicated by the operator to the tenant
 whilst the device keeps trying to download its certificate.
+
+This is what [`tedge cert download c8y`](../cli/tedge-cert.md) does by default: it generates a random one-time password
+and prints the URL of the Cumulocity device registration page, pre-filled with the device id and the one-time password.
+See [Registering a device from the device](../../operate/c8y/connect#cumulocity-ca-register-device).
 :::
 
 For a guide on how to register the device, please checkout the [Connecting to Cumulocity](../../operate/c8y/connect) guide.
