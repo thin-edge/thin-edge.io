@@ -237,7 +237,7 @@ async fn config_document_ingested_from_mqtt() {
     let topic_id = "device/main//".parse::<EntityTopicId>().unwrap();
     assert_eq!(
         entity_store.get(&topic_id).unwrap().config.get("device.id"),
-        Some(&"my-device".to_string())
+        Some(&json!("my-device"))
     );
 }
 
@@ -255,7 +255,7 @@ async fn empty_payload_clears_the_config_document() {
     let topic_id = "device/main//".parse::<EntityTopicId>().unwrap();
     assert_eq!(
         entity_store.get(&topic_id).unwrap().config.get("device.id"),
-        Some(&"my-device".to_string())
+        Some(&json!("my-device"))
     );
 
     entity_store
@@ -290,7 +290,7 @@ async fn malformed_config_payload_does_not_change_the_stored_document() {
     let topic_id = "device/main//".parse::<EntityTopicId>().unwrap();
     assert_eq!(
         entity_store.get(&topic_id).unwrap().config.get("device.id"),
-        Some(&"my-device".to_string())
+        Some(&json!("my-device"))
     );
 }
 

@@ -55,8 +55,8 @@ pub enum EntityStoreResponse {
     SetTwinFragment(Result<bool, entity_store::Error>),
     GetTwinFragments(Result<Map<String, Value>, entity_store::Error>),
     SetTwinFragments(Result<(), entity_store::Error>),
-    GetConfig(Result<BTreeMap<String, String>, entity_store::Error>),
-    GetConfigValue(Option<String>),
+    GetConfig(Result<BTreeMap<String, Value>, entity_store::Error>),
+    GetConfigValue(Option<Value>),
 }
 
 pub struct EntityStoreServer {
