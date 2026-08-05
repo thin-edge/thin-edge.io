@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use tedge_actors::Actor;
 use tedge_actors::LoggingSender;
@@ -16,9 +17,10 @@ use tracing::error;
 pub struct ConfigPublisherActor {
     mqtt_schema: MqttSchema,
     service_topic_id: ServiceTopicId,
-    /// Every currently-set exposed key-value pair, published as one retained JSON object.
-    /// A key that is exposable but unset is simply absent here.
-    expected: BTreeMap<String, String>,
+    /// Every currently-set exposed key-value pair, published as one retained JSON object. Each
+    /// value keeps the type it has in `tedge.toml`, so a port stays a number and a flag stays a
+    /// boolean. A key that is exposable but unset is simply absent here.
+    expected: BTreeMap<String, Value>,
     messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     mqtt_publisher: LoggingSender<MqttMessage>,
 }
@@ -27,7 +29,7 @@ impl ConfigPublisherActor {
     pub fn new(
         mqtt_schema: MqttSchema,
         service_topic_id: ServiceTopicId,
-        exposed_config: Vec<(String, Option<String>)>,
+        exposed_config: Vec<(String, Option<Value>)>,
         messages: SimpleMessageBox<MqttMessage, MqttMessage>,
         mqtt_publisher: LoggingSender<MqttMessage>,
     ) -> Self {
@@ -80,7 +82,7 @@ impl ConfigPublisherActor {
     }
 
     fn payload_matches_expected(&self, payload: &[u8]) -> bool {
-        serde_json::from_slice::<BTreeMap<String, String>>(payload)
+        serde_json::from_slice::<BTreeMap<String, Value>>(payload)
             .is_ok_and(|received| received == self.expected)
     }
 
@@ -89,7 +91,7 @@ impl ConfigPublisherActor {
             .mqtt_schema
             .topic_for(self.service_topic_id.entity(), &Channel::Config);
         let payload =
-            serde_json::to_string(&self.expected).expect("a map of strings always serializes");
+            serde_json::to_string(&self.expected).expect("a map of JSON values always serializes");
         let message = MqttMessage::new(&topic, payload)
             .with_retain()
             .with_qos(QoS::AtLeastOnce);

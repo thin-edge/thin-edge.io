@@ -12,6 +12,7 @@ mod actor;
 mod tests;
 
 use actor::ConfigPublisherActor;
+use serde_json::Value;
 use std::convert::Infallible;
 use tedge_actors::Builder;
 use tedge_actors::DynSender;
@@ -31,7 +32,7 @@ use tedge_mqtt_ext::TopicFilter;
 pub struct ConfigPublisherBuilder {
     mqtt_schema: MqttSchema,
     service_topic_id: ServiceTopicId,
-    exposed_config: Vec<(String, Option<String>)>,
+    exposed_config: Vec<(String, Option<Value>)>,
     box_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     mqtt_publisher: LoggingSender<MqttMessage>,
 }
@@ -40,7 +41,7 @@ impl ConfigPublisherBuilder {
     pub fn new(
         mqtt_schema: MqttSchema,
         service_topic_id: ServiceTopicId,
-        exposed_config: Vec<(String, Option<String>)>,
+        exposed_config: Vec<(String, Option<Value>)>,
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Self {
         let mqtt_publisher = LoggingSender::new(
