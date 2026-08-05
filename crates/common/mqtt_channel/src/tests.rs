@@ -640,3 +640,40 @@ async fn connection_can_be_closed_after_last_will_published() -> Result<(), anyh
 
     Ok(())
 }
+
+#[tokio::test]
+async fn connection_times_out_when_broker_is_unavailable() {
+    // Unresolvable host: retries would hang forever without a connection timeout.
+    let mqtt_config = Config::default()
+        .with_host("invalid.invalid")
+        .with_port(1883)
+        .with_session_name(uniquify!("timeout_client"))
+        .with_connection_timeout(Duration::from_millis(500));
+
+    let started = std::time::Instant::now();
+    let result = Connection::new(&mqtt_config).await;
+    let elapsed = started.elapsed();
+
+    match result {
+        Err(MqttError::ConnectionTimeout { .. }) => {}
+        Ok(_) => panic!("expected ConnectionTimeout, but connection succeeded"),
+        Err(err) => panic!("expected ConnectionTimeout, got error: {err}"),
+    }
+    // Should fail fast well under the historical infinite-retry behaviour.
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "connection timeout took too long: {elapsed:?}"
+    );
+}
+
+#[test]
+fn zero_connection_timeout_disables_timeout() {
+    let config = Config::default().with_connection_timeout(Duration::ZERO);
+    assert_eq!(config.connection_timeout, None);
+
+    let config = Config::default().with_connection_timeout(None);
+    assert_eq!(config.connection_timeout, None);
+
+    let config = Config::default().with_connection_timeout(Duration::from_secs(10));
+    assert_eq!(config.connection_timeout, Some(Duration::from_secs(10)));
+}

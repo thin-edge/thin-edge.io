@@ -25,6 +25,8 @@ pub struct MqttSubscribeCommand {
     pub duration: Option<Duration>,
     pub count: Option<u32>,
     pub retained_only: bool,
+    /// Maximum time spent connecting to the broker. `None` means retry forever.
+    pub connection_timeout: Option<Duration>,
 }
 
 #[derive(Clone, Debug)]
@@ -54,7 +56,8 @@ fn build_config(cmd: &MqttSubscribeCommand) -> Result<mqtt_channel::Config, anyh
         .with_clean_session(true)
         .with_subscriptions(topic)
         .with_max_packet_size(MAX_PACKET_SIZE)
-        .with_queue_capacity(DEFAULT_QUEUE_CAPACITY);
+        .with_queue_capacity(DEFAULT_QUEUE_CAPACITY)
+        .with_connection_timeout(cmd.connection_timeout);
     config.with_client_auth(cmd.auth_config.clone().try_into()?)?;
     Ok(config)
 }
@@ -161,6 +164,19 @@ mod tests {
             duration: None,
             count: None,
             retained_only: false,
+            connection_timeout: Some(Duration::from_secs(10)),
         }
+    }
+
+    #[test]
+    fn build_config_applies_connection_timeout() {
+        let mut cmd = sub_command_with_client_id("tedge-sub-timeout");
+        cmd.connection_timeout = Some(Duration::from_secs(3));
+        let config = build_config(&cmd).unwrap();
+        assert_eq!(config.connection_timeout, Some(Duration::from_secs(3)));
+
+        cmd.connection_timeout = None;
+        let config = build_config(&cmd).unwrap();
+        assert_eq!(config.connection_timeout, None);
     }
 }
