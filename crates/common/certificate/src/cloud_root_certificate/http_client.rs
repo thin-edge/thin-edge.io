@@ -8,6 +8,7 @@
 //! allowing components to opt-out or opt-in to other config options.
 
 use reqwest::Identity;
+use reqwest::StatusCode;
 
 use super::CloudHttpConfig;
 
@@ -68,6 +69,19 @@ impl HttpClientBuilder {
         };
         builder.build()
     }
+}
+
+pub fn is_status_retryable(status: StatusCode) -> bool {
+    matches!(
+        status,
+        StatusCode::REQUEST_TIMEOUT
+            | StatusCode::TOO_EARLY
+            | StatusCode::TOO_MANY_REQUESTS
+            | StatusCode::INTERNAL_SERVER_ERROR
+            | StatusCode::BAD_GATEWAY
+            | StatusCode::SERVICE_UNAVAILABLE
+            | StatusCode::GATEWAY_TIMEOUT
+    )
 }
 
 #[cfg(test)]

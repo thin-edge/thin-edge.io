@@ -1,5 +1,6 @@
 use super::*;
 use axum::Router;
+use http::StatusCode;
 use hyper::header::AUTHORIZATION;
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::PrivateKeyDer;
@@ -19,18 +20,8 @@ async fn downloader_has_user_agent() {
     let _mock1 = server
         .mock("GET", "/some_file.txt")
         .with_status(200)
-        // the downloader incorrectly tries to retry when it gets 501 Not Implemented status from
-        // mockito, so currently we can't use `.match_headers()` because match needs to succeed and
-        // return 200. So for now do the check in the assert in the body closure, can remove when
-        // downloader stops retrying for 501.
-        .with_body_from_request(|r| {
-            let user_agent = r.header("user-agent")[0];
-            assert_eq!(
-                user_agent.to_str().unwrap(),
-                certificate::http_client::USER_AGENT
-            );
-            b"hello".to_vec()
-        })
+        .match_header("user-agent", certificate::http_client::USER_AGENT)
+        .with_body(b"hello")
         .create_async()
         .await;
 
@@ -468,6 +459,100 @@ async fn downloader_error_shows_certificate_required_error_when_appropriate() {
     let err = anyhow::Error::new(err);
 
     assert!(dbg!(format!("{err:#}")).contains("received fatal alert: CertificateRequired"));
+}
+
+#[tokio::test]
+async fn should_retry_for_statuses() {
+    let retryable = [
+        StatusCode::REQUEST_TIMEOUT,
+        StatusCode::TOO_EARLY,
+        StatusCode::TOO_MANY_REQUESTS,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        StatusCode::BAD_GATEWAY,
+        StatusCode::SERVICE_UNAVAILABLE,
+        StatusCode::GATEWAY_TIMEOUT,
+    ];
+
+    let non_retryable = [
+        // 4xx
+        StatusCode::BAD_REQUEST,
+        StatusCode::UNAUTHORIZED,
+        StatusCode::PAYMENT_REQUIRED,
+        StatusCode::FORBIDDEN,
+        StatusCode::NOT_FOUND,
+        StatusCode::METHOD_NOT_ALLOWED,
+        StatusCode::NOT_ACCEPTABLE,
+        StatusCode::PROXY_AUTHENTICATION_REQUIRED,
+        StatusCode::CONFLICT,
+        StatusCode::GONE,
+        StatusCode::LENGTH_REQUIRED,
+        StatusCode::PRECONDITION_FAILED,
+        StatusCode::PAYLOAD_TOO_LARGE,
+        StatusCode::URI_TOO_LONG,
+        StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        StatusCode::RANGE_NOT_SATISFIABLE,
+        StatusCode::EXPECTATION_FAILED,
+        StatusCode::IM_A_TEAPOT,
+        StatusCode::MISDIRECTED_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        StatusCode::LOCKED,
+        StatusCode::FAILED_DEPENDENCY,
+        StatusCode::UPGRADE_REQUIRED,
+        StatusCode::PRECONDITION_REQUIRED,
+        StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE,
+        StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS,
+        // 5xx
+        StatusCode::NOT_IMPLEMENTED,
+        StatusCode::HTTP_VERSION_NOT_SUPPORTED,
+        StatusCode::VARIANT_ALSO_NEGOTIATES,
+        StatusCode::INSUFFICIENT_STORAGE,
+        StatusCode::LOOP_DETECTED,
+        StatusCode::NOT_EXTENDED,
+        StatusCode::NETWORK_AUTHENTICATION_REQUIRED,
+    ];
+    let statuses = retryable.into_iter().chain(non_retryable);
+
+    let mut server = mockito::Server::new_async().await;
+    for status in statuses {
+        let mock = server
+            .mock("GET", format!("/{}", status.as_u16()).as_str())
+            .with_status(status.as_u16().into());
+        let mock = if retryable.contains(&status) {
+            mock.expect(2)
+        } else {
+            mock.expect(1)
+        };
+        let mock = mock.create_async().await;
+
+        let res = attempt_download(&server, format!("/{}", status.as_u16()).as_str()).await;
+        assert!(matches!(res, Err(DownloadError::Request(_))), "{res:?}");
+
+        mock.assert_async().await;
+    }
+}
+
+async fn attempt_download(
+    server: &mockito::ServerGuard,
+    resource: &str,
+) -> Result<(), DownloadError> {
+    let target_dir_path = TempDir::new().unwrap();
+    let target_path = target_dir_path.path().join("test_download");
+
+    let mut target_url = server.url();
+    target_url.push_str(resource);
+
+    let url = DownloadInfo::new(&target_url);
+
+    let mut downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
+    // tweaked to exactly 1 retry
+    downloader.set_backoff(ExponentialBackoff {
+        initial_interval: Duration::from_millis(5),
+        multiplier: 10.0,
+        randomization_factor: f64::EPSILON,
+        max_elapsed_time: Some(Duration::from_millis(50)),
+        ..Default::default()
+    });
+    downloader.download(&url).await
 }
 
 fn create_file_with_size(size: usize) -> Result<NamedTempFile, anyhow::Error> {

@@ -5,6 +5,7 @@ use crate::error::ErrContext;
 use anyhow::anyhow;
 use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
+use certificate::http_client;
 use certificate::CloudHttpConfig;
 use http::StatusCode;
 use nix::sys::statvfs;
@@ -355,12 +356,15 @@ impl Downloader {
                 .send()
                 .await
                 .and_then(|response| {
-                    if response.status() != StatusCode::RANGE_NOT_SATISFIABLE {
-                        response.error_for_status()
-                    } else {
-                        // if range not satisfiable, request should be retried with different range
-                        // (or without)
+                    if response.status() == StatusCode::RANGE_NOT_SATISFIABLE && range_start != 0 {
+                        // if we did request a range, but the server says it's not satisfiable, then
+                        // don't return an error so the caller can retry with a different range (or
+                        // without)
                         Ok(response)
+                    } else {
+                        // if other status code or this is the first request and server returns
+                        // RANGE_NOT_SATISFIABLE, then it shouldn't be retried
+                        response.error_for_status()
                     }
                 })
                 .map_err(reqwest_err_to_backoff)
@@ -380,7 +384,7 @@ fn reqwest_err_to_backoff(err: reqwest::Error) -> backoff::Error<reqwest::Error>
         return backoff::Error::transient(err);
     }
     if let Some(status) = err.status() {
-        if status.is_server_error() {
+        if http_client::is_status_retryable(status) {
             return backoff::Error::transient(err);
         }
     }

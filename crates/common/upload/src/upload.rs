@@ -3,6 +3,7 @@ use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use certificate::http_client;
 use certificate::CloudHttpConfig;
 use mime::Mime;
 use mime_guess::MimeGuess;
@@ -11,12 +12,27 @@ use reqwest::header::CONTENT_TYPE;
 use reqwest::multipart;
 use reqwest::Body;
 use reqwest::Identity;
+use reqwest::StatusCode;
 use std::time::Duration;
 use tokio::fs::File;
 use tokio_util::codec::BytesCodec;
 use tokio_util::codec::FramedRead;
+use tracing::debug;
 use tracing::info;
 use tracing::warn;
+
+/// Path prefixes for which retry for status 500 is disabled. This is to avoid retrying for e.g.
+/// File Transfer Service, for which we currently test that on 500 we shouldn't retry.
+///
+/// The optimal solution would be for components interacting with the FTS to call a wrapper API
+/// which would handle the exceptions from the generic HTTP client, but for now we disable retry for
+/// these paths. This is not ideal because these paths could theoretically be used by some other,
+/// possibly remote services, but it's acceptable for now as a workaround.
+const DISABLED_500_RETRY_PATHS: [&str; 2] = ["/te/v1/files/", "/tedge/file-transfer/"];
+
+fn is_fts_path(path: &str) -> bool {
+    DISABLED_500_RETRY_PATHS.iter().any(|p| path.starts_with(p))
+}
 
 fn default_backoff() -> ExponentialBackoff {
     // Default retry is an exponential retry with a limit of 5 minutes total.
@@ -260,17 +276,24 @@ impl Uploader {
                     }
                 })?
                 .error_for_status()
-                .map_err(|err| match err.status() {
-                    // 4xx and 500/501 server-side errors are permanent and retrying won't help
-                    Some(status)
-                        if status.is_client_error()
-                            || status == reqwest::StatusCode::INTERNAL_SERVER_ERROR
-                            || status == reqwest::StatusCode::NOT_IMPLEMENTED =>
-                    {
-                        backoff::Error::Permanent(UploadError::Network(err))
+                .map_err(|err| {
+                    let path = err.url().map(|url| url.path()).unwrap_or_default();
+                    match err.status() {
+                        Some(StatusCode::INTERNAL_SERVER_ERROR) if is_fts_path(path) => {
+                            debug!(
+                                "Path '{path}' is in the list of paths for which retry for status 500 is disabled, so not retrying"
+                            );
+                            backoff::Error::permanent(UploadError::Network(err))
+                        }
+                        Some(status) => {
+                            if http_client::is_status_retryable(status) {
+                                backoff::Error::transient(UploadError::Network(err))
+                            } else {
+                                backoff::Error::permanent(UploadError::Network(err))
+                            }
+                        }
+                        _ => backoff::Error::transient(UploadError::Network(err)),
                     }
-                    // 502/503/504 are gateway/overload conditions that may resolve on retry.
-                    _ => backoff::Error::transient(UploadError::Network(err)),
                 })
         };
 
@@ -313,14 +336,8 @@ mod tests {
         let _mock1 = server
             .mock("PUT", "/some_file.txt")
             .with_status(201)
-            .with_body_from_request(|r| {
-                let user_agent = r.header("user-agent")[0];
-                assert_eq!(
-                    user_agent.to_str().unwrap(),
-                    certificate::http_client::USER_AGENT
-                );
-                b"hello".to_vec()
-            })
+            .match_header("user-agent", certificate::http_client::USER_AGENT)
+            .with_body("hello")
             .create();
 
         let mut target_url = server.url();
@@ -565,6 +582,120 @@ mod tests {
 
         assert_eq!(source_content.len(), target_content.len());
         assert_eq!(source_content, target_content);
+    }
+
+    #[tokio::test]
+    async fn should_retry_for_statuses() {
+        let retryable = [
+            StatusCode::REQUEST_TIMEOUT,
+            StatusCode::TOO_EARLY,
+            StatusCode::TOO_MANY_REQUESTS,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            StatusCode::BAD_GATEWAY,
+            StatusCode::SERVICE_UNAVAILABLE,
+            StatusCode::GATEWAY_TIMEOUT,
+        ];
+
+        let non_retryable = [
+            // 4xx
+            StatusCode::BAD_REQUEST,
+            StatusCode::UNAUTHORIZED,
+            StatusCode::PAYMENT_REQUIRED,
+            StatusCode::FORBIDDEN,
+            StatusCode::NOT_FOUND,
+            StatusCode::METHOD_NOT_ALLOWED,
+            StatusCode::NOT_ACCEPTABLE,
+            StatusCode::PROXY_AUTHENTICATION_REQUIRED,
+            StatusCode::CONFLICT,
+            StatusCode::GONE,
+            StatusCode::LENGTH_REQUIRED,
+            StatusCode::PRECONDITION_FAILED,
+            StatusCode::PAYLOAD_TOO_LARGE,
+            StatusCode::URI_TOO_LONG,
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            StatusCode::RANGE_NOT_SATISFIABLE,
+            StatusCode::EXPECTATION_FAILED,
+            StatusCode::IM_A_TEAPOT,
+            StatusCode::MISDIRECTED_REQUEST,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            StatusCode::LOCKED,
+            StatusCode::FAILED_DEPENDENCY,
+            StatusCode::UPGRADE_REQUIRED,
+            StatusCode::PRECONDITION_REQUIRED,
+            StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE,
+            StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS,
+            // 5xx
+            StatusCode::NOT_IMPLEMENTED,
+            StatusCode::HTTP_VERSION_NOT_SUPPORTED,
+            StatusCode::VARIANT_ALSO_NEGOTIATES,
+            StatusCode::INSUFFICIENT_STORAGE,
+            StatusCode::LOOP_DETECTED,
+            StatusCode::NOT_EXTENDED,
+            StatusCode::NETWORK_AUTHENTICATION_REQUIRED,
+        ];
+        let statuses = retryable.into_iter().chain(non_retryable);
+
+        let mut server = mockito::Server::new_async().await;
+        for status in statuses {
+            let mock = server
+                .mock("PUT", format!("/{}", status.as_u16()).as_str())
+                .with_status(status.as_u16().into());
+            let mock = if retryable.contains(&status) {
+                mock.expect(2)
+            } else {
+                mock.expect(1)
+            };
+            let mock = mock.create_async().await;
+
+            let res = attempt_upload(&server, format!("/{}", status.as_u16()).as_str()).await;
+            assert!(matches!(res, Err(UploadError::Network(_))), "{res:?}");
+
+            mock.assert_async().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn should_not_retry_for_fts_500() {
+        let mut server = mockito::Server::new_async().await;
+        let _mock = server
+            .mock("PUT", "/te/v1/files/test")
+            .with_status(500)
+            .expect(1)
+            .create_async()
+            .await;
+        let UploadError::Network(err) = attempt_upload(&server, "/te/v1/files/test")
+            .await
+            .unwrap_err()
+        else {
+            panic!("should be 500")
+        };
+        assert_eq!(err.status().unwrap(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    async fn attempt_upload(
+        server: &mockito::ServerGuard,
+        resource: &str,
+    ) -> Result<(), UploadError> {
+        let ttd = TempTedgeDir::new();
+        let file = ttd
+            .file("file_upload.txt")
+            .with_raw_content("Hello, world!");
+
+        let mut target_url = server.url();
+        target_url.push_str(resource);
+
+        let url = UploadInfo::new(&target_url).set_method(UploadMethod::PUT);
+
+        let mut uploader = Uploader::new(file.utf8_path_buf(), None, CloudHttpConfig::test_value());
+        // tweaked to exactly 1 retry
+        uploader.set_backoff(ExponentialBackoff {
+            initial_interval: Duration::from_millis(5),
+            multiplier: 10.0,
+            randomization_factor: f64::EPSILON,
+            max_elapsed_time: Some(Duration::from_millis(50)),
+            ..Default::default()
+        });
+        uploader.upload(&url).await
     }
 
     async fn write_to_file_with_size(file: &mut File, size: usize) {
