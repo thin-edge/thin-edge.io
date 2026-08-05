@@ -1,28 +1,31 @@
 //! Collects the (key, value) pairs a component is allowed to expose to external clients.
 //!
 //! These are pure functions over [TEdgeConfigReader], built on the same
-//! [TEdgeConfigReader::readable_keys]/[TEdgeConfigReader::read_string] machinery used by
-//! `tedge config list`. The caller (the agent for core config, a mapper for its own cloud
-//! config) is responsible for publishing the result; this module only decides which keys are in
-//! scope and what their current values are.
+//! [TEdgeConfigReader::readable_keys] machinery used by `tedge config list`. Values are read with
+//! [TEdgeConfigReader::read_exposed_value] rather than `read_string`, so each one keeps the type it
+//! has in `tedge.toml`: a port stays a number, a flag stays a boolean, a template set stays an
+//! array. The caller (the agent for core config, a mapper for its own cloud config) is responsible
+//! for publishing the result; this module only decides which keys are in scope and what their
+//! current values are.
 
 use super::ProfileName;
 use super::ReadableKey;
 use super::TEdgeConfigReader;
 use crate::models::CloudType;
+use serde_json::Value;
 
 /// The exposable core (non-cloud) configuration, as (key, value) pairs.
 ///
 /// A key with no value currently set is included with `None`, so the caller can still clear any
 /// stale retained message for it.
-pub fn exposed_core_config(reader: &TEdgeConfigReader) -> Vec<(String, Option<String>)> {
+pub fn exposed_core_config(reader: &TEdgeConfigReader) -> Vec<(String, Option<Value>)> {
     reader
         .readable_keys()
         .filter(|key| key.is_exposable())
         .filter_map(|key| {
             let key_str = key.to_cow_str();
             (!is_cloud_key(&key_str)).then(|| {
-                let value = reader.read_string(&key).ok();
+                let value = exposed_value(reader, &key);
                 (key_str.into_owned(), value)
             })
         })
@@ -38,7 +41,7 @@ pub fn exposed_cloud_config(
     reader: &TEdgeConfigReader,
     cloud: CloudType,
     profile: Option<&ProfileName>,
-) -> anyhow::Result<Vec<(String, Option<String>)>> {
+) -> anyhow::Result<Vec<(String, Option<Value>)>> {
     let profile_str = profile.map(|p| p.to_string());
     let keys: Vec<ReadableKey> = match cloud {
         CloudType::C8y => reader
@@ -62,10 +65,16 @@ pub fn exposed_cloud_config(
         .filter_map(|key| {
             let key_str = key.to_cow_str();
             let local_key = key_str.strip_prefix(&prefix)?.to_owned();
-            let value = reader.read_string(&key).ok();
+            let value = exposed_value(reader, &key);
             Some((local_key, value))
         })
         .collect())
+}
+
+/// The typed value of an already-known-exposable key, or `None` when it is unset or cannot be
+/// derived. `Ok(None)` is unreachable here: the callers only pass keys that pass `is_exposable`.
+fn exposed_value(reader: &TEdgeConfigReader, key: &ReadableKey) -> Option<Value> {
+    reader.read_exposed_value(key).ok().flatten()
 }
 
 fn is_cloud_key(key: &str) -> bool {
@@ -89,6 +98,7 @@ mod tests {
     use super::*;
     use crate::TEdgeConfigLocation;
     use camino::Utf8PathBuf;
+    use serde_json::json;
     use std::str::FromStr;
 
     fn config_reader(toml: &str) -> TEdgeConfigReader {
@@ -129,7 +139,53 @@ mod tests {
         // mqtt.client.host has a default, so it should always be set
         let core = exposed_core_config(&reader);
         let (_, host) = core.iter().find(|(k, _)| k == "mqtt.client.host").unwrap();
-        assert_eq!(host.as_deref(), Some("127.0.0.1"));
+        assert_eq!(host, &Some(json!("127.0.0.1")));
+    }
+
+    /// Values keep the type they have in `tedge.toml` rather than all collapsing to strings, so a
+    /// consumer of the published document doesn't have to re-parse them.
+    #[test]
+    fn core_config_preserves_the_declared_type_of_each_value() {
+        let reader = config_reader(
+            r#"
+            [mqtt.client]
+            port = 8883
+
+            [agent.entity_store]
+            auto_register = false
+            "#,
+        );
+        let core = exposed_core_config(&reader);
+
+        let value = |key: &str| core.iter().find(|(k, _)| k == key).unwrap().1.clone();
+        assert_eq!(value("mqtt.client.port"), Some(json!(8883)));
+        assert_eq!(
+            value("agent.entity_store.auto_register"),
+            Some(json!(false))
+        );
+        assert_eq!(value("device.type"), Some(json!("thin-edge.io")));
+    }
+
+    #[test]
+    fn cloud_config_preserves_the_declared_type_of_each_value() {
+        let reader = config_reader(
+            r#"
+            [c8y]
+            url = "example.cumulocity.com"
+
+            [c8y.smartrest]
+            templates = ["1234", "5678"]
+
+            [c8y.enable]
+            log_upload = false
+            "#,
+        );
+        let cloud = exposed_cloud_config(&reader, CloudType::C8y, None).unwrap();
+
+        let value = |key: &str| cloud.iter().find(|(k, _)| k == key).unwrap().1.clone();
+        assert_eq!(value("url"), Some(json!("example.cumulocity.com")));
+        assert_eq!(value("smartrest.templates"), Some(json!(["1234", "5678"])));
+        assert_eq!(value("enable.log_upload"), Some(json!(false)));
     }
 
     #[test]
@@ -159,7 +215,7 @@ mod tests {
         let cloud = exposed_cloud_config(&reader, CloudType::C8y, None).unwrap();
         assert!(cloud
             .iter()
-            .any(|(k, v)| k == "url" && v.as_deref() == Some("example.cumulocity.com")));
+            .any(|(k, v)| k == "url" && v == &Some(json!("example.cumulocity.com"))));
         assert!(!cloud.iter().any(|(k, _)| k.starts_with("c8y")));
     }
 
@@ -175,7 +231,7 @@ mod tests {
         let cloud = exposed_cloud_config(&reader, CloudType::C8y, Some(&profile)).unwrap();
         assert!(cloud
             .iter()
-            .any(|(k, v)| k == "url" && v.as_deref() == Some("edge.c8y.io")));
+            .any(|(k, v)| k == "url" && v == &Some(json!("edge.c8y.io"))));
     }
 
     #[test]
@@ -236,7 +292,7 @@ mod tests {
         for key in secret_keys {
             let parsed: ReadableKey = key
                 .parse()
-                .expect(&format!("failed to parse known configuration key '{key}'"));
+                .unwrap_or_else(|_| panic!("failed to parse known configuration key '{key}'"));
             assert!(
                 !parsed.is_exposable(),
                 "'{key}' holds sensitive material and must never be marked #[tedge_config(exposable)]"
