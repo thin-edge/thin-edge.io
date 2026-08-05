@@ -20,6 +20,8 @@ Each service's exposable values SHALL be published as one retained JSON
 message on `te/device/<device>/service/<service>/config`,
 where `<service>` is the owning component's service topic
 and each JSON field name is a config key with the cloud/profile prefix stripped.
+Each value SHALL keep the type the setting has in `tedge.toml`,
+so a port is a number, a flag is a boolean and a template set is an array.
 An unset exposable key SHALL be omitted from the object.
 Each component SHALL publish only the settings it owns — the agent publishes
 core/device settings, each mapper publishes only its own cloud settings.
@@ -32,6 +34,14 @@ core/device settings, each mapper publishes only its own cloud settings.
 - **AND** the c8y mapper SHALL publish retained on
   `.../tedge-mapper-c8y/config` a JSON object containing
   `"url":"example.cumulocity.com"`
+
+#### Scenario: A non-string setting is published with its own type
+- **WHEN** the agent starts with `mqtt.client.port = 1883`
+  and the c8y mapper starts with `c8y.enable.log_upload = true`
+  and `c8y.smartrest.templates = ["1234", "5678"]`
+- **THEN** the published objects SHALL contain `"mqtt.client.port":1883`,
+  `"enable.log_upload":true` and `"smartrest.templates":["1234","5678"]`
+  rather than the string renderings of those values
 
 #### Scenario: A profiled mapper instance publishes under its own service topic
 - **WHEN** a c8y mapper profile named `edge` is configured with a distinct bridge topic prefix `c8y-edge`
@@ -49,6 +59,8 @@ them as:
 - `GET /te/v1/entities/<service-topic-id>/config/<key>` — single value,
   looked up in that service's parsed object
 
+Both routes SHALL respond with JSON, so each value keeps the type it has
+in `tedge.toml`.
 A key that is not exposed and a key that does not exist SHALL both return
 `404 Not Found`, indistinguishably.
 Writes (PUT/PATCH/DELETE) SHALL be rejected.
@@ -57,7 +69,9 @@ Writes (PUT/PATCH/DELETE) SHALL be rejected.
 - **WHEN** a client sends `GET .../tedge-mapper-c8y/config`
 - **THEN** the response SHALL be a JSON object of every exposed key-value pair
 - **WHEN** a client sends `GET .../tedge-agent/config/device.id`
-- **THEN** the response SHALL be the value `my-device-01`
+- **THEN** the response SHALL be the JSON value `"my-device-01"`
+- **WHEN** a client sends `GET .../tedge-agent/config/mqtt.client.port`
+- **THEN** the response SHALL be the JSON value `1883`
 
 ### Requirement: Self-correcting publisher
 Each component SHALL subscribe to its own `config` topic and republish its

@@ -63,6 +63,37 @@ generating `ReadableKey::is_exposable()`.
 This follows the same pattern already used for `deprecated_key` and doc
 comments — the decision to expose lives next to the setting definition.
 
+### Values keep their declared type, via a second macro-generated reader
+
+`read_string` renders every value through `Display`, which would publish a port
+as `"1883"`, a flag as `"true"` and a template set as the `Debug` rendering of a
+`Vec<String>`. So the macro generates a second reader,
+`TEdgeConfigReader::read_exposed_value`, which serializes the reader value
+instead of formatting it.
+
+Each field type's `Serialize` impl is the source of truth for the published
+shape, and it already matches the `tedge.toml` form: `ConnectUrl`, `HostPort`
+and `TopicPrefix` serialize `into = "String"`, `TemplatesSet` as an array,
+`MqttPayloadLimit` as its inner `u32`, `EntityTopicId` as `serde(transparent)`.
+So there is nothing to hand-maintain per type.
+
+Arms are generated only for `#[tedge_config(exposable)]` fields; every other key
+falls into a `_ => Ok(None)` catch-all. Restricting it this way keeps the
+`Serialize` requirement scoped to the allowlist, so adding a config type that
+isn't `Serialize` can never break the build inside macro-expanded code. It also
+means a non-exposable key has no typed representation to leak in the first
+place.
+
+The value type is `serde_json::Value` rather than `toml::Value`. Every
+destination is JSON — the retained payload, the entity store's `config` map
+(parallel to `twin_data`), and the HTTP response — and the publisher actor
+compares against a *parsed JSON* payload, so a `toml::Value` would have to be
+converted in its constructor anyway and would survive nowhere downstream.
+`toml::Value` is also a lossier intermediate rather than an interchangeable one:
+no null, `i64`-only integers, and a `Datetime` variant that transcodes to a
+`{"$__toml_private_datetime": ...}` sentinel object through a non-TOML
+serializer.
+
 ### One retained JSON document per service, not per-value topics
 
 Each service publishes a single retained MQTT message on
