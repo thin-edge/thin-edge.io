@@ -486,7 +486,7 @@ impl EntityStore {
 
     /// Returns a single exposed configuration value collected from an entity's own
     /// retained `config` MQTT topic.
-    pub fn get_config_value(&self, topic_id: &EntityTopicId, key: &str) -> Option<&String> {
+    pub fn get_config_value(&self, topic_id: &EntityTopicId, key: &str) -> Option<&JsonValue> {
         self.entities
             .get(topic_id)
             .and_then(|entity| entity.config.get(key))
@@ -497,7 +497,7 @@ impl EntityStore {
     pub fn get_config(
         &self,
         topic_id: &EntityTopicId,
-    ) -> Result<&BTreeMap<String, String>, entity_store::Error> {
+    ) -> Result<&BTreeMap<String, JsonValue>, entity_store::Error> {
         let entity = self.try_get(topic_id)?;
         Ok(&entity.config)
     }
@@ -510,8 +510,8 @@ impl EntityStore {
     pub fn set_config(
         &mut self,
         topic_id: &EntityTopicId,
-        config: BTreeMap<String, String>,
-    ) -> Result<BTreeMap<String, String>, entity_store::Error> {
+        config: BTreeMap<String, JsonValue>,
+    ) -> Result<BTreeMap<String, JsonValue>, entity_store::Error> {
         if let Some(key) = config
             .keys()
             .find(|key| key.is_empty() || key.starts_with('@') || key.contains('/'))
@@ -1803,7 +1803,7 @@ mod tests {
     }
 
     #[test]
-    fn set_config_stores_the_whole_document() {
+    fn set_config_stores_the_whole_document_with_typed_values() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut store = new_entity_store(&temp_dir, true);
         let topic_id = EntityTopicId::default_main_device();
@@ -1811,17 +1811,25 @@ mod tests {
         store
             .set_config(
                 &topic_id,
-                BTreeMap::from([("device.id".to_string(), "my-device".to_string())]),
+                BTreeMap::from([
+                    ("device.id".to_string(), json!("my-device")),
+                    ("mqtt.client.port".to_string(), json!(1883)),
+                ]),
             )
             .unwrap();
 
         assert_eq!(
             store.get_config_value(&topic_id, "device.id"),
-            Some(&"my-device".to_string())
+            Some(&json!("my-device"))
         );
         assert_eq!(
             store.get_config(&topic_id).unwrap().get("device.id"),
-            Some(&"my-device".to_string())
+            Some(&json!("my-device"))
+        );
+        assert_eq!(
+            store.get_config_value(&topic_id, "mqtt.client.port"),
+            Some(&json!(1883)),
+            "a value keeps the type it was published with"
         );
     }
 
@@ -1835,8 +1843,8 @@ mod tests {
             .set_config(
                 &topic_id,
                 BTreeMap::from([
-                    ("device.id".to_string(), "my-device".to_string()),
-                    ("mqtt.client.port".to_string(), "1883".to_string()),
+                    ("device.id".to_string(), json!("my-device")),
+                    ("mqtt.client.port".to_string(), json!(1883)),
                 ]),
             )
             .unwrap();
@@ -1844,14 +1852,14 @@ mod tests {
         let old = store
             .set_config(
                 &topic_id,
-                BTreeMap::from([("device.id".to_string(), "other-device".to_string())]),
+                BTreeMap::from([("device.id".to_string(), json!("other-device"))]),
             )
             .unwrap();
 
-        assert_eq!(old.get("mqtt.client.port"), Some(&"1883".to_string()));
+        assert_eq!(old.get("mqtt.client.port"), Some(&json!(1883)));
         assert_eq!(
             store.get_config_value(&topic_id, "device.id"),
-            Some(&"other-device".to_string())
+            Some(&json!("other-device"))
         );
         assert_eq!(
             store.get_config_value(&topic_id, "mqtt.client.port"),
@@ -1869,7 +1877,7 @@ mod tests {
         store
             .set_config(
                 &topic_id,
-                BTreeMap::from([("device.id".to_string(), "my-device".to_string())]),
+                BTreeMap::from([("device.id".to_string(), json!("my-device"))]),
             )
             .unwrap();
 
@@ -1886,24 +1894,18 @@ mod tests {
         let topic_id = EntityTopicId::default_main_device();
 
         assert!(matches!(
-            store.set_config(
-                &topic_id,
-                BTreeMap::from([("".to_string(), "x".to_string())])
-            ),
+            store.set_config(&topic_id, BTreeMap::from([("".to_string(), json!("x"))])),
             Err(Error::InvalidConfigKey(_))
         ));
         assert!(matches!(
             store.set_config(
                 &topic_id,
-                BTreeMap::from([("@type".to_string(), "x".to_string())])
+                BTreeMap::from([("@type".to_string(), json!("x"))])
             ),
             Err(Error::InvalidConfigKey(_))
         ));
         assert!(matches!(
-            store.set_config(
-                &topic_id,
-                BTreeMap::from([("a/b".to_string(), "x".to_string())])
-            ),
+            store.set_config(&topic_id, BTreeMap::from([("a/b".to_string(), json!("x"))])),
             Err(Error::InvalidConfigKey(_))
         ));
     }
@@ -1917,7 +1919,7 @@ mod tests {
         assert!(matches!(
             store.set_config(
                 &unknown,
-                BTreeMap::from([("device.id".to_string(), "x".to_string())])
+                BTreeMap::from([("device.id".to_string(), json!("x"))])
             ),
             Err(Error::UnknownEntity(_))
         ));
@@ -2080,7 +2082,7 @@ mod tests {
         store
             .set_config(
                 &entity_topic_id,
-                BTreeMap::from([("device.id".to_string(), "my-device".to_string())]),
+                BTreeMap::from([("device.id".to_string(), json!("my-device"))]),
             )
             .unwrap();
 
@@ -2090,7 +2092,7 @@ mod tests {
 
         assert_eq!(
             store.get_config_value(&entity_topic_id, "device.id"),
-            Some(&"my-device".to_string())
+            Some(&json!("my-device"))
         );
     }
 
