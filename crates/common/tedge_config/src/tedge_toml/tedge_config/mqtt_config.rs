@@ -101,21 +101,25 @@ impl TryFrom<TEdgeMqttClientAuthConfig> for mqtt_channel::AuthenticationConfig {
         if let Some(ca_file) = config.ca_file {
             debug!(target: "MQTT", "Using CA certificate file: {}", ca_file);
             let cert_store = &mut authentication_config.get_cert_store_mut();
-            parse_root_certificate::add_certs_from_file(cert_store, ca_file)?;
+            parse_root_certificate::add_certs_from_file(cert_store, ca_file)
+                .context("Invalid 'mqtt.client.auth.ca_file'")?;
         }
 
         // Adds all certificate from all files in the directory `ca_dir` to the trust store.
         if let Some(ca_dir) = config.ca_dir {
             debug!(target: "MQTT", "Using CA certificate directory: {}", ca_dir);
             let cert_store = &mut authentication_config.get_cert_store_mut();
-            parse_root_certificate::add_certs_from_directory(cert_store, ca_dir)?;
+            parse_root_certificate::add_certs_from_directory(cert_store, ca_dir)
+                .context("Invalid 'mqtt.client.auth.ca_dir'")?;
         }
 
         // Provides client certificate and private key for authentication.
         if let Some(client_cert) = config.client_cert {
             debug!(target: "MQTT", "Using client certificate file: {}", client_cert.cert_file);
             debug!(target: "MQTT", "Using client private key file: {}", client_cert.key_file);
-            authentication_config.set_cert_config(client_cert.cert_file, client_cert.key_file)?;
+            authentication_config
+                .set_cert_config(client_cert.cert_file, client_cert.key_file)
+                .context("Invalid 'mqtt.client.auth.cert_file' or 'mqtt.client.auth.key_file'")?;
         }
 
         // Provides client username/password for authentication.

@@ -366,7 +366,9 @@ pub fn translate_rustls_error(err: &(dyn std::error::Error + 'static)) -> Option
 
 #[derive(thiserror::Error, Debug)]
 pub enum CertificateError {
-    #[error("Could not access {path}: {error}")]
+    // The path is quoted, as otherwise leading/trailing whitespace in a
+    // misconfigured path is invisible in the error message.
+    #[error("Could not access {path:?}: {error}")]
     IoError {
         path: PathBuf,
         error: std::io::Error,
@@ -387,7 +389,7 @@ pub enum CertificateError {
     #[error("Fail to parse the private key")]
     UnknownPrivateKeyFormat,
 
-    #[error("Could not parse certificate {path}")]
+    #[error("Could not parse certificate {path:?}")]
     CertificateParseFailed {
         path: PathBuf,
         source: anyhow::Error,
