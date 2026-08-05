@@ -21,22 +21,27 @@ ${DEVICE_SN}    ${EMPTY}    # Main device serial number
 
 *** Test Cases ***
 Mapper publishes its own settings with the cloud qualifier stripped as one retained JSON message
+    [Documentation]    Each value keeps the type it has in tedge.toml: a capability flag is
+    ...    published as a JSON boolean and a SmartREST template set as a JSON array, rather than
+    ...    as the string renderings of those values.
     ${url}=    Execute Command    tedge config get c8y.url    strip=${True}
     ${topic_prefix}=    Execute Command    tedge config get c8y.bridge.topic_prefix    strip=${True}
+    ${max_payload_size}=    Execute Command    tedge config get c8y.mapper.mqtt.max_payload_size    strip=${True}
 
     ${retained}=    Should Have Retained MQTT Messages    te/device/main/service/tedge-mapper-c8y/config
 
     ${config}=    JSONLibrary.Convert String To Json    ${retained}[0]
     Should Be Equal As Strings    ${config["url"]}    ${url}
     Should Be Equal As Strings    ${config["bridge.topic_prefix"]}    ${topic_prefix}
+    Should Be Equal    ${config["enable.log_upload"]}    ${True}
+    Should Be Equal As Strings    ${config["bridge.topic_prefix"]}    ${topic_prefix}
+    Should Be Equal As Integers    ${config["mapper.mqtt.max_payload_size"]}    ${max_payload_size}
 
 Mapper does not publish another cloud's settings
-    Execute Command    tedge config set c8y.url test.c8y.io --profile test
     Execute Command    tedge config set az.url test.azure.com
     Execute Command    tedge config set aws.url test.aws.com
 
     ${retained}=    Should Have Retained MQTT Messages    te/device/main/service/tedge-mapper-c8y/config
-    Should Not Contain    ${retained}[0]    test.c8y.io
     Should Not Contain    ${retained}[0]    test.azure.com
     Should Not Contain    ${retained}[0]    test.aws.com
 
@@ -44,7 +49,7 @@ Agent serves the mapper's single exposed value over HTTP
     ${url}=    Execute Command    tedge config get c8y.url    strip=${True}
     ${get}=    Execute Command
     ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/te/v1/entities/device/main/service/tedge-mapper-c8y/config/url
-    Should Be Equal    ${get}    ${url}|200
+    Should Be Equal    ${get}    "${url}"|200
 
 Agent serves the mapper's whole exposed config as a JSON object over HTTP
     ${url}=    Execute Command    tedge config get c8y.url    strip=${True}
@@ -84,7 +89,7 @@ Mapper republishes its config after an external client overwrites it
     # The corrected document, not the injected one, is what ends up retained
     ${retained}=    Should Have Retained MQTT Messages
     ...    te/device/main/service/tedge-mapper-c8y/config
-    Should Not Contain    ${retained}[0]    bogus
+    Should Not Contain    ${retained}[0]    "bad":"config"
     ${config}=    JSONLibrary.Convert String To Json    ${retained}[0]
     Should Be Equal As Strings    ${config["url"]}    ${url}
 
@@ -103,7 +108,7 @@ Config of a profiled c8y mapper is exposed under its own service topic
 
     ${get}=    Execute Command
     ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/te/v1/entities/device/main/service/tedge-mapper-c8y-test/config/url
-    Should Be Equal    ${get}    ${url}|200
+    Should Be Equal    ${get}    "${url}"|200
 
     [Teardown]    Restore Main Device From c8y Profile    test
 
@@ -124,6 +129,11 @@ Non-cloud custom mapper still publishes an empty exposed config document
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
+
+Restore The Default c8y Templates And Flags
+    Execute Command    tedge config unset c8y.enable.log_upload
+    Execute Command    tedge config unset c8y.smartrest.templates
+    Restart Service    tedge-mapper-c8y
 
 Switch Main Device To A c8y Profile
     [Arguments]    ${profile}

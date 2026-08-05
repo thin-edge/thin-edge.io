@@ -23,22 +23,33 @@ ${MQTT_PORT}    ${EMPTY}    # MQTT client port from config
 
 *** Test Cases ***
 Agent publishes its exposed core settings as one retained MQTT JSON message
+    [Documentation]    Each value keeps the type it has in tedge.toml: a port is published as a
+    ...    JSON number and a capability flag as a JSON boolean, rather than as the string
+    ...    renderings of those values.
     ${retained}=    Should Have Retained MQTT Messages    te/device/main/service/tedge-agent/config
 
     ${config}=    JSONLibrary.Convert String To Json    ${retained}[0]
     Should Be Equal As Strings    ${config["device.id"]}    ${DEVICE_ID}
-    Should Be Equal As Strings    ${config["mqtt.client.port"]}    ${MQTT_PORT}
+    Should Be Equal As Integers    ${config["mqtt.client.port"]}    ${MQTT_PORT}
+    Should Contain    ${retained}[0]    "mqtt.client.port":${MQTT_PORT}
+    Should Match Regexp    ${retained}[0]    "agent\\.entity_store\\.auto_register":(true|false)
 
 Agent serves a single exposed value over HTTP
+    [Documentation]    The single-key route responds with JSON, so a string setting comes back
+    ...    quoted and a numeric setting comes back unquoted.
     ${get}=    Execute Command
     ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config/device.id
-    Should Be Equal    ${get}    ${DEVICE_ID}|200
+    Should Be Equal    ${get}    "${DEVICE_ID}"|200
+
+    ${get}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config/mqtt.client.port
+    Should Be Equal    ${get}    ${MQTT_PORT}|200
 
 Agent serves the whole exposed config as a JSON object over HTTP
     ${get}=    Execute Command
     ...    curl --silent http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config
     Should Contain    ${get}    "device.id":"${DEVICE_ID}"
-    Should Contain    ${get}    "mqtt.client.port":"${MQTT_PORT}"
+    Should Contain    ${get}    "mqtt.client.port":${MQTT_PORT}
 
 A non-exposed secret setting never appears on the retained config topic
     ${retained}=    Should Have Retained MQTT Messages    te/device/main/service/tedge-agent/config
