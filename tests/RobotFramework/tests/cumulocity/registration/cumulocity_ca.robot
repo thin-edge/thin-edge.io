@@ -43,6 +43,36 @@ Reuse existing Device ID whilst downloading
     ...    cmd=env DEVICE_ID= tedge cert download c8y --one-time-password '${credentials.one_time_password}' --retry-every 5s --max-timeout 30s
     Execute Command    tedge reconnect c8y
 
+Generate a one-time password and print the device registration URL
+    [Documentation]    When no one-time password is given, a random one is generated and displayed,
+    ...    along with the URL of the Cumulocity registration page which is pre-filled
+    ...    with the device id and the one-time password.
+    [Setup]    Custom Setup
+    Set Cumulocity URLs
+    ${DOMAIN}=    Cumulocity.Get Domain
+    ${stderr}=    Execute Command
+    ...    cmd=tedge cert download c8y --device-id "${DEVICE_SN}" --retry-every 1s --max-timeout 0s
+    ...    stdout=${False}
+    ...    stderr=${True}
+    ...    exp_exit_code=!0
+    ${password}=    Get Regexp Matches    ${stderr}    one-time password: ([0-9A-Za-z]{32})    1
+    Should Contain
+    ...    ${stderr}
+    ...    https://${DOMAIN}/apps/devicemanagement/index.html#/deviceregistration?externalId=${DEVICE_SN}&one-time-password=${password}[0]
+
+Don't print the device registration URL when opted out
+    [Documentation]    The generated one-time password is still displayed,
+    ...    as it is required to register the device.
+    [Setup]    Custom Setup
+    Set Cumulocity URLs
+    ${stderr}=    Execute Command
+    ...    cmd=tedge cert download c8y --device-id "${DEVICE_SN}" --no-registration-url --retry-every 1s --max-timeout 0s
+    ...    stdout=${False}
+    ...    stderr=${True}
+    ...    exp_exit_code=!0
+    Should Match Regexp    ${stderr}    one-time password: [0-9A-Za-z]{32}
+    Should Not Contain    ${stderr}    deviceregistration?externalId=
+
 Certificate Renewal Service Using Cumulocity Certificate Authority
     [Setup]    Setup With Self-Signed Certificate
     ${cert_before}=    Execute Command    tedge cert show | grep -v Status:
