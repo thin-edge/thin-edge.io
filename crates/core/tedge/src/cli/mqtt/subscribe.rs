@@ -34,7 +34,7 @@ pub struct SimpleTopicFilter(String);
 impl Command for MqttSubscribeCommand {
     fn description(&self) -> String {
         format!(
-            "subscribe to the topic \"{:?}\" with QoS \"{:?}\".",
+            "subscribe to the topic \"{}\" with QoS \"{:?}\".",
             self.topic.pattern(),
             self.qos
         )
