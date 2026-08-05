@@ -13,7 +13,7 @@ use tedge_mqtt_ext::MqttActorBuilder;
 pub async fn start_basic_actors(
     mapper_name: &str,
     config: &TEdgeConfig,
-    exposed_config: Vec<(String, Option<String>)>,
+    exposed_config: Vec<(String, Option<serde_json::Value>)>,
 ) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
     let mut runtime = Runtime::new();
 
