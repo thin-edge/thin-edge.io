@@ -7,7 +7,7 @@ action = "proceed"
 on_success = "executing"
 
 [executing]
-script = "echo custom-snapshot-workflow > /tmp/config_snapshot_workflow.log"
+script = "sh -c 'echo custom-snapshot-workflow > /tmp/config_snapshot_workflow.log'"
 on_success = "get"
 on_error = "failed"
 
