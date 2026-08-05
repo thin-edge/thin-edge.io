@@ -85,7 +85,7 @@ The set never includes secrets (private keys, PINs, credential-file paths).
   `exposed_core_config()` / `exposed_cloud_config()` helpers
 - `tedge_api` — new `Channel::Config` topic variant,
   config storage on the entity store
-- New shared publisher crate used by the agent and all three mappers
+- New shared publisher crate used by the agent and all the built-in mappers
 - `tedge_agent` — MQTT ingestion of config topics, new HTTP routes
 - Robot Framework end-to-end tests
 - Docs: MQTT topic reference and HTTP API reference

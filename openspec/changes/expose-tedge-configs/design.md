@@ -75,6 +75,13 @@ A consumer subscribes to one topic and gets the service's whole exposed
 config; there's no way to subscribe to a single key over MQTT — a client
 that wants just one value uses the HTTP API instead.
 
+On every starup, the previously published `config` message is replaced with a new one.
+This will make sure that any keys that were published on the previous run,
+that became stale for the following reasons do not stay with the broker:
+- any exposed keys that were unset before the restart
+- any previously exposed config in the previous version, hidden in the new version
+- any config key that's renamed/removed in the new version
+
 Alternative: one retained message per key (`config/<key>`). Rejected —
 publishing and reconciling N per-key topics is proportionally more MQTT
 traffic and state to track for no benefit over parsing one JSON object.
@@ -93,12 +100,8 @@ That name comes from `bridge.topic_prefix`: `format!("tedge-mapper-{prefix}")`
 
 ### One shared publisher
 
-At startup, a component publishes one retained message: a JSON object of
-every currently-set exposed key-value pair. Unset exposable keys are simply
-omitted from the object.
-Because the whole document is replaced as a unit, a value removed from config, 
-or a key no longer marked exposable, can't linger from a previous run:
-the next publish just doesn't include it.
+Since all tedge components follow the same protocol to publish the configs,
+that logic is captured into a single actor and shared by all of them.
 
 ### Self-correcting publisher
 
@@ -117,10 +120,13 @@ no separate clearing path to implement or test.
 
 ### Config stored parallel to twin data, not merged into it
 
-The entity store gets a `config` map on each entity, separate from
-`twin_data`. Config values come from one source of truth (the owning
-component's `tedge_config`) and nothing external can set them.
-Merging into twin data would blur that distinction.
+The entity store maintains a `twin_data` map for each entity.
+Even though `config` values are also just key-value pairs, just like twin data,
+the same `twin_data` map be re-used to store configs as well,
+as they both serve distinct responsibilities.
+The `twin_data` map captures `twin` messages published by the users,
+while `config` is published by the owning component itself.
+So, they must be stored in a separate dedicated `config` map per entity.
 
 ### Unexposed and non-existent keys are indistinguishable
 
@@ -168,7 +174,7 @@ The curated set (✓ = exposed, ✗ = not exposed):
 | `az.device.key_path` | ✗ |
 | `az.device.key_pin` | ✗ |
 | `az.device.key_uri` | ✗ |
-| `az.mapper.mqtt.max_payload_size` | ✗ |
+| `az.mapper.mqtt.max_payload_size` | ✓ |
 | `az.mapper.timestamp` | ✗ |
 | `az.mapper.timestamp_format` | ✗ |
 | `az.root_cert_path` | ✗ |
