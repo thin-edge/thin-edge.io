@@ -12,37 +12,33 @@ Library             JSONLibrary
 Suite Setup         Custom Setup
 Test Teardown       Get Logs    ${DEVICE_SN}
 
-Test Tags           theme:tedge_agent
+Test Tags           theme:tedge_agent    theme:configuration
 
 
 *** Variables ***
 ${DEVICE_SN}    ${EMPTY}    # Main device serial number
+${DEVICE_ID}    ${EMPTY}    # Device ID from config
+${MQTT_PORT}    ${EMPTY}    # MQTT client port from config
 
 
 *** Test Cases ***
 Agent publishes its exposed core settings as one retained MQTT JSON message
-    ${device_id}=    Execute Command    tedge config get device.id    strip=${True}
-    ${mqtt_port}=    Execute Command    tedge config get mqtt.client.port    strip=${True}
-
     ${retained}=    Should Have Retained MQTT Messages    te/device/main/service/tedge-agent/config
 
     ${config}=    JSONLibrary.Convert String To Json    ${retained}[0]
-    Should Be Equal As Strings    ${config["device.id"]}    ${device_id}
-    Should Be Equal As Strings    ${config["mqtt.client.port"]}    ${mqtt_port}
+    Should Be Equal As Strings    ${config["device.id"]}    ${DEVICE_ID}
+    Should Be Equal As Strings    ${config["mqtt.client.port"]}    ${MQTT_PORT}
 
 Agent serves a single exposed value over HTTP
-    ${device_id}=    Execute Command    tedge config get device.id    strip=${True}
     ${get}=    Execute Command
     ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config/device.id
-    Should Be Equal    ${get}    ${device_id}|200
+    Should Be Equal    ${get}    ${DEVICE_ID}|200
 
 Agent serves the whole exposed config as a JSON object over HTTP
-    ${device_id}=    Execute Command    tedge config get device.id    strip=${True}
-    ${mqtt_port}=    Execute Command    tedge config get mqtt.client.port    strip=${True}
     ${get}=    Execute Command
     ...    curl --silent http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config
-    Should Contain    ${get}    "device.id":"${device_id}"
-    Should Contain    ${get}    "mqtt.client.port":"${mqtt_port}"
+    Should Contain    ${get}    "device.id":"${DEVICE_ID}"
+    Should Contain    ${get}    "mqtt.client.port":"${MQTT_PORT}"
 
 A non-exposed secret setting never appears on the retained config topic
     ${retained}=    Should Have Retained MQTT Messages    te/device/main/service/tedge-agent/config
@@ -76,3 +72,7 @@ The config HTTP view rejects writes
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
+    ${device_id}=    Execute Command    tedge config get device.id    strip=${True}
+    Set Suite Variable    ${DEVICE_ID}    ${device_id}
+    ${mqtt_port}=    Execute Command    tedge config get mqtt.client.port    strip=${True}
+    Set Suite Variable    ${MQTT_PORT}    ${mqtt_port}
