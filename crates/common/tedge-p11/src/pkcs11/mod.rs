@@ -79,6 +79,7 @@ use cryptoki::object::ObjectClass;
 use cryptoki::object::ObjectHandle;
 use cryptoki::session::Session;
 use cryptoki::session::UserType;
+use cryptoki::slot::Slot;
 use cryptoki::slot::SlotInfo;
 use cryptoki::slot::TokenInfo;
 use rsa::pkcs1::EncodeRsaPublicKey;
@@ -95,24 +96,37 @@ use std::fmt::Debug;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 pub use cryptoki::types::AuthPin;
 
 use crate::service;
+use crate::service::ChangePinRequest;
+use crate::service::ChangePinResponse;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
 use crate::service::CreateKeyResponse;
+use crate::service::DeleteKeyRequest;
+use crate::service::DeleteKeyResponse;
+use crate::service::InitTokenRequest;
+use crate::service::InitTokenResponse;
+use crate::service::KeyDetails;
+use crate::service::ListKeysRequest;
+use crate::service::ListKeysResponse;
+use crate::service::ListTokensResponse;
 use crate::service::SecretString;
 use crate::service::SignRequestWithSigScheme;
 use crate::service::SignResponse;
 use crate::service::TedgeP11Service;
+use crate::service::TokenDetails;
 
 mod signing;
 pub use signing::Pkcs11Signer;
 pub use signing::SigScheme;
 
-mod uri;
+pub mod uri;
 
 /// Parameters used when opening a session.
 #[derive(Debug, Clone)]
@@ -151,6 +165,9 @@ impl Debug for CryptokiConfigDirect {
 pub struct Cryptoki {
     context: Arc<Mutex<Pkcs11>>,
     config: CryptokiConfigDirect,
+    /// When the module was last reloaded from the signing path, used to rate-limit reloads so a
+    /// burst of failed signings does not churn a physical reader (see [`Cryptoki::should_reinit`]).
+    last_reinit: Arc<Mutex<Option<Instant>>>,
 }
 
 impl TedgeP11Service for Cryptoki {
@@ -210,6 +227,253 @@ impl TedgeP11Service for Cryptoki {
         Ok(uris)
     }
 
+    fn list_tokens(&self) -> anyhow::Result<ListTokensResponse> {
+        let tokens = self
+            .snapshot_tokens()?
+            .into_iter()
+            .map(|(slot, info)| TokenDetails {
+                slot: slot.id(),
+                label: info.label().to_string(),
+                model: info.model().to_string(),
+                manufacturer: info.manufacturer_id().to_string(),
+                serial: info.serial_number().to_string(),
+                initialized: info.token_initialized(),
+                // An uninitialized token has no label or serial, so its URI selects the slot id.
+                uri: export_slot_uri(slot, &info),
+            })
+            .collect();
+        Ok(ListTokensResponse { tokens })
+    }
+
+    #[instrument(skip_all)]
+    fn list_keys(&self, request: ListKeysRequest) -> anyhow::Result<ListKeysResponse> {
+        let params = SessionParams {
+            uri: request.uri,
+            pin: request.pin,
+        };
+        // Private key objects are only visible after a login, which open_session_ro performs.
+        let session = self.open_session_ro(&params)?;
+
+        let mut keys = Vec::new();
+        for (class, class_name) in [
+            (ObjectClass::PRIVATE_KEY, "private"),
+            (ObjectClass::PUBLIC_KEY, "public"),
+        ] {
+            let template = [Attribute::Token(true), Attribute::Class(class)];
+            let objects = match session.session.find_objects(&template) {
+                Ok(objects) => objects,
+                Err(e) => {
+                    error!(?e, class = class_name, "Failed to find key objects");
+                    continue;
+                }
+            };
+            for object in objects {
+                let uri = session
+                    .export_object_uri(object)
+                    .unwrap_or_else(|_| "<unknown>".to_string());
+
+                let mut label = String::new();
+                let mut id = String::new();
+                let mut key_type = String::new();
+                if let Ok(attrs) = session.session.get_attributes(
+                    object,
+                    &[
+                        AttributeType::Label,
+                        AttributeType::Id,
+                        AttributeType::KeyType,
+                    ],
+                ) {
+                    for attr in attrs {
+                        match attr {
+                            Attribute::Label(bytes) => {
+                                label = String::from_utf8_lossy(&bytes).into_owned();
+                            }
+                            Attribute::Id(bytes) => {
+                                id = bytes.iter().map(|b| format!("{b:02x}")).collect();
+                            }
+                            Attribute::KeyType(kt) => {
+                                key_type = match kt {
+                                    KeyType::RSA => "RSA".to_string(),
+                                    KeyType::EC => "EC".to_string(),
+                                    other => format!("{other:?}"),
+                                };
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                keys.push(KeyDetails {
+                    class: class_name.to_string(),
+                    key_type,
+                    label,
+                    id,
+                    uri,
+                });
+            }
+        }
+
+        Ok(ListKeysResponse { keys })
+    }
+
+    #[instrument(skip_all)]
+    fn change_pin(&self, request: ChangePinRequest) -> anyhow::Result<ChangePinResponse> {
+        // Identify the token by its stable URI attributes (token label / serial) rather than a
+        // library-defined slot index, which can be reordered between calls.
+        let uri_attributes = self.request_uri(request.uri.as_deref())?;
+        let wanted_label = uri_attributes.token.as_ref();
+        let wanted_serial = uri_attributes.serial.as_ref();
+
+        // Refresh the slot list so a recently attached/initialized token is visible.
+        let _ = self.reinit();
+        let context = match self.context.lock() {
+            Ok(c) => c,
+            Err(e) => e.into_inner(),
+        };
+
+        // Only an initialized token has a user PIN to change.
+        let initialized = context
+            .get_slots_with_initialized_token()
+            .context("Failed to list slots with an initialized token")?;
+
+        // Narrow to the token(s) matching the requested URI, if one was given.
+        let matching: Vec<Slot> = initialized
+            .into_iter()
+            .filter(|slot| {
+                let Ok(info) = context.get_token_info(*slot) else {
+                    return false;
+                };
+                wanted_label.is_none_or(|l| info.label() == l)
+                    && wanted_serial.is_none_or(|s| info.serial_number() == s)
+            })
+            .collect();
+
+        let slot = match matching.as_slice() {
+            [] => anyhow::bail!(
+                "No initialized token was found{}. Ensure the HSM is connected and a token has \
+                 been initialized with `tedge hsm init`.",
+                if request.uri.is_some() {
+                    " matching the requested URI"
+                } else {
+                    ""
+                }
+            ),
+            [slot] => *slot,
+            many => {
+                let uris: Vec<String> = many
+                    .iter()
+                    .filter_map(|s| context.get_token_info(*s).ok())
+                    .map(|i| export_session_uri(&i))
+                    .collect();
+                anyhow::bail!(
+                    "Found multiple initialized tokens. Please select one by passing its URI:\n{}",
+                    uris.join("\n")
+                );
+            }
+        };
+
+        // NOTE: changing a PIN mutates the token, so a read-write session is required.
+        let session = context
+            .open_rw_session(slot)
+            .context("Failed to open a read-write session")?;
+
+        if request.reset {
+            // Recovery path: a Security Officer resets the user PIN without knowing the old one.
+            let so_pin = request.so_pin.context(
+                "A Security Officer PIN is required to reset the user PIN (pass --so-pin).",
+            )?;
+            session
+                .login(UserType::So, Some(&AuthPin::from(so_pin)))
+                .context("Failed to log in as Security Officer")?;
+            session
+                .init_pin(&AuthPin::from(request.new_pin))
+                .context("Failed to reset the user PIN (C_InitPIN)")?;
+        } else {
+            // Normal path: change the user PIN using the current one. While PKCS #11 allows
+            // C_SetPIN in a public session, several modules (SoftHSM2, tpm2-pkcs11) expect the user
+            // to be logged in first, so log in with the current PIN before changing it.
+            let old_pin = request.old_pin.unwrap_or_else(|| self.config.pin.clone());
+            session
+                .login(UserType::User, Some(&AuthPin::from(old_pin.clone())))
+                .context(
+                    "Failed to log in with the current user PIN. Check that it is correct, or use \
+                     --reset with the Security Officer PIN.",
+                )?;
+            session
+                .set_pin(&AuthPin::from(old_pin), &AuthPin::from(request.new_pin))
+                .context("Failed to change the user PIN (C_SetPIN)")?;
+        }
+
+        let info = context
+            .get_token_info(slot)
+            .context("Failed to read token info after changing the PIN")?;
+        Ok(ChangePinResponse {
+            uri: export_session_uri(&info),
+        })
+    }
+
+    #[instrument(skip_all)]
+    fn delete_key(&self, request: DeleteKeyRequest) -> anyhow::Result<DeleteKeyResponse> {
+        let params = SessionParams {
+            uri: Some(request.uri),
+            pin: request.pin,
+        };
+        // Destroying objects requires a read-write session, and private objects require a login;
+        // open_session_rw provides both.
+        let session = self.open_session_rw(&params)?;
+
+        // Require a specific selector so a whole token's contents can never be wiped by accident.
+        anyhow::ensure!(
+            session.uri_attributes.object.is_some() || session.uri_attributes.id.is_some(),
+            "Refusing to delete: the key must be identified by a label and/or id. Provide a label \
+             (and optionally an id), or a URI that selects an object."
+        );
+
+        let mut template = vec![Attribute::Token(true)];
+        if let Some(object) = &session.uri_attributes.object {
+            template.push(Attribute::Label(object.as_bytes().to_vec()));
+        }
+        if let Some(id) = &session.uri_attributes.id {
+            template.push(Attribute::Id(id.clone()));
+        }
+
+        // Matches both the private and public key objects that share the label/id. A missing key
+        // is not an error: delete is idempotent, so an empty result means there was nothing to do.
+        let objects = session
+            .session
+            .find_objects(&template)
+            .context("Failed to find key objects to delete")?;
+
+        // Attempt to destroy every matching object even if some fail, so one failure doesn't
+        // leave the others behind; as delete is idempotent, a re-run retries only what's left.
+        let mut deleted = Vec::with_capacity(objects.len());
+        let mut failed = Vec::new();
+        for object in objects {
+            // Read the URI before destroying the object so it can be reported back.
+            let uri = session
+                .export_object_uri(object)
+                .unwrap_or_else(|_| "<unknown object>".to_string());
+            match session.session.destroy_object(object) {
+                Ok(()) => deleted.push(uri),
+                Err(e) => failed.push(format!("{uri}: {e}")),
+            }
+        }
+
+        if !failed.is_empty() {
+            let deleted_note = if deleted.is_empty() {
+                String::new()
+            } else {
+                format!("\nSuccessfully destroyed:\n{}", deleted.join("\n"))
+            };
+            anyhow::bail!(
+                "Failed to destroy some key objects:\n{}{deleted_note}",
+                failed.join("\n")
+            );
+        }
+
+        Ok(DeleteKeyResponse { deleted })
+    }
+
     fn create_key(&self, request: CreateKeyRequest) -> anyhow::Result<CreateKeyResponse> {
         let session_params = SessionParams {
             uri: Some(request.uri.to_string()),
@@ -222,6 +486,189 @@ impl TedgeP11Service for Cryptoki {
         let uri = session.export_object_uri(key)?;
         Ok(CreateKeyResponse { pem, uri })
     }
+
+    #[instrument(skip_all)]
+    fn init_token(&self, request: InitTokenRequest) -> anyhow::Result<InitTokenResponse> {
+        let label = request.label;
+        // The SO PIN is only needed to initialize the token; when not provided, the user PIN is
+        // reused, which works for tokens that don't enforce distinct PINs (e.g. SoftHSM2).
+        let user_pin = request.pin.unwrap_or_else(|| self.config.pin.clone());
+        let so_pin = request.so_pin.unwrap_or_else(|| user_pin.clone());
+
+        let tokens = self.snapshot_tokens()?;
+        // A token that is initialized and has a user PIN is ready to use as-is.
+        let is_usable = |i: &TokenInfo| i.token_initialized() && i.user_pin_initialized();
+
+        // The URI selects the slot to initialize. Only the attributes of the request URI are used,
+        // not those of the configured `cryptoki.uri`: the latter points at the token tedge signs
+        // with, which is exactly the token that doesn't exist yet on a fresh HSM.
+        let requested_uri = request
+            .uri
+            .as_deref()
+            .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
+            .transpose()?;
+
+        // A usable token that already carries the requested label; used for idempotent re-runs.
+        let usable_with_label = || {
+            tokens
+                .iter()
+                .find(|(_, i)| is_usable(i) && i.label() == label)
+        };
+
+        // Resolve which slot to reuse (idempotent) or initialize.
+        let slot = match requested_uri {
+            Some(uri) => {
+                let matching: Vec<&(Slot, TokenInfo)> = tokens
+                    .iter()
+                    .filter(|(slot, info)| token_matches_uri(&uri, *slot, info))
+                    .collect();
+
+                let (slot, info) = match matching.as_slice() {
+                    [entry] => *entry,
+                    // Note: slot ids are transient (initializing a token can renumber the slots),
+                    // so a stored slot URI may go stale and stop matching.
+                    [] => anyhow::bail!(
+                        "No token matching the given URI was found. Use `tedge hsm list-tokens` \
+                         to see the available tokens."
+                    ),
+                    many => {
+                        let uris = many
+                            .iter()
+                            .map(|(slot, i)| export_slot_uri(*slot, i))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        anyhow::bail!(
+                            "Found multiple tokens matching the given URI. Please select one by \
+                             passing a URI that identifies a single token:\n{uris}"
+                        );
+                    }
+                };
+
+                // Idempotent: a slot that already holds a usable token is left untouched.
+                if is_usable(info) {
+                    return Ok(InitTokenResponse {
+                        uri: export_session_uri(info),
+                    });
+                }
+                // Never reinitialize an already-initialized token: C_InitToken would erase it.
+                anyhow::ensure!(
+                    !info.token_initialized(),
+                    "Slot {} already holds an initialized token (label '{}') without a usable \
+                     user PIN. Refusing to reinitialize it as this would erase its contents.",
+                    slot.id(),
+                    info.label()
+                );
+                // The URI selects a free slot, but a usable token with the requested label
+                // already exists: return it instead of creating a duplicate label, which would
+                // break label-based selection.
+                if let Some((_, existing)) = usable_with_label() {
+                    return Ok(InitTokenResponse {
+                        uri: export_session_uri(existing),
+                    });
+                }
+                *slot
+            }
+            None => {
+                // Idempotency: if a token with the requested label is already usable, return it.
+                if let Some((_, info)) = usable_with_label() {
+                    return Ok(InitTokenResponse {
+                        uri: export_session_uri(info),
+                    });
+                }
+
+                // Otherwise prefer creating a token (with the requested label) on an uninitialized
+                // slot.
+                let uninitialized: Vec<Slot> = tokens
+                    .iter()
+                    .filter(|(_, i)| !i.token_initialized())
+                    .map(|(s, _)| *s)
+                    .collect();
+                match uninitialized.as_slice() {
+                    [slot] => *slot,
+                    [_, _, ..] => {
+                        let uris = tokens
+                            .iter()
+                            .filter(|(s, _)| uninitialized.contains(s))
+                            .map(|(s, i)| export_slot_uri(*s, i))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        anyhow::bail!(
+                            "Found multiple uninitialized slots. Please select one by passing its \
+                             URI:\n{uris}"
+                        );
+                    }
+                    // No slot to initialize. Fall back to reusing an existing usable token if
+                    // there is exactly one - e.g. a pre-initialized Nitrokey/SmartCard-HSM, which
+                    // never exposes an uninitialized slot.
+                    [] => {
+                        let usable: Vec<&(Slot, TokenInfo)> =
+                            tokens.iter().filter(|(_, i)| is_usable(i)).collect();
+                        match usable.as_slice() {
+                            [entry] => {
+                                debug!(label = %entry.1.label(), "A usable token already exists, reusing it");
+                                return Ok(InitTokenResponse {
+                                    uri: export_session_uri(&entry.1),
+                                });
+                            }
+                            [] => anyhow::bail!(
+                                "No token was found. Ensure the HSM is connected and exposes a slot \
+                                 with a token."
+                            ),
+                            _ => {
+                                let uris = usable
+                                    .iter()
+                                    .map(|(_, i)| export_session_uri(i))
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                anyhow::bail!(
+                                    "Found multiple initialized tokens and no uninitialized slot to \
+                                     create a new one. Use one of the existing tokens directly by \
+                                     its URI: {uris}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        // Initialize the resolved (uninitialized) slot under the module lock.
+        let token_info = {
+            let context = match self.context.lock() {
+                Ok(c) => c,
+                Err(e) => e.into_inner(),
+            };
+            debug!(slot = slot.id(), %label, "Initializing token");
+
+            let so_auth = AuthPin::from(so_pin);
+            context
+                .init_token(slot, &so_auth, &label)
+                .context("Failed to initialize the token (C_InitToken)")?;
+
+            // Set the user PIN: open a RW session, log in as Security Officer, then C_InitPIN.
+            let session = context
+                .open_rw_session(slot)
+                .context("Failed to open a read-write session after initializing the token")?;
+            session
+                .login(UserType::So, Some(&so_auth))
+                .context("Failed to log in as Security Officer")?;
+            session
+                .init_pin(&AuthPin::from(user_pin))
+                .context("Failed to set the user PIN (C_InitPIN)")?;
+            drop(session);
+
+            context
+                .get_token_info(slot)
+                .context("Failed to read token info after initialization")?
+        };
+
+        // Refresh the slot list; some libraries (e.g. SoftHSM2) renumber slots after init.
+        let _ = self.reinit();
+
+        Ok(InitTokenResponse {
+            uri: export_session_uri(&token_info),
+        })
+    }
 }
 
 impl Cryptoki {
@@ -232,7 +679,54 @@ impl Cryptoki {
         Ok(Self {
             context: Arc::new(Mutex::new(pkcs11client)),
             config,
+            last_reinit: Arc::new(Mutex::new(None)),
         })
+    }
+
+    /// Rate-limit module reloads driven by signing failures.
+    ///
+    /// Returns `true` (and records the time) if the module has not been reloaded from the signing
+    /// path within [`SIGNING_REINIT_MIN_INTERVAL`], otherwise `false`. Reloading the PKCS #11 module
+    /// (`C_Finalize` + `C_Initialize`) can recover a token that was re-inserted, but on a physical
+    /// reader (a CCID smartcard via pcscd) it churns the connection and can hang it, so a
+    /// reconnecting cloud mapper retrying to sign must not trigger it on every attempt.
+    fn should_reinit(&self) -> bool {
+        const SIGNING_REINIT_MIN_INTERVAL: Duration = Duration::from_secs(30);
+        let now = Instant::now();
+        let mut last = self.last_reinit.lock().unwrap_or_else(|e| e.into_inner());
+        match *last {
+            Some(t) if now.duration_since(t) < SIGNING_REINIT_MIN_INTERVAL => false,
+            _ => {
+                *last = Some(now);
+                true
+            }
+        }
+    }
+
+    /// Snapshot the (slot, token info) of every slot that currently holds a token.
+    ///
+    /// Does not reinitialize the module first (that churns physical readers), but reinit-and-
+    /// retries once if nothing is present, to pick up a token that was just attached or created.
+    fn snapshot_tokens(&self) -> anyhow::Result<Vec<(Slot, TokenInfo)>> {
+        let read = || -> anyhow::Result<Vec<(Slot, TokenInfo)>> {
+            let context = match self.context.lock() {
+                Ok(c) => c,
+                Err(e) => e.into_inner(),
+            };
+            let slots = context
+                .get_slots_with_token()
+                .context("Failed to list slots with a token")?;
+            Ok(slots
+                .into_iter()
+                .filter_map(|s| context.get_token_info(s).ok().map(|i| (s, i)))
+                .collect())
+        };
+        let tokens = read()?;
+        if !tokens.is_empty() {
+            return Ok(tokens);
+        }
+        let _ = self.reinit();
+        read()
     }
 
     /// Reinitializes the PKCS11 library.
@@ -285,33 +779,35 @@ impl Cryptoki {
     /// want to restart the server manually. If the key is still missing after a reload, the
     /// original error is returned.
     pub fn signing_key_retry(&self, session_params: SessionParams) -> anyhow::Result<Pkcs11Signer> {
-        let signing_key = self
+        let err = match self
             .open_session_ro(&session_params)
             .and_then(|s| s.signing_key())
-            .context("Failed to find a signing key");
-
-        let signing_key = match signing_key {
-            Ok(key) => key,
-            // refresh the slots only if the key couldn't be found, i.e.:
-            // - we didn't find a slot with the token that matches the URI
-            // - we didn't find an object on the token that matches the URI
-            Err(ref e)
-                if format!("{e:#}").contains("Didn't find a slot to use")
-                    || format!("{e:#}").contains("Failed to find a key") =>
-            {
-                warn!("Failed to find a signing key, reloading the library to retry");
-                // ensure current session is dropped before opening a new one
-                drop(signing_key);
-                self.reinit()?;
-                self.open_session_ro(&session_params)
-                    .and_then(|s| s.signing_key())
-                    .context("Failed to find a signing key")?
-            }
-
-            Err(e) => return Err(e),
+            .context("Failed to find a signing key")
+        {
+            Ok(key) => return Ok(key),
+            // The failed session has already been dropped by the time we get here.
+            Err(e) => e,
         };
 
-        Ok(signing_key)
+        // Reload the module and retry only if the key couldn't be found, i.e.:
+        // - we didn't find a slot with the token that matches the URI
+        // - we didn't find an object on the token that matches the URI
+        // Reloads are rate-limited (see `should_reinit`) so a client repeatedly retrying to sign
+        // doesn't churn the module on every attempt.
+        let recoverable = {
+            let msg = format!("{err:#}");
+            msg.contains("Didn't find a slot to use") || msg.contains("Failed to find a key")
+        };
+        if recoverable && self.should_reinit() {
+            warn!("Failed to find a signing key, reloading the library to retry");
+            self.reinit()?;
+            return self
+                .open_session_ro(&session_params)
+                .and_then(|s| s.signing_key())
+                .context("Failed to find a signing key");
+        }
+
+        Err(err)
     }
 
     fn open_session_ro<'a>(
@@ -795,6 +1291,45 @@ fn get_ec_mechanism(session: &Session, key: ObjectHandle) -> anyhow::Result<SigS
         SECP521R1_OID => Ok(SigScheme::EcdsaNistp521Sha512),
         _ => anyhow::bail!("Parsed oID({oid}) doesn't match any supported EC curve"),
     }
+}
+
+/// Generates the PKCS11 URI identifying a slot, whether or not it holds an initialized token.
+///
+/// An uninitialized token has neither a label nor a serial - both are only assigned by
+/// `C_InitToken` - so [`export_session_uri`] would return the same URI for every one of them. Such a
+/// slot can only be addressed by its "slot-id"; the model is included as well since it is the one
+/// attribute that says which HSM the slot belongs to.
+fn export_slot_uri(slot: Slot, token_info: &TokenInfo) -> String {
+    if token_info.token_initialized() {
+        export_session_uri(token_info)
+    } else {
+        format!(
+            "pkcs11:model={};slot-id={}",
+            uri::percent_encode(token_info.model()),
+            slot.id()
+        )
+    }
+}
+
+/// Whether a slot and the token it holds match the attributes given in a PKCS #11 URI.
+///
+/// Only the attributes present in the URI are considered, so a URI selecting a token by its label
+/// matches it in whichever slot it currently sits.
+fn token_matches_uri(uri: &uri::Pkcs11Uri, slot: Slot, token_info: &TokenInfo) -> bool {
+    uri.slot_id.is_none_or(|id| id == slot.id())
+        && uri
+            .token
+            .as_ref()
+            .is_none_or(|label| token_info.label() == label)
+        && uri
+            .serial
+            .as_ref()
+            .is_none_or(|serial| token_info.serial_number() == serial)
+        // the model is not a field of Pkcs11Uri, it is kept with the other attributes
+        && uri
+            .other
+            .get("model")
+            .is_none_or(|model| token_info.model() == model)
 }
 
 /// Generates PKCS11 URI of the selected token.

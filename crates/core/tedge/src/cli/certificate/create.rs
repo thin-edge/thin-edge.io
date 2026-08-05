@@ -109,7 +109,7 @@ impl CreateCertCmd {
                 let e = format!("{e:#}");
                 // TODO: replace string comparisons with proper error type comparisons once those are implemented
                 if e.contains("Didn't find a slot to use") || e.contains("Failed to find a key") {
-                    warning!("When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.");
+                    warning!("When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge hsm create-key` to create the key first.");
                 }
             })?;
 

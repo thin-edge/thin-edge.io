@@ -10,9 +10,18 @@ use tracing::trace;
 use super::connection::Connection;
 use super::connection::Frame1;
 use crate::pkcs11::SigScheme;
+use crate::service::ChangePinRequest;
+use crate::service::ChangePinResponse;
 use crate::service::ChooseSchemeRequest;
 use crate::service::ChooseSchemeResponse;
 use crate::service::CreateKeyRequest;
+use crate::service::DeleteKeyRequest;
+use crate::service::DeleteKeyResponse;
+use crate::service::InitTokenRequest;
+use crate::service::InitTokenResponse;
+use crate::service::ListKeysRequest;
+use crate::service::ListKeysResponse;
+use crate::service::ListTokensResponse;
 use crate::service::SecretString;
 use crate::service::SignRequest;
 use crate::service::SignRequestWithSigScheme;
@@ -70,6 +79,17 @@ impl TedgeP11Service for TedgeP11Client {
         self.create_key(_request)
     }
 
+    fn init_token(&self, request: InitTokenRequest) -> anyhow::Result<InitTokenResponse> {
+        let request = Frame1::InitTokenRequest(request);
+        let response = self.do_request(request)?;
+
+        let Frame1::InitTokenResponse(response) = response else {
+            bail!("protocol error: bad response, expected init_token, received: {response:?}");
+        };
+
+        Ok(response)
+    }
+
     fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
         let request = Frame1::GetTokensUrisRequest;
         let response = self.do_request(request)?;
@@ -79,6 +99,50 @@ impl TedgeP11Service for TedgeP11Client {
         };
 
         Ok(uris)
+    }
+
+    fn list_tokens(&self) -> anyhow::Result<ListTokensResponse> {
+        let request = Frame1::ListTokensRequest;
+        let response = self.do_request(request)?;
+
+        let Frame1::ListTokensResponse(response) = response else {
+            bail!("protocol error: bad response, expected list_tokens, received: {response:?}");
+        };
+
+        Ok(response)
+    }
+
+    fn change_pin(&self, request: ChangePinRequest) -> anyhow::Result<ChangePinResponse> {
+        let request = Frame1::ChangePinRequest(request);
+        let response = self.do_request(request)?;
+
+        let Frame1::ChangePinResponse(response) = response else {
+            bail!("protocol error: bad response, expected change_pin, received: {response:?}");
+        };
+
+        Ok(response)
+    }
+
+    fn delete_key(&self, request: DeleteKeyRequest) -> anyhow::Result<DeleteKeyResponse> {
+        let request = Frame1::DeleteKeyRequest(request);
+        let response = self.do_request(request)?;
+
+        let Frame1::DeleteKeyResponse(response) = response else {
+            bail!("protocol error: bad response, expected delete_key, received: {response:?}");
+        };
+
+        Ok(response)
+    }
+
+    fn list_keys(&self, request: ListKeysRequest) -> anyhow::Result<ListKeysResponse> {
+        let request = Frame1::ListKeysRequest(request);
+        let response = self.do_request(request)?;
+
+        let Frame1::ListKeysResponse(response) = response else {
+            bail!("protocol error: bad response, expected list_keys, received: {response:?}");
+        };
+
+        Ok(response)
     }
 }
 
