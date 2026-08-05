@@ -502,6 +502,9 @@ returns `405 Method Not Allowed`.
 A setting can only be changed with `tedge config set`,
 and the new value is published only once its owning service is restarted.
 
+Values are served as JSON, keeping the type the setting has in `tedge.toml`:
+a port comes back as a number, a flag as a boolean and a template set as an array.
+
 ### Get a single configuration value
 
 **Endpoint**
@@ -527,8 +530,18 @@ So the response tells nothing about the settings that are not exposed.
 curl http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config/device.id
 ```
 
-```text title="Response"
-my-device-01
+```json title="Response"
+"my-device-01"
+```
+
+#### Example: Get the agent's mqtt.client.port setting
+
+```sh
+curl http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config/mqtt.client.port
+```
+
+```json title="Response"
+1883
 ```
 
 ### Get all exposed configuration
@@ -553,7 +566,9 @@ curl http://localhost:8000/te/v1/entities/device/main/service/tedge-mapper-c8y/c
 ```json title="Response"
 {
     "url": "example.cumulocity.com",
-    "device.id": "my-device-01"
+    "device.id": "my-device-01",
+    "enable.log_upload": true,
+    "smartrest.templates": ["1234", "5678"]
 }
 ```
 

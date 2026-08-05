@@ -578,6 +578,10 @@ The whole set is published as a single JSON document, as a retained message.
 Each field name is the corresponding `tedge config` key:
 the agent publishes `device.id` as `device.id`.
 
+Each value keeps the type the setting has in `tedge.toml`.
+A port is published as a number, a flag as a boolean and a template set as an array,
+so a consumer does not have to parse them back out of strings.
+
 For mapper configs that contains the cloud/profile prefixes like `c8y.url`,
 the mapper strips the cloud and profile prefix from the key
 as the service topic already contains that information (e.g: `tedge-mapper-c8y`).
@@ -611,8 +615,8 @@ te/device/main/service/tedge-agent/config
 ```json5 title="Payload"
 {
   "device.id": "my-device-01",
-  "http.client.port": "8000",
-  "mqtt.client.port": "1883",
+  "http.client.port": 8000,
+  "mqtt.client.port": 1883,
   // ... other settings
 }
 ```
@@ -628,6 +632,8 @@ te/device/main/service/tedge-mapper-c8y/config
   "url": "example.cumulocity.com",
   "device.id": "my-device-01",
   "auth_method": "certificate",
+  "enable.log_upload": true,
+  "smartrest.templates": ["1234", "5678"],
   // ... other settings
 }
 ```
