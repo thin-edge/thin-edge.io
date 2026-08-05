@@ -742,6 +742,16 @@ impl WorkflowActor {
                     .load_pending_commands(pending_commands)
                     .await
                 {
+                    // Skip the commands which have been finalized and cleared
+                    // as a side effect of resuming a previous command
+                    if self
+                        .workflow_repository
+                        .get_state(command.command_topic())
+                        .is_none()
+                    {
+                        continue;
+                    }
+
                     // Make sure the latest state is visible over MQTT
                     self.mqtt_publisher
                         .send(command.clone().into_message())
