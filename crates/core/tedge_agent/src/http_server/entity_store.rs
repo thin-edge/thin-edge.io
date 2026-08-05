@@ -627,7 +627,9 @@ async fn get_entity_config_value(
         return Err(Error::EntityConfigNotFound(topic_id, key));
     };
 
-    Ok(value)
+    // Served as JSON rather than as a bare body, so the value keeps the type it has in
+    // `tedge.toml`: a port comes back as `1883` and a flag as `true`, not as quoted strings.
+    Ok(Json(value))
 }
 
 #[cfg(test)]
@@ -1537,10 +1539,10 @@ mod tests {
                 if let EntityStoreRequest::GetConfig(topic_id) = req.request {
                     if topic_id == EntityTopicId::default_child_device("test-child").unwrap() {
                         req.reply_to
-                            .send(EntityStoreResponse::GetConfig(Ok(BTreeMap::from([(
-                                "url".to_string(),
-                                "example.cumulocity.com".to_string(),
-                            )]))))
+                            .send(EntityStoreResponse::GetConfig(Ok(BTreeMap::from([
+                                ("url".to_string(), json!("example.cumulocity.com")),
+                                ("mqtt.client.port".to_string(), json!(1883)),
+                            ]))))
                             .await
                             .unwrap();
                     }
@@ -1559,7 +1561,10 @@ mod tests {
 
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let config: Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(config, json!({"url": "example.cumulocity.com"}));
+        assert_eq!(
+            config,
+            json!({"url": "example.cumulocity.com", "mqtt.client.port": 1883})
+        );
     }
 
     #[tokio::test]
@@ -1611,9 +1616,9 @@ mod tests {
                         && key == "device.id"
                     {
                         req.reply_to
-                            .send(EntityStoreResponse::GetConfigValue(Some(
-                                "my-device-01".to_string(),
-                            )))
+                            .send(EntityStoreResponse::GetConfigValue(Some(json!(
+                                "my-device-01"
+                            ))))
                             .await
                             .unwrap();
                     }
@@ -1631,7 +1636,42 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = response.into_body().collect().await.unwrap().to_bytes();
-        assert_eq!(body.as_ref(), b"my-device-01");
+        assert_eq!(body.as_ref(), br#""my-device-01""#);
+    }
+
+    /// A single-key lookup returns the value with the type it has in `tedge.toml`, so a number is
+    /// served as a number rather than as a quoted string.
+    #[test_case(json!(1883), b"1883"; "number")]
+    #[test_case(json!(true), b"true"; "boolean")]
+    #[tokio::test]
+    async fn get_entity_config_value_keeps_its_type(value: Value, expected_body: &[u8]) {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::GetConfigValue(_, _) = req.request {
+                    req.reply_to
+                        .send(EntityStoreResponse::GetConfigValue(Some(value)))
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities/device/test-child///config/mqtt.client.port")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body.as_ref(), expected_body);
     }
 
     // A key that isn't exposed and a key that doesn't exist both hit this same response: the
