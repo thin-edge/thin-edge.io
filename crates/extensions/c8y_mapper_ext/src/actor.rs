@@ -3,6 +3,7 @@ use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::entity_cache::UpdateOutcome;
 use crate::service_monitor::is_c8y_bridge_established;
+use crate::service_monitor::is_c8y_bridge_up;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -69,8 +70,44 @@ impl Actor for C8yMapperActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        if !self.converter.config.bridge_in_mapper {
-            // Wait till the c8y bridge is established
+        if self.converter.config.bridge_in_mapper {
+            // With the built-in bridge, the mapper and the bridge start together. Keep
+            // processing the main loop immediately (so local/offline handling is not
+            // blocked on the cloud connection), but defer the init messages until the
+            // bridge is first up. Publishing the supported operations (`114`) earlier
+            // races with the bridge subscribing locally: on a fresh session such an early
+            // publish to `c8y/s/us` is dropped before the bridge subscribes, so the
+            // operations would never reach the cloud. Waiting for the bridge to be up
+            // guarantees the local subscription is in place and sends them exactly once.
+            let mut init_sent = false;
+            loop {
+                tokio::select! {
+                    // Only watch the bridge status until the init messages are sent
+                    status = self.bridge_status_messages.recv(), if !init_sent => {
+                        match status {
+                            Some(message) if is_c8y_bridge_up(
+                                &message,
+                                &self.converter.config.mqtt_schema,
+                                &self.converter.config.bridge_health_topic,
+                            ) => {
+                                self.publish_init_messages().await?;
+                                init_sent = true;
+                            }
+                            // A non-`up` status (e.g. `down`): keep waiting for `up`
+                            Some(_) => {}
+                            // The status channel is closed: stop watching it
+                            None => init_sent = true,
+                        }
+                    }
+                    event = self.messages.recv() => {
+                        let Some(event) = event else { break };
+                        self.process_input(event).await?;
+                    }
+                }
+            }
+        } else {
+            // With an external bridge, wait till it is established before announcing
+            // anything, then process the main loop.
             while let Some(message) = self.bridge_status_messages.recv().await {
                 if is_c8y_bridge_established(
                     &message,
@@ -80,21 +117,11 @@ impl Actor for C8yMapperActor {
                     break;
                 }
             }
-        }
 
-        let init_messages = self.converter.init_messages();
-        for init_message in init_messages.into_iter() {
-            self.mqtt_publisher.send(init_message).await?;
-        }
+            self.publish_init_messages().await?;
 
-        while let Some(event) = self.messages.recv().await {
-            match event {
-                C8yMapperInput::MqttMessage(message) => {
-                    self.process_mqtt_message(message).await?;
-                }
-                C8yMapperInput::FsWatchEvent(event) => {
-                    self.process_file_watch_event(event).await?;
-                }
+            while let Some(event) = self.messages.recv().await {
+                self.process_input(event).await?;
             }
         }
         Ok(())
@@ -116,6 +143,29 @@ impl C8yMapperActor {
             bridge_status_messages,
             message_handlers,
         }
+    }
+
+    /// Publish the messages the mapper emits once, on startup (or, for the built-in
+    /// bridge, once the bridge is up): the supported operations and a request for any
+    /// pending operations.
+    async fn publish_init_messages(&mut self) -> Result<(), RuntimeError> {
+        let init_messages = self.converter.init_messages();
+        for init_message in init_messages.into_iter() {
+            self.mqtt_publisher.send(init_message).await?;
+        }
+        Ok(())
+    }
+
+    async fn process_input(&mut self, event: C8yMapperInput) -> Result<(), RuntimeError> {
+        match event {
+            C8yMapperInput::MqttMessage(message) => {
+                self.process_mqtt_message(message).await?;
+            }
+            C8yMapperInput::FsWatchEvent(event) => {
+                self.process_file_watch_event(event).await?;
+            }
+        }
+        Ok(())
     }
 
     /// Processing an incoming message involves the following steps, if the message follows MQTT topic scheme v1:

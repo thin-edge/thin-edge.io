@@ -89,6 +89,49 @@ async fn mapper_publishes_init_messages_on_startup() {
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
 }
 
+/// With the built-in bridge, the mapper must not publish its init messages (notably the
+/// `114` supported operations) before the bridge is up: an early publish to `c8y/s/us`
+/// races with the bridge subscribing locally and can be dropped on a fresh session, so the
+/// supported operations would never reach the cloud. The init messages must be deferred
+/// until the bridge reports `up` and then sent exactly once.
+#[tokio::test]
+async fn builtin_bridge_mapper_defers_init_messages_until_bridge_is_up() {
+    let ttd = TempTedgeDir::new();
+
+    // Configure the mapper to use the built-in bridge
+    let base = test_mapper_config(&ttd);
+    let bridge_health_topic =
+        Topic::new_unchecked("te/device/main/service/tedge-mapper-bridge-c8y/status/health");
+    let config = C8yMapperConfig {
+        bridge_in_mapper: true,
+        bridge_service_name: format!("tedge-mapper-bridge-{}", base.bridge_config.c8y_prefix),
+        bridge_health_topic: bridge_health_topic.clone(),
+        ..base
+    };
+
+    let builders = c8y_mapper_builder(&ttd, config, true).await;
+    let actor = builders.c8y.build();
+    tokio::spawn(async move { actor.run().await });
+    let flows_actor = builders.flows.build();
+    tokio::spawn(async move { flows_actor.run().await });
+    let mut service_monitor = builders.service_monitor.build();
+
+    let mut mqtt = builders
+        .mqtt
+        .build()
+        .with_timeout(Duration::from_millis(500));
+
+    // While the bridge is not up, no init message is published
+    assert!(mqtt.recv().await.is_none());
+
+    // Once the built-in bridge is up, the init messages are published
+    service_monitor
+        .send(MqttMessage::new(&bridge_health_topic, r#"{"status":"up"}"#))
+        .await
+        .unwrap();
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
+}
+
 #[tokio::test]
 async fn mapper_converts_agent_twin_to_c8y_agent_fragment() {
     let ttd = TempTedgeDir::new();
