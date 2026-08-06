@@ -70,6 +70,57 @@ async fn retries_on_502() {
     _mock.assert();
 }
 
+#[tokio::test]
+async fn retries_on_retry_status() {
+    let mut server = mockito::Server::new_async().await;
+
+    // first try without retry_statuses to confirm we don't retry without it
+    let mock = server
+        .mock("GET", "/non-retried")
+        .with_status(501)
+        .expect(1)
+        .create_async()
+        .await;
+
+    let mut http = spawn_http_actor().await;
+
+    let request = HttpRequestBuilder::get(format!("{}/non-retried", server.url()))
+        .build()
+        .unwrap();
+    let response = http.await_response(request).await.unwrap();
+    assert!(matches!(
+        response.unwrap_err(),
+        HttpError::HttpStatusError {
+            code: StatusCode::NOT_IMPLEMENTED,
+            ..
+        }
+    ));
+    mock.assert();
+
+    // then use retry_statuses to retry on a usually non-retryable response status
+    let mock2 = server
+        .mock("GET", "/retried")
+        .with_status(501)
+        .expect(2)
+        .create_async()
+        .await;
+
+    let request = HttpRequestBuilder::get(format!("{}/retried", server.url()))
+        .retry_statuses([StatusCode::NOT_IMPLEMENTED])
+        .build()
+        .unwrap();
+
+    let response = http.await_response(request).await.unwrap();
+    assert!(matches!(
+        response.unwrap_err(),
+        HttpError::HttpStatusError {
+            code: StatusCode::NOT_IMPLEMENTED,
+            ..
+        }
+    ));
+    mock2.assert();
+}
+
 async fn spawn_http_actor() -> ClientMessageBox<HttpRequest, HttpResult> {
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();

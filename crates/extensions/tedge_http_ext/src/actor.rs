@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use backoff::ExponentialBackoff;
 use http::request;
 use http::HeaderValue;
+use http::StatusCode;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt as _;
 use http_body_util::Empty;
@@ -52,6 +53,7 @@ impl Server for HttpService {
     async fn handle(&mut self, request: Self::Request) -> Self::Response {
         let mut request = request;
         request
+            .request
             .headers_mut()
             .entry(http::header::USER_AGENT)
             .or_insert_with(|| HeaderValue::from_static(USER_AGENT));
@@ -61,9 +63,10 @@ impl Server for HttpService {
         //
         // To work around that, we change actor request type to a request which is clonable, and
         // then clone the body before wrapping it into a BoxedBody.
-        let endpoint = request.uri().path().to_owned();
-        let method = request.method().to_owned();
-        let (parts, body) = request.into_parts();
+        let allowed_retry_statuses = request.retry_statuses;
+        let endpoint = request.request.uri().path().to_owned();
+        let method = request.request.method().to_owned();
+        let (parts, body) = request.request.into_parts();
 
         let backoff = self.backoff.clone();
         let operation = || {
@@ -83,7 +86,7 @@ impl Server for HttpService {
                         if response.status().is_client_error()
                             || response.status().is_server_error() =>
                     {
-                        if certificate::http_client::is_status_retryable(response.status()) {
+                        if is_status_retryable(response.status(), &allowed_retry_statuses) {
                             Err(backoff::Error::transient(HttpError::HttpStatusError {
                                 code: response.status(),
                                 endpoint,
@@ -117,4 +120,9 @@ fn to_backoff_error(err: hyper_util::client::legacy::Error) -> backoff::Error<Ht
     } else {
         backoff::Error::permanent(HttpError::HyperUtilError(err))
     }
+}
+
+fn is_status_retryable(status: StatusCode, allowed_retry_statuses: &[StatusCode]) -> bool {
+    allowed_retry_statuses.contains(&status)
+        || certificate::http_client::is_status_retryable(status)
 }

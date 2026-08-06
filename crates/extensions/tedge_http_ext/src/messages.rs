@@ -1,8 +1,12 @@
+use std::ops::Deref;
+use std::ops::DerefMut;
+
 use async_trait::async_trait;
 use http::header::HeaderName;
 use http::header::HeaderValue;
 use http::HeaderMap;
 use http::Method;
+use http::StatusCode;
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
@@ -35,7 +39,27 @@ pub enum HttpError {
 }
 
 type Body = BoxBody<Bytes, hyper::Error>;
-pub type HttpRequest = http::Request<Option<Bytes>>;
+#[derive(Debug)]
+pub struct HttpRequest {
+    pub(crate) request: http::Request<Option<Bytes>>,
+    /// Response status codes for which request should be retried.
+    ///
+    /// If empty, a default set of retryable statuses will be used.
+    pub(crate) retry_statuses: Vec<StatusCode>,
+}
+
+impl Deref for HttpRequest {
+    type Target = http::Request<Option<Bytes>>;
+    fn deref(&self) -> &Self::Target {
+        &self.request
+    }
+}
+
+impl DerefMut for HttpRequest {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.request
+    }
+}
 
 #[derive(Debug)]
 pub struct HttpResponse {
@@ -58,13 +82,19 @@ pub type HttpBytes = hyper::body::Bytes;
 pub struct HttpRequestBuilder {
     inner: http::request::Builder,
     body: Result<Bytes, HttpError>,
+    retry_statuses: Vec<StatusCode>,
 }
 
 impl HttpRequestBuilder {
     /// Build the request
     pub fn build(self) -> Result<HttpRequest, HttpError> {
-        self.body
-            .and_then(|body| self.inner.body(Some(body)).map_err(HttpError::from))
+        let request = self
+            .body
+            .and_then(|body| self.inner.body(Some(body)).map_err(HttpError::from));
+        request.map(|request| HttpRequest {
+            request,
+            retry_statuses: self.retry_statuses,
+        })
     }
 
     /// Start to build a GET request
@@ -76,6 +106,7 @@ impl HttpRequestBuilder {
         HttpRequestBuilder {
             inner: hyper::Request::get(uri),
             body: Ok(Bytes::new()),
+            retry_statuses: vec![],
         }
     }
 
@@ -88,6 +119,7 @@ impl HttpRequestBuilder {
         HttpRequestBuilder {
             inner: hyper::Request::post(uri),
             body: Ok(Bytes::new()),
+            retry_statuses: vec![],
         }
     }
 
@@ -100,6 +132,7 @@ impl HttpRequestBuilder {
         HttpRequestBuilder {
             inner: hyper::Request::put(uri),
             body: Ok(Bytes::new()),
+            retry_statuses: vec![],
         }
     }
 
@@ -112,6 +145,7 @@ impl HttpRequestBuilder {
         HttpRequestBuilder {
             inner: hyper::Request::delete(uri),
             body: Ok(Bytes::new()),
+            retry_statuses: vec![],
         }
     }
 
@@ -151,6 +185,14 @@ impl HttpRequestBuilder {
         let body = content.into();
         HttpRequestBuilder {
             body: Ok(body),
+            ..self
+        }
+    }
+
+    pub fn retry_statuses(self, retry_statuses: impl Into<Vec<StatusCode>>) -> Self {
+        let retry_statuses = retry_statuses.into();
+        Self {
+            retry_statuses,
             ..self
         }
     }
