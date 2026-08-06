@@ -1,6 +1,6 @@
 ## Why
 
-Cumulocity can show action buttons (start, stop, restart, and custom commands) on a service,
+Cumulocity can show action buttons (start, stop, restart, and custom actions) on a service,
 but thin-edge cannot act on a service today.
 Service operation directories are not watched dynamically,
 the required `c8y_SupportedServiceCommands` fragment must be set by hand,
@@ -10,17 +10,52 @@ for both init-managed services and services owned by a third-party daemon (for e
 
 See `design/decisions/0011-service-commands.md` for the domain background and the design rationale.
 
+## Proposed solution
+
+A service declares each action it supports on its own retained topic, one topic per action.
+
+```sh
+tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/restart' '{}'
+tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/pause' '{}'
+```
+
+A declared action is then triggered as any other thin-edge command,
+and `tedge-agent` runs it.
+
+```sh
+tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/restart/1' \
+  '{"status":"init","serviceName":"nodered","serviceType":"service"}'
+```
+
+A Cumulocity operator sees the same actions as the commands of that service,
+triggers one from the service page, and gets the outcome reported on the operation.
+
+The agent does not act on a service itself.
+It calls `tedge service`, which is usable on its own, and which either runs the action
+through the init system configured in `system.toml`,
+or hands it to the service plugin named after the type of the service.
+
+```sh
+sudo tedge service restart nodered
+sudo tedge service restart nodered --service-type container
+```
+
+So a third party that manages its own services, a container engine for instance,
+supports every action of those services by dropping one executable in the plugin directory,
+and writes no state machine of its own.
+
 ## What Changes
 
 - Add a cloud-agnostic thin-edge interface for service commands.
-  A service declares each supported command as a capability on
+  A service declares each supported action as a capability on
   `te/device/<device>/service/<service>/cmd/<action>`,
-  and receives commands on the same per-command topics.
-  Standard commands (`start`, `stop`, `restart`) and arbitrary custom commands are supported.
+  and receives commands on the same per-action topics.
+  Standard actions (`start`, `stop`, `restart`, `enable` and `disable`)
+  and arbitrary custom actions are supported.
 - Make tedge-agent the single executor for commands addressed to services of its own device.
   The workflow engine gains a `type` field so that a service `restart` and a device `restart`
   are distinct workflows.
-- Add a `tedge service <command> <name> --service-type <type>` CLI.
+- Add a `tedge service <action> <name> --service-type <type>` CLI.
   It dispatches on the service type:
   the built-in init-system abstraction (`system.toml`) for the default `service` type,
   or a service plugin at `/usr/share/tedge/service-plugins/<type>` for other types.
@@ -41,11 +76,11 @@ A service registered without a type is dispatched as the default `service` (init
 
 - `service-commands`: the cloud-agnostic interface for declaring and issuing service commands,
   and the rule that tedge-agent is the sole executor for its own device's services.
-  Covers the per-command topic model, workflow scoping by entity type, and the self-targeting rules
+  Covers the per-action topic model, workflow scoping by entity type, and the self-targeting rules
   (agent self-restart; rejecting `stop` of the agent or a cloud mapper).
 - `tedge-service-cli`: the `tedge service` command and the service-plugin contract.
   Covers init-system dispatch via `system.toml`, the plugin invocation and exit codes,
-  and the security validation of the command, service name, and service type.
+  and the security validation of the action, service name, and service type.
 - `c8y-service-commands`: the Cumulocity mapping.
   Covers capability aggregation into `c8y_SupportedServiceCommands`,
   conversion of a `c8y_ServiceCommand` operation into a thin-edge command,
@@ -66,4 +101,4 @@ None. No existing spec's requirements change.
 - `system.toml` schema — accept custom action templates in `[init]`.
 - Packaging — `/usr/share/tedge/service-plugins/` created `root:root 755`.
   The existing `tedge` sudoers rule already authorizes execution, so no new privileged surface is added.
-- Tests — `tests/RobotFramework/tests/cumulocity/service_command/`.
+- Tests — `tests/RobotFramework/tests/cumulocity/service_commands/`.
