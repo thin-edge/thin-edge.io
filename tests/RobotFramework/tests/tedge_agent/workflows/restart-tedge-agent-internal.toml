@@ -1,0 +1,21 @@
+operation = "restart-tedge-agent-internal"
+
+[init]
+action = "proceed"
+on_success = "restart"
+
+[restart]
+background_script = "sudo systemctl restart tedge-agent"
+on_exec = "restarting"
+
+[restarting]
+action = "await-agent-restart"
+on_success = "successful"
+timeout_second = 30
+on_timeout = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

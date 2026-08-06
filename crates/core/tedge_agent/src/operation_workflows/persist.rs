@@ -446,6 +446,10 @@ impl WorkflowRepository {
         self.workflows.get_action(command_state)
     }
 
+    pub fn get_state(&self, command: &str) -> Option<&GenericCommandState> {
+        self.workflows.get_state(command)
+    }
+
     pub fn root_invoking_command_state(
         &self,
         leaf_command: &GenericCommandState,
