@@ -1,15 +1,15 @@
 ## ADDED Requirements
 
-### Requirement: A service declares each supported command as a per-command capability
+### Requirement: A service declares each supported action as a per-action capability
 
-A service entity SHALL declare a supported command by publishing a retained capability message
+A service entity SHALL declare a supported action by publishing a retained capability message
 on `te/device/<device>/service/<service>/cmd/<action>` with an empty JSON object `{}` as payload.
-One topic SHALL be used per command, so that each command can have its own workflow.
+One topic SHALL be used per action, so that each action can have its own workflow.
 
-`<action>` SHALL be one of the standard commands
+`<action>` SHALL be one of the standard actions
 `start`, `stop`, `restart`, `enable` and `disable`,
 the five an init system defines in `system.toml`,
-or any custom command name chosen by the service owner.
+or any custom action name chosen by the service owner.
 
 An action name SHALL match `[a-z][a-z0-9_-]*`:
 lowercase letters, digits, `_` and `-`, starting with a letter.
@@ -20,25 +20,25 @@ is deliberately left out of scope, and SHALL be rejected wherever it enters the 
 The names then survive every conversion on the way to the cloud and back,
 and stay usable as the argument of a command line.
 
-A declared command SHALL be withdrawn by clearing its capability topic with a retained empty message.
+A declared action SHALL be withdrawn by clearing its capability topic with a retained empty message.
 
-#### Scenario: Standard commands are declared
+#### Scenario: Standard actions are declared
 - **WHEN** a service publishes retained `{}` on its `cmd/start`, `cmd/stop` and `cmd/restart` topics
-- **THEN** those three commands SHALL be the commands supported by that service
+- **THEN** those three actions SHALL be the actions supported by that service
 
-#### Scenario: A custom command is declared
+#### Scenario: A custom action is declared
 - **WHEN** a service publishes retained `{}` on `te/device/main/service/nodered/cmd/pause`
-- **THEN** `pause` SHALL be a supported command of the `nodered` service
+- **THEN** `pause` SHALL be a supported action of the `nodered` service
 
-#### Scenario: A command is withdrawn
+#### Scenario: An action is withdrawn
 - **WHEN** a service clears one of its `cmd/<action>` topics with a retained empty message
-- **THEN** that command SHALL no longer be a supported command of that service
+- **THEN** that action SHALL no longer be a supported action of that service
 
 #### Scenario: Capabilities survive a restart of a consumer
 - **WHEN** a component subscribes to a service's `cmd/+` topics after the capabilities were published
-- **THEN** it SHALL receive the retained capability messages and rebuild the full set of supported commands
+- **THEN** it SHALL receive the retained capability messages and rebuild the full set of supported actions
 
-### Requirement: A service command is issued on the per-command topic
+### Requirement: A service command is issued on the per-action topic
 
 A service command SHALL be issued as a command message on
 `te/device/<device>/service/<service>/cmd/<action>/<cmd-id>`,
@@ -54,7 +54,7 @@ The payload SHALL NOT repeat the action name.
 The topic is the only place the action is named,
 as it is for every other thin-edge command.
 
-A command SHALL only be issued for a command the target service has declared as a capability.
+A command SHALL only be issued for an action the target service has declared as a capability.
 
 #### Scenario: A restart command is issued for a service
 - **WHEN** a `restart` command is issued for the `collectd` service of the main device
@@ -131,14 +131,14 @@ as a process executed by tedge-agent, and never as a competing MQTT subscriber.
 
 #### Scenario: No backend for the service type is a definitive failure
 - **WHEN** a command is issued for a service whose type has no execution backend installed
-- **THEN** the command SHALL move to `failed` with a reason naming the unsupported service type,
-  and SHALL NOT be left waiting for another executor
+- **THEN** the command SHALL move to `failed` with a reason saying the action is not supported
+  for that type of service, and SHALL NOT be left waiting for another executor
 
 ### Requirement: Service command workflows delegate execution to the tedge service CLI
 
 The workflows shipped for service commands SHALL execute the command by invoking
-`sudo -n tedge service <command> <serviceName> --service-type <serviceType>`,
-taking the command name from the command topic and the service name and type from the command payload.
+`sudo -n tedge service <action> <serviceName> --service-type <serviceType>`,
+taking the action name from the command topic and the service name and type from the command payload.
 
 A zero exit code SHALL move the command to `successful`;
 a non-zero exit code SHALL move it to `failed` with the failure reason.
@@ -186,7 +186,7 @@ as neither takes a cloud profile.
 
 #### Scenario: Restarting the agent itself completes the command
 - **WHEN** a `restart` command is issued for the tedge-agent service
-- **THEN** the agent SHALL restart itself detached, resume the workflow after the restart,
+- **THEN** the agent SHALL stop, resume the workflow once it is started again,
   and move the command to `successful` exactly once
 
 #### Scenario: Stopping the agent is rejected

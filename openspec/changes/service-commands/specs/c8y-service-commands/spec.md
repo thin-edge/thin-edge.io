@@ -13,7 +13,7 @@ under `/etc/tedge/operations/c8y/<service-external-id>/`
 and SHALL reload that service's operations,
 since the operation directory of a service is not watched for changes.
 
-#### Scenario: A service declaring a command becomes actionable in the cloud
+#### Scenario: A service declaring an action becomes actionable in the cloud
 - **WHEN** a service publishes its first `cmd/<action>` capability
 - **THEN** the mapper SHALL declare `c8y_ServiceCommand` among that service's supported operations
 
@@ -22,43 +22,43 @@ since the operation directory of a service is not watched for changes.
 - **THEN** the mapper SHALL register the supported operation on its own,
   with nothing to install beforehand
 
-### Requirement: The mapper aggregates declared commands into c8y_SupportedServiceCommands
+### Requirement: The mapper aggregates declared actions into c8y_SupportedServiceCommands
 
 The c8y mapper SHALL collect all `cmd/<action>` capabilities declared by a service
 and SHALL publish them as a single `c8y_SupportedServiceCommands` array
 on the service's managed object, through an inventory update over the JSON over MQTT API.
 
-Command names SHALL be uppercased, following the Cumulocity convention.
-Custom command names SHALL be passed through unchanged apart from the case mapping.
-The array SHALL be sorted, so that the same set of commands always gives the same array.
+Action names SHALL be uppercased, following the Cumulocity convention.
+Custom action names SHALL be passed through unchanged apart from the case mapping.
+The array SHALL be sorted, so that the same set of actions always gives the same array.
 
-The array SHALL be re-published whenever the set of declared commands changes.
-When a capability topic is cleared, the mapper SHALL drop that command from the set
+The array SHALL be re-published whenever the set of declared actions changes.
+When a capability topic is cleared, the mapper SHALL drop that action from the set
 and publish the reduced array.
 On mapper restart, the retained capability messages replay,
-so the mapper SHALL rebuild the full set and SHALL NOT lose a previously declared command.
+so the mapper SHALL rebuild the full set and SHALL NOT lose a previously declared action.
 
-#### Scenario: Standard commands are published in uppercase
+#### Scenario: Standard actions are published in uppercase
 - **WHEN** a service declares `cmd/start`, `cmd/stop` and `cmd/restart`
 - **THEN** the mapper SHALL set `{"c8y_SupportedServiceCommands": ["RESTART", "START", "STOP"]}`
   on that service's managed object
 
-#### Scenario: A custom command is passed through
+#### Scenario: A custom action is passed through
 - **WHEN** a service declares `cmd/pause`
 - **THEN** `PAUSE` SHALL appear in that service's `c8y_SupportedServiceCommands`
 
-#### Scenario: A withdrawn command is removed
+#### Scenario: A withdrawn action is removed
 - **WHEN** a service clears its `cmd/pause` capability topic
 - **THEN** the mapper SHALL re-publish `c8y_SupportedServiceCommands` without `PAUSE`
 
-#### Scenario: All commands are withdrawn
+#### Scenario: All actions are withdrawn
 - **WHEN** a service clears every one of its `cmd/<action>` capability topics
 - **THEN** the mapper SHALL publish an empty `c8y_SupportedServiceCommands` array,
   so that Cumulocity stops offering actions for that service
 
 #### Scenario: The set is rebuilt after a mapper restart
 - **WHEN** the mapper restarts and receives the retained capability messages again
-- **THEN** it SHALL publish the same complete set of commands, losing none
+- **THEN** it SHALL publish the same complete set of actions, losing none
 
 ### Requirement: The mapper converts a c8y_ServiceCommand operation into a thin-edge command
 
@@ -113,8 +113,8 @@ The c8y mapper SHALL fail the cloud operation, with a reason explaining why,
 and SHALL NOT publish any thin-edge command, when:
 
 - the target entity cannot be resolved from `externalSource.externalId`;
-- the requested command, compared case-insensitively,
-  is not among the commands the target service has declared;
+- the requested action, compared case-insensitively,
+  is not among the actions the target service has declared;
 - the lowercased `command` value does not match the action name rule `[a-z][a-z0-9_-]*`,
   which is what `tedge service` accepts;
 - the operation carries no `serviceName`, or one a backend could misread.
@@ -130,7 +130,8 @@ The failure SHALL be reported on the SmartREST topic of the target,
 the very topic Cumulocity created the operation on.
 A target that cannot be resolved SHALL be addressed by the external id the operation carries,
 as the service a service command always names.
-The failure SHALL NOT be reported on the topic of the main device,
+Nothing SHALL be published when that external id names no valid topic.
+The failure of a command addressed to a service SHALL NOT be reported on the topic of the main device,
 which owns no operation created for a service.
 
 #### Scenario: The target cannot be resolved
@@ -138,11 +139,11 @@ which owns no operation created for a service.
 - **THEN** the mapper SHALL fail the operation with a reason naming the unresolvable target,
   on `c8y/s/us/<external-id>`
 
-#### Scenario: An undeclared command is refused
-- **WHEN** the operation requests a command the target service has not declared
+#### Scenario: An undeclared action is refused
+- **WHEN** the operation requests an action the target service has not declared
 - **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
 
-#### Scenario: The command is matched case-insensitively
+#### Scenario: The action is matched case-insensitively
 - **WHEN** the operation requests `RESTART` and the service declares `cmd/restart`
 - **THEN** the mapper SHALL accept it and publish a `restart` command
 

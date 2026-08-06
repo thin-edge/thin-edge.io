@@ -1,11 +1,14 @@
 ## Context
 
-The domain background, the alternatives, and the reasons behind the user-facing shape of this feature
+thin-edge cannot act on a service today:
+nothing declares which actions a service supports, and nothing executes such a command.
+The [proposal](./proposal.md) states the problem and the shape of the feature;
+the domain background, the alternatives, and the reasons behind that shape
 are in `design/decisions/0011-service-commands.md`.
-This document does not repeat them.
+This document repeats neither.
 It records the engineering decisions needed to build the feature in the current code base.
 
-The relevant current state:
+The current state constraining them:
 
 - **Workflow definitions are keyed by operation name only.**
   `TomlOperationWorkflow` (`crates/core/tedge_api/src/workflow/toml_config.rs:33`)
@@ -94,14 +97,12 @@ The capabilities of a service are declared by that service,
 so a deleted service workflow file clears nothing on the device's topics.
 For the same reason `capability_messages` is filtered on the entity type of the target.
 
-0011 leaves open how two workflows named `restart` can live in `/etc/tedge/operations/`
-when the file name is `restart.toml` in both cases.
-Reading the code, the question does not arise: the file name is never used as the operation name.
+The operation name comes from the `operation` field of the definition, not from the file name,
+so a device `restart` and a service `restart` live in `/etc/tedge/operations/` under any two names.
 `load_operation_workflow` takes the name from the parsed content, `workflow.operation` (`persist.rs:132`),
 `read_operation_workflow` uses the path only in error messages (`persist.rs:478`),
 and removal finds the entry by comparing paths (`persist.rs:245`).
-So a file may be named anything, and the only thing a user has to do
-is set `type = "service"` inside it.
+The only thing a user has to do is set `type = "service"` in the definition.
 
 Alternative considered: a naming convention such as `service-restart.toml`,
 or a per-type subdirectory `operations/service/restart.toml`.
@@ -239,8 +240,6 @@ Cumulocity uppercases a command name by convention,
 so lowercasing the value it sends gives back the declared action name exactly,
 and there is no original spelling left to carry.
 
-This needs a matching edit in 0011.
-
 ### Handle `c8y_ServiceCommand` as a native fragment
 
 A `ServiceCommand` variant is added to `C8yDeviceControlOperation`
@@ -286,12 +285,11 @@ and both name a file under the service plugin directory.
 All three rules — action, service name, service type — therefore live in `tedge_api`
 and are applied by the mapper and by the CLI alike.
 
-Status reporting needs no new mapping.
 `OperationContext::update` (`crates/extensions/c8y_mapper_ext/src/operations/handlers/mod.rs:77`)
 already publishes `501`-`506` on a topic derived from the entity,
 and `C8yTopic::smartrest_response_topic`
 (`crates/core/c8y_api/src/smartrest/topic.rs:21`) already maps a service to `c8y/s/us/<service-xid>`.
-A handler module for the new operation type is added alongside the existing ones.
+A status handler for service commands is added alongside the existing ones.
 
 Alternative considered: a shipped custom operation handler file with `on_fragment = "c8y_ServiceCommand"`.
 Rejected in 0011: the feature also needs the `c8y_SupportedServiceCommands` fragment,
@@ -473,15 +471,3 @@ and a device without a service plugin directory simply has no non-default servic
 The one behaviour that is not preserved is that `[init]` no longer rejects an unknown key.
 A `system.toml` that fails to load today will load after this change,
 with the offending key read as a custom action.
-
-## Open Questions
-
-- **Where the declared-command set lives in the mapper.**
-  An in-memory map on the converter is the smallest change,
-  but it makes the `c8y_SupportedServiceCommands` fragment depend on retained messages replaying.
-  That is how 0011 describes it, and it is acceptable, but worth confirming
-  against how the mapper handles other derived inventory fragments.
-- **Whether `action` is the final term.**
-  `action` is used here for the `system.toml` templates and for the `cmd/<action>` topic segment,
-  while the command payload and the Cumulocity fragment keep the word `command`.
-  The choice between `action` and `operation` is still being discussed.
