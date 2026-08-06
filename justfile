@@ -61,7 +61,7 @@ install-tools:
     rustup component add rustfmt --toolchain nightly
 
     # Install taplo by downloading the pre-compiled binary directly from GitHub releases
-    # This is because cargo-binstall can't find a binary release for it
+    # This is because cargo-binstall cannot find a binary release for it
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
     case "$ARCH" in
@@ -163,7 +163,7 @@ test *ARGS:
 
 # Run unit tests
 test-unit *ARGS:
-    cargo nextest run --status-level fail --no-fail-fast --all-features --all-targets {{ARGS}}
+    cargo nextest run --status-level fail --no-fail-fast --locked --all-features --all-targets {{ARGS}}
 
 # Run doc tests
 test-docs *ARGS:
