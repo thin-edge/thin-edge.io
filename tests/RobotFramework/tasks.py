@@ -377,6 +377,7 @@ def flake_finder(
     include="",
     exclude="test:on_demand OR theme:benchmarks",
     clean=False,
+    slow=False,
 ):
     """Run tests multiple times to find any flakey tests
 
@@ -426,6 +427,7 @@ def flake_finder(
                 processes=processes,
                 include=include,
                 exclude=exclude,
+                slow=slow,
             )
             passed.append(i)
         except invoke.exceptions.Failure:
@@ -463,6 +465,7 @@ def test(
     processes=None,
     include="",
     exclude="test:on_demand OR theme:benchmarks",
+    slow=False,
 ):
     """Run tests
 
@@ -507,6 +510,12 @@ def test(
 
         # Required because of docker race condition which leads to duplicate networks
         remove_duplicate_container_networks(container_cli, network_name)
+
+        if slow:
+            # simulate a slower device by limiting CPU resourced allocated to the container.
+            # This can help reproduce some bugs by changing the timing
+            os.environ["DOCKER_OPTIONS_CPU_QUOTA"] = "5000"
+            os.environ["DOCKER_OPTIONS_CPU_PERIOD"] = "20000"
 
     elif adapter in [ADAPTER_SSH, ADAPTER_LOCAL]:
         # Parallel processing is not supported when using ssh or local
