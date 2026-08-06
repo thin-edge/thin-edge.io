@@ -17,6 +17,8 @@ use tedge_actors::Concurrent;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
 
+pub use backoff;
+
 #[derive(Debug)]
 pub struct HttpActor {
     config: ServerConfig,

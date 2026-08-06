@@ -951,6 +951,7 @@ dependencies = [
  "tedge_config",
  "tedge_http_ext",
  "tedge_test_utils",
+ "test-case",
  "thiserror 2.0.12",
  "time",
  "tokio",
