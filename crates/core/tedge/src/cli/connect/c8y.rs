@@ -14,10 +14,12 @@ use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message_ids::GET_DEVICE_MANAGED_OBJECT_ID;
 use c8y_api::smartrest::message_ids::GET_DEVICE_MANAGED_OBJECT_ID_RESPONSE;
 use c8y_api::smartrest::message_ids::JWT_TOKEN;
+use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::create_tls_config_without_client_cert;
 use rumqttc::tokio_rustls::rustls::AlertDescription;
 use rumqttc::tokio_rustls::rustls::CertificateError;
 use rumqttc::tokio_rustls::rustls::Error;
+use rumqttc::tokio_rustls::rustls::InvalidMessage;
 use rumqttc::AsyncClient;
 use rumqttc::ConnectionError;
 use rumqttc::Event;
@@ -33,24 +35,50 @@ use tedge_config::models::auth_method::AuthType;
 use tedge_config::tedge_toml::mapper_config::C8yMapperConfig;
 use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
+use tedge_config::tedge_toml::PrivateKeyType;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 use tracing::debug;
 
+/// Reported for an error raised before the broker accepted the MQTT connection
+const HANDSHAKE_ERROR_CONTEXT: &str = "Connection error while connecting to Cumulocity";
+
+/// Reported for an error raised once the broker had accepted the MQTT connection
 const CONNECTION_ERROR_CONTEXT: &str = "Connection error while creating device in Cumulocity";
+
+/// Says which stage an otherwise unexplained error came from, so that a bare I/O error at least
+/// tells the user whether the connection was ever established
+fn error_context(connected: bool) -> &'static str {
+    if connected {
+        CONNECTION_ERROR_CONTEXT
+    } else {
+        HANDSHAKE_ERROR_CONTEXT
+    }
+}
+
+/// The message `rustls` reports when it has no room left to buffer an incoming message
+const BUFFER_FULL_MESSAGE: &str = "message buffer full";
 
 // Connect directly to the c8y cloud over mqtt and publish device create message.
 pub async fn create_device_with_direct_connection(
     bridge_config: &BridgeConfig,
+    profile: Option<&ProfileName>,
     device_type: &str,
     // TODO: put into general authentication struct
     mqtt_auth_config: MqttAuthConfigCloudBroker,
 ) -> anyhow::Result<()> {
     let address = bridge_config.address.clone();
+    let host = address.host().to_string();
+    let connection = ConnectionDetails::new(
+        &host,
+        &bridge_config.remote_clientid,
+        profile,
+        &mqtt_auth_config,
+    );
 
     let mut mqtt_options = MqttOptions::new(
         bridge_config.remote_clientid.clone(),
-        address.host().to_string(),
+        host.clone(),
         address.port().into(),
     );
     mqtt_options.set_keep_alive(std::time::Duration::from_secs(5));
@@ -85,6 +113,11 @@ pub async fn create_device_with_direct_connection(
         .network_options
         .set_connection_timeout(CONNECTION_TIMEOUT.as_secs());
 
+    // Tracks whether the TLS handshake is behind us, so that errors can be attributed to the right
+    // stage. A ConnAck is the first event the broker sends us, so it is the earliest point at which
+    // we know the handshake succeeded
+    let mut connected = false;
+
     loop {
         match eventloop.poll().await {
             Ok(Event::Incoming(Packet::ConnAck(connack))) => {
@@ -92,6 +125,7 @@ pub async fn create_device_with_direct_connection(
                     "Received ConnAck ({:?}), session_present={:?}",
                     connack.code, connack.session_present
                 );
+                connected = true;
                 // Connection established, publish device creation message
                 publish_device_create_message(
                     &mut client,
@@ -116,41 +150,247 @@ pub async fn create_device_with_direct_connection(
                 // No acknowledgment received for device creation message even after 5s (keep alive interval)
                 bail!("Timed-out waiting for device creation acknowledgment from Cumulocity")
             }
-            Err(ConnectionError::Io(err)) if err.kind() == std::io::ErrorKind::InvalidData => {
-                if let Some(Error::AlertReceived(alert_description)) = err
-                    .get_ref()
-                    .and_then(|custom_err| custom_err.downcast_ref::<Error>())
-                {
-                    if let AlertDescription::CertificateUnknown = alert_description {
-                        // Either the device cert is not uploaded to c8y or
-                        // another cert is set in device.cert_path
-                        bail!("The device certificate is not trusted by Cumulocity. Upload the certificate using `tedge cert upload c8y`");
-                    } else if let AlertDescription::HandshakeFailure = alert_description {
-                        // Non-paired private key is set in device.key_path
-                        bail!(
-                            "The private key is not paired with the certificate. Check your 'device.key_path'."
-                        );
-                    }
-                }
-                return Err(err).context(CONNECTION_ERROR_CONTEXT);
-            }
-            Err(ConnectionError::Tls(TlsError::Io(err)))
-                if err.kind() == std::io::ErrorKind::InvalidData =>
-            {
-                match err
-                    .get_ref()
-                    .and_then(|custom_err| custom_err.downcast_ref::<Error>())
-                {
-                    Some(Error::InvalidCertificate(CertificateError::UnknownIssuer)) => {
-                        bail!("Cumulocity certificate is not trusted by the device. Check your 'c8y.root_cert_path'.");
-                    }
-                    _ => return Err(err).context(CONNECTION_ERROR_CONTEXT),
+            Err(ConnectionError::Io(err) | ConnectionError::Tls(TlsError::Io(err))) => {
+                match diagnose_tls_error(&err, &connection, connected) {
+                    Some(explanation) => bail!("{explanation}"),
+                    None => return Err(err).context(error_context(connected)),
                 }
             }
-            Err(err) => return Err(err).context(CONNECTION_ERROR_CONTEXT),
+            Err(err) => return Err(err).context(error_context(connected)),
             _ => {}
         }
     }
+}
+
+/// Recognises `rustls` refusing to buffer any more of an over-large message
+///
+/// `rustls` gives up without constructing a `rustls::Error`, so there is nothing to downcast to
+/// and the message has to be matched instead. A test below checks this still matches what the
+/// current `rustls` version reports. The same message is used whether or not a handshake is in
+/// progress, and the two cases have different size limits, so the caller must establish which of
+/// them applies
+fn is_buffer_full(err: &std::io::Error) -> bool {
+    err.get_ref()
+        .is_some_and(|inner| inner.to_string() == BUFFER_FULL_MESSAGE)
+}
+
+/// The files and settings a connection attempt used, so that a diagnosis can name them
+///
+/// Nothing secret is held here: the PKCS#11 PIN is never read, and neither is the key URI, which
+/// may carry a `pin-value` attribute of its own. The messages name the setting that holds the URI
+/// instead of quoting its value
+struct ConnectionDetails {
+    /// Host of the Cumulocity MQTT endpoint
+    host: String,
+
+    /// Identity the device claims, which is the common name of its certificate
+    device_id: String,
+
+    /// Prefix of this connection's `tedge config` keys: `c8y`, or `c8y.profiles.<name>`
+    config_prefix: String,
+
+    root_cert_path: Utf8PathBuf,
+
+    /// Absent under basic auth, where the device sends no certificate of its own
+    client: Option<ClientCredentials>,
+}
+
+/// The certificate and private key a connection presented to Cumulocity
+struct ClientCredentials {
+    cert_path: Utf8PathBuf,
+    key: KeyLocation,
+}
+
+/// Where a private key lives, which decides both what to print and which setting to name
+enum KeyLocation {
+    File(Utf8PathBuf),
+    /// A PKCS#11 token, chosen by `<prefix>.device.key_uri` rather than `<prefix>.device.key_path`
+    Token,
+}
+
+impl ConnectionDetails {
+    /// Reads the connection details from the authentication config the connection itself uses
+    ///
+    /// The paths come from `mqtt_auth_config` rather than from `bridge_config`, as those are the
+    /// files actually presented: when reconnecting to validate a renewed certificate, the caller
+    /// swaps in the new certificate there
+    fn new(
+        host: &str,
+        device_id: &str,
+        profile: Option<&ProfileName>,
+        mqtt_auth_config: &MqttAuthConfigCloudBroker,
+    ) -> Self {
+        Self {
+            host: host.to_owned(),
+            device_id: device_id.to_owned(),
+            config_prefix: match profile {
+                None => "c8y".into(),
+                Some(profile) => format!("c8y.profiles.{profile}"),
+            },
+            root_cert_path: mqtt_auth_config.ca_path.clone(),
+            client: mqtt_auth_config
+                .client
+                .as_ref()
+                .map(|client| ClientCredentials {
+                    cert_path: client.cert_file.clone(),
+                    key: match &client.private_key {
+                        PrivateKeyType::File(path) => KeyLocation::File(path.clone()),
+                        PrivateKeyType::Cryptoki(_) => KeyLocation::Token,
+                    },
+                }),
+        }
+    }
+
+    /// Names the `tedge config` key that sets one of this connection's values
+    fn config_key(&self, key: &str) -> String {
+        format!("{}.{key}", self.config_prefix)
+    }
+}
+
+/// Explains a TLS error in terms of what the user can do about it
+///
+/// Returns `None` for anything unrecognised, leaving the caller to report the error as it is.
+/// `connected` tells us whether the broker has accepted the MQTT connection, and hence whether the
+/// TLS handshake is behind us
+fn diagnose_tls_error(
+    err: &std::io::Error,
+    connection: &ConnectionDetails,
+    connected: bool,
+) -> Option<String> {
+    if err.kind() != std::io::ErrorKind::InvalidData {
+        return None;
+    }
+
+    match err
+        .get_ref()
+        .and_then(|custom_err| custom_err.downcast_ref::<Error>())
+    {
+        // Either the device certificate is not among the tenant's trusted certificates, or the
+        // connection is using a certificate other than the one that is
+        Some(Error::AlertReceived(AlertDescription::CertificateUnknown)) => connection
+            .client
+            .as_ref()
+            .map(|client| unknown_certificate(connection, client)),
+        // Most often a private key that does not belong to the certificate sent alongside it
+        Some(Error::AlertReceived(AlertDescription::HandshakeFailure)) => connection
+            .client
+            .as_ref()
+            .map(|client| unpaired_private_key(connection, client)),
+        Some(Error::InvalidCertificate(CertificateError::UnknownIssuer)) => {
+            Some(untrusted_server(connection))
+        }
+        // A single handshake message that announces more than `rustls` will buffer
+        Some(Error::InvalidMessage(InvalidMessage::HandshakePayloadTooLarge)) if !connected => {
+            Some(oversized_handshake(&connection.host))
+        }
+        // A handshake that fills the buffer before any one message completes. Only a handshake
+        // can reach the larger of the two buffer limits, so both diagnoses hold only while the
+        // connection is still being established
+        _ if !connected && is_buffer_full(err) => Some(oversized_handshake(&connection.host)),
+        _ => None,
+    }
+}
+
+/// Explains Cumulocity rejecting a device certificate it does not hold as trusted
+fn unknown_certificate(connection: &ConnectionDetails, client: &ClientCredentials) -> String {
+    let cert_path = &client.cert_path;
+    let cert_key = connection.config_key("device.cert_path");
+    let ConnectionDetails {
+        host, device_id, ..
+    } = connection;
+    format!(
+        "Cumulocity did not recognise the device certificate.\n\
+        \n\
+        The certificate sent was {cert_path} (set by '{cert_key}'), \
+        which identifies this device as '{device_id}'.\n\
+        \n\
+        Cumulocity accepts a device certificate only if the tenant at {host} already holds it as a \
+        trusted certificate. So either this certificate has not been added there yet, \
+        or the tenant holds a different certificate for '{device_id}'.\n\
+        \n\
+        Run `tedge cert upload c8y` to add this certificate to the tenant's trusted certificates."
+    )
+}
+
+/// Explains Cumulocity aborting the handshake, most often over a key that is not the certificate's
+fn unpaired_private_key(connection: &ConnectionDetails, client: &ClientCredentials) -> String {
+    let cert_path = &client.cert_path;
+    let cert_key = connection.config_key("device.cert_path");
+    let (key, advice) = match &client.key {
+        KeyLocation::File(key_path) => (
+            format!(
+                "{key_path} (from '{}')",
+                connection.config_key("device.key_path")
+            ),
+            "`tedge cert create` always writes a matching pair, so they normally only come apart if \
+            one of those settings now points somewhere else, or if one of the two files has since \
+            been replaced on its own.\n\
+            \n\
+            Creating a fresh pair with `tedge cert create` and adding the new certificate to \
+            Cumulocity with `tedge cert upload c8y` will resolve it."
+                .to_owned(),
+        ),
+        KeyLocation::Token => (
+            format!(
+                "on a PKCS#11 token (named by '{}')",
+                connection.config_key("device.key_uri")
+            ),
+            format!(
+                "So check that '{cert_key}' names the certificate that was issued for the key held \
+                on that token, and not another certificate."
+            ),
+        ),
+    };
+
+    format!(
+        "Cumulocity aborted the TLS handshake. The usual cause is a private key that does not \
+        belong to the device certificate sent with it.\n\
+        \n\
+        This connection used:\n\
+        \x20 certificate: {cert_path} (from '{cert_key}')\n\
+        \x20 private key: {key}\n\
+        \n\
+        These two have to be a matching pair: the certificate has to be the one issued for that \
+        exact key.\n\
+        \n\
+        {advice}"
+    )
+}
+
+/// Explains the device refusing the certificate Cumulocity presented
+fn untrusted_server(connection: &ConnectionDetails) -> String {
+    let root_cert_key = connection.config_key("root_cert_path");
+    let ConnectionDetails {
+        host,
+        root_cert_path,
+        ..
+    } = connection;
+    format!(
+        "The device does not trust the certificate presented by {host}: it is signed by a \
+        certificate authority the device does not know.\n\
+        \n\
+        This check is about Cumulocity's identity, not the device's — the certificate and key \
+        created by `tedge cert create` play no part in it. The authorities the device trusts are \
+        read from {root_cert_path} (set by '{root_cert_key}').\n\
+        \n\
+        Check that:\n\
+        \x20 * {root_cert_path} is the right file or directory — on most Linux systems the \
+        system's own CA certificates are in /etc/ssl/certs\n\
+        \x20 * the authority that signed Cumulocity's certificate is among those it holds: if the \
+        connection passes through a proxy that terminates TLS, or the tenant is served by a \
+        private authority, that authority's certificate has to be added there"
+    )
+}
+
+/// Explains a handshake too large for `rustls` to accept, however it broke the limit
+fn oversized_handshake(host: &str) -> String {
+    format!(
+        "Cumulocity sent a TLS handshake that is too large for thin-edge.io to accept (over 64 KB).\n\
+        The likely cause is the certificate request listing, as `certificate_authorities`, \
+        the client certificates the server will accept, which it should not be sending.\n\
+        Whatever the cause, this is not something that can be fixed on this device. \
+        Please report it to Cumulocity support, quoting the host {host}."
+    )
 }
 
 // Check the connection by using the jwt token retrieval over the mqtt.
@@ -433,6 +673,12 @@ pub(crate) fn decode_jwt_token(token: &str) -> Result<String, ConnectError> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use rumqttc::tokio_rustls::rustls::ClientConfig;
+    use rumqttc::tokio_rustls::rustls::ClientConnection;
+    use rumqttc::tokio_rustls::rustls::RootCertStore;
+    use std::io::Cursor;
+    use std::sync::Arc;
+    use tedge_config::tedge_toml::MqttAuthClientConfigCloudBroker;
     use test_case::test_case;
 
     #[test]
@@ -495,5 +741,321 @@ mod test {
                 assert_eq!(error_msg, expected_error_msg)
             }
         }
+    }
+
+    #[test]
+    fn blames_cumulocity_for_a_handshake_too_large_to_buffer() {
+        let explanation = diagnose_tls_error(&oversized_handshake_error(), &connection(), false)
+            .expect("an oversized handshake is diagnosed");
+
+        assert!(
+            explanation.contains("too large"),
+            "should say what went wrong: {explanation}"
+        );
+        assert!(
+            explanation.contains("Cumulocity support") && explanation.contains(HOST),
+            "should say who to report it to: {explanation}"
+        );
+    }
+
+    /// The other way `rustls` refuses an over-large handshake: rather than filling the buffer, a
+    /// single message announces more than it will ever accept
+    #[test]
+    fn blames_cumulocity_for_a_handshake_message_that_announces_too_much() {
+        let err = std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            Error::InvalidMessage(InvalidMessage::HandshakePayloadTooLarge),
+        );
+
+        let explanation = diagnose_tls_error(&err, &connection(), false)
+            .expect("an over-large handshake message is diagnosed");
+
+        assert_eq!(explanation, oversized_handshake(HOST));
+    }
+
+    #[test]
+    fn does_not_blame_the_handshake_for_an_over_large_message_after_connecting() {
+        let err = std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            Error::InvalidMessage(InvalidMessage::HandshakePayloadTooLarge),
+        );
+
+        assert_eq!(diagnose_tls_error(&err, &connection(), true), None);
+    }
+
+    /// `rustls` reports a full buffer the same way once the handshake is done, but then it means a
+    /// single over-long record rather than an over-long handshake, so the diagnosis must not apply
+    #[test]
+    fn does_not_blame_the_handshake_for_a_full_buffer_after_connecting() {
+        assert_eq!(
+            diagnose_tls_error(&oversized_handshake_error(), &connection(), true),
+            None
+        );
+    }
+
+    #[test]
+    fn names_the_certificate_cumulocity_did_not_recognise_and_how_to_have_it_trusted() {
+        let err = alert(AlertDescription::CertificateUnknown);
+
+        let explanation = diagnose_tls_error(&err, &connection(), false)
+            .expect("a rejected certificate is diagnosed");
+
+        assert!(
+            explanation.contains(CERT_PATH) && explanation.contains("'c8y.device.cert_path'"),
+            "should name the certificate sent and the setting that chose it: {explanation}"
+        );
+        assert!(
+            explanation.contains("trusted certificate")
+                && explanation.contains("tedge cert upload c8y"),
+            "should say how to have Cumulocity trust it: {explanation}"
+        );
+    }
+
+    #[test]
+    fn names_both_files_that_have_to_match_when_the_key_does_not_match_the_certificate() {
+        let err = alert(AlertDescription::HandshakeFailure);
+
+        let explanation = diagnose_tls_error(&err, &connection(), false)
+            .expect("an unpaired private key is diagnosed");
+
+        assert!(
+            explanation.contains(CERT_PATH) && explanation.contains(KEY_PATH),
+            "should name both files sent: {explanation}"
+        );
+        assert!(
+            explanation.contains("'c8y.device.cert_path'")
+                && explanation.contains("'c8y.device.key_path'"),
+            "should name the settings that chose them: {explanation}"
+        );
+    }
+
+    #[test]
+    fn names_the_key_uri_setting_when_the_key_is_held_on_a_token() {
+        let err = alert(AlertDescription::HandshakeFailure);
+        let connection = ConnectionDetails {
+            client: Some(ClientCredentials {
+                cert_path: CERT_PATH.into(),
+                key: KeyLocation::Token,
+            }),
+            ..connection()
+        };
+
+        let explanation = diagnose_tls_error(&err, &connection, false)
+            .expect("an unpaired private key is diagnosed");
+
+        assert!(
+            explanation.contains("'c8y.device.key_uri'")
+                && !explanation.contains("device.key_path"),
+            "should name the setting that chose the token: {explanation}"
+        );
+        assert!(
+            !explanation.contains("pkcs11:"),
+            "should not echo the key URI, which can hold a PIN: {explanation}"
+        );
+    }
+
+    #[test]
+    fn names_the_profiled_settings_when_the_connection_uses_a_profile() {
+        let err = alert(AlertDescription::HandshakeFailure);
+        let connection = ConnectionDetails {
+            config_prefix: "c8y.profiles.staging".into(),
+            ..connection()
+        };
+
+        let explanation = diagnose_tls_error(&err, &connection, false)
+            .expect("an unpaired private key is diagnosed");
+
+        assert!(
+            explanation.contains("'c8y.profiles.staging.device.key_path'"),
+            "should name the profile's own setting: {explanation}"
+        );
+    }
+
+    /// Under basic auth the device sends no certificate of its own, so neither alert can be about
+    /// one, and the raw error is more honest than a guess
+    #[test]
+    fn does_not_blame_the_device_certificate_when_none_was_sent() {
+        let connection = ConnectionDetails {
+            client: None,
+            ..connection()
+        };
+
+        for description in [
+            AlertDescription::CertificateUnknown,
+            AlertDescription::HandshakeFailure,
+        ] {
+            assert_eq!(
+                diagnose_tls_error(&alert(description), &connection, false),
+                None,
+                "{description:?} should not be diagnosed without a client certificate"
+            );
+        }
+    }
+
+    #[test]
+    fn points_at_the_root_certificates_when_the_device_does_not_trust_cumulocity() {
+        let err = std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            Error::InvalidCertificate(CertificateError::UnknownIssuer),
+        );
+
+        let explanation = diagnose_tls_error(&err, &connection(), false)
+            .expect("an untrusted server is diagnosed");
+
+        assert!(
+            explanation.contains(ROOT_CERT_PATH) && explanation.contains("'c8y.root_cert_path'"),
+            "should name the authorities in use and the setting that chose them: {explanation}"
+        );
+        assert!(
+            explanation.contains("tedge cert create"),
+            "should say the device's own certificate is not at fault: {explanation}"
+        );
+    }
+
+    #[test]
+    fn leaves_an_unrecognised_error_to_be_reported_verbatim() {
+        let err = std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "connection refused");
+
+        assert_eq!(diagnose_tls_error(&err, &connection(), false), None);
+    }
+
+    #[test]
+    fn error_context_says_whether_the_connection_was_ever_established() {
+        assert_ne!(error_context(true), error_context(false));
+    }
+
+    /// The certificate presented is the one the connection is configured with, which is not always
+    /// the one named by `device.cert_path`: reconnecting to validate a renewed certificate sends
+    /// the new one instead
+    #[test]
+    fn reads_the_certificate_from_the_authentication_config() {
+        let mqtt_auth_config = MqttAuthConfigCloudBroker {
+            ca_path: ROOT_CERT_PATH.into(),
+            client: Some(MqttAuthClientConfigCloudBroker {
+                cert_file: format!("{CERT_PATH}.new").into(),
+                private_key: PrivateKeyType::File(KEY_PATH.into()),
+            }),
+        };
+
+        let connection = ConnectionDetails::new(HOST, DEVICE_ID, None, &mqtt_auth_config);
+
+        let explanation = diagnose_tls_error(
+            &alert(AlertDescription::CertificateUnknown),
+            &connection,
+            false,
+        )
+        .expect("a rejected certificate is diagnosed");
+        assert!(
+            explanation.contains(&format!("{CERT_PATH}.new")),
+            "should name the certificate actually sent: {explanation}"
+        );
+    }
+
+    #[test]
+    fn qualifies_the_settings_with_the_profile_the_connection_uses() {
+        let profile: ProfileName = "staging".parse().unwrap();
+
+        let connection = ConnectionDetails::new(
+            HOST,
+            DEVICE_ID,
+            Some(&profile),
+            &MqttAuthConfigCloudBroker::default(),
+        );
+
+        assert_eq!(
+            connection.config_key("device.key_path"),
+            "c8y.profiles.staging.device.key_path"
+        );
+    }
+
+    const HOST: &str = "example.cumulocity.com";
+    const DEVICE_ID: &str = "test-device";
+    const CERT_PATH: &str = "/etc/tedge/device-certs/tedge-certificate.pem";
+    const KEY_PATH: &str = "/etc/tedge/device-certs/tedge-private-key.pem";
+    const ROOT_CERT_PATH: &str = "/etc/ssl/certs";
+
+    /// A connection authenticated with a certificate and key held in files, as `tedge cert create`
+    /// leaves them
+    fn connection() -> ConnectionDetails {
+        ConnectionDetails {
+            host: HOST.into(),
+            device_id: DEVICE_ID.into(),
+            config_prefix: "c8y".into(),
+            root_cert_path: ROOT_CERT_PATH.into(),
+            client: Some(ClientCredentials {
+                cert_path: CERT_PATH.into(),
+                key: KeyLocation::File(KEY_PATH.into()),
+            }),
+        }
+    }
+
+    /// The largest handshake flight `rustls` will buffer, as a guard against denial-of-service
+    ///
+    /// Mirrors `MAX_HANDSHAKE_SIZE` in `rustls`, which is not publicly exported
+    const MAX_HANDSHAKE_SIZE: usize = 0xffff;
+
+    /// Wraps a TLS alert the way `rustls` surfaces it through `read_tls`
+    fn alert(description: AlertDescription) -> std::io::Error {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            Error::AlertReceived(description),
+        )
+    }
+
+    /// Drives a real [`ClientConnection`] into rejecting an over-large handshake
+    ///
+    /// Going through `rustls` rather than hand-building the error means an upgrade that changes
+    /// how the refusal is reported fails these tests instead of silently losing the diagnosis
+    fn oversized_handshake_error() -> std::io::Error {
+        // Must be called before any use of `ClientConfig::builder()`
+        let _ = rumqttc::tokio_rustls::rustls::crypto::ring::default_provider().install_default();
+
+        let config = ClientConfig::builder()
+            .with_root_certificates(RootCertStore::empty())
+            .with_no_client_auth();
+        let mut connection =
+            ClientConnection::new(Arc::new(config), "example.com".try_into().unwrap())
+                .expect("a client connection can be created");
+        connection
+            .write_tls(&mut std::io::sink())
+            .expect("the client hello can be flushed");
+
+        let mut flight = Cursor::new(oversized_handshake_flight());
+        loop {
+            match connection.read_tls(&mut flight) {
+                Ok(0) => panic!("rustls buffered the whole flight without complaining"),
+                Ok(_) => connection
+                    .process_new_packets()
+                    .expect("the partial flight is not rejected on its content"),
+                Err(err) => break err,
+            };
+        }
+    }
+
+    /// Frames a single `Certificate` handshake message into plaintext TLS records
+    ///
+    /// The message declares just under [`MAX_HANDSHAKE_SIZE`] bytes of payload, so once its own
+    /// header and the record headers are counted, the flight can never fit in the buffer and
+    /// `rustls` gives up part way through
+    fn oversized_handshake_flight() -> Vec<u8> {
+        const HANDSHAKE_RECORD: u8 = 22;
+        const TLS_1_2_VERSION: [u8; 2] = [0x03, 0x03];
+        const MAX_RECORD_PAYLOAD: usize = 16_384;
+        const CERTIFICATE_MESSAGE: u8 = 11;
+
+        let payload_len = MAX_HANDSHAKE_SIZE - 1;
+        let mut message = vec![CERTIFICATE_MESSAGE];
+        // A handshake message length is 3 bytes wide
+        message.extend_from_slice(&(payload_len as u32).to_be_bytes()[1..]);
+        message.resize(message.len() + payload_len, 0);
+
+        let mut flight = Vec::new();
+        for chunk in message.chunks(MAX_RECORD_PAYLOAD) {
+            flight.push(HANDSHAKE_RECORD);
+            flight.extend_from_slice(&TLS_1_2_VERSION);
+            flight.extend_from_slice(&(chunk.len() as u16).to_be_bytes());
+            flight.extend_from_slice(chunk);
+        }
+        flight
     }
 }
