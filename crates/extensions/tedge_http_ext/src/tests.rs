@@ -1,4 +1,6 @@
 use crate::*;
+use backoff::exponential::ExponentialBackoff;
+use http::StatusCode;
 use rustls::ClientConfig;
 use rustls::RootCertStore;
 use tedge_actors::ClientMessageBox;
@@ -41,6 +43,142 @@ async fn requests_include_thin_edge_user_agent() {
     _mock.assert();
 }
 
+#[tokio::test]
+async fn retries_on_502() {
+    let mut server = mockito::Server::new_async().await;
+    let _mock = server
+        .mock("GET", "/")
+        .with_status(502)
+        .expect(2)
+        .create_async()
+        .await;
+
+    let mut http = spawn_http_actor().await;
+
+    let request = HttpRequestBuilder::get(server.url())
+        .build()
+        .expect("A simple HTTPS GET request");
+
+    let response = http.await_response(request).await.unwrap();
+    assert!(matches!(
+        response.unwrap_err(),
+        HttpError::HttpStatusError {
+            code: StatusCode::BAD_GATEWAY,
+            ..
+        }
+    ));
+    _mock.assert();
+}
+
+#[tokio::test]
+async fn retries_on_retry_status() {
+    let mut server = mockito::Server::new_async().await;
+
+    // first try without retry_statuses to confirm we don't retry without it
+    let mock = server
+        .mock("GET", "/non-retried")
+        .with_status(501)
+        .expect(1)
+        .create_async()
+        .await;
+
+    let mut http = spawn_http_actor().await;
+
+    let request = HttpRequestBuilder::get(format!("{}/non-retried", server.url()))
+        .build()
+        .unwrap();
+    let response = http.await_response(request).await.unwrap();
+    assert!(matches!(
+        response.unwrap_err(),
+        HttpError::HttpStatusError {
+            code: StatusCode::NOT_IMPLEMENTED,
+            ..
+        }
+    ));
+    mock.assert();
+
+    // then use retry_statuses to retry on a usually non-retryable response status
+    let mock2 = server
+        .mock("GET", "/retried")
+        .with_status(501)
+        .expect(2)
+        .create_async()
+        .await;
+
+    let request = HttpRequestBuilder::get(format!("{}/retried", server.url()))
+        .retry_statuses([StatusCode::NOT_IMPLEMENTED])
+        .build()
+        .unwrap();
+
+    let response = http.await_response(request).await.unwrap();
+    assert!(matches!(
+        response.unwrap_err(),
+        HttpError::HttpStatusError {
+            code: StatusCode::NOT_IMPLEMENTED,
+            ..
+        }
+    ));
+    mock2.assert();
+}
+
+#[tokio::test]
+async fn retries_only_idempotent_methods() {
+    let mut server = mockito::Server::new_async().await;
+    let mut http = spawn_http_actor().await;
+
+    // also HEAD, OPTIONS, TRACE, but currently not supported by HttpActor
+    let idempotent = [http::Method::GET, http::Method::PUT, http::Method::DELETE];
+
+    for method in idempotent {
+        let m = method.as_str();
+        let mock = server
+            .mock(m, format!("/{m}").as_str())
+            .with_status(500)
+            .expect(2)
+            .create_async()
+            .await;
+
+        let request = match method {
+            http::Method::GET => HttpRequestBuilder::get(format!("{}/{m}", server.url())),
+            http::Method::PUT => HttpRequestBuilder::put(format!("{}/{m}", server.url())),
+            http::Method::DELETE => HttpRequestBuilder::delete(format!("{}/{m}", server.url())),
+            _ => unreachable!(),
+        };
+        let request = request.build().unwrap();
+        let response = http.await_response(request).await.unwrap();
+        assert!(matches!(
+            response.unwrap_err(),
+            HttpError::HttpStatusError {
+                code: StatusCode::INTERNAL_SERVER_ERROR,
+                ..
+            }
+        ));
+
+        mock.assert_async().await;
+    }
+
+    // only POST isn't idempotent
+    let mock = server
+        .mock("POST", "/POST")
+        .with_status(500)
+        .expect(1)
+        .create_async()
+        .await;
+    let request = HttpRequestBuilder::post(format!("{}/POST", server.url()))
+        .build()
+        .unwrap();
+    let response = http.await_response(request).await.unwrap();
+    assert!(matches!(
+        response.unwrap_err(),
+        HttpError::HttpStatusError {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            ..
+        }
+    ));
+
+    mock.assert_async().await;
+}
+
 async fn spawn_http_actor() -> ClientMessageBox<HttpRequest, HttpResult> {
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
@@ -48,7 +186,18 @@ async fn spawn_http_actor() -> ClientMessageBox<HttpRequest, HttpResult> {
     let config = ClientConfig::builder()
         .with_root_certificates(RootCertStore::empty())
         .with_no_client_auth();
-    let mut builder = HttpActor::new(config).builder();
+    let mut builder = HttpActor::new(config)
+        .with_backoff(
+            // for test: tweaked to exactly 1 retry
+            ExponentialBackoff {
+                initial_interval: Duration::from_millis(5),
+                multiplier: 10.0,
+                randomization_factor: f64::EPSILON,
+                max_elapsed_time: Some(Duration::from_millis(50)),
+                ..Default::default()
+            },
+        )
+        .builder();
     let handle = ClientMessageBox::new(&mut builder);
 
     tokio::spawn(builder.run());

@@ -951,6 +951,7 @@ dependencies = [
  "tedge_config",
  "tedge_http_ext",
  "tedge_test_utils",
+ "test-case",
  "thiserror 2.0.12",
  "time",
  "tokio",
@@ -5398,6 +5399,7 @@ name = "tedge_http_ext"
 version = "2.0.1"
 dependencies = [
  "async-trait",
+ "backoff",
  "certificate",
  "http 1.3.1",
  "http-body-util",

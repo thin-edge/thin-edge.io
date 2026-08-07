@@ -8,13 +8,16 @@ use c8y_api::proxy_url::Protocol;
 use c8y_api::proxy_url::ProxyUrlGenerator;
 use http::StatusCode;
 use std::collections::HashMap;
+use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
 use tedge_actors::Sender;
 use tedge_config::TEdgeConfig;
+use tedge_http_ext::backoff::exponential::ExponentialBackoff;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpActor;
+use tedge_http_ext::HttpError;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResult;
@@ -439,6 +442,64 @@ async fn request_internal_id_before_posting_software_list() {
         ),
     )
     .await;
+}
+#[tokio::test(start_paused = true)]
+#[test_case::test_case(501, 1; "don't retry when header is non-retryable")]
+#[test_case::test_case(500, 2; "retry when header is retryable")]
+async fn get_internal_id_retries_depending_on_response_status(
+    status: usize,
+    expected_retries: usize,
+) {
+    let external_id = "device-001";
+
+    let mut server = mockito::Server::new_async().await;
+    let _mock = server
+        .mock("GET", "/c8y/identity/externalIds/c8y_Serial/device-001")
+        .with_status(status)
+        .expect(expected_retries)
+        .create_async()
+        .await;
+    let target_url = "remote.c8y.com".to_string();
+    let server_url = server.host_with_port();
+    let (proxy_host, proxy_port) = server_url.split_once(':').unwrap();
+    let proxy = ProxyUrlGenerator::new(
+        proxy_host.into(),
+        proxy_port.parse().unwrap(),
+        Protocol::Http,
+    );
+
+    let tedge_config = TEdgeConfig::load_toml_str("");
+    let tls_config = tedge_config.http.client_tls_config().unwrap();
+    let mut http_actor = HttpActor::new(tls_config)
+        .with_backoff(
+            // for test: tweaked to exactly 1 retry
+            ExponentialBackoff {
+                initial_interval: Duration::from_millis(5),
+                multiplier: 10.0,
+                randomization_factor: f64::EPSILON,
+                max_elapsed_time: Some(Duration::from_millis(50)),
+                ..Default::default()
+            },
+        )
+        .builder();
+
+    let config = C8YHttpConfig {
+        c8y_http_host: target_url.clone(),
+        c8y_mqtt_host: target_url,
+        device_id: external_id.into(),
+        proxy,
+    };
+    let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
+
+    tokio::spawn(async move { http_actor.run().await });
+
+    let result = proxy.c8y_internal_id(external_id).await;
+    let status = StatusCode::from_u16(status as u16).unwrap();
+    assert!(matches!(
+        result.unwrap_err(),
+        crate::messages::C8YRestError::FromHttpError(HttpError::HttpStatusError { code, .. }) if code == status
+    ));
+    _mock.assert();
 }
 
 /// Return two handles:
