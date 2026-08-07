@@ -246,6 +246,7 @@ The following is an overview of the channel categories which are available.
 | a        | Alarms               |
 | cmd      | Commands             |
 | twin     | Entity twin metadata |
+| config   | Exposed configuration values |
 | status   | Service status       |
 | signal   | Signals              |
 
@@ -436,6 +437,7 @@ so that it can process them.
 | Events        | `te/<identifier>/e/<event-type>`       |
 | Alarms        | `te/<identifier>/a/<alarm-type>`       |
 | Twin          | `te/<identifier>/twin/<data-type>`     |
+| Configuration | `te/<identifier>/config`               |
 | Status        | `te/<identifier>/status/<target-type>` |
 
 ### Examples: With default device/service topic semantics
@@ -557,6 +559,82 @@ te/device/main///twin/device_OS
 {
   "family": "Debian",
   "version": "11"
+}
+```
+
+## Configuration
+
+Each %%te%% service publishes a subset of its configuration on its own `config` topic,
+so that other clients can read those settings without access to the configuration files:
+
+```text
+te/<service-topic-id>/config
+```
+
+* `te/device/main/service/tedge-agent/config`: the core device settings from `tedge.toml`
+* `te/device/main/service/tedge-mapper-<cloud>/config`: cloud connection settings from `mapper.toml`
+
+The whole set is published as a single JSON document, as a retained message.
+Each field name is the corresponding `tedge config` key:
+the agent publishes `device.id` as `device.id`.
+
+Each value keeps the type the setting has in `tedge.toml`.
+A port is published as a number, a flag as a boolean and a template set as an array,
+so a consumer does not have to parse them back out of strings.
+
+For mapper configs that contains the cloud/profile prefixes like `c8y.url`,
+the mapper strips the cloud and profile prefix from the key
+as the service topic already contains that information (e.g: `tedge-mapper-c8y`).
+So the Cumulocity mapper publishes both `c8y.url`
+and `c8y.profiles.<profile>.url` as just `url`.
+
+:::note
+Only the settings that are explicitly marked as exposable are published.
+Secrets, such as private keys, PINs and credential file paths, are never published,
+and neither are internal settings.
+:::
+
+A service publishes its `config` message on startup,
+reflecting the configuration it was started with
+rather than the current contents of the configuration files.
+As a configuration change takes effect only when the service is restarted,
+the updated values are published on that same restart.
+
+The `config` values are also served over HTTP by the agent,
+including a single-key lookup that has no MQTT equivalent.
+See the [Entity Store REST API](../operate/entity-management/rest_api.md#get-exposed-configuration).
+
+### Examples
+
+#### tedge-agent configuration
+
+```text title="Topic (retain=true)"
+te/device/main/service/tedge-agent/config
+```
+
+```json5 title="Payload"
+{
+  "device.id": "my-device-01",
+  "http.client.port": 8000,
+  "mqtt.client.port": 1883,
+  // ... other settings
+}
+```
+
+#### tedge-mapper-c8y configuration
+
+```text title="Topic (retain=true)"
+te/device/main/service/tedge-mapper-c8y/config
+```
+
+```json5 title="Payload"
+{
+  "url": "example.cumulocity.com",
+  "device.id": "my-device-01",
+  "auth_method": "certificate",
+  "enable.log_upload": true,
+  "smartrest.templates": ["1234", "5678"],
+  // ... other settings
 }
 ```
 
