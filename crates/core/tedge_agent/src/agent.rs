@@ -465,7 +465,6 @@ impl Agent {
         runtime.spawn(mqtt_actor_builder).await?;
         runtime.spawn(fs_watch_actor_builder).await?;
         runtime.spawn(twin_manager_builder).await?;
-        runtime.spawn(config_publisher_builder).await?;
         runtime.spawn(downloader_actor_builder).await?;
         runtime.spawn(uploader_actor_builder).await?;
         if let Some(config_actor_builder) = config_actor_builder {
@@ -479,6 +478,7 @@ impl Agent {
         runtime.spawn(script_runner).await?;
         runtime.spawn(workflow_actor_builder).await?;
         runtime.spawn(health_actor).await?;
+        runtime.spawn(config_publisher_builder).await?;
 
         Ok(runtime)
     }
