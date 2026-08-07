@@ -18,14 +18,7 @@ on_error = "failed"
 action = "upload"
 input.url = "${.payload.tedgeUrl}"
 on_success = "successful"
-on_error = "upload_failed"
-
-# The generic upload action records its own failure reason. Move through a
-# dedicated state so the config_snapshot operation can restore its established
-# public error contract before completing as failed.
-[upload_failed]
-action = "proceed"
-on_success = { status = "failed", reason = "config-manager failed uploading configuration snapshot: ${.payload.tedgeUrl}" }
+on_error = "failed"
 
 [successful]
 action = "cleanup"
