@@ -202,6 +202,11 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
                     let input_excerpt = input.input.try_into()?;
                     Ok(OperationAction::Download(input_excerpt, handlers))
                 }
+                "upload" => {
+                    let handlers = ExitHandlers::try_from(input.handlers)?;
+                    let input_excerpt = input.input.try_into()?;
+                    Ok(OperationAction::Upload(input_excerpt, handlers))
+                }
                 _ => {
                     if let Some(builtin) = command.strip_prefix("builtin:") {
                         if let Some((operation, step)) = builtin.split_once(':') {
@@ -922,6 +927,87 @@ action = "cleanup"
                 assert_eq!(
                     handlers.state_update_on_exit("config_set", 0).status,
                     "successful"
+                );
+            }
+            other => panic!("Expected BuiltInOperationStep action, but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_upload_action() {
+        let file = r#"
+operation = "config_snapshot"
+
+[init]
+action = "proceed"
+on_success = "upload"
+
+[upload]
+action = "upload"
+input.url = "${.payload.tedgeUrl}"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let workflow = OperationWorkflow::try_from(input).unwrap();
+
+        match workflow.states.get("upload").unwrap() {
+            OperationAction::Upload(input_excerpt, handlers) => {
+                let expected_input = StateExcerpt::from(json!({
+                    "url": "${.payload.tedgeUrl}"
+                }));
+                assert_eq!(input_excerpt, &expected_input);
+                assert_eq!(
+                    handlers.state_update_on_exit("upload", 0).status,
+                    "successful"
+                );
+            }
+            other => panic!("Expected Upload action, but got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_config_snapshot_get_action() {
+        let file = r#"
+operation = "config_snapshot"
+
+[init]
+action = "proceed"
+on_success = "get"
+
+[get]
+action = "builtin:config_snapshot:get"
+on_success = "upload"
+on_error = "failed"
+
+[upload]
+action = "upload"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let workflow = OperationWorkflow::try_from(input).unwrap();
+
+        match workflow.states.get("get").unwrap() {
+            OperationAction::BuiltInOperationStep(operation, step, input_excerpt, handlers) => {
+                assert_eq!(operation, "config_snapshot");
+                assert_eq!(step, "get");
+                assert_eq!(input_excerpt, &StateExcerpt::try_from(None).unwrap());
+                assert_eq!(
+                    handlers.state_update_on_exit("config_get", 0).status,
+                    "upload"
                 );
             }
             other => panic!("Expected BuiltInOperationStep action, but got {:?}", other),

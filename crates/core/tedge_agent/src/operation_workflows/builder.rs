@@ -45,9 +45,13 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::TopicFilter;
 use tedge_script_ext::Execute;
+use tedge_uploader_ext::UploadRequest;
+use tedge_uploader_ext::UploadResult;
 
 pub type DownloaderRequest = (String, DownloadRequest);
 pub type DownloaderResult = (String, DownloadResult);
+pub type UploaderRequest = (String, UploadRequest);
+pub type UploaderResult = (String, UploadResult);
 
 pub struct WorkflowActorBuilder {
     config: OperationConfig,
@@ -60,6 +64,7 @@ pub struct WorkflowActorBuilder {
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
+    uploader: ClientMessageBox<UploaderRequest, UploaderResult>,
     builtin_operation_step_executor: HashMap<
         (OperationType, OperationStep),
         ClientMessageBox<OperationStepRequest, OperationStepResponse>,
@@ -73,6 +78,7 @@ impl WorkflowActorBuilder {
         script_runner: &mut impl Service<Execute, std::io::Result<Output>>,
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         downloader: &mut impl Service<DownloaderRequest, DownloaderResult>,
+        uploader: &mut impl Service<UploaderRequest, UploaderResult>,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();
         let (signal_sender, signal_receiver) = mpsc::channel(10);
@@ -103,6 +109,7 @@ impl WorkflowActorBuilder {
         let script_runner = ClientMessageBox::new(script_runner);
 
         let downloader = ClientMessageBox::new(downloader);
+        let uploader = ClientMessageBox::new(uploader);
 
         fs_notify.connect_sink(config.operations_dir.path().into(), &input_sender);
 
@@ -117,6 +124,7 @@ impl WorkflowActorBuilder {
             signal_sender,
             script_runner,
             downloader,
+            uploader,
             builtin_operation_step_executor: HashMap::new(),
         }
     }
@@ -221,6 +229,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             command_sender: self.command_sender,
             script_runner: self.script_runner,
             downloader: self.downloader,
+            uploader: self.uploader,
             tmp_dir: self.config.tmp_dir.root().into(),
         }
     }

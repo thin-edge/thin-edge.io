@@ -45,6 +45,8 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_script_ext::Execute;
+use tedge_uploader_ext::UploadRequest;
+use tedge_uploader_ext::UploadResult;
 use tokio::time::sleep;
 use tracing::error;
 use tracing::info;
@@ -52,6 +54,8 @@ use tracing::warn;
 
 type DownloaderRequest = (String, DownloadRequest);
 type DownloaderResult = (String, DownloadResult);
+type UploaderRequest = (String, UploadRequest);
+type UploaderResult = (String, UploadResult);
 
 /// A generic command state that is published by the [TedgeOperationConverterActor]
 /// to itself for further processing .i.e. after a state update
@@ -78,6 +82,7 @@ pub struct WorkflowActor {
     pub(crate) mqtt_publisher: LoggingSender<MqttMessage>,
     pub(crate) script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     pub(crate) downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
+    pub(crate) uploader: ClientMessageBox<UploaderRequest, UploaderResult>,
     pub(crate) tmp_dir: Utf8PathBuf,
 }
 
@@ -476,6 +481,100 @@ impl WorkflowActor {
                 };
                 let new_state = state
                     .update_with_builtin_action_result("download", result, handlers, &mut log_file)
+                    .await;
+                self.publish_command_state(new_state, &mut log_file).await
+            }
+            OperationAction::Upload(input_excerpt, handlers) => {
+                let step = &state.status;
+                info!("Processing {operation} operation {step} step with upload builtin action");
+
+                let input = input_excerpt.extract_value_from(&state);
+                let (url, url_source) =
+                    if let Some(url) = GenericCommandState::extract_text_property(&input, "url") {
+                        (url, "input.url")
+                    } else if let Some(url) = state.get_text_property("tedgeUrl") {
+                        (url, "tedgeUrl")
+                    } else {
+                        let err_state = state
+                            .update_with_builtin_action_result(
+                                "upload",
+                                Err("No valid URL found in input.url or tedgeUrl".to_string()),
+                                handlers,
+                                &mut log_file,
+                            )
+                            .await;
+                        return self.publish_command_state(err_state, &mut log_file).await;
+                    };
+
+                let (file_path, path_source) = if let Some(path) =
+                    GenericCommandState::extract_text_property(&input, "file")
+                {
+                    (path, "input.file")
+                } else if let Some(path) =
+                    GenericCommandState::extract_text_property(&input, "path")
+                {
+                    (path, "input.path")
+                } else if let Some(path) = state.get_text_property("path") {
+                    (path, "path")
+                } else {
+                    let err_state = state
+                        .update_with_builtin_action_result(
+                            "upload",
+                            Err(
+                                "No valid file path found in input.file, input.path, or path"
+                                    .to_string(),
+                            ),
+                            handlers,
+                            &mut log_file,
+                        )
+                        .await;
+                    return self.publish_command_state(err_state, &mut log_file).await;
+                };
+
+                log_file
+                    .log_info(&format!(
+                        "Uploading file from {} ({}) to URL from {} ({})",
+                        path_source, file_path, url_source, url
+                    ))
+                    .await;
+
+                let upload_path = match Utf8PathBuf::from(file_path) {
+                    path if path.as_str().is_empty() => {
+                        let err_state = state
+                            .update_with_builtin_action_result(
+                                "upload",
+                                Err("Upload file path is empty".to_string()),
+                                handlers,
+                                &mut log_file,
+                            )
+                            .await;
+                        return self.publish_command_state(err_state, &mut log_file).await;
+                    }
+                    path => path,
+                };
+
+                let upload_request = UploadRequest::new(url, &upload_path);
+                let (_topic, upload_result) = self
+                    .uploader
+                    .await_response((state.topic.name.clone(), upload_request))
+                    .await?;
+
+                let result = match upload_result {
+                    Ok(upload_response) => {
+                        log_file
+                            .log_info(&format!(
+                                "Uploaded {} to {}",
+                                upload_response.file_path, upload_response.url
+                            ))
+                            .await;
+
+                        // Keep `path` on the payload so config_snapshot can report it as successful
+                        Ok(json!({"path": upload_response.file_path}))
+                    }
+                    Err(err) => Err(format!("Upload failed: {}", err)),
+                };
+                let new_state = state
+                    .update_with_builtin_action_result("upload", result, handlers, &mut log_file)
                     .await;
                 self.publish_command_state(new_state, &mut log_file).await
             }

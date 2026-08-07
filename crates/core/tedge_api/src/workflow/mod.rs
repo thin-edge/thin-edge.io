@@ -144,6 +144,20 @@ pub enum OperationAction {
     /// ```
     Download(StateExcerpt, ExitHandlers),
 
+    /// Generic upload action (reusable across operations)
+    ///
+    /// Uploads a local file to `input.url`. The local file path is taken from `input.file` when
+    /// provided, otherwise falls back to the `path` field already present on the command payload.
+    /// This action is operation-agnostic and can be used by config_snapshot, log_upload, etc.
+    ///
+    /// ```toml
+    /// action = "upload"
+    /// input.url = "${.payload.tedgeUrl}"
+    /// on_success = "<state>"
+    /// on_error = "<state>"
+    /// ```
+    Upload(StateExcerpt, ExitHandlers),
+
     /// Trigger an operation and move to the next state from where the outcome of the operation will be awaited
     ///
     /// ```toml
@@ -217,6 +231,7 @@ impl Display for OperationAction {
             OperationAction::Script(script, _) => script.to_string(),
             OperationAction::BgScript(script, _) => script.to_string(),
             OperationAction::Download(_, _) => "builtin download action".to_string(),
+            OperationAction::Upload(_, _) => "builtin upload action".to_string(),
             OperationAction::Operation(operation, maybe_script, _, _) => match maybe_script {
                 None => format!("execute {operation} as sub-operation"),
                 Some(script) => format!(

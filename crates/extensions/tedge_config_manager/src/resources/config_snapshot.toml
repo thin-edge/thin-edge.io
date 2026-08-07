@@ -1,0 +1,27 @@
+operation = "config_snapshot"
+on_error = "failed"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "get"
+
+[get]
+action = "builtin:config_snapshot:get"
+on_success = "upload"
+on_error = "failed"
+
+[upload]
+action = "upload"
+input.url = "${.payload.tedgeUrl}"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

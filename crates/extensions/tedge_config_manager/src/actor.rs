@@ -83,6 +83,8 @@ fn get_path_property<'a>(
 /// Represents the different steps for config management operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConfigOperationStep {
+    /// Retrieve configuration content for a snapshot (`config_snapshot` operation)
+    Get,
     Prepare,
     Set,
     Verify,
@@ -92,6 +94,7 @@ pub enum ConfigOperationStep {
 impl ConfigOperationStep {
     pub fn as_str(&self) -> &'static str {
         match self {
+            Self::Get => "get",
             Self::Prepare => "prepare",
             Self::Set => "set",
             Self::Verify => "verify",
@@ -99,7 +102,8 @@ impl ConfigOperationStep {
         }
     }
 
-    pub fn all() -> &'static [ConfigOperationStep] {
+    /// Steps registered for the `config_update` operation
+    pub fn update_steps() -> &'static [ConfigOperationStep] {
         &[Self::Prepare, Self::Set, Self::Verify, Self::Rollback]
     }
 }
@@ -109,6 +113,7 @@ impl FromStr for ConfigOperationStep {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "get" => Ok(Self::Get),
             "prepare" => Ok(Self::Prepare),
             "set" => Ok(Self::Set),
             "verify" => Ok(Self::Verify),
@@ -523,6 +528,7 @@ impl ConfigManagerWorker {
         };
 
         let result = match step {
+            ConfigOperationStep::Get => self.process_config_get_request(command).await,
             ConfigOperationStep::Prepare => self.process_config_prepare_request(command).await,
             ConfigOperationStep::Set => self.process_config_set_request(command).await,
             ConfigOperationStep::Verify => self.process_config_verify_request(command).await,
@@ -538,6 +544,68 @@ impl ConfigManagerWorker {
                 topic, error
             );
         }
+    }
+
+    async fn process_config_get_request(
+        &mut self,
+        command: GenericCommandState,
+    ) -> Result<Value, ConfigManagementError> {
+        let topic = command.topic.clone();
+        let cmd_id = self.extract_command_id(&topic)?;
+        let log_path = command.get_log_path();
+        let config_type = get_text_property(&command, "type")?;
+
+        let config_path = self
+            .execute_config_get_step(config_type, log_path, &cmd_id)
+            .await?;
+
+        // Ensure a tedgeUrl is available for the subsequent upload step.
+        // If the requester did not provide one, generate it the same way as the
+        // legacy monolithic snapshot handler.
+        let mut response = json!({"path": config_path.as_str()});
+        if command.get_text_property("tedgeUrl").is_none() {
+            let tedge_url = self.create_tedge_url_for_config_operation(&topic, config_type)?;
+            if let Some(obj) = response.as_object_mut() {
+                obj.insert("tedgeUrl".to_string(), json!(tedge_url));
+            }
+        }
+
+        Ok(response)
+    }
+
+    async fn execute_config_get_step(
+        &mut self,
+        config_type: &str,
+        log_path: Option<Utf8PathBuf>,
+        cmd_id: &str,
+    ) -> Result<Utf8PathBuf, ConfigManagementError> {
+        let (parsed_type, plugin_name) = parse_config_type(config_type);
+        let plugin = self.get_plugin(plugin_name)?;
+
+        let config_path = self.config.tmp_path.root().join(format!(
+            "config_snapshot-{}-{}-{}.conf",
+            config_type.replace(['/', ':', '\\'], "_"),
+            cmd_id,
+            OffsetDateTime::now_utc().unix_timestamp()
+        ));
+
+        let mut command_log = log_path.map(|path| {
+            CommandLog::from_log_path(
+                path,
+                OperationType::ConfigSnapshot.to_string(),
+                cmd_id.to_string(),
+            )
+        });
+
+        info!(
+            target: "config plugins",
+            "Retrieving config type: {} to file: {}", parsed_type, config_path
+        );
+        plugin
+            .get(parsed_type, &config_path, command_log.as_mut())
+            .await?;
+
+        Ok(config_path)
     }
 
     async fn process_config_prepare_request(

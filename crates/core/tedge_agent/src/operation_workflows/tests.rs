@@ -1,5 +1,7 @@
 use crate::operation_workflows::builder::DownloaderRequest;
 use crate::operation_workflows::builder::DownloaderResult;
+use crate::operation_workflows::builder::UploaderRequest;
+use crate::operation_workflows::builder::UploaderResult;
 use crate::operation_workflows::builder::WorkflowActorBuilder;
 use crate::operation_workflows::config::OperationConfig;
 use crate::software_manager::actor::SoftwareCommand;
@@ -57,6 +59,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_script_ext::Execute;
 use tedge_test_utils::fs::TempTedgeDir;
+use tedge_uploader_ext::UploadResponse;
 use tedge_utils::paths::TedgePaths;
 use tokio::task::JoinHandle;
 
@@ -630,6 +633,255 @@ action = "cleanup"
 }
 
 #[tokio::test]
+async fn upload_action() -> Result<(), DynError> {
+    let workflow = r#"
+operation = "config_snapshot"
+
+[init]
+action = "proceed"
+on_success = "upload"
+
+[upload]
+action = "upload"
+input.url = "${.payload.tedgeUrl}"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut uploader_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![("config_snapshot.toml".to_string(), workflow.to_string())],
+    )
+    .await?;
+
+    let mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_snapshot/123"),
+        r#"{"status":"init","tedgeUrl":"http://example.com/upload","path":"/tmp/snapshot.conf","type":"tedge.toml"}"#,
+    );
+    mqtt_box.send(mqtt_message).await?;
+
+    let RequestEnvelope {
+        request: (topic, upload_request),
+        reply_to: _,
+    } = recv_or_fail_on_actor_exit(&mut uploader_box, &mut actor_handle, "upload request")
+        .await
+        .expect("upload request expected");
+    assert_eq!(topic, "te/device/main///cmd/config_snapshot/123");
+    assert_eq!(upload_request.url, "http://example.com/upload");
+    assert_eq!(upload_request.file_path.as_str(), "/tmp/snapshot.conf");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn upload_action_without_input_url() -> Result<(), DynError> {
+    let workflow = r#"
+operation = "config_snapshot"
+
+[init]
+action = "proceed"
+on_success = "upload"
+
+[upload]
+action = "upload"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut uploader_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![("config_snapshot.toml".to_string(), workflow.to_string())],
+    )
+    .await?;
+
+    let mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_snapshot/123"),
+        r#"{"status":"init","tedgeUrl":"http://example.com/upload","path":"/tmp/snapshot.conf","type":"tedge.toml"}"#,
+    );
+    mqtt_box.send(mqtt_message).await?;
+
+    // Fall back to tedgeUrl and path from the payload when input is omitted
+    let RequestEnvelope {
+        request: (topic, upload_request),
+        mut reply_to,
+    } = recv_or_fail_on_actor_exit(&mut uploader_box, &mut actor_handle, "upload request")
+        .await
+        .expect("upload request expected");
+    assert_eq!(topic, "te/device/main///cmd/config_snapshot/123");
+    assert_eq!(upload_request.url, "http://example.com/upload");
+    assert_eq!(upload_request.file_path.as_str(), "/tmp/snapshot.conf");
+
+    reply_to
+        .send((
+            topic.clone(),
+            Ok(UploadResponse {
+                url: upload_request.url.clone(),
+                file_path: upload_request.file_path.clone(),
+            }),
+        ))
+        .await?;
+
+    let payload = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/config_snapshot/123",
+        "successful",
+    )
+    .await;
+    assert_eq!(
+        payload.get("path").and_then(|v| v.as_str()),
+        Some("/tmp/snapshot.conf")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn upload_action_missing_path() -> Result<(), DynError> {
+    let workflow = r#"
+operation = "config_snapshot"
+
+[init]
+action = "proceed"
+on_success = "upload"
+
+[upload]
+action = "upload"
+input.url = "${.payload.tedgeUrl}"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut uploader_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![("config_snapshot.toml".to_string(), workflow.to_string())],
+    )
+    .await?;
+
+    let mqtt_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_snapshot/123"),
+        r#"{"status":"init","tedgeUrl":"http://example.com/upload","type":"tedge.toml"}"#,
+    );
+    mqtt_box.send(mqtt_message).await?;
+
+    assert_no_message_or_actor_exit(
+        &mut uploader_box,
+        &mut actor_handle,
+        "waiting for unexpected upload request",
+    )
+    .await;
+
+    let payload = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/config_snapshot/123",
+        "failed",
+    )
+    .await;
+    assert_eq!(
+        payload.get("reason").and_then(|v| v.as_str()),
+        Some(
+            "builtin 'upload' action failed with: No valid file path found in input.file, input.path, or path",
+        )
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn config_snapshot_get_operation_step() -> Result<(), DynError> {
+    let workflow = r#"
+operation = "config_snapshot"
+
+[init]
+action = "proceed"
+on_success = "get"
+
+[get]
+action = "builtin:config_snapshot:get"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut config_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![("config_snapshot.toml".to_string(), workflow.to_string())],
+    )
+    .await?;
+
+    let init_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/config_snapshot/123"),
+        r#"{"status":"init","tedgeUrl":"http://example.com/upload","type":"tedge.toml"}"#,
+    );
+    mqtt_box.send(init_message).await?;
+
+    let RequestEnvelope {
+        request,
+        reply_to: _,
+    } = recv_or_fail_on_actor_exit(
+        &mut config_box,
+        &mut actor_handle,
+        "builtin operation step request",
+    )
+    .await
+    .expect("expected builtin operation step request");
+
+    assert_eq!(request.command_step, "get");
+    assert_eq!(request.command_state.status, "get");
+    let command_payload = serde_json::to_value(&request.command_state.payload)?;
+    assert_eq!(
+        command_payload.get("type").and_then(|v| v.as_str()),
+        Some("tedge.toml")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn builtin_operation_step_action() -> Result<(), DynError> {
     let workflow = r#"
 operation = "config_update"
@@ -847,6 +1099,9 @@ struct TestHandler {
     downloader_box: TimedMessageBox<
         SimpleMessageBox<RequestEnvelope<DownloaderRequest, DownloaderResult>, NoMessage>,
     >,
+    uploader_box: TimedMessageBox<
+        SimpleMessageBox<RequestEnvelope<UploaderRequest, UploaderResult>, NoMessage>,
+    >,
     config_box: TimedMessageBox<
         SimpleMessageBox<RequestEnvelope<OperationStepRequest, OperationStepResponse>, NoMessage>,
     >,
@@ -875,6 +1130,10 @@ async fn spawn_mqtt_operation_converter(
         RequestEnvelope<DownloaderRequest, DownloaderResult>,
         NoMessage,
     > = SimpleMessageBoxBuilder::new("Downloader", 5);
+    let mut uploader_builder: SimpleMessageBoxBuilder<
+        RequestEnvelope<UploaderRequest, UploaderResult>,
+        NoMessage,
+    > = SimpleMessageBoxBuilder::new("Uploader", 5);
 
     let tmp_dir = Arc::new(TempTedgeDir::new());
     let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
@@ -908,6 +1167,7 @@ async fn spawn_mqtt_operation_converter(
         &mut script_builder,
         &mut inotify_builder,
         &mut downloade_builder,
+        &mut uploader_builder,
     );
     workflow_actor_builder.register_builtin_operation(&mut restart_builder);
     workflow_actor_builder.register_builtin_operation(&mut software_builder);
@@ -924,6 +1184,7 @@ async fn spawn_mqtt_operation_converter(
     let restart_box = restart_builder.0.build().with_timeout(TEST_TIMEOUT_MS);
     let mqtt_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let downloader_box = downloade_builder.build().with_timeout(TEST_TIMEOUT_MS);
+    let uploader_box = uploader_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let _inotify_box = inotify_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
     let workflow_actor = workflow_actor_builder.build();
@@ -942,6 +1203,7 @@ async fn spawn_mqtt_operation_converter(
         restart_box,
         _inotify_box,
         downloader_box,
+        uploader_box,
         config_box,
         sync_signal_box,
     })
@@ -1106,7 +1368,10 @@ struct ConfigActorBuilder(
 
 impl OperationStepHandler for ConfigActorBuilder {
     fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)> {
-        vec![(OperationType::ConfigUpdate, OperationStep::from("set"))]
+        vec![
+            (OperationType::ConfigUpdate, OperationStep::from("set")),
+            (OperationType::ConfigSnapshot, OperationStep::from("get")),
+        ]
     }
 }
 
