@@ -1,0 +1,35 @@
+[package]
+name = "facet-config-prototype"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = [
+    "crates/config-macro-impl",
+    "crates/config-macro",
+    "crates/config-runtime",
+    "crates/tedge-config",
+    "crates/mapper-config",
+]
+
+[dependencies]
+tedge-config = { path = "crates/tedge-config" }
+mapper-config = { path = "crates/mapper-config" }
+facet-config-runtime = { path = "crates/config-runtime" }
+facet = { version = "0.50.0-rc.5", features = ["camino", "net", "nonzero"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+camino = { version = "1", features = ["serde1"] }
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+pretty_assertions = "1"
+tempfile = "3"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true

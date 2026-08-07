@@ -1,0 +1,18 @@
+[package]
+name = "facet-config-macro-impl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+darling = "0.20"
+heck = "0.5"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "parsing", "extra-traits"] }
+
+[dev-dependencies]
+pretty_assertions = "1"
+prettyplease = "0.2"
+# span-locations makes Span::start()/end() available so tests can assert
+# that generated tokens point back at the macro input
+proc-macro2 = { version = "1", features = ["span-locations"] }
