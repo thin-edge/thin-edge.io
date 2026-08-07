@@ -35,6 +35,7 @@ mod mapper;
 mod mqtt;
 mod reconnect;
 mod refresh_bridges;
+mod service;
 mod upload;
 
 #[derive(clap::Parser, Debug)]
@@ -170,6 +171,12 @@ pub enum TEdgeOpt {
     #[clap(subcommand)]
     Mapper(mapper::MapperCli),
 
+    /// Run an action on a system service, whatever manages it
+    ///
+    /// The init system configured in system.toml runs the action for the default service
+    /// type. Any other service type is handled by the service plugin named after it.
+    Service(service::TEdgeServiceOpt),
+
     /// Run thin-edge services and plugins
     Run(ComponentOpt),
 
@@ -251,6 +258,7 @@ impl BuildCommand for TEdgeOpt {
             TEdgeOpt::Reconnect(opt) => opt.build_command(config).await,
             TEdgeOpt::Flows(opt) => opt.build_command(config).await,
             TEdgeOpt::Mapper(opt) => opt.build_command(config).await,
+            TEdgeOpt::Service(opt) => opt.build_command(config).await,
             TEdgeOpt::Bridge(opt) => opt.build_command(config).await,
             TEdgeOpt::Run(_) => {
                 // This method has to be kept in sync with tedge::redirect_if_multicall()

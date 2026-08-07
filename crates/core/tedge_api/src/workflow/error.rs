@@ -1,3 +1,4 @@
+use crate::entity::EntityType;
 use serde::Deserialize;
 
 /// Error preventing a workflow to be registered
@@ -105,4 +106,11 @@ pub enum WorkflowExecutionError {
 #[derive(Deserialize)]
 pub struct IllFormedOperationWorkflow {
     pub operation: String,
+
+    /// The entity type of a workflow that cannot be parsed any further
+    ///
+    /// Read here too, so that an ill-formed workflow fails the commands of the entity type
+    /// it was written for, and not those of the device.
+    #[serde(rename = "type", default = "crate::workflow::default_entity_type")]
+    pub entity_type: EntityType,
 }

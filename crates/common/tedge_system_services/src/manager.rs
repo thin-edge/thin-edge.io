@@ -15,20 +15,45 @@ pub trait SystemServiceManager: Debug + Send + Sync {
     /// Checks whether the system service manager facility is available and operational.
     async fn check_operational(&self) -> Result<(), SystemServiceError>;
 
+    /// Runs a named action on the specified system service.
+    ///
+    /// The action is whatever the init system defines a template for: the standard
+    /// `start`, `stop`, `restart`, `enable` and `disable`, plus any custom action added
+    /// to the `[init]` table of `system.toml`. An action with no template fails with
+    /// [`SystemServiceError::UnsupportedAction`].
+    async fn run_action(
+        &self,
+        action: &str,
+        service: SystemService<'_>,
+    ) -> Result<(), SystemServiceError>;
+
+    /// The actions this init system can run, sorted.
+    fn action_names(&self) -> Vec<&str>;
+
     /// Stops the specified system service.
-    async fn stop_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
+    async fn stop_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+        self.run_action("stop", service).await
+    }
 
     /// Starts the specified system service.
-    async fn start_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
+    async fn start_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+        self.run_action("start", service).await
+    }
 
     /// Restarts the specified system service.
-    async fn restart_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
+    async fn restart_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+        self.run_action("restart", service).await
+    }
 
     /// Enables the specified system service. This does not start the service, unless you reboot.
-    async fn enable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
+    async fn enable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+        self.run_action("enable", service).await
+    }
 
     /// Disables the specified system service. This does not stop the service.
-    async fn disable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError>;
+    async fn disable_service(&self, service: SystemService<'_>) -> Result<(), SystemServiceError> {
+        self.run_action("disable", service).await
+    }
 
     /// Queries status of the specified system service. "Running" here means the same as "active".
     async fn is_service_running(

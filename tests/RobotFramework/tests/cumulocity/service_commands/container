@@ -1,0 +1,31 @@
+#!/bin/sh
+# Test service plugin for the "container" service type.
+#
+# It runs nothing: it records the arguments `tedge service` passed it, so the test can check
+# what the runner and the workflow resolved, and it returns the exit code the test expects for
+# each action.
+#
+# Exit codes:
+#   0   the action succeeded
+#   2   the action is not supported by this plugin
+set -u
+
+ACTION="${1:-}"
+NAME="${2:-}"
+
+echo "$ACTION $NAME" >>/tmp/container-plugin.log
+
+case "$ACTION" in
+    start | restart | pause)
+        echo "container plugin: $ACTION $NAME"
+        ;;
+    stop)
+        # Used by the test to check how exit code 2 is reported
+        echo "container plugin: cannot stop '$NAME'" >&2
+        exit 2
+        ;;
+    *)
+        echo "container plugin: unsupported action '$ACTION'" >&2
+        exit 2
+        ;;
+esac

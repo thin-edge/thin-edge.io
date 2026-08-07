@@ -1,6 +1,7 @@
 mod actor;
 mod builder;
 mod config;
+mod entity_store_client;
 mod message_box;
 mod persist;
 

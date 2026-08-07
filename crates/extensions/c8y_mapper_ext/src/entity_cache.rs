@@ -87,6 +87,13 @@ impl CloudEntityMetadata {
             .unwrap_or_else(|| self.external_id.as_ref())
     }
 
+    /// The type given to this entity when it was registered, if any.
+    ///
+    /// Unlike [`Self::display_type`], no default is substituted for a missing type.
+    pub fn registered_type(&self) -> Option<&str> {
+        self.metadata.display_type()
+    }
+
     pub fn display_type(&self) -> &str {
         self.metadata
             .display_type()

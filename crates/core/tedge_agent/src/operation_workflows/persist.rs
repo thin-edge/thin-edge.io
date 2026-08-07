@@ -2,6 +2,7 @@ use anyhow::Context;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::collections::HashMap;
+use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
@@ -20,6 +21,7 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 /// Persist the workflow definitions.
 ///
@@ -39,7 +41,10 @@ pub struct WorkflowRepository {
     state_dir: Utf8PathBuf,
 
     // Map each user defined workflow to its version and workflow file
-    definitions: HashMap<OperationName, (WorkflowVersion, Utf8PathBuf)>,
+    //
+    // Keyed by entity type too, as two workflows can share an operation name
+    // when they apply to entities of different types.
+    definitions: HashMap<(EntityType, OperationName), (WorkflowVersion, Utf8PathBuf)>,
 
     // Map each workflow version to the count of instance using it
     in_use_copies: HashMap<WorkflowVersion, u32>,
@@ -109,9 +114,9 @@ impl WorkflowRepository {
                         self.load_operation_workflow(file_source, workflow, version)
                     });
                 match result {
-                    Ok(cmd) => {
+                    Ok((entity_type, cmd)) => {
                         info!(
-                            "Using operation workflow definition from {file:?} for '{cmd}' operation"
+                            "Using operation workflow definition from {file:?} for the '{cmd}' operation of a {entity_type}"
                         );
                     }
                     Err(err) => {
@@ -128,12 +133,19 @@ impl WorkflowRepository {
         source: WorkflowSource<Utf8PathBuf>,
         workflow: OperationWorkflow,
         version: WorkflowVersion,
-    ) -> Result<String, anyhow::Error> {
+    ) -> Result<(EntityType, OperationName), anyhow::Error> {
+        let entity_type = workflow.entity_type;
         let operation_name = workflow.operation.to_string();
+        if entity_type == EntityType::ChildDevice {
+            warn!("The {operation_name} workflow declares type = \"{entity_type}\", which no command is addressed to: \
+                   the device an agent runs on is a \"{}\"", EntityType::MainDevice);
+        }
         let version = match source {
             WorkflowSource::UserDefined(definition) => {
-                self.definitions
-                    .insert(operation_name.clone(), (version.clone(), definition));
+                self.definitions.insert(
+                    (entity_type, operation_name.clone()),
+                    (version.clone(), definition),
+                );
                 WorkflowSource::UserDefined(version)
             }
             WorkflowSource::InUseCopy(_) => {
@@ -147,7 +159,7 @@ impl WorkflowRepository {
         };
 
         self.workflows.register_custom_workflow(version, workflow)?;
-        Ok(operation_name)
+        Ok((entity_type, operation_name))
     }
 
     fn load_builtin_workflows(&mut self) {
@@ -180,8 +192,13 @@ impl WorkflowRepository {
                         // Checking the path exists as FsWatchEvent returns misleading Modified events along FileDeleted events.
                         if path.exists() {
                             return self.reload_operation_workflow(&path).await.and_then(
-                                |updated_operation| {
-                                    self.capability_message(schema, target, &updated_operation)
+                                |(entity_type, updated_operation)| {
+                                    self.capability_message(
+                                        schema,
+                                        target,
+                                        entity_type,
+                                        &updated_operation,
+                                    )
                                 },
                             );
                         }
@@ -192,9 +209,14 @@ impl WorkflowRepository {
             FsWatchEvent::FileDeleted(path) => {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
-                        return self.remove_operation_workflow(&path).await.map(
-                            |deprecated_operation| {
-                                self.deregistration_message(schema, target, &deprecated_operation)
+                        return self.remove_operation_workflow(&path).await.and_then(
+                            |(entity_type, deprecated_operation)| {
+                                self.deregistration_message(
+                                    schema,
+                                    target,
+                                    entity_type,
+                                    &deprecated_operation,
+                                )
                             },
                         );
                     }
@@ -214,16 +236,19 @@ impl WorkflowRepository {
     /// Reload a user defined workflow.
     ///
     /// Return the operation name if this is a new operation or workflow version.
-    async fn reload_operation_workflow(&mut self, path: &Utf8PathBuf) -> Option<OperationName> {
+    async fn reload_operation_workflow(
+        &mut self,
+        path: &Utf8PathBuf,
+    ) -> Option<(EntityType, OperationName)> {
         match read_operation_workflow(path).await {
             Ok((workflow, version)) => {
-                if let Ok(cmd) = self.load_operation_workflow(
+                if let Ok((entity_type, cmd)) = self.load_operation_workflow(
                     WorkflowSource::UserDefined(path.clone()),
                     workflow,
                     version,
                 ) {
-                    info!("Using the updated operation workflow definition from {path} for '{cmd}' operation");
-                    return Some(cmd);
+                    info!("Using the updated operation workflow definition from {path} for the '{cmd}' operation of a {entity_type}");
+                    return Some((entity_type, cmd));
                 }
             }
             Err(err) => {
@@ -240,29 +265,35 @@ impl WorkflowRepository {
     async fn remove_operation_workflow(
         &mut self,
         removed_path: &Utf8PathBuf,
-    ) -> Option<OperationName> {
+    ) -> Option<(EntityType, OperationName)> {
         // As this is not intended to be a frequent operation, there is no attempt to be efficient.
-        let (operation, removed_version) = self
+        let (key, removed_version) = self
             .definitions
             .iter()
             .find(|(_, (_, p))| p == removed_path)
-            .map(|(n, (v, _))| (n.clone(), v.clone()))?;
-        self.definitions.remove(&operation);
-        let builtin_restored = self
-            .workflows
-            .unregister_custom_workflow(&operation, &removed_version);
+            .map(|(key, (v, _))| (key.clone(), v.clone()))?;
+        self.definitions.remove(&key);
+        let (entity_type, operation) = key;
+        let builtin_restored =
+            self.workflows
+                .unregister_custom_workflow(entity_type, &operation, &removed_version);
         if builtin_restored {
             info!("The builtin workflow for the '{operation}' operation has been restored");
             None
         } else {
-            info!("The user defined workflow for the '{operation}' operation has been removed");
-            Some(operation)
+            info!("The user defined workflow for the '{operation}' operation of a {entity_type} has been removed");
+            Some((entity_type, operation))
         }
     }
 
     /// Copy the workflow definition file to the persisted state directory,
     /// unless this has already been done.
-    async fn persist_workflow_definition(&mut self, operation: &str, version: &str) {
+    async fn persist_workflow_definition(
+        &mut self,
+        entity_type: EntityType,
+        operation: &str,
+        version: &str,
+    ) {
         if version_is_builtin(version) {
             return;
         }
@@ -271,7 +302,7 @@ impl WorkflowRepository {
             return;
         };
 
-        if let Some((_, source)) = self.definitions.get(operation) {
+        if let Some((_, source)) = self.definitions.get(&(entity_type, operation.to_string())) {
             let target = self.workflow_copy_path(operation, version);
             if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
                 error!("Fail to persist a copy of {source} as {target}: {err}");
@@ -286,8 +317,10 @@ impl WorkflowRepository {
         self.state_dir.join(filename).with_extension("toml")
     }
 
-    async fn load_latest_version(&mut self, operation: &OperationName) {
-        if let Some((path, version, workflow)) = self.get_latest_version(operation).await {
+    async fn load_latest_version(&mut self, entity_type: EntityType, operation: &OperationName) {
+        if let Some((path, version, workflow)) =
+            self.get_latest_version(entity_type, operation).await
+        {
             if let Err(err) = self.load_operation_workflow(
                 WorkflowSource::UserDefined(path.clone()),
                 workflow,
@@ -319,9 +352,10 @@ impl WorkflowRepository {
 
     async fn get_latest_version(
         &mut self,
+        entity_type: EntityType,
         operation: &OperationName,
     ) -> Option<(Utf8PathBuf, WorkflowVersion, OperationWorkflow)> {
-        if let Some((version, path)) = self.definitions.get(operation) {
+        if let Some((version, path)) = self.definitions.get(&(entity_type, operation.clone())) {
             if let Ok((workflow, latest)) = read_operation_workflow(path).await {
                 if version != &latest {
                     return Some((path.to_owned(), latest, workflow));
@@ -333,7 +367,11 @@ impl WorkflowRepository {
                 .join(operation)
                 .with_extension("toml");
             if let Ok((workflow, new)) = read_operation_workflow(&path).await {
-                return Some((path, new, workflow));
+                // The name of a file tells nothing of the type of the entities its workflow
+                // applies to: a workflow for another type is not the latest version of this one
+                if workflow.entity_type == entity_type {
+                    return Some((path, new, workflow));
+                }
             };
         }
         None
@@ -349,9 +387,16 @@ impl WorkflowRepository {
         for (_, command) in commands.iter_mut() {
             if command.workflow_version().is_none() {
                 if let Some(operation) = command.operation() {
-                    if let Some(current_version) = self.workflows.use_current_version(&operation) {
-                        self.persist_workflow_definition(&operation, &current_version)
-                            .await;
+                    if let Some(current_version) = self
+                        .workflows
+                        .use_current_version(EntityType::MainDevice, &operation)
+                    {
+                        self.persist_workflow_definition(
+                            EntityType::MainDevice,
+                            &operation,
+                            &current_version,
+                        )
+                        .await;
                         command.set_workflow_version(&current_version);
                     }
                 }
@@ -369,27 +414,48 @@ impl WorkflowRepository {
         &self,
         schema: &MqttSchema,
         target: &EntityTopicId,
+        entity_type: EntityType,
     ) -> Vec<MqttMessage> {
-        self.workflows.capability_messages(schema, target)
+        self.workflows
+            .capability_messages(schema, target, entity_type)
     }
 
+    /// The message declaring the capability of an updated operation
+    ///
+    /// Only for the workflows of the target itself: the capabilities of a service are
+    /// declared by that service, not by the workflows installed on the device.
     fn capability_message(
         &self,
         schema: &MqttSchema,
         target: &EntityTopicId,
+        entity_type: EntityType,
         operation: &OperationName,
     ) -> Option<MqttMessage> {
-        self.workflows.capability_message(schema, target, operation)
+        if entity_type != EntityType::MainDevice {
+            return None;
+        }
+        self.workflows
+            .capability_message(schema, target, entity_type, operation)
     }
 
+    /// The message clearing the capability of a deprecated operation
+    ///
+    /// Only for the workflows of the target itself: the capabilities of a service are
+    /// declared by that service, not by the workflows installed on the device.
     fn deregistration_message(
         &self,
         schema: &MqttSchema,
         target: &EntityTopicId,
+        entity_type: EntityType,
         operation: &OperationName,
-    ) -> MqttMessage {
-        self.workflows
-            .deregistration_message(schema, target, operation)
+    ) -> Option<MqttMessage> {
+        if entity_type != EntityType::MainDevice {
+            return None;
+        }
+        Some(
+            self.workflows
+                .deregistration_message(schema, target, operation),
+        )
     }
 
     /// Update the state of the command board on reception of a message sent by a peer over MQTT
@@ -400,13 +466,14 @@ impl WorkflowRepository {
     /// even if the user pushes a new version meantime.
     pub async fn apply_external_update(
         &mut self,
+        entity_type: EntityType,
         operation: &OperationType,
         command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
         let operation_name = operation.name();
         if command_state.is_init() {
             // A new command instance must use the latest on-disk version of the operation workflow
-            self.load_latest_version(&operation_name).await;
+            self.load_latest_version(entity_type, &operation_name).await;
         } else if command_state.is_finished() {
             // Clear the cache if this happens to be the latest instance using that version of the workflow
             if let Some(version) = command_state.workflow_version() {
@@ -416,13 +483,13 @@ impl WorkflowRepository {
 
         match self
             .workflows
-            .apply_external_update(operation, command_state)?
+            .apply_external_update(entity_type, operation, command_state)?
         {
             None => Ok(None),
 
             Some(new_state) if new_state.is_init() => {
                 if let Some(version) = new_state.workflow_version() {
-                    self.persist_workflow_definition(&operation_name, version)
+                    self.persist_workflow_definition(entity_type, &operation_name, version)
                         .await;
                 }
                 Ok(Some(new_state))
@@ -494,7 +561,11 @@ async fn read_operation_workflow(
                 .context("Extracting operation name")?;
 
             let reason = format!("Invalid operation workflow definition {path:?}: {err:?}");
-            Ok(OperationWorkflow::ill_formed(workflow.operation, reason))
+            Ok(OperationWorkflow::ill_formed(
+                workflow.entity_type,
+                workflow.operation,
+                reason,
+            ))
         })
         .map(|workflow| (workflow, version))
 }

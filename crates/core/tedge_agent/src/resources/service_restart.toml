@@ -1,0 +1,58 @@
+# The `restart` action of a service.
+#
+# The action is run by `tedge service`, which dispatches it to whatever manages that service:
+# the init system for the default service type, a service plugin for any other type.
+#
+# Restarting tedge-agent is the one exception: the agent is what runs this command, so it restarts
+# itself instead of asking a backend to do it. The next state is persisted before the process
+# stops, so the restart is not run a second time when the workflow resumes.
+#
+# This file is a template: tedge-agent creates it if it is missing, and never overwrites it once
+# it differs from `service_restart.toml.template`, which always holds the shipped definition.
+
+operation = "restart"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "evaluate-agent-restart"
+
+# The name comes from the cloud, and systemd restarts `tedge-agent.service` and `tedge-agent`
+# alike. Both spellings have to reach the self-restart: the generic step below would restart the
+# agent from inside its own workflow, and the step would run again on every resume.
+[evaluate-agent-restart]
+script = "test ${.payload.serviceName} = tedge-agent -o ${.payload.serviceName} = tedge-agent.service"
+on_exit.0 = "restart-agent"
+on_exit.1-255 = "execute"
+
+[restart-agent]
+action = "restart-agent"
+on_exec = "await-agent-restart"
+
+[await-agent-restart]
+action = "await-agent-restart"
+timeout_second = 90
+on_success = "successful"
+on_timeout = { status = "failed", reason = "tedge-agent did not restart in time" }
+
+[execute]
+script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type ${.payload.serviceType}"
+# systemd waits for the service to stop and to start again, 90 seconds each by default
+timeout_second = 180
+on_exit.0 = "successful"
+# A reason has to be given per exit code: the reason given by the backend goes to the operation
+# log, and only what a script prints on stdout can update the state of a command
+on_exit.1 = { status = "failed", reason = "The action failed, see the operation log for the reason given by the backend" }
+on_exit.2 = { status = "failed", reason = "This action is not supported for that type of service" }
+on_exit.3-255 = { status = "failed", reason = "The action failed, see the operation log for the reason given by the backend" }
+on_kill = { status = "failed", reason = "The action did not complete in time and was cancelled" }
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
