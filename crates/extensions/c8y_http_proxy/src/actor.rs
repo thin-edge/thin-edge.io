@@ -10,30 +10,11 @@ use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
 use http::StatusCode;
 use serde_json::json;
-use std::time::Duration;
 use tedge_actors::ClientMessageBox;
-use tedge_http_ext::HttpError;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResponseExt;
 use tedge_http_ext::HttpResult;
-use tokio::time::sleep;
-use tracing::debug;
-
-/// Maximum number of attempts to fetch the Cumulocity internal id of an entity.
-///
-/// A freshly registered device (typically a child device) may not have been created yet in the
-/// Cumulocity inventory when the mapper first needs its internal id (e.g. to publish its software
-/// list). In that case the lookup transiently fails with `404 Not Found`. Retrying a few times
-/// with a growing delay lets the mapper recover from this race instead of silently dropping the
-/// request.
-const INTERNAL_ID_MAX_ATTEMPTS: u32 = 8;
-
-/// Delay before the first internal-id lookup retry (doubles after each attempt).
-const INTERNAL_ID_RETRY_INITIAL_INTERVAL: Duration = Duration::from_millis(1000);
-
-/// Upper bound for the delay between internal-id lookup retries.
-const INTERNAL_ID_RETRY_MAX_INTERVAL: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
 pub struct C8YHttpProxyActor {
@@ -53,31 +34,16 @@ impl C8YHttpProxyActor {
     pub async fn try_get_internal_id(&mut self, device_id: &str) -> Result<String, C8YRestError> {
         let url_get_id: String = self.end_point.proxy_url_for_internal_id(device_id);
 
-        let mut attempt = 0;
-        let mut interval = INTERNAL_ID_RETRY_INITIAL_INTERVAL;
-        loop {
-            attempt += 1;
-            let request = HttpRequestBuilder::get(&url_get_id).build()?;
-            match self.http.await_response(request).await?.error_for_status() {
-                Ok(response) => {
-                    let internal_id_response: InternalIdResponse = response.json().await?;
-                    return Ok(internal_id_response.id());
-                }
-                // The entity is registered locally but not created yet in the c8y inventory:
-                // retry the lookup a few times before giving up so the request is not lost.
-                Err(err)
-                    if is_entity_not_created_yet(&err) && attempt < INTERNAL_ID_MAX_ATTEMPTS =>
-                {
-                    debug!(
-                        "Internal id of {device_id} not available yet \
-                         (attempt {attempt}/{INTERNAL_ID_MAX_ATTEMPTS}), retrying in {interval:?}"
-                    );
-                    sleep(interval).await;
-                    interval = (interval * 2).min(INTERNAL_ID_RETRY_MAX_INTERVAL);
-                }
-                Err(err) => return Err(err.into()),
-            }
-        }
+        let request = HttpRequestBuilder::get(&url_get_id)
+            .retry_statuses([StatusCode::NOT_FOUND])
+            .build()?;
+        let response = self
+            .http
+            .await_response(request)
+            .await?
+            .error_for_status()?;
+        let internal_id_response: InternalIdResponse = response.json().await?;
+        Ok(internal_id_response.id())
     }
 
     pub(crate) async fn create_event(
@@ -191,15 +157,4 @@ impl C8YHttpProxyActor {
 
         Ok(())
     }
-}
-
-/// Whether an HTTP error indicates that a c8y entity has not been created yet.
-///
-/// The internal-id lookup of an entity that is registered locally but not created yet in the
-/// Cumulocity inventory returns `404 Not Found`. This is a transient condition worth retrying.
-fn is_entity_not_created_yet(err: &HttpError) -> bool {
-    matches!(
-        err,
-        HttpError::HttpStatusError { code, .. } if *code == StatusCode::NOT_FOUND
-    )
 }
