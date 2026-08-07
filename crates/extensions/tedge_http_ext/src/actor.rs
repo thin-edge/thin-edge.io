@@ -104,7 +104,13 @@ impl Server for HttpService {
                 }
             }
         };
-        let response = backoff::future::retry(backoff, operation).await?;
+        let response = match &method {
+            m if m.is_idempotent() => backoff::future::retry(backoff, operation).await,
+            _ => operation().await.map_err(|err| match err {
+                backoff::Error::Permanent(err) | backoff::Error::Transient { err, .. } => err,
+            }),
+        };
+        let response = response?;
 
         Ok(HttpResponse {
             endpoint,

@@ -121,6 +121,64 @@ async fn retries_on_retry_status() {
     mock2.assert();
 }
 
+#[tokio::test]
+async fn retries_only_idempotent_methods() {
+    let mut server = mockito::Server::new_async().await;
+    let mut http = spawn_http_actor().await;
+
+    // also HEAD, OPTIONS, TRACE, but currently not supported by HttpActor
+    let idempotent = [http::Method::GET, http::Method::PUT, http::Method::DELETE];
+
+    for method in idempotent {
+        let m = method.as_str();
+        let mock = server
+            .mock(m, format!("/{m}").as_str())
+            .with_status(500)
+            .expect(2)
+            .create_async()
+            .await;
+
+        let request = match method {
+            http::Method::GET => HttpRequestBuilder::get(format!("{}/{m}", server.url())),
+            http::Method::PUT => HttpRequestBuilder::put(format!("{}/{m}", server.url())),
+            http::Method::DELETE => HttpRequestBuilder::delete(format!("{}/{m}", server.url())),
+            _ => unreachable!(),
+        };
+        let request = request.build().unwrap();
+        let response = http.await_response(request).await.unwrap();
+        assert!(matches!(
+            response.unwrap_err(),
+            HttpError::HttpStatusError {
+                code: StatusCode::INTERNAL_SERVER_ERROR,
+                ..
+            }
+        ));
+
+        mock.assert_async().await;
+    }
+
+    // only POST isn't idempotent
+    let mock = server
+        .mock("POST", "/POST")
+        .with_status(500)
+        .expect(1)
+        .create_async()
+        .await;
+    let request = HttpRequestBuilder::post(format!("{}/POST", server.url()))
+        .build()
+        .unwrap();
+    let response = http.await_response(request).await.unwrap();
+    assert!(matches!(
+        response.unwrap_err(),
+        HttpError::HttpStatusError {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            ..
+        }
+    ));
+
+    mock.assert_async().await;
+}
+
 async fn spawn_http_actor() -> ClientMessageBox<HttpRequest, HttpResult> {
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
