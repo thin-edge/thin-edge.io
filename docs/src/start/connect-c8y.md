@@ -130,17 +130,7 @@ A Tenant Manager must create a CA certificate for the tenant before devices can 
 If the Cumulocity CA feature is not available on your tenant, you can use a [self-signed certificate](#self-signed-certificate) instead, though this is only recommended for development and testing.
 :::
 
-1. In the Cumulocity *Device Management* UI, navigate to *Devices* &rarr; *Registration*
-
-1. Click *Register device* &rarr; *General* and select *"Create device certificates during device registration"*
-
-1. Enter the device ID and a one-time password, then click *Next*
-
-    :::tip
-    Copy the one-time password — you will need it on the device in the next step.
-    :::
-
-1. On the device, run the following command to download the certificate:
+1. On the device, run the following command to request the certificate:
 
     <UserContext>
 
@@ -150,7 +140,36 @@ If the Cumulocity CA feature is not available on your tenant, you can use a [sel
 
     </UserContext>
 
-    You will be prompted for the one-time password set in the previous step.
+    A one-time password is generated, and the URL of the Cumulocity device registration page is printed:
+
+    ```text title="Output"
+    Register the device on example.cumulocity.com:
+
+        device id:         my-device-01
+        one-time password: CTodKOt02iaKIp6s9gTkECS5rkq0vnxv
+
+        Open the following URL to register the device:
+
+        https://example.cumulocity.com/apps/devicemanagement/index.html#/deviceregistration?externalId=my-device-01&one-time-password=CTodKOt02iaKIp6s9gTkECS5rkq0vnxv
+
+    Waiting for the device to be registered ...
+    ```
+
+1. Open the printed URL in a browser and complete the device registration form
+
+    The device id and the one-time password are pre-filled from the URL. Once the device is registered, the command running on the device downloads and stores the certificate.
+
+    :::tip
+    If the device has already been registered in Cumulocity, provide the one-time password given during the registration instead:
+
+    <UserContext>
+
+    ```sh
+    sudo tedge cert download c8y --device-id "$DEVICE_ID" --prompt
+    ```
+
+    </UserContext>
+    :::
 
 ### Alternative: self-signed certificate {#self-signed-certificate}
 

@@ -306,12 +306,19 @@ impl BuildCommand for TEdgeCertCli {
             TEdgeCertCli::Download(DownloadCertCli::C8y {
                 id,
                 one_time_password: token,
+                prompt,
+                no_registration_url,
                 profile,
                 csr_path,
                 url,
                 retry_every,
                 max_timeout,
             }) => {
+                if prompt && !token.is_empty() {
+                    return Err(anyhow!(
+                        "--prompt cannot be used when a one-time password is provided with --one-time-password or DEVICE_ONE_TIME_PASSWORD"
+                    ).into());
+                }
                 let c8y_config = config.mapper_config::<C8yMapperSpecificConfig>(&profile)?;
 
                 let (csr_path, generate_csr) = match csr_path {
@@ -346,6 +353,8 @@ impl BuildCommand for TEdgeCertCli {
                 let cmd = c8y::DownloadCertCmd {
                     device_id,
                     one_time_password: token,
+                    prompt,
+                    show_registration_url: !no_registration_url,
                     c8y_url,
                     root_certs: config.cloud_root_certs().await?,
                     cert_path: c8y_config.device.cert_path.to_owned().into(),
@@ -543,8 +552,31 @@ pub enum DownloadCertCli {
         )]
         /// The one-time password assigned to this device when registered to Cumulocity
         ///
-        /// You will be prompted for input if the value is not provided or is empty
+        /// A random one-time password is generated if the value is not provided or is empty,
+        /// unless `--prompt` is used
+        ///
+        /// A password given by the user is kept secret: it is neither displayed
+        /// nor added to the device registration URL
         one_time_password: String,
+
+        /// Prompt for the one-time password instead of generating a random one
+        #[clap(long)]
+        prompt: bool,
+
+        /// Don't print the device registration URL
+        ///
+        /// The URL includes the one-time password when this command generates it
+        #[clap(long)]
+        #[arg(
+            env = "DEVICE_NO_REGISTRATION_URL",
+            hide_env_values = true,
+            hide_default_value = true,
+            num_args = 0..=1,
+            default_value_t = false,
+            default_missing_value = "true",
+            value_parser = clap::builder::FalseyValueParser::new(),
+        )]
+        no_registration_url: bool,
 
         #[clap(long)]
         /// The Cumulocity cloud profile (when the device is connected to several tenants)

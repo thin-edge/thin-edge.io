@@ -4853,6 +4853,7 @@ dependencies = [
  "pem",
  "predicates",
  "pretty_assertions",
+ "rand 0.10.1",
  "rasn",
  "rasn-cms",
  "rcgen",
