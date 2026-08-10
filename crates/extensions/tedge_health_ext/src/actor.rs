@@ -10,6 +10,7 @@ use tedge_mqtt_ext::MqttMessage;
 pub struct HealthMonitorActor {
     // TODO(marcel): move this
     service_registration_message: Option<MqttMessage>,
+    action_capabilities: Vec<MqttMessage>,
     health_topic: ServiceHealthTopic,
     messages: SimpleMessageBox<MqttMessage, MqttMessage>,
 }
@@ -17,11 +18,13 @@ pub struct HealthMonitorActor {
 impl HealthMonitorActor {
     pub fn new(
         service_registration_message: Option<MqttMessage>,
+        action_capabilities: Vec<MqttMessage>,
         health_topic: ServiceHealthTopic,
         messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     ) -> Self {
         Self {
             service_registration_message,
+            action_capabilities,
             health_topic,
             messages,
         }
@@ -45,6 +48,11 @@ impl Actor for HealthMonitorActor {
     async fn run(mut self) -> Result<(), RuntimeError> {
         if let Some(registration_message) = &self.service_registration_message {
             self.messages.send(registration_message.clone()).await?;
+        }
+
+        // Service action capabilities should be sent after the service registration
+        for action_capability in &self.action_capabilities {
+            self.messages.send(action_capability.clone()).await?;
         }
 
         self.messages.send(self.up_health_status()).await?;

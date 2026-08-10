@@ -19,6 +19,7 @@ use flockfile::Flockfile;
 use flockfile::FlockfileError;
 use futures::FutureExt;
 use tedge_actors::Runtime;
+use tedge_api::service_command::ServiceDeployment;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init_reloadable_for_services;
 use tedge_config::TEdgeConfig;
@@ -74,7 +75,7 @@ pub async fn run(
         let agent_opt = agent_opt.clone();
         async move {
             let config = TEdgeConfig::load(&config_dir).await?;
-            build(agent_opt, config).await
+            build(agent_opt, config, ServiceDeployment::OwnUnit).await
         }
         .boxed()
     });
@@ -95,11 +96,15 @@ pub const AGENT_NAME: &str = "tedge-agent";
 /// Rebuildable factory the single-process supervisor calls (on each restart) for the
 /// agent unit. Builds the runtime with no signal handling, lock, or run-to-completion
 /// — the supervisor owns those.
+///
+/// `deployment` tells whether the agent has an init unit of its own or is hosted by
+/// `tedge run all`, which is what decides the actions it declares on its own service.
 pub async fn build(
     agent_opt: AgentOpt,
     tedge_config: TEdgeConfig,
+    deployment: ServiceDeployment,
 ) -> Result<Runtime, anyhow::Error> {
-    let config = AgentConfig::from_config_and_cliopts(tedge_config, agent_opt).await?;
+    let config = AgentConfig::from_config_and_cliopts(tedge_config, agent_opt, deployment).await?;
     agent::Agent::new(config).build().await
 }
 

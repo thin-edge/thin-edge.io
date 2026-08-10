@@ -43,6 +43,8 @@ use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::mqtt_topics::ServiceTopicId;
 use tedge_api::path::DataDir;
+use tedge_api::service_command::service_actions;
+use tedge_api::service_command::ServiceDeployment;
 use tedge_api::EntityStore;
 use tedge_config::tedge_toml::TEdgeConfigReaderService;
 use tedge_config_ext::ConfigPublisherBuilder;
@@ -95,6 +97,7 @@ pub(crate) struct AgentConfig {
     pub log_plugin_dirs: Vec<Utf8PathBuf>,
     pub config_plugin_dirs: Vec<Utf8PathBuf>,
     pub exposed_config: Vec<(String, Option<serde_json::Value>)>,
+    pub deployment: ServiceDeployment,
     entity_auto_register: bool,
     entity_store_clean_start: bool,
 }
@@ -103,6 +106,7 @@ impl AgentConfig {
     pub async fn from_config_and_cliopts(
         tedge_config: tedge_config::TEdgeConfig,
         cliopts: AgentOpt,
+        deployment: ServiceDeployment,
     ) -> Result<Self, anyhow::Error> {
         let config_dir = tedge_config.config_root();
         let tmp_dir = Arc::from(tedge_config.tmp_root());
@@ -232,6 +236,7 @@ impl AgentConfig {
             log_plugin_dirs,
             config_plugin_dirs,
             exposed_config,
+            deployment,
             entity_auto_register,
             entity_store_clean_start,
         })
@@ -352,7 +357,8 @@ impl Agent {
             &mut mqtt_actor_builder,
             &mqtt_schema,
             &self.config.service,
-        );
+        )
+        .with_actions(service_actions(TEDGE_AGENT, self.config.deployment));
 
         // Instantiate config manager actor if either config_snapshot or config_update operation is enabled
         let config_actor_builder: Option<ConfigManagerBuilder> =

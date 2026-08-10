@@ -15,6 +15,7 @@ use mqtt_channel::Config;
 use tedge_actors::Runtime;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::service_command::ServiceDeployment;
 use tedge_config::models::MQTT_CORE_TLS_PORT;
 use tedge_config::models::MQTT_SERVICE_TLS_PORT;
 use tedge_config::tedge_toml::mapper_config;
@@ -76,6 +77,7 @@ impl TEdgeComponent for CumulocityMapper {
         &self,
         tedge_config: TEdgeConfig,
         cfg_dir: &TedgePaths,
+        deployment: ServiceDeployment,
     ) -> Result<Runtime, anyhow::Error> {
         let c8y_config = tedge_config.mapper_config(&self.profile)?;
         let prefix = &c8y_config.bridge.topic_prefix;
@@ -86,7 +88,7 @@ impl TEdgeComponent for CumulocityMapper {
             self.profile.as_ref(),
         )?;
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(&c8y_mapper_name, &tedge_config, exposed_config).await?;
+            start_basic_actors(&c8y_mapper_name, &tedge_config, exposed_config, deployment).await?;
         let service_topic_id = EntityTopicId::default_main_service(&c8y_mapper_name)?;
 
         let c8y_mapper_config = C8yMapperConfig::from_tedge_config(

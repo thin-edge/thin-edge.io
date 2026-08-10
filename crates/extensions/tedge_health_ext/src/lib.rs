@@ -22,14 +22,20 @@ use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::Service;
+use tedge_api::mqtt_topics::ServiceTopicId;
+use tedge_api::service_command::ServiceActions;
 use tedge_config::tedge_toml::TEdgeConfigReaderService;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::TopicFilter;
 
 pub struct HealthMonitorBuilder {
     registration_message: Option<MqttMessage>,
+    action_capabilities: Vec<MqttMessage>,
     health_topic: ServiceHealthTopic,
+    service_topic_id: ServiceTopicId,
+    mqtt_schema: MqttSchema,
     box_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
 }
 
@@ -103,6 +109,9 @@ impl HealthMonitorBuilder {
         let builder = HealthMonitorBuilder {
             health_topic,
             registration_message: Some(registration_message),
+            action_capabilities: Vec::new(),
+            service_topic_id: service.service_topic_id.clone(),
+            mqtt_schema: mqtt_schema.clone(),
             box_builder,
         };
 
@@ -114,6 +123,30 @@ impl HealthMonitorBuilder {
         *mqtt.as_mut() = builder.set_init_and_last_will(mqtt.as_mut().clone());
 
         builder
+    }
+
+    pub fn with_actions(mut self, actions: ServiceActions) -> Self {
+        let capability = |action: &&str, payload: &'static str| {
+            let topic = self
+                .mqtt_schema
+                .capability_topic_for(self.service_topic_id.entity(), OperationType::from(*action));
+            MqttMessage::new(&topic, payload)
+                .with_retain()
+                .with_qos(QoS::AtLeastOnce)
+        };
+
+        self.action_capabilities = actions
+            .declared
+            .iter()
+            .map(|action| capability(action, "{}"))
+            .chain(
+                actions
+                    .withdrawn
+                    .iter()
+                    .map(|action| capability(action, "")),
+            )
+            .collect();
+        self
     }
 
     fn set_init_and_last_will(&self, config: MqttConfig) -> MqttConfig {
@@ -137,8 +170,12 @@ impl Builder<HealthMonitorActor> for HealthMonitorBuilder {
     fn try_build(self) -> Result<HealthMonitorActor, Self::Error> {
         let message_box = self.box_builder.build();
 
-        let actor =
-            HealthMonitorActor::new(self.registration_message, self.health_topic, message_box);
+        let actor = HealthMonitorActor::new(
+            self.registration_message,
+            self.action_capabilities,
+            self.health_topic,
+            message_box,
+        );
 
         Ok(actor)
     }
