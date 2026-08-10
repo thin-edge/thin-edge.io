@@ -177,3 +177,20 @@ The pull-model, where the agent asks a plugin for the list, stays a future consi
 Nothing here needs to change now.
 
 - [ ] 15.1 Whether `disable` refuses the services `stop` refuses. `stop` refuses `tedge-agent` and any cloud mapper because the outcome of the very command asking for it could not be reported. That reason does not hold for `disable`: a disabled service keeps running, so the outcome is reported. The risk is a different one — disabling `tedge-agent` leaves the device unmanaged after the next reboot, and nothing fails at the time of the command, so the operator learns of it only when the device stops reporting. Decide whether that deserves the same refusal, for that different reason
+
+- [ ] 15.2 Whether a service maps every `cmd/<action>` to `c8y_SupportedServiceCommands`, or only some of them.
+  The mapper takes every command capability of a service as an action of that service (`crates/extensions/c8y_mapper_ext/src/converter.rs:1144`),
+  so no device operation is ever declared on a service,
+  and it reports the outcome of every command of a service as `c8y_ServiceCommand`, deciding that from the entity type alone (`crates/extensions/c8y_mapper_ext/src/operations/handlers/mod.rs:95`).
+  That convention is what dropped `service-supported-ops.robot`, whose tests covered a service's `cmd/<action>` becoming an operation of its own.
+  It may be wider than it has to be: a `c8y_LogfileRequest` on a service is a reasonable thing to ask for, and the discussion which settled the convention did not cover it.
+  What the convention costs today is small.
+  No component declares a device operation on a service, so such an operation reaches one only when it is created on that service's managed object through the REST API,
+  none of the inbound converters checking the type of the target they resolve.
+  It is then carried out only if a workflow is registered for it under `type = "service"`,
+  which for the shipped set means `restart` alone, `service_restart.toml` being the one whose name is also a device operation.
+  The outcome is reported as `c8y_ServiceCommand`: with `smart_rest_use_operation_id` the status is set by operation id, so the operation still closes,
+  and what is lost is the work the mapper does for that operation in particular — uploading the log file or the configuration file it was asked for.
+  Decide the declaration side first, the reporting side following from it.
+  Making the reporting exact now — by refusing a device operation addressed to a service where the target is resolved (`process_json_over_mqtt`, `converter.rs:515`),
+  or by reading the declared set instead of the entity type — would fix the current convention in place, which is the opposite of leaving the question open

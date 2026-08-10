@@ -68,7 +68,11 @@ Re-publish supported operations by signal channel
     ...    c8y/s/us
     ...    message_contains=114,c8y_DeviceProfile,c8y_DownloadConfigFile,c8y_LogfileRequest,c8y_RemoteAccessConnect,c8y_Restart,c8y_SoftwareUpdate,c8y_UploadConfigFile
     Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01    message_contains=114,c8y_Restart
-    Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01:service:foo    message_contains=114,c8y_Restart
+    # On a service, a `cmd/<action>` capability is an action of that service, so the operation
+    # registered for it is `c8y_ServiceCommand`, whatever the action.
+    Should Have MQTT Messages
+    ...    c8y/s/us/${DEVICE_SN}:device:child01:service:foo
+    ...    message_contains=114,c8y_ServiceCommand
 
 
 *** Keywords ***

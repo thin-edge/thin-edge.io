@@ -3157,7 +3157,7 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     ttd.dir("operations")
         .dir("c8y")
         .dir("test-device:device:main:service:collectd")
-        .file("c8y_Restart");
+        .file("c8y_ServiceCommand");
 
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
@@ -3209,7 +3209,7 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
             ),
             (
                 "c8y/s/us/test-device:device:main:service:collectd",
-                "114,c8y_Restart",
+                "114,c8y_ServiceCommand",
             ),
         ],
     )
