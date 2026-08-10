@@ -38,6 +38,73 @@ A declared action SHALL be withdrawn by clearing its capability topic with a ret
 - **WHEN** a component subscribes to a service's `cmd/+` topics after the capabilities were published
 - **THEN** it SHALL receive the retained capability messages and rebuild the full set of supported actions
 
+### Requirement: thin-edge's own services declare their own actions
+
+`tedge-agent` and every mapper SHALL declare their own actions when they start,
+publishing the capabilities where they publish their service registration.
+Which actions are declared depends on how the service is deployed.
+
+A service managed by an init unit of its own SHALL declare:
+
+- `restart`, `enable` and `disable`, for `tedge-agent` and for every mapper;
+- the five standard actions, for `tedge-mapper-collectd` and `tedge-mapper-local`,
+  the two mappers connected to no cloud.
+
+`stop` SHALL NOT be declared for the first set,
+the shipped workflow always refusing it there:
+an action which can only fail is a button in the cloud
+and an operation an operator creates for nothing.
+`start` SHALL NOT be declared either,
+`tedge-agent` being what executes a service command,
+so a `start` addressed to it is only ever asked for while nothing is there to run it.
+
+What a service declares states what is offered and never what is enforced.
+A capability is a retained message anyone can publish,
+and a command can be posted with no capability declared at all,
+so the guards of the shipped workflows SHALL stay the only thing which refuses an action.
+
+A service hosted in a single process with the other components has no init unit of its own,
+so an action reaching an init system would act on a unit which is not what runs.
+Such a service SHALL declare `restart` if it is `tedge-agent`, that being the one action
+which reaches no init system, and SHALL declare nothing otherwise.
+It SHALL also withdraw every standard action it does not declare,
+a capability being retained and outliving the deployment which published it.
+
+A capability lives as long as the registration of the service which published it.
+Uninstalling a service clears neither, and deregistering the service SHALL clear both.
+
+A service thin-edge does not ship declares its own actions,
+thin-edge deciding nothing for it.
+
+#### Scenario: The agent declares its actions at startup
+- **WHEN** `tedge-agent` starts as a service of its own
+- **THEN** `restart`, `enable` and `disable` SHALL be the actions it declares,
+  with nothing else having been published
+
+#### Scenario: A cloud mapper declares the same actions
+- **WHEN** a mapper connected to a cloud starts as a service of its own
+- **THEN** `restart`, `enable` and `disable` SHALL be the actions it declares
+
+#### Scenario: A mapper connected to no cloud declares every action
+- **WHEN** `tedge-mapper-collectd` or `tedge-mapper-local` starts as a service of its own
+- **THEN** the five standard actions SHALL be the actions it declares
+
+#### Scenario: A hosted service declares only what it can carry out
+- **WHEN** the agent and the mappers are hosted in a single process
+- **THEN** `restart` SHALL be the only action declared by the agent,
+  and the mappers SHALL declare no action
+
+#### Scenario: A hosted service withdraws the actions of the previous deployment
+- **WHEN** a device whose services declared their actions as services of their own
+  is moved to a single process
+- **THEN** every standard action a hosted service does not declare SHALL be withdrawn
+
+#### Scenario: An action declared by hand is still refused
+- **WHEN** `stop` is declared by hand on the capability topic of `tedge-agent`
+  and a `stop` command is issued for it
+- **THEN** the command SHALL be refused by the guard of the shipped workflow,
+  the declaration deciding what is offered and not what is allowed
+
 ### Requirement: A service command is issued on the per-action topic
 
 A service command SHALL be issued as a command message on

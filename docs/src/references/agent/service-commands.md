@@ -115,6 +115,31 @@ When that lookup fails, the agent cannot tell whether the command is its own,
 so it leaves the command untouched rather than driving a state machine it may not own.
 :::
 
+## Actions of the shipped services
+
+`tedge-agent` and the mappers declare their own actions when they start,
+on the connection that publishes their service registration.
+Nobody has to declare anything for them.
+
+| Service | Declared actions |
+| --- | --- |
+| `tedge-agent` | `restart`, `enable`, `disable` |
+| any cloud mapper | `restart`, `enable`, `disable` |
+| `tedge-mapper-collectd` and `tedge-mapper-local` | `start`, `stop`, `restart`, `enable`, `disable` |
+
+`stop` is missing from the first two rows because the shipped workflow always refuses it there —
+see [services that cannot be stopped](#services-that-cannot-be-stopped) —
+and an action that can only fail is better not offered.
+`start` is missing because `restart` already starts a service that is not running.
+
+Under `tedge run all`, `tedge-agent` declares `restart` and the mappers declare nothing:
+the init system manages the shared process, not the components inside it,
+and the agent's `restart` is the only action that does not go through the init system.
+
+A capability lives as long as the registration of the service that published it.
+Uninstalling a service clears neither;
+[deregistering it](../../operate/entity-management/rest_api.md) clears both.
+
 ## Shipped workflows
 
 `tedge-agent` installs a workflow for each standard action in
@@ -159,6 +184,10 @@ No backend is asked to restart the agent,
 so this works whether the agent runs as a service of its own,
 or is co-hosted with the mappers under `tedge run all`,
 where no `tedge-agent` unit exists.
+
+Under `tedge run all` the whole process stops, so the mappers restart with the agent.
+Whatever started the process is what starts it again,
+so a unit written with no restart policy leaves the command with nothing to complete it.
 
 ### Services that cannot be stopped
 
