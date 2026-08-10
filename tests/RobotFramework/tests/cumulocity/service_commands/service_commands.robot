@@ -27,6 +27,30 @@ Declares the actions of a service to Cumulocity
     Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
     Supported Service Commands Should Be    ${SERVICE_XID}    RESTART    START    STOP
 
+Declares the actions of thin-edge's own services
+    [Documentation]    tedge-agent and every cloud mapper declare their own actions when they
+    ...    start, with nobody asking for it. Neither declares STOP or START: the shipped
+    ...    workflow always refuses to stop them, so the action is never offered.
+    Supported Service Commands Should Be    ${AGENT_XID}    RESTART    ENABLE    DISABLE
+    Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
+
+    Supported Service Commands Should Be    ${MAPPER_XID}    RESTART    ENABLE    DISABLE
+    Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
+
+Declares every action of a mapper connected to no cloud
+    [Documentation]    The collectd mapper and the local mapper are connected to no cloud, so
+    ...    stopping one takes no way of reporting anything away and both declare all five
+    ...    actions. Neither runs by default, so this test starts them and stops them again.
+    Execute Command    systemctl start tedge-mapper-collectd tedge-mapper-local
+
+    Supported Service Commands Should Be
+    ...    ${DEVICE_SN}:device:main:service:tedge-mapper-collectd
+    ...    DISABLE    ENABLE    RESTART    START    STOP
+    Supported Service Commands Should Be
+    ...    ${DEVICE_SN}:device:main:service:tedge-mapper-local
+    ...    DISABLE    ENABLE    RESTART    START    STOP
+    [Teardown]    Stop The Mappers Connected To No Cloud
+
 Withdraws an action from Cumulocity
     Declare Action    ${SERVICE_NAME}    pause
     Supported Service Commands Should Be    ${SERVICE_XID}    PAUSE    RESTART    START    STOP
@@ -121,6 +145,9 @@ Rejects a service type that names no plugin file
     ...    te/device/main/service/${SERVICE_NAME}/cmd/restart/c8y-mapper-${operation_id}
 
 Refuses to stop tedge-agent
+    # The agent does not declare `stop`, so the action has to be declared by hand to reach the
+    # guard which refuses it. That guard is what enforces the refusal: a capability is a retained
+    # message anyone can publish, and the declaration only says what is offered.
     Declare Action    tedge-agent    stop
     ${operation}=    Create Service Command Operation
     ...    ${AGENT_XID}
@@ -132,6 +159,7 @@ Refuses to stop tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
 Refuses to stop a mapper connected to a cloud
+    # Declared by hand for the same reason as above: a cloud mapper offers no `stop` either.
     Declare Action    tedge-mapper-c8y    stop
     ${operation}=    Create Service Command Operation
     ...    ${MAPPER_XID}
@@ -144,8 +172,8 @@ Refuses to stop a mapper connected to a cloud
 
 Restarts tedge-agent itself
     [Documentation]    tedge-agent is what runs the command, so it asks its runtime to stop and
-    ...    completes the command exactly once when the workflow resumes.
-    Declare Action    tedge-agent    restart
+    ...    completes the command exactly once when the workflow resumes. The action is one the
+    ...    agent declares itself, so nothing has to be declared here.
     ${before}=    Get Service PID    tedge-agent
 
     ${operation}=    Create Service Command Operation
@@ -181,6 +209,12 @@ Register Service
     [Arguments]    ${name}
     Execute Command    tedge mqtt pub --retain te/device/main/service/${name} '{"name":"${name}","@type":"service"}'
     Cumulocity.External Identity Should Exist    ${DEVICE_SN}:device:main:service:${name}    show_info=${False}
+
+Stop The Mappers Connected To No Cloud
+    # Leave the device as the suite setup left it. The suite teardown is called here too,
+    # a test teardown of its own replacing it.
+    Execute Command    systemctl stop tedge-mapper-collectd tedge-mapper-local    ignore_exit_code=${True}
+    Get Logs
 
 Declare Action
     [Arguments]    ${name}    ${action}

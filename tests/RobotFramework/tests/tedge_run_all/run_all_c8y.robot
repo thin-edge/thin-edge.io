@@ -8,8 +8,10 @@ Documentation       Smoke tests for the single-process supervisor (`tedge run al
 ...                 on every restart, while its pid stays put — only the supervised task
 ...                 is rebuilt, not the process), that an update requiring an agent
 ...                 restart exits the whole process for the service manager to restart it,
-...                 and that the supervisor can host multiple mappers (c8y + a custom
-...                 flows-only mapper) simultaneously.
+...                 that a hosted service declares only the action it can carry out with no
+...                 init unit of its own — the agent restarting itself — and that the
+...                 supervisor can host multiple mappers (c8y + a custom flows-only mapper)
+...                 simultaneously.
 ...
 ...                 The device is registered once for the suite, but each test gets a
 ...                 freshly started supervisor and tears it down again afterwards, so the
@@ -89,6 +91,46 @@ A config update restarting the agent restarts the whole process
     Wait Until Keyword Succeeds
     ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
     [Teardown]    Stop Supervisor And Remove Config Type
+
+Declares only the action a hosted service can carry out
+    [Documentation]    No hosted component has an init unit of its own, so an action going
+    ...    through systemctl would act on a unit which is not what runs. Only the agent
+    ...    restarting itself never reaches an init system, so that is all the agent declares
+    ...    and the mapper declares nothing. The suite setup ran both as standalone services
+    ...    first, so their declarations from that deployment are on show when the supervisor
+    ...    starts: a capability is retained, and clearing them is what the hosted services do.
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
+
+    Supported Service Commands Should Be    ${AGENT_XID}    RESTART
+    Supported Service Commands Should Be    ${MAPPER_XID}
+
+Restarts tedge-agent under the supervisor
+    [Documentation]    The agent restarts itself rather than asking a backend, so the action
+    ...    works with no unit of its own: the supervisor exits the whole process and the service
+    ...    manager starts it again, the mapper coming back with it. The operation completes once
+    ...    the agent resumes from the state it persisted before stopping.
+    [Setup]    Start Supervisor With Restart On Failure
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-agent
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
+
+    ${pid_before}=    Get Service PID    tedge-run-all
+
+    ${operation}=    Create Service Command Operation
+    ...    ${AGENT_XID}
+    ...    {"command":"RESTART","serviceName":"tedge-agent","serviceType":"service"}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=180
+
+    # The whole process was re-executed, the agent having no unit of its own to restart.
+    ${pid_after}=    Get Service PID    tedge-run-all
+    Should Not Be Equal    ${pid_before}    ${pid_after}
+
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-agent
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
 
 SIGUSR1 restarts the mapper
     # The mapper publishes a health `up` message every time it (re)starts, stamped
@@ -175,6 +217,8 @@ Register Device
     # certificate-authority enrolment.
     ${DEVICE_SN}=    Setup    register_using=self-signed    connect=${False}
     Set Suite Variable    ${DEVICE_SN}
+    Set Suite Variable    $AGENT_XID    ${DEVICE_SN}:device:main:service:tedge-agent
+    Set Suite Variable    $MAPPER_XID    ${DEVICE_SN}:device:main:service:tedge-mapper-c8y
 
     # Establish connectivity the normal way first, to prove a working baseline and to
     # lay down the bridge configuration the supervisor's bridge reuses.
@@ -251,3 +295,23 @@ Custom Mapper Restarted Since
     ${now}=    Service Health Status Should Be Up    tedge-mapper-test-echo
     Should Be True    ${now["time"]} > ${before["time"]}
     Should Be Equal As Integers    ${now["pid"]}    ${before["pid"]}
+
+Supported Service Commands Should Be
+    [Arguments]    ${external_id}    @{expected}
+    Cumulocity.External Identity Should Exist    ${external_id}    show_info=${False}
+    Wait Until Keyword Succeeds    30x    2s    Managed Object Service Commands Should Be    @{expected}
+
+Managed Object Service Commands Should Be
+    [Arguments]    @{expected}
+    ${mo}=    Cumulocity.Managed Object Should Have Fragments    c8y_SupportedServiceCommands
+    ${actual}=    Evaluate    sorted($mo["c8y_SupportedServiceCommands"])
+    ${wanted}=    Evaluate    sorted($expected)
+    Should Be Equal    ${actual}    ${wanted}
+
+Create Service Command Operation
+    [Arguments]    ${external_id}    ${fragment}
+    Cumulocity.External Identity Should Exist    ${external_id}    show_info=${False}
+    ${operation}=    Cumulocity.Create Operation
+    ...    fragments={"c8y_ServiceCommand":${fragment}}
+    ...    description=Service command
+    RETURN    ${operation}
