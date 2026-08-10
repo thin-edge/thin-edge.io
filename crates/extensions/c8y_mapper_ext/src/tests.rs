@@ -70,6 +70,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::paths::TedgePaths;
+use tokio::sync::watch;
 
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
@@ -89,47 +90,101 @@ async fn mapper_publishes_init_messages_on_startup() {
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
 }
 
-/// With the built-in bridge, the mapper must not publish its init messages (notably the
-/// `114` supported operations) before the bridge is up: an early publish to `c8y/s/us`
-/// races with the bridge subscribing locally and can be dropped on a fresh session, so the
-/// supported operations would never reach the cloud. The init messages must be deferred
-/// until the bridge reports `up` and then sent exactly once.
+/// The built-in bridge starts alongside the mapper, and until it is subscribed to `c8y/s/us`
+/// anything published there on a fresh session is dropped rather than relayed to the cloud
 #[tokio::test]
-async fn builtin_bridge_mapper_defers_init_messages_until_bridge_is_up() {
+async fn builtin_bridge_mapper_defers_init_messages_until_the_bridge_is_subscribed() {
     let ttd = TempTedgeDir::new();
+    let (handle, bridge_subscribed) = spawn_c8y_mapper_actor_with_builtin_bridge(&ttd).await;
+    let mut mqtt = handle.mqtt.with_timeout(Duration::from_millis(500));
 
-    // Configure the mapper to use the built-in bridge
+    // While the bridge is not subscribed, no init message is published
+    assert!(mqtt.recv().await.is_none());
+
+    // Once the built-in bridge is subscribed, the init messages are published
+    bridge_subscribed.send(true).unwrap();
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
+}
+
+/// Everything the mapper converts is bound for the cloud, so nothing may be converted before the
+/// bridge is subscribed — not just the init messages. The inputs are held back and converted
+/// afterwards.
+#[tokio::test]
+async fn builtin_bridge_mapper_converts_messages_received_while_waiting_once_subscribed() {
+    let ttd = TempTedgeDir::new();
+    let (handle, bridge_subscribed) = spawn_c8y_mapper_actor_with_builtin_bridge(&ttd).await;
+    let mut mqtt = handle.mqtt.with_timeout(Duration::from_millis(500));
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1//"),
+        r#"{ "@type": "child-device", "type": "RaspberryPi", "name": "Child1" }"#,
+    ))
+    .await
+    .unwrap();
+
+    // While the bridge is not subscribed, the registration is not converted
+    assert!(mqtt.recv().await.is_none());
+
+    bridge_subscribed.send(true).unwrap();
+
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "114"),
+            ("c8y/s/us", "500"),
+            (
+                "c8y/s/us",
+                "101,test-device:device:child1,Child1,RaspberryPi,false",
+            ),
+        ],
+    )
+    .await;
+}
+
+/// The mapper cannot know when it is safe to publish unless the built-in bridge tells it, so a
+/// wiring mistake has to fail at startup rather than silently lose the cloud-bound messages
+#[tokio::test]
+async fn builtin_bridge_mapper_cannot_be_built_without_the_bridge_subscription_state() {
+    let ttd = TempTedgeDir::new();
     let base = test_mapper_config(&ttd);
-    let bridge_health_topic =
-        Topic::new_unchecked("te/device/main/service/tedge-mapper-bridge-c8y/status/health");
     let config = C8yMapperConfig {
         bridge_in_mapper: true,
-        bridge_service_name: format!("tedge-mapper-bridge-{}", base.bridge_config.c8y_prefix),
-        bridge_health_topic: bridge_health_topic.clone(),
         ..base
     };
 
     let builders = c8y_mapper_builder(&ttd, config, true).await;
-    let actor = builders.c8y.build();
-    tokio::spawn(async move { actor.run().await });
-    let flows_actor = builders.flows.build();
-    tokio::spawn(async move { flows_actor.run().await });
-    let mut service_monitor = builders.service_monitor.build();
 
-    let mut mqtt = builders
-        .mqtt
-        .build()
-        .with_timeout(Duration::from_millis(500));
+    let Err(error) = builders.c8y.try_build() else {
+        panic!("the mapper must not be built without the bridge's subscription state")
+    };
+    assert!(
+        error.to_string().contains("subscription state"),
+        "unexpected error: {error}"
+    );
+}
 
-    // While the bridge is not up, no init message is published
-    assert!(mqtt.recv().await.is_none());
+/// A device may stay offline long after the mapper starts, so the mapper has to keep receiving
+/// its inputs while it waits: a full input channel would stall the MQTT actor for every other
+/// actor in the process
+#[tokio::test]
+async fn builtin_bridge_mapper_keeps_receiving_its_inputs_while_waiting_for_the_bridge() {
+    let ttd = TempTedgeDir::new();
+    // The bridge stays unsubscribed for the whole test: holding on to the sender keeps the mapper
+    // waiting, as a dropped sender would end the wait
+    let (handle, _bridge_subscribed) = spawn_c8y_mapper_actor_with_builtin_bridge(&ttd).await;
+    let mut mqtt = handle.mqtt;
 
-    // Once the built-in bridge is up, the init messages are published
-    service_monitor
-        .send(MqttMessage::new(&bridge_health_topic, r#"{"status":"up"}"#))
-        .await
-        .unwrap();
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
+    // More registrations than the mapper's input channel can hold at once
+    for i in 0..32 {
+        let registration = MqttMessage::new(
+            &Topic::new_unchecked(&format!("te/device/child{i}//")),
+            r#"{ "@type": "child-device" }"#,
+        );
+        tokio::time::timeout(TEST_TIMEOUT_MS, mqtt.send(registration))
+            .await
+            .expect("the mapper must keep receiving while it waits for the bridge")
+            .unwrap();
+    }
 }
 
 #[tokio::test]
@@ -3225,6 +3280,42 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
         dl: builders.dl.build(),
         avail: builders.avail.build(),
     }
+}
+
+/// Spawns a mapper using the built-in bridge, with that bridge not yet subscribed
+///
+/// Unlike [spawn_c8y_mapper_actor_with_config], the caller decides when the bridge holds the
+/// subscriptions relaying the cloud topics, through the returned sender
+pub(crate) async fn spawn_c8y_mapper_actor_with_builtin_bridge(
+    tmp_dir: &TempTedgeDir,
+) -> (TestHandle, watch::Sender<bool>) {
+    let base = test_mapper_config(tmp_dir);
+    let config = C8yMapperConfig {
+        bridge_in_mapper: true,
+        bridge_service_name: format!("tedge-mapper-bridge-{}", base.bridge_config.c8y_prefix),
+        ..base
+    };
+
+    let mut builders = c8y_mapper_builder(tmp_dir, config, true).await;
+    let (bridge_subscribed, subscribed) = watch::channel(false);
+    builders.c8y.set_bridge_subscribed(subscribed);
+
+    let actor = builders.c8y.build();
+    tokio::spawn(async move { actor.run().await });
+
+    let actor = builders.flows.build();
+    tokio::spawn(async move { actor.run().await });
+
+    let handle = TestHandle {
+        mqtt: builders.mqtt.build(),
+        http: builders.http.build(),
+        fs: builders.fs.build(),
+        ul: builders.ul.build(),
+        dl: builders.dl.build(),
+        avail: builders.avail.build(),
+    };
+
+    (handle, bridge_subscribed)
 }
 
 pub(crate) struct TestHandleBuilder {

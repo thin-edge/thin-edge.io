@@ -92,6 +92,7 @@ impl TEdgeComponent for CumulocityMapper {
             self.profile.clone(),
         )?;
         let auth_method = auth_method(&c8y_config);
+        let mut bridge_subscribed = None;
         if tedge_config.mqtt.bridge.built_in {
             let (tc, cloud_config, reconnect_message_mapper) = mqtt_bridge_config(
                 &tedge_config,
@@ -102,20 +103,20 @@ impl TEdgeComponent for CumulocityMapper {
                 auth_method,
             )
             .await?;
-            runtime
-                .spawn(
-                    MqttBridgeActorBuilder::new(
-                        &tedge_config,
-                        &c8y_mapper_config.bridge_service_name,
-                        &c8y_mapper_config.bridge_health_topic,
-                        tc,
-                        cloud_config,
-                        Some(reconnect_message_mapper),
-                        c8y_config.mapper.mqtt.max_payload_size.0 as usize,
-                    )
-                    .await,
-                )
-                .await?;
+            let bridge_builder = MqttBridgeActorBuilder::new(
+                &tedge_config,
+                &c8y_mapper_config.bridge_service_name,
+                &c8y_mapper_config.bridge_health_topic,
+                tc,
+                cloud_config,
+                Some(reconnect_message_mapper),
+                c8y_config.mapper.mqtt.max_payload_size.0 as usize,
+            )
+            .await;
+            // The mapper publishes nothing to the cloud until this bridge holds the subscriptions
+            // relaying those topics, as the broker discards anything published before then
+            bridge_subscribed = Some(bridge_builder.local_subscriptions_ready());
+            runtime.spawn(bridge_builder).await?;
         } else if tedge_config.proxy.address.or_none().is_some() {
             warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
         }
@@ -154,6 +155,9 @@ impl TEdgeComponent for CumulocityMapper {
             &mut fs_watch_actor,
             &mut service_monitor_actor,
         )?;
+        if let Some(bridge_subscribed) = bridge_subscribed {
+            c8y_mapper_actor.set_bridge_subscribed(bridge_subscribed);
+        }
 
         let availability_actor = if c8y_config.cloud_specific.availability.enable {
             Some(AvailabilityBuilder::new(
