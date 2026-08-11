@@ -32,6 +32,12 @@ Action names SHALL be uppercased, following the Cumulocity convention.
 Custom action names SHALL be passed through unchanged apart from the case mapping.
 The array SHALL be sorted, so that the same set of actions always gives the same array.
 
+A capability whose action name does not match the action name rule `[a-z][a-z0-9_-]*`
+SHALL NOT be declared at all, and SHALL only be logged.
+Cumulocity would otherwise offer a command whose lowercased name
+matches no capability topic of that service,
+so the action could never be routed back to it.
+
 The array SHALL be re-published whenever the set of declared actions changes.
 When a capability topic is cleared, the mapper SHALL drop that action from the set
 and publish the reduced array.
@@ -46,6 +52,11 @@ so the mapper SHALL rebuild the full set and SHALL NOT lose a previously declare
 #### Scenario: A custom action is passed through
 - **WHEN** a service declares `cmd/pause`
 - **THEN** `PAUSE` SHALL appear in that service's `c8y_SupportedServiceCommands`
+
+#### Scenario: An action name the cloud could not send back is not declared
+- **WHEN** a service declares `cmd/doSomething`
+- **THEN** `DOSOMETHING` SHALL NOT appear in that service's `c8y_SupportedServiceCommands`,
+  and the capability SHALL be logged as dropped
 
 #### Scenario: A withdrawn action is removed
 - **WHEN** a service clears its `cmd/pause` capability topic

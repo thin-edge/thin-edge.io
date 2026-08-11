@@ -205,9 +205,9 @@ so no supported operation is deregistered and no operation file is deleted.
 
 ### The command payload does not name the action
 
-0011 gives the command payload as
-`{"status", "command", "serviceName", "serviceType"}`.
-The `command` field is dropped.
+The command payload as 0011 first gave it was
+`{"status", "action", "serviceName", "serviceType"}`.
+The `action` field is dropped.
 
 thin-edge names an operation in the topic, not in the payload.
 `RestartCommandPayload` (`crates/core/tedge_api/src/commands.rs:681`) carries
@@ -225,7 +225,7 @@ The payload is therefore `{"status", "serviceName", "serviceType"}`.
 which is not derivable from the topic under a custom topic scheme.
 `serviceType` stays because it selects the backend.
 
-The `command` field exists in 0011 because it mirrors Cumulocity's `c8y_ServiceCommand`
+The field was there because it mirrors Cumulocity's `c8y_ServiceCommand`
 fragment, which carries `serviceType`, `serviceName` and `command`.
 thin-edge does not need to follow Cumulocity's shape;
 `command` is the cloud's word and stays inside the mapper.
