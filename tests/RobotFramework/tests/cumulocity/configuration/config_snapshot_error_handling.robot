@@ -31,7 +31,7 @@ Config snapshot fails immediately when file-transfer storage is not writable
     ${operation}=    Cumulocity.Get Configuration    tedge-configuration-plugin
     Operation Should Be FAILED
     ...    ${operation}
-    ...    failure_reason=config-manager failed uploading configuration snapshot.*
+    ...    failure_reason=.+Upload failed:.*
     ...    timeout=30
     [Teardown]    Run Keywords
     ...    Restore File-Transfer Directory Permissions
