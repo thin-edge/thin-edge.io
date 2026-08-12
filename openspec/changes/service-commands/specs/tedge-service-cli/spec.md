@@ -93,9 +93,7 @@ To keep a misspelled key discoverable,
 the actions read from `[init]` SHALL be logged when the configuration is loaded,
 and `tedge service` SHALL list the known actions when it rejects an unsupported one.
 
-Keys of `[init]` that are not service actions — the init system name
-and the templates that query state rather than act on a service —
-SHALL remain reserved and SHALL NOT be dispatchable as actions.
+Every key of `[init]` except `name` SHALL be an action.
 
 #### Scenario: A custom action template is honoured
 - **WHEN** `[init]` defines a `reload` template and `tedge service reload nginx` is run
@@ -106,9 +104,13 @@ SHALL remain reserved and SHALL NOT be dispatchable as actions.
 - **THEN** the command SHALL fail with the "not supported" exit code,
   and the error SHALL list the actions `[init]` does define
 
-#### Scenario: A reserved key is not an action
-- **WHEN** `tedge service` is run with an action name matching a reserved `[init]` key
-- **THEN** it SHALL fail with the "not supported" exit code and SHALL NOT execute that template
+#### Scenario: A state query is run
+- **WHEN** `tedge service is_active nginx` is run
+- **THEN** the configured `is_active` command SHALL be executed on `nginx`
+
+#### Scenario: name is not an action
+- **WHEN** `tedge service name nginx` is run
+- **THEN** it SHALL fail with the "not supported" exit code and SHALL NOT execute anything
 
 ### Requirement: Service plugin contract
 
@@ -117,7 +119,8 @@ installed in one of the directories of `service.plugin_paths`,
 `/usr/share/tedge/service-plugins` per default.
 
 `tedge service` SHALL invoke it as `<plugin> <action> <service-name>`,
-where `<action>` is `start`, `stop`, `restart` or an action the plugin defines itself.
+where `<action>` is `start`, `stop`, `restart`, `enable`, `disable`
+or an action the plugin defines itself.
 
 The plugin SHALL report its outcome through its exit code:
 
@@ -150,12 +153,10 @@ and SHALL NOT have to accept any other spelling of it.
 Since `tedge service` runs as root, it SHALL validate every argument before use,
 and SHALL reject an invalid argument without invoking any backend.
 
-- the action SHALL be of bounded length and SHALL match `[a-z][a-z0-9_-]*`.
+- the action SHALL match `[a-z][a-z0-9_-]*`.
   The rule allows neither a space nor a leading `-`,
   so the action can be neither read as an option nor mistaken for a command line to run;
-- the service name SHALL be non-empty, of bounded length,
-  match `[A-Za-z0-9_.@-]+`, and not start with `-`,
-  so that it cannot be read as an option by the init tool;
+- the service name SHALL be non-empty and SHALL NOT start with `-`;
 - the service type SHALL match `[a-z0-9_-]+`,
   since it selects a file under the plugin directory and must not allow path traversal.
 

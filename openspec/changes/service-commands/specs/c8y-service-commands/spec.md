@@ -86,19 +86,16 @@ For a valid operation, the mapper SHALL publish a thin-edge command with:
   so lowercasing the value it sends gives back the action name the service declared.
   The action is named by the topic only;
   the mapper SHALL NOT copy the cloud's `command` value into the thin-edge payload;
-- `serviceName` taken from the `serviceName` value of the operation payload.
-  Cumulocity holds one name per service, the one the mapper published when registering it,
-  so this is the name a backend is asked for.
-  The target is resolved from the external id and never from that name,
-  so the command is published on the topic of the resolved service whatever the name says;
+- `serviceName` taken from the `serviceName` value of the operation payload,
+  which is the name `tedge service` passes to the backend;
 - `serviceType` taken from the service's registration data,
   falling back to the `serviceType` value in the operation payload,
   and to the default type `service` when the service was registered without a type;
 - `status` set to `init`.
 
 #### Scenario: A RESTART operation becomes a restart command
-- **WHEN** the mapper receives a `c8y_ServiceCommand` operation with `command` `RESTART`
-  for the external id `<device-id>:device:main:service:collectd`
+- **WHEN** the mapper receives a `c8y_ServiceCommand` operation with `command` `RESTART`,
+  whose external id resolves to the `collectd` service of the main device
 - **THEN** it SHALL publish `te/device/main/service/collectd/cmd/restart/<cmd-id>`
   with `status` `init` and `serviceName` `collectd`, and no action name in the payload
 
@@ -128,22 +125,20 @@ and SHALL NOT publish any thin-edge command, when:
   is not among the actions the target service has declared;
 - the lowercased `command` value does not match the action name rule `[a-z][a-z0-9_-]*`,
   which is what `tedge service` accepts;
-- the operation carries no `serviceName`, or one a backend could misread.
-  The name is checked against the same rule as the service name of `tedge service`,
-  so the reason reaches the operator instead of a generic backend failure.
-  Cumulocity always names the service,
-  hence a missing name is reported the same way as an invalid one;
+- the operation carries no `serviceName`,
+  or one which does not match the service name rule of `tedge service`:
+  non-empty with no leading `-`.
+  Checking the name here gives the operator the reason
+  instead of a generic backend failure;
 - the service type, whether it comes from the registration data or from the operation payload,
   does not match the service type rule of `tedge service`,
   since it names a file under the service plugin directory.
 
 The failure SHALL be reported on the SmartREST topic of the target,
-the very topic Cumulocity created the operation on.
+the topic Cumulocity created the operation on.
 A target that cannot be resolved SHALL be addressed by the external id the operation carries,
 as the service a service command always names.
 Nothing SHALL be published when that external id names no valid topic.
-The failure of a command addressed to a service SHALL NOT be reported on the topic of the main device,
-which owns no operation created for a service.
 
 #### Scenario: The target cannot be resolved
 - **WHEN** the operation's external id matches no known entity
@@ -164,8 +159,7 @@ which owns no operation created for a service.
 - **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
 
 #### Scenario: A service name a backend could misread is refused
-- **WHEN** the operation's `serviceName` is absent or empty,
-  starts with `-`, or holds a character outside `[A-Za-z0-9_.@-]`
+- **WHEN** the operation's `serviceName` is absent or empty, or starts with `-`
 - **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
 
 #### Scenario: A service type naming no plugin file is refused
@@ -180,10 +174,9 @@ with the existing command status mapping (SmartREST `501` to `506`),
 on the SmartREST topic of the service.
 
 The operation reported SHALL be `c8y_ServiceCommand`,
-decided by the target being a service and not by the name of the action.
-A service action is not the device operation its name would otherwise map to:
-reporting the status of the `restart` command of a service as `c8y_Restart`
-would name an operation that Cumulocity never created.
+chosen from the target being a service and not from the name of the action.
+Reporting a service's `restart` as `c8y_Restart`
+would name an operation Cumulocity never created.
 
 #### Scenario: A successful command is reported
 - **WHEN** the service command reaches `successful`

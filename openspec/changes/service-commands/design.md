@@ -11,58 +11,36 @@ It records the engineering decisions needed to build the feature in the current 
 The current state constraining them:
 
 - **Workflow definitions are keyed by operation name only.**
-  `TomlOperationWorkflow` (`crates/core/tedge_api/src/workflow/toml_config.rs:33`)
-  has `operation` plus flattened handlers and states.
-  `WorkflowSupervisor.workflows` is a `HashMap<OperationType, WorkflowVersions>`
-  (`crates/core/tedge_api/src/workflow/supervisor.rs:12`),
-  and `WorkflowRepository.definitions` is keyed by operation name
-  (`crates/core/tedge_agent/src/operation_workflows/persist.rs:42`).
   Nothing in the engine knows which entity type a workflow is for.
-- **The agent only subscribes to its own device's commands.**
-  `WorkflowActorBuilder::subscriptions` (`crates/core/tedge_agent/src/operation_workflows/builder.rs:166`)
-  builds `te/device/<own>///cmd/+/+`.
-  `WorkflowActor::process_mqtt_message` (`crates/core/tedge_agent/src/operation_workflows/actor.rs:163`)
-  then discards the entity part of the parsed topic, because there is only one possible target.
-- **The c8y mapper turns a capability message into an operation file.**
-  `Channel::CommandMetadata` is handled in `try_convert_data_message`
-  (`crates/extensions/c8y_mapper_ext/src/converter.rs:1132`),
-  which maps a known command to a c8y fragment and calls `register_operation`
-  (`converter.rs:1328`), which writes a file under `/etc/tedge/operations/c8y/<xid>/`
-  and then republishes SmartREST `114`.
-  An empty capability payload is ignored with a warning (`converter.rs:1134`, issue #2739),
-  so clearing a capability does nothing today.
-- **The init system is abstracted, but with a fixed set of commands.**
-  `InitConfig` (`crates/common/tedge_config/src/system_toml/services.rs:3`)
-  has exactly `name`, `is_available`, `restart`, `stop`, `start`, `enable`, `disable`, `is_active`,
-  each an argv template with a `{}` placeholder.
-  `InitConfigToml` (`services.rs:16`) uses `deny_unknown_fields`.
-  `SystemServiceManager` (`crates/common/tedge_system_services/src/manager.rs:11`)
-  exposes one method per command, and `GeneralServiceManager` runs them argv-based, without a shell
-  (`managers/general_manager.rs:232`).
-- **`/usr/bin/tedge` is already a sudoers entry**
-  (written by `configuration/package_scripts/tedge/preinst:89`),
+- **The agent only subscribes to its own device's commands**,
+  and discards the entity part of the topic a command arrives on,
+  because there is only one possible target.
+- **The init system is abstracted, but with a fixed set of commands**,
+  each an argv template with a `{}` placeholder, and unknown keys are rejected.
+- **`/usr/bin/tedge` is already a sudoers entry**,
   so a new `tedge` subcommand needs no packaging change to run as root.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- One executor per device, with third parties plugged in below the command state machine.
+- One executor per device: `tedge-agent` drives every service command,
+  and a third party supplies the plugin it runs rather than driving the command itself.
 - A workflow can be selected by target entity type, so `restart` for a device
   and `restart` for a service are separate workflows.
-- The c8y mapper handles `c8y_ServiceCommand` natively, without an operation file per command.
+- The c8y mapper handles `c8y_ServiceCommand` natively,
+  creating the supported operation entry itself, with nothing to install beforehand.
 - `tedge service` is usable on its own, as an init-system-agnostic service wrapper.
 
 **Non-Goals:**
 
 - Discovering service capabilities from the agent (the pull model in 0011's future work).
 - Filtering which declared capabilities are exposed to the cloud.
-- Commands addressed to services of other devices.
 - Reworking how workflow files are named on disk beyond what this feature needs.
 
 ## Decisions
 
-### Scope the workflow registry by entity type, not by a mangled operation name
+### Scope the workflow registry by entity type, not by encoding the type in the operation name
 
 `TomlOperationWorkflow` gains an optional `type` field holding an `EntityType`,
 defaulting to `device`.
@@ -70,22 +48,20 @@ It must be declared **before** the flattened `handlers` and `states` fields,
 otherwise serde folds it into the state map.
 
 The registry key changes from `OperationType` to `(EntityType, OperationType)`
-in `WorkflowSupervisor.workflows`, and the same pair is threaded through
-`register_custom_workflow`, `unregister_custom_workflow`, `capability_message`,
-`use_current_version`, `apply_external_update` and `get_action` (`supervisor.rs:31`-`:206`).
+in `WorkflowSupervisor.workflows`.
 
 Alternative considered: encoding the type into the operation name, for example `service/restart`.
 Rejected — the operation name appears in the MQTT topic and in the cloud mapping,
 so overloading it would leak the scoping into the wire format.
 
-`WorkflowRepository.definitions` (`persist.rs:42`) is keyed the same way,
+`WorkflowRepository.definitions` (`persist.rs`) is keyed the same way,
 and gets the same treatment.
 
 Two methods do not take the entity type.
 
 `get_action` keeps its signature.
 A command under execution is identified by its operation name and its `@version`,
-and the version is the digest of the workflow definition (`persist.rs:483`),
+and the version is the digest of the workflow definition (`persist.rs`),
 of which `type` is part.
 So two workflows sharing an operation name never share a version,
 and the workflow of a running command is found without knowing the entity type.
@@ -99,15 +75,12 @@ For the same reason `capability_messages` is filtered on the entity type of the 
 
 The operation name comes from the `operation` field of the definition, not from the file name,
 so a device `restart` and a service `restart` live in `/etc/tedge/operations/` under any two names.
-`load_operation_workflow` takes the name from the parsed content, `workflow.operation` (`persist.rs:132`),
-`read_operation_workflow` uses the path only in error messages (`persist.rs:478`),
-and removal finds the entry by comparing paths (`persist.rs:245`).
 The only thing a user has to do is set `type = "service"` in the definition.
 
 Alternative considered: a naming convention such as `service-restart.toml`,
 or a per-type subdirectory `operations/service/restart.toml`.
 Both are unnecessary once the keys carry the entity type,
-and the subdirectory would additionally require changing `is_user_defined` (`persist.rs:211`),
+and the subdirectory would additionally require changing `is_user_defined` (`persist.rs`),
 which expects the file's parent to be exactly the workflows directory,
 along with the inotify watch that only covers that directory.
 
@@ -118,9 +91,9 @@ because the device-service relation is carried by the registration message's `@p
 not by the topic structure.
 So the scoping is not done by the subscription; it is done when a command arrives.
 
-The subscription in `WorkflowActorBuilder::subscriptions` (`builder.rs:166`) is widened to
+The subscription in `WorkflowActorBuilder::subscriptions` (`builder.rs`) is widened to
 `EntityFilter::AnyEntity` with `ChannelFilter::AnyCommand`, keeping the own-service signal filter.
-`WorkflowActor::process_mqtt_message` currently drops the entity from the parsed topic (`actor.rs:163`);
+`WorkflowActor::process_mqtt_message` currently drops the entity from the parsed topic (`actor.rs`);
 it will keep it and decide, per command, whether to act and under which entity type:
 
 - the target is the device the agent runs on: act, classified as `device`;
@@ -137,7 +110,7 @@ Not looking it up also keeps a device command working exactly as before this cha
 it does not depend on the entity store being reachable, nor on the device being registered there.
 That last point matters under a custom topic scheme, where the device is not registered at all
 unless someone registers it: `EntityStore::with_main_device` only ever holds `device/main//`
-(`agent.rs:409`).
+(`agent.rs`).
 The consequence is that a workflow declaring `type = "child-device"` matches nothing today.
 The key keeps the three values of the `@type` vocabulary,
 so the case that value is meant for stays expressible when it is designed:
@@ -145,10 +118,10 @@ a main device agent driving the workflows of a child device that cannot run its 
 Loading such a workflow is logged as a warning, since it will never be selected.
 
 The registration data of any other target comes from the entity store over its REST API,
-`GET /te/v1/entities/<topic-id>` (`crates/core/tedge_agent/src/http_server/entity_store.rs:167`),
+`GET /te/v1/entities/<topic-id>` (`crates/core/tedge_agent/src/http_server/entity_store.rs`),
 which returns the entity's type and parent.
 The request goes through the `tedge_http_ext` HTTP actor, which the agent now spawns,
-built from `http.client_tls_config()` as the c8y mapper already does (`c8y/mapper.rs:123`),
+built from `http.client_tls_config()` as the c8y mapper already does (`c8y/mapper.rs`),
 and addressed at `http.client.host` and `http.client.port`.
 The config and log managers already use that host to reach the main device
 even when they run on the main device itself,
@@ -160,10 +133,10 @@ and not caching removes the need to invalidate anything when an entity is deregi
 
 Alternative considered: an in-process client to the entity store actor on the main device,
 falling back to REST on a child device.
-Rejected — the entity store only runs on the main device (`agent.rs:424`),
+Rejected — the entity store only runs on the main device (`agent.rs`),
 so this is two code paths for one question,
-and the in-process path needs the workflow builder (`agent.rs:317`)
-to be constructed after the entity store (`agent.rs:433`).
+and the in-process path needs the workflow builder (`agent.rs`)
+to be constructed after the entity store (`agent.rs`).
 
 Alternative considered: tracking registration messages inside the workflow actor
 and adding a subscription per service through `DynSubscriptions`.
@@ -172,7 +145,7 @@ and it makes the agent's behaviour depend on the order in which retained message
 
 ### Treat every command capability of a service entity as a service command
 
-In `try_convert_data_message` (`converter.rs:1132`),
+In `try_convert_data_message` (`converter.rs`),
 a `Channel::CommandMetadata` message whose target entity is an `EntityType::Service`
 is routed to the new service-command handling
 instead of the existing per-operation mapping.
@@ -182,26 +155,49 @@ not the device operation `c8y_Restart`.
 The mapper keeps the declared command names per service in memory
 and republishes the whole `c8y_SupportedServiceCommands` array on every change,
 using the existing inventory helper `inventory_update_message`
-(`crates/extensions/c8y_mapper_ext/src/inventory.rs:82`).
+(`crates/extensions/c8y_mapper_ext/src/inventory.rs`).
 `c8y_ServiceCommand` itself is registered once per service through the existing
-`register_operation` path (`converter.rs:1328`), which emits SmartREST `114`.
+`register_operation` path (`converter.rs`), which emits SmartREST `114`.
 
 This changes today's behaviour for a service that declares a command capability.
-In practice thin-edge's own services do not declare capabilities on their service topics today,
-so the exposure is small, but it is a behaviour change and is called out as a risk.
+No thin-edge service declares one before this change,
+so what is affected is a service someone else wrote.
+It is still a behaviour change, and is called out as a risk.
 
 **Withdrawal is implemented, narrowly.**
-An empty capability payload is ignored today with a warning
-(`converter.rs:1134`, issue #2739).
+An empty capability payload is ignored today with a warning (`converter.rs`).
 For command metadata on a service entity it is handled:
 the command is dropped from the service's set and the reduced
 `c8y_SupportedServiceCommands` array is published.
 Services appear and disappear at runtime — a container is the obvious case —
 so without this the fragment drifts away from what the device can actually do.
 
-The rest of #2739 is left alone.
 Nothing outside the service-command set is removed on an empty payload,
 so no supported operation is deregistered and no operation file is deleted.
+
+### thin-edge's own services declare their own actions
+
+`service_actions` (`crates/core/tedge_api/src/service_command.rs`) decides what each
+thin-edge service publishes on its own service topic at startup.
+
+The agent and every `tedge-mapper-<x>` declare `restart`, `enable` and `disable`.
+`stop` is left out because the shipped workflow refuses it for them,
+nothing being left to report the outcome of the command that asked for it,
+and `start` with it: a service that cannot be stopped this way has nothing to start.
+`tedge-mapper-collectd` and `tedge-mapper-local` are connected to no cloud
+and declare all five.
+
+Under `tedge run all` no init unit manages a component,
+so the agent declares `restart` alone — the one action which never reaches an init system —
+and a mapper declares nothing.
+There, and only there, what is not declared is withdrawn by clearing the capability topic:
+a capability is retained, so it outlives the service that published it,
+and moving a device to `tedge run all` would otherwise leave the actions of the
+previous deployment on show.
+
+A declaration says what is offered, never what is enforced.
+Anyone can publish a capability, and a command can be posted with none declared at all,
+so the guards of the shipped workflows stay the only thing that refuses an action.
 
 ### The command payload does not name the action
 
@@ -210,9 +206,9 @@ The command payload as 0011 first gave it was
 The `action` field is dropped.
 
 thin-edge names an operation in the topic, not in the payload.
-`RestartCommandPayload` (`crates/core/tedge_api/src/commands.rs:681`) carries
+`RestartCommandPayload` (`crates/core/tedge_api/src/commands.rs`) carries
 `status` and `log_path`;
-`SoftwareUpdateCommandPayload` (`commands.rs:420`) carries
+`SoftwareUpdateCommandPayload` (`commands.rs`) carries
 `status`, `update_list`, `failures` and `log_path`.
 Neither repeats its own operation name, and no other command payload does either.
 0011's own workflow example already reads the action from `${.topic.operation}`,
@@ -230,24 +226,19 @@ fragment, which carries `serviceType`, `serviceName` and `command`.
 thin-edge does not need to follow Cumulocity's shape;
 `command` is the cloud's word and stays inside the mapper.
 
-Nothing is lost with the field, because an action name is a single lowercase token,
-`[a-z][a-z0-9_-]*`.
-MQTT topic names are case-sensitive and do accept spaces,
-so this is a restriction thin-edge puts on itself:
-a name such as `do something` or `doSomething` is out of scope,
-and is rejected by the mapper and by `tedge service` alike.
-Cumulocity uppercases a command name by convention,
-so lowercasing the value it sends gives back the declared action name exactly,
+Nothing is lost with the field.
+An action name survives lowercasing unchanged, by the rule below,
+so the value Cumulocity sends gives back the declared name exactly
 and there is no original spelling left to carry.
 
 ### Handle `c8y_ServiceCommand` as a native fragment
 
 A `ServiceCommand` variant is added to `C8yDeviceControlOperation`
-(`crates/core/c8y_api/src/json_c8y_deserializer.rs:34`) with its payload struct,
-and an arm to `process_json_over_mqtt` (`converter.rs:509`)
-that follows the shape of `forward_restart_request` (`converter.rs:823`):
+(`crates/core/c8y_api/src/json_c8y_deserializer.rs`) with its payload struct,
+and an arm to `process_json_over_mqtt` (`converter.rs`)
+that follows the shape of `forward_restart_request` (`converter.rs`):
 resolve the entity with `EntityCache::try_get_by_external_id`
-(`crates/extensions/c8y_mapper_ext/src/entity_cache.rs:377`),
+(`crates/extensions/c8y_mapper_ext/src/entity_cache.rs`),
 build the command, publish it.
 
 The difference from the existing operations is that the thin-edge operation name is not fixed:
@@ -255,19 +246,17 @@ it comes from the lowercased `command` value in the payload.
 So the name is validated against the action name rule `[a-z][a-z0-9_-]*`,
 the same rule `tedge service` applies, before it is used to build a topic,
 and it is checked against the set of commands the service has declared.
-Both the mapper and the CLI need that rule, so it lives in `tedge_api` and is used by both.
 
 The `serviceName` of the operation is taken as it comes.
 Cumulocity holds one name per service:
-the very name the mapper published in the `102` message that created it (`converter.rs:335`),
+the name the mapper published in the `102` message that created it (`converter.rs`),
 which is the `name` of the entity registration message,
 or the service segment of the topic identifier when the registration carries no name.
-The cloud sends thin-edge's own value back.
 
-The mapper does not replace it by a value derived from the entity.
+Deriving it from the entity instead was rejected.
 Nothing in the registration data means "the name the backend knows":
 neither the `name` nor the topic segment is guaranteed to be it,
-so picking one of them would be a guess, and a silent one —
+so picking one would be a guess, and a silent one —
 the operator would read one name on the operation
 while a backend was asked for another.
 Which name a service is reachable by is a contract on whoever registers it.
@@ -285,21 +274,20 @@ and both name a file under the service plugin directory.
 All three rules — action, service name, service type — therefore live in `tedge_api`
 and are applied by the mapper and by the CLI alike.
 
-`OperationContext::update` (`crates/extensions/c8y_mapper_ext/src/operations/handlers/mod.rs:77`)
+`OperationContext::update` (`crates/extensions/c8y_mapper_ext/src/operations/handlers/mod.rs`)
 already publishes `501`-`506` on a topic derived from the entity,
 and `C8yTopic::smartrest_response_topic`
-(`crates/core/c8y_api/src/smartrest/topic.rs:21`) already maps a service to `c8y/s/us/<service-xid>`.
+(`crates/core/c8y_api/src/smartrest/topic.rs`) already maps a service to `c8y/s/us/<service-xid>`.
 A status handler for service commands is added alongside the existing ones.
 
 Alternative considered: a shipped custom operation handler file with `on_fragment = "c8y_ServiceCommand"`.
 Rejected in 0011: the feature also needs the `c8y_SupportedServiceCommands` fragment,
 and operation files for services are not reloaded dynamically.
 
-### Take the action name rule from the steps a name has to survive
+### Take each naming rule from how the name is used
 
 An action name is `[a-z][a-z0-9_-]*`:
-lowercase letters, digits, `_` and `-`, starting with a letter, of bounded length.
-The rule is not a matter of taste.
+lowercase letters, digits, `_` and `-`, starting with a letter.
 It is the largest set of characters left once every step a name takes has had its say:
 
 - the c8y mapper lowercases the command name the cloud sends,
@@ -310,41 +298,34 @@ It is the largest set of characters left once every step a name takes has had it
 - the name is a key of `[init]` in `system.toml`, so it has to be a TOML bare key,
   which accepts only letters, digits, `_` and `-` → this is what leaves `.` and `@` out.
 
-That is why the three rules of this change differ,
-and the action name is the only one of the three derived this way.
-
 A service type has one constraint of its own:
 it names a file under the plugin directory, so it holds no `/` and is neither `.` nor `..`.
 The rest of its rule follows the action name's, so that one spelling of a type names one plugin.
 
-A service name (`[A-Za-z0-9_.@-]`, no leading `-`) is not derived at all, it is a whitelist.
-Only the leading `-` comes from a step the name takes:
-the `{}` of an `[init]` template is replaced one argv element at a time
-(`general_manager.rs:159`), so a name holding a space cannot become two arguments,
-but a name of `--now` does become an option of the init tool.
-The rest is a whitelist because the name comes from the cloud
-and then reaches code thin-edge does not own.
-An `[init]` template is an argv list the user writes, so it can be
-`["/bin/sh", "-c", "systemctl restart {}"]`,
-and a service plugin may be a shell script that uses its arguments unquoted.
-thin-edge never builds a shell command line itself, but it cannot promise that of a backend.
-So the rule lists the characters a real service name needs —
-`.` for the suffix of a unit name, `@` for a template instance such as `getty@tty1`,
-`-` and `_` for both unit and container names —
-instead of listing the characters known to be dangerous.
-Being a whitelist, it is narrower than the backends themselves:
-a systemd unit name may hold `:` and this rule does not accept it.
-That is deliberate.
-A character is added when a name that needs it turns up,
-and adding one is a security review rather than a matter of taste.
+A service name is derived the same way, and two steps have something to say about it:
 
-Allowing `-` also gives a way around the reserved keys of `[init]`.
-`name`, `is_available` and `is_active` are named fields of the table,
-so they never reach the custom action map and are not dispatchable:
-a user who wants an "is active" action can name it `is-active`.
+- a name is not empty, an empty argument naming no service at all;
+- a name does not start with `-`.
+  The `{}` of an `[init]` template is replaced one argv element at a time
+  (`general_manager.rs`), so a name holding a space cannot become two arguments,
+  but `systemctl restart --now` and `rc-service --now restart`
+  read that argument as an option of the tool, and the name stops being a name.
 
-No lower bound is put on the length beyond being non-empty.
-A one-letter name breaks none of the steps above.
+Nothing else is refused, the length included.
+A service name is the one the device registered the service under,
+`name` being a plain key of the registration payload (`entity.rs`) with no rule of its own,
+so a rule here refuses a service Cumulocity shows.
+
+Alternative considered: a whitelist of the characters a real service name needs,
+`[A-Za-z0-9_.@-]`.
+Rejected — it refuses a name the device registered, a systemd unit name being free to hold `:`,
+and adding a character each time such a name turns up leaves the next one refused.
+What it would guard against is a backend running a shell,
+an `[init]` template being an argv list the user writes,
+and that is the exposure the config and log plugins already carry:
+both pass a type from the cloud under `sudo` to a plugin shipped as a `/bin/sh` script
+(`tedge_config_manager/src/plugin.rs`), with no character rule at all.
+Quoting is the backend's job.
 
 ### Add custom actions as plain keys of `[init]`
 
@@ -360,13 +341,19 @@ reload = ["/usr/bin/systemctl", "reload", "{}"]
 ```
 
 `[init]` today is one string, `name`, plus seven argv templates
-(`crates/common/tedge_config/src/system_toml/services.rs:3`).
+(`crates/common/tedge_config/src/system_toml/services.rs`).
 A custom action is the same kind of value as `restart` or `is_active`,
 so it belongs in the same table.
 `InitConfig` gains a map that collects the keys beyond the known ones,
-and `InitConfigToml`'s `deny_unknown_fields` (`services.rs:17`) is dropped,
+and `InitConfigToml`'s `deny_unknown_fields` (`services.rs`) is dropped,
 since serde does not combine `deny_unknown_fields` with `flatten`.
-`name` and the predicate templates stay reserved and are not dispatchable as actions.
+
+Every key except `name` is an action,
+so `InitConfig::action` (`services.rs`) resolves `is_available` and `is_active` too:
+a key a user writes in their own `system.toml` is one they can run.
+
+`is_available` asks about the init system rather than about a service,
+so it is the one action run without a `{}` placeholder (`general_manager.rs`).
 
 The cost is that a misspelled known key, `restrat` instead of `restart`,
 is now read as a custom action rather than rejected,
@@ -382,24 +369,24 @@ Rejected — it splits one concept across two places,
 leaving users to remember that `restart` goes in `[init]` and `reload` in `[actions]`,
 and it is not what 0011 describes.
 
-`SystemServiceManager` (`manager.rs:11`) gains a method to run an action by name,
+`SystemServiceManager` (`manager.rs`) gains a method to run an action by name,
 which the existing per-action methods can be expressed in terms of.
-Execution stays argv-based in `GeneralServiceManager` (`general_manager.rs:232`).
+Execution stays argv-based in `GeneralServiceManager` (`general_manager.rs`).
 
 ### `tedge service` follows the diag-plugin precedent
 
-A `Service` variant is added to `TEdgeOpt` (`crates/core/tedge/src/cli/mod.rs:97`)
-with a command implementing `Command` (`crates/core/tedge/src/command.rs:63`).
+A `Service` variant is added to `TEdgeOpt` (`crates/core/tedge/src/cli/mod.rs`)
+with a command implementing `Command` (`crates/core/tedge/src/command.rs`).
 It obtains the service manager the same way `tedge connect` does,
-`tedge_system_services::service_manager(config.root_dir())` (`cli/connect/cli.rs:52`).
+`tedge_system_services::service_manager(config.root_dir())` (`cli/connect/cli.rs`).
 
-Exit codes follow `tedge diag collect` (`crates/core/tedge/src/cli/diag/collect.rs:71`),
+Exit codes follow `tedge diag collect` (`crates/core/tedge/src/cli/diag/collect.rs`),
 which already uses `0` for success and `2` for "this plugin skipped it":
 `0` success, `2` command not supported for this service type, other non-zero failure.
 The plugin's own `2` is propagated unchanged.
 
 The plugin directories are a new key of the existing `service` table,
-`service.plugin_paths` (`crates/common/tedge_config/src/tedge_toml/tedge_config.rs:1327`),
+`service.plugin_paths` (`crates/common/tedge_config/src/tedge_toml/tedge_config.rs`),
 defaulting to `/usr/share/tedge/service-plugins`.
 It is a `TemplatesSet`, a comma-separated list of directories,
 the same name and shape as `diag.plugin_paths`, `log.plugin_paths`
@@ -409,7 +396,7 @@ A plugin is picked by its exact name, the service type,
 from the first directory that holds one, as it is for the other three.
 Packaging adds the directory to `configuration/package_manifests/nfpm.tedge.yaml`
 with mode `0755`, following the `log-plugins` and `config-plugins` entries.
-It must **not** be added to the chown list in `package_scripts/tedge/preinst:102`,
+It must **not** be added to the chown list in `package_scripts/tedge/preinst`,
 which is what keeps it out of the `tedge` user's reach.
 
 No sudoers change is needed.
@@ -421,18 +408,16 @@ and `/usr/bin/tedge` is already covered by the shipped rule.
 - Handling an empty capability payload for service entities only means the mapper treats
   the same message differently depending on the target entity type
   → the difference is deliberate and sits in one place, the `EntityType::Service` branch of
-  `try_convert_data_message`. It also removes one case from #2739 rather than adding to it.
+  `try_convert_data_message`.
 - A service can withdraw every command it declared, leaving an empty set
-  → the mapper publishes an empty `c8y_SupportedServiceCommands` array,
-  which is what tells Cumulocity to stop offering the buttons.
-  `c8y_ServiceCommand` stays registered as a supported operation,
-  since deregistering it is the part of #2739 this change does not solve.
+  → `c8y_ServiceCommand` stays registered as a supported operation, so Cumulocity still
+  offers the operation with no action to pick.
+  Deregistering a supported operation is out of scope here.
 - A service that declares `cmd/restart` today would get `c8y_Restart`, and will now get
   `c8y_ServiceCommand` with `RESTART`
-  → no thin-edge service declares command capabilities today, and the new behaviour is
-  what a service action means in Cumulocity. Called out in the release notes.
-  The old mapping is not kept in parallel: a service declaring both `c8y_Restart` and
-  `c8y_ServiceCommand` would show two buttons for one action, which helps nobody migrate.
+  → called out in the release notes. The old mapping is not kept in parallel:
+  a service declaring both `c8y_Restart` and `c8y_ServiceCommand` would show two buttons
+  for one action, which helps nobody migrate.
 - Every `cmd/<action>` topic of a service becomes an action offered in the cloud,
   and a service owner has no way to declare an action locally without exposing it.
   A service declaring both `cmd/restart` and `cmd/collect_measurements` gets both
@@ -457,8 +442,8 @@ and `/usr/bin/tedge` is already covered by the shipped rule.
   On a child device this makes service commands depend on the connection to the main device,
   which is the same dependency the file transfer service already has.
 - `tedge service` runs as root and takes an action name that originates in the cloud
-  → the name is validated against `[a-z][a-z0-9_-]*` before any backend is selected, and all
-  execution is argv-based, so the value cannot become extra arguments or a shell fragment.
+  → every argument is validated before any backend is selected, and all execution is
+  argv-based, so a value cannot become extra arguments or a shell fragment.
 
 ## Migration Plan
 

@@ -23,8 +23,8 @@ and stay usable as the argument of a command line.
 A declared action SHALL be withdrawn by clearing its capability topic with a retained empty message.
 
 #### Scenario: Standard actions are declared
-- **WHEN** a service publishes retained `{}` on its `cmd/start`, `cmd/stop` and `cmd/restart` topics
-- **THEN** those three actions SHALL be the actions supported by that service
+- **WHEN** a service publishes retained `{}` on its `cmd/start`, `cmd/stop`, `cmd/restart`, `cmd/enable` and `cmd/disable` topics
+- **THEN** those five actions SHALL be the actions supported by that service
 
 #### Scenario: A custom action is declared
 - **WHEN** a service publishes retained `{}` on `te/device/main/service/nodered/cmd/pause`
@@ -50,31 +50,29 @@ A service managed by an init unit of its own SHALL declare:
 - the five standard actions, for `tedge-mapper-collectd` and `tedge-mapper-local`,
   the two mappers connected to no cloud.
 
-`stop` SHALL NOT be declared for the first set,
-the shipped workflow always refusing it there:
-an action which can only fail is a button in the cloud
-and an operation an operator creates for nothing.
-`start` SHALL NOT be declared either,
-`tedge-agent` being what executes a service command,
-so a `start` addressed to it is only ever asked for while nothing is there to run it.
+Neither `start` nor `stop` SHALL be declared for `tedge-agent` and the cloud mappers.
+The shipped workflow always refuses `stop` for these services,
+so declaring it would put a button in the cloud for an action which can only fail.
+A `start` is only ever asked for while the service is stopped,
+and `tedge-agent` is what executes a service command:
+once it is stopped, nothing is left to run that command.
 
-What a service declares states what is offered and never what is enforced.
-A capability is a retained message anyone can publish,
-and a command can be posted with no capability declared at all,
-so the guards of the shipped workflows SHALL stay the only thing which refuses an action.
+Leaving an action out of the list does not prevent it from being commanded:
+a capability is a plain retained message, so anyone can publish one,
+and a command can be issued on MQTT with no capability declared at all.
+What refuses an action SHALL therefore be the guards of the shipped workflows.
 
-A service hosted in a single process with the other components has no init unit of its own,
+Under `tedge run all`, the agent and the mappers are hosted in a single process.
+Such a hosted service has no init unit of its own,
 so an action reaching an init system would act on a unit which is not what runs.
-Such a service SHALL declare `restart` if it is `tedge-agent`, that being the one action
+A hosted service SHALL declare `restart` if it is `tedge-agent`, that being the one action
 which reaches no init system, and SHALL declare nothing otherwise.
 It SHALL also withdraw every standard action it does not declare,
 a capability being retained and outliving the deployment which published it.
 
 A capability lives as long as the registration of the service which published it.
-Uninstalling a service clears neither, and deregistering the service SHALL clear both.
-
-A service thin-edge does not ship declares its own actions,
-thin-edge deciding nothing for it.
+Uninstalling the software clears neither the registration nor its capabilities;
+deregistering the service SHALL clear both.
 
 #### Scenario: The agent declares its actions at startup
 - **WHEN** `tedge-agent` starts as a service of its own
@@ -89,12 +87,12 @@ thin-edge deciding nothing for it.
 - **WHEN** `tedge-mapper-collectd` or `tedge-mapper-local` starts as a service of its own
 - **THEN** the five standard actions SHALL be the actions it declares
 
-#### Scenario: A hosted service declares only what it can carry out
+#### Scenario: A service under `tedge run all` declares only what it can carry out
 - **WHEN** the agent and the mappers are hosted in a single process
 - **THEN** `restart` SHALL be the only action declared by the agent,
   and the mappers SHALL declare no action
 
-#### Scenario: A hosted service withdraws the actions of the previous deployment
+#### Scenario: Moving to `tedge run all` withdraws the actions of the previous deployment
 - **WHEN** a device whose services declared their actions as services of their own
   is moved to a single process
 - **THEN** every standard action a hosted service does not declare SHALL be withdrawn
@@ -211,7 +209,8 @@ A zero exit code SHALL move the command to `successful`;
 a non-zero exit code SHALL move it to `failed` with the failure reason.
 
 The workflow SHALL carry a timeout,
-so that a backend that never returns surfaces as a failed command rather than a stuck one.
+so that a command whose backend never returns moves to `failed`
+rather than staying in progress.
 
 #### Scenario: A successful execution completes the command
 - **WHEN** the execution step of a service command workflow exits with code `0`
@@ -243,13 +242,10 @@ so in both cases the requester would never learn the outcome.
 
 A mapper is recognized by its name, which is always `tedge-mapper-<x>`,
 whatever its cloud, topic prefix and profile.
-Two mappers are the exception, being connected to no cloud:
-the collectd mapper, which feeds local measurements in,
-and the local mapper, which transforms data on the device.
-Stopping one of them takes no way of reporting anything away,
+`tedge-mapper-collectd` and `tedge-mapper-local` are the exception, being connected to no cloud.
+The requester still learns the outcome when one of them is stopped,
 so both SHALL be stopped as any other service.
-They are always named `tedge-mapper-collectd` and `tedge-mapper-local`,
-as neither takes a cloud profile.
+Neither takes a cloud profile, so these are always their exact names.
 
 #### Scenario: Restarting the agent itself completes the command
 - **WHEN** a `restart` command is issued for the tedge-agent service
