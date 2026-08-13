@@ -43,8 +43,8 @@ pub enum TEdgeHsmCli {
     /// PKCS #11 URI. The URI can be used as `device.key_uri` to select an existing key, e.g. one
     /// pre-provisioned on the token.
     ///
-    /// The token is auto-discovered when no URI is given. Listing private keys requires a login, so
-    /// the configured PIN (or `--pin`) is used.
+    /// The token is auto-discovered when no URI is given. Listing private keys requires a login on
+    /// tokens that require one, in which case the configured PIN (or `--pin`) is used.
     ///
     /// The listing can be narrowed to keys with a given label or id using the `--label` and `--id`
     /// flags, or equivalently by passing a URI carrying `object=` or `id=` attributes.

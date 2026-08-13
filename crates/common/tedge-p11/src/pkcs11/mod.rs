@@ -251,7 +251,8 @@ impl TedgeP11Service for Cryptoki {
             uri: request.uri,
             pin: request.pin,
         };
-        // Private key objects are only visible after a login, which open_session_ro performs.
+        // Private key objects are only visible after a login, which open_session_ro performs when
+        // the token requires one.
         let session = self.open_session_ro(&params)?;
 
         let mut keys = Vec::new();
@@ -371,6 +372,18 @@ impl TedgeP11Service for Cryptoki {
                 );
             }
         };
+
+        // A token that doesn't require a login has no user PIN to change. Without this check the
+        // command would fail in C_Login with an error that says nothing about the actual problem.
+        let token_info = context
+            .get_token_info(slot)
+            .context("Failed to read token info")?;
+        anyhow::ensure!(
+            token_info.login_required(),
+            "The token '{}' does not use a PIN (it doesn't set CKF_LOGIN_REQUIRED), so there is no \
+             user PIN to change.",
+            token_info.label()
+        );
 
         // NOTE: changing a PIN mutates the token, so a read-write session is required.
         let session = context
@@ -496,8 +509,13 @@ impl TedgeP11Service for Cryptoki {
         let so_pin = request.so_pin.unwrap_or_else(|| user_pin.clone());
 
         let tokens = self.snapshot_tokens()?;
-        // A token that is initialized and has a user PIN is ready to use as-is.
-        let is_usable = |i: &TokenInfo| i.token_initialized() && i.user_pin_initialized();
+        // A token that is initialized and has a user PIN is ready to use as-is. A token that
+        // doesn't require a login has no user PIN to set, so CKF_USER_PIN_INITIALIZED stays unset
+        // even though the token is ready; treat it as usable too, otherwise a working token (e.g.
+        // a provisioned ATECC608) looks like it still needs initializing.
+        let is_usable = |i: &TokenInfo| {
+            i.token_initialized() && (i.user_pin_initialized() || !i.login_required())
+        };
 
         // The URI selects the slot to initialize. Only the attributes of the request URI are used,
         // not those of the configured `cryptoki.uri`: the latter points at the token tedge signs
@@ -875,19 +893,31 @@ impl Cryptoki {
             CryptokiSessionType::ReadWrite => context.open_rw_session(slot)?,
         };
 
-        let pin = uri_attributes
-            .pin_value
-            .as_ref()
-            .or(params.pin.as_ref())
-            .cloned()
-            .as_ref()
-            .unwrap_or(&self.config.pin)
-            .to_owned();
-        let pin = AuthPin::from(pin);
+        // A token that doesn't set CKF_LOGIN_REQUIRED gives access to its objects without a login,
+        // e.g. hardware that gates access by other means than a PIN. Logging in to such a token is
+        // not just redundant, it breaks it: the module rejects the login (CKR_USER_TYPE_INVALID with
+        // the p11-kit trust module, CKR_USER_PIN_NOT_INITIALIZED with others) and every operation
+        // fails. So only log in when the token asks for it, and ignore the configured PIN otherwise.
+        if token_info.login_required() {
+            let pin = uri_attributes
+                .pin_value
+                .as_ref()
+                .or(params.pin.as_ref())
+                .cloned()
+                .as_ref()
+                .unwrap_or(&self.config.pin)
+                .to_owned();
+            let pin = AuthPin::from(pin);
 
-        session.login(UserType::User, Some(&pin))?;
+            session.login(UserType::User, Some(&pin))?;
+        } else {
+            debug!(
+                "Token doesn't require a login (CKF_LOGIN_REQUIRED is not set), skipping C_Login"
+            );
+        }
+
         let session_info = session.get_session_info()?;
-        debug!(?session_info, "Opened a readonly session");
+        debug!(?session_info, "Opened a session");
 
         let session = CryptokiSession {
             session,

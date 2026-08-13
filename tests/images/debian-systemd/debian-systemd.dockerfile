@@ -32,6 +32,8 @@ RUN apt-get -y update \
     # PKCS11 / cryptoki support
     gnutls-bin \
     softhsm2 \
+    # provides p11-kit-trust.so, a token which does not require a login
+    p11-kit-modules \
     # configure locales
     && echo "LANG=C.UTF-8" > /etc/default/locale
 

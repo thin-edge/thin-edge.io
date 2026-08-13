@@ -93,6 +93,16 @@ aws.device.key_pin  User PIN value for logging into the PKCS#11 token provided b
                     Examples: 123456, my-pin
 ```
 
+:::note
+Not every token is protected by a PIN.
+If a token reports that no login is required (the `CKF_LOGIN_REQUIRED` flag is not set),
+%%te%% uses it without logging in,
+and both `device.cryptoki.pin` and `device.key_pin` are ignored for that token.
+Such a token has no user PIN to manage either,
+so `tedge hsm change-pin` reports that there is nothing to change,
+and `tedge hsm init` treats an already initialized token as ready to use.
+:::
+
 ## Setup guide
 <!-- split the guide into a separate page under "Operate Devices" category? -->
 <!-- also would be nice to write a test for this guide -->

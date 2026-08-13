@@ -9,6 +9,12 @@ Suite Teardown      Get Suite Logs
 Test Tags           adapter:docker    theme:cryptoki
 
 
+*** Variables ***
+# Config dir and transient unit of the tedge-p11-server instance serving the no-login token
+${NO_LOGIN_DIR}     /tmp/nologin-token
+${NO_LOGIN_UNIT}    tedge-p11-server-nologin
+
+
 *** Test Cases ***
 Ignore tedge.toml if missing
     Execute Command    rm -f ./tedge.toml
@@ -93,8 +99,41 @@ Prints version on startup
     ${stdout}=    Execute Command    tedge-p11-server --version    strip=True
     Logs Should Contain    Starting ${stdout}
 
+Use a token which does not require a login
+    [Documentation]    A token that doesn't set the CKF_LOGIN_REQUIRED flag gives access to its
+    ...    objects without a login, and rejects C_Login (e.g. with CKR_USER_TYPE_INVALID), so no
+    ...    login must be attempted for it and the configured PIN must be ignored.
+    ...    The p11-kit trust module provides such a token.
+    ...    A dedicated tedge-p11-server instance and config dir are used so the SoftHSM2 setup of
+    ...    the other tests is left alone.
+    ${module}=    Execute Command    ls /usr/lib/*/pkcs11/p11-kit-trust.so    strip=${True}
+    Execute Command    mkdir -p ${NO_LOGIN_DIR}
+
+    # tedge is statically linked and can't load a PKCS#11 module itself, so the module is loaded by
+    # its own tedge-p11-server instance, which tedge reaches over that server's socket
+    Execute Command
+    ...    cmd=systemd-run --unit=${NO_LOGIN_UNIT} --collect /usr/bin/tedge-p11-server --config-dir ${NO_LOGIN_DIR} --module-path ${module} --pin not-a-valid-pin --socket-path ${NO_LOGIN_DIR}/p11.sock
+    Wait Until Keyword Succeeds    10x    1s    Execute Command    test -S ${NO_LOGIN_DIR}/p11.sock
+
+    Execute Command    tedge --config-dir ${NO_LOGIN_DIR} config set device.cryptoki.mode socket
+    Execute Command
+    ...    tedge --config-dir ${NO_LOGIN_DIR} config set device.cryptoki.socket_path ${NO_LOGIN_DIR}/p11.sock
+
+    # The token holds no keys, but opening a session on it must succeed without logging in
+    ${stderr}=    Execute Command
+    ...    tedge --config-dir ${NO_LOGIN_DIR} hsm list-keys
+    ...    stdout=${False}
+    ...    stderr=${True}
+    Should Contain    ${stderr}    No keys were found on the token
+    [Teardown]    Remove No Login Token Server
+
 
 *** Keywords ***
+Remove No Login Token Server
+    [Documentation]    Stops the tedge-p11-server instance serving the no-login token.
+    Execute Command    systemctl stop ${NO_LOGIN_UNIT}    ignore_exit_code=${True}
+    Execute Command    rm -rf ${NO_LOGIN_DIR}
+
 Custom Setup
     ${DEVICE_SN}=    Setup    register=${False}
     Set Suite Variable    ${DEVICE_SN}
