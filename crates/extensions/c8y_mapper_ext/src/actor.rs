@@ -131,21 +131,20 @@ impl C8yMapperActor {
 
     /// Waits until the bridge can relay the mapper's messages to the cloud
     ///
-    /// The built-in bridge signals when it is subscribed to the topics it relays; until then
-    /// anything published on them is discarded by the broker. Only that subscription is awaited,
-    /// not the cloud connection: once the bridge holds the subscription it takes the messages and
-    /// forwards them when the cloud is reachable, and the broker bounds how many it holds
-    /// meanwhile. Inputs arriving before then are held back rather than converted, but they are
-    /// still received, as a full input channel would stall the MQTT actor for every other actor in
-    /// this process.
+    /// The built-in bridge waits until it has established a session with the local broker
+    /// before returning that it is ready. At this point, the mapper can safely publish
+    /// messages to the cloud topics as mosquitto is guarenteed to queue them if the
+    /// cloud is unreachable.
     ///
     /// This is awaited once, not on every reconnection: the bridge keeps its session on the local
     /// broker, so from then on the broker queues what it cannot deliver instead of discarding it.
     ///
-    /// Mosquitto's bridge subscribes for itself before the mapper starts, so it only has to be
-    /// running: it queues the messages the mapper publishes until the cloud is reachable.
+    /// If the bridge is not built-in (i.e. it runs inside the broker), we wait for the first sign
+    /// of a health message from the bridge. This ensures the bridge is configured with mosquitto
+    /// and it is queuing incoming messages even if it is not yet connected to the cloud.
     async fn wait_until_bridge_is_ready(&mut self) -> Result<Startup, RuntimeError> {
         let Some(mut bridge_subscribed) = self.bridge_subscribed.take() else {
+            // Non built-in bridge - wait for the health message
             while let Some(message) = self.bridge_status_messages.recv().await {
                 if is_c8y_bridge_established(
                     &message,
@@ -158,6 +157,7 @@ impl C8yMapperActor {
             return Ok(Startup::BridgeReady(vec![]));
         };
 
+        // Built-in bridge - use the internal channel to know when it is subscribed
         let mut pending = Vec::new();
         let mut overflowed = false;
         loop {
