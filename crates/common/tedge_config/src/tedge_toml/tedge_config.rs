@@ -2265,6 +2265,26 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn all_mapper_configs_shows_c8y_if_configured_with_separate_http_and_mqtt() {
+        // Previously, if a c8y mapper was configured with separate HTTP and MQTT endpoints,
+        // it would not be included in the configured mappers, and thus would be excluded in
+        // a bare `tedge run all`. This test ensures that such a configuration is still included.
+        let ttd = TempTedgeDir::new();
+        ttd.dir("mappers")
+            .dir("c8y")
+            .file("mapper.toml")
+            .with_toml_content(toml::toml! {
+                mqtt = "t123.cumulocity.example.com"
+                http = "c8y.example.com"
+            });
+
+        let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
+        let configs = tedge_config.all_mapper_configs::<C8yMapperSpecificConfig>();
+
+        assert_eq!(configs.len(), 1);
+    }
+
     fn profile_name(input: Option<&str>) -> Option<ProfileName> {
         input
             .map(<_>::to_owned)

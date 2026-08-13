@@ -38,6 +38,13 @@ impl<T> OptionalConfig<T> {
     pub fn empty(key: impl Into<Cow<'static, str>>) -> Self {
         Self::Empty(key.into())
     }
+
+    pub fn or(self, optional: OptionalConfig<T>) -> Self {
+        match self {
+            Self::Present { .. } => self,
+            Self::Empty(_) => optional,
+        }
+    }
 }
 
 impl<T> From<OptionalConfig<T>> for Option<T> {
