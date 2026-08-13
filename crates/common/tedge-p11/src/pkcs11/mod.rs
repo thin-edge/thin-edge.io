@@ -71,6 +71,7 @@ use cryptoki::context::CInitializeArgs;
 use cryptoki::context::CInitializeFlags;
 use cryptoki::context::Pkcs11;
 use cryptoki::error::Error;
+use cryptoki::error::RvError;
 use cryptoki::mechanism::Mechanism;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
@@ -251,8 +252,6 @@ impl TedgeP11Service for Cryptoki {
             uri: request.uri,
             pin: request.pin,
         };
-        // Private key objects are only visible after a login, which open_session_ro performs when
-        // the token requires one.
         let session = self.open_session_ro(&params)?;
 
         let mut keys = Vec::new();
@@ -1205,7 +1204,7 @@ impl CryptokiSession<'_> {
 
     /// Create a new keypair on the token.
     fn create_key(&self, params: CreateKeyParams) -> anyhow::Result<ObjectHandle> {
-        let (mechanism, attrs_pub, attrs_priv) = match params.key {
+        let (mechanism, attrs_pub) = match params.key {
             KeyTypeParams::Rsa { bits } => {
                 anyhow::ensure!(
                     bits == 2048 || bits == 3072 || bits == 4096,
@@ -1217,7 +1216,6 @@ impl CryptokiSession<'_> {
                         // u64 or u32 depending on the platform
                         std::os::raw::c_ulong::from(bits).into(),
                     )],
-                    vec![],
                 )
             }
             KeyTypeParams::Ec { curve } => {
@@ -1237,7 +1235,6 @@ impl CryptokiSession<'_> {
                 (
                     Mechanism::EccKeyPairGen,
                     vec![Attribute::EcParams(curve_oid)],
-                    vec![],
                 )
             }
         };
@@ -1260,8 +1257,7 @@ impl CryptokiSession<'_> {
             Attribute::Id(id.to_vec()),
         ]);
 
-        let mut priv_key_template = attrs_priv;
-        priv_key_template.extend_from_slice(&[
+        let mut priv_key_template = vec![
             Attribute::Token(true),
             Attribute::Private(true),
             Attribute::Sensitive(true),
@@ -1270,13 +1266,41 @@ impl CryptokiSession<'_> {
             Attribute::Decrypt(true),
             Attribute::Label(params.label.clone().into()),
             Attribute::Id(id.to_vec()),
-        ]);
+        ];
 
         trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
-        let (pub_handle, _priv_handle) = self
-            .session
-            .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
-            .context("Failed to generate keypair")?;
+        let result =
+            self.session
+                .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template);
+
+        // PKCS #11 puts the curve in the public key template and leaves CKA_CLASS implied, but
+        // Microchip's cryptoauthlib reads both from the private key template and rejects the
+        // request when they are missing. Which dialect a module speaks cannot be queried (and both
+        // SoftHSM2 and tpm2-pkcs11 reject a private key template carrying CKA_EC_PARAMS, so
+        // cryptoauthlib's cannot be the default), which leaves the module's own answer as the only
+        // reliable signal: when the standard template is rejected, extend it with the attributes
+        // cryptoauthlib wants and try again. A rejected template creates nothing, so the retry is
+        // safe.
+        let result = match result {
+            Err(Error::Pkcs11(RvError::TemplateInconsistent, _)) => {
+                debug!("Keypair template was rejected, retrying with the cryptoauthlib attributes");
+                priv_key_template.push(Attribute::Class(ObjectClass::PRIVATE_KEY));
+                // Copy the curve from the public key template, where the spec puts it (for RSA
+                // there is none and nothing is copied).
+                priv_key_template.extend(
+                    pub_key_template
+                        .iter()
+                        .find(|attr| matches!(attr, Attribute::EcParams(_)))
+                        .cloned(),
+                );
+                trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
+                self.session
+                    .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
+            }
+            result => result,
+        };
+
+        let (pub_handle, _priv_handle) = result.context("Failed to generate keypair")?;
 
         Ok(pub_handle)
     }
