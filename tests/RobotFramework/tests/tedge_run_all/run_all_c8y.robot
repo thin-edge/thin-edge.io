@@ -8,8 +8,9 @@ Documentation       Smoke tests for the single-process supervisor (`tedge run al
 ...                 on every restart, while its pid stays put — only the supervised task
 ...                 is rebuilt, not the process), that an update requiring an agent
 ...                 restart exits the whole process for the service manager to restart it,
-...                 and that the supervisor can host multiple mappers (c8y + a custom
-...                 flows-only mapper) simultaneously.
+...                 that the supervisor can host multiple mappers (c8y + a custom
+...                 flows-only mapper) simultaneously, and that a bare `tedge run all`
+...                 discovers a c8y mapper configured with separate HTTP and MQTT urls.
 ...
 ...                 The device is registered once for the suite, but each test gets a
 ...                 freshly started supervisor and tears it down again afterwards, so the
@@ -89,6 +90,24 @@ A config update restarting the agent restarts the whole process
     Wait Until Keyword Succeeds
     ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
     [Teardown]    Stop Supervisor And Remove Config Type
+
+Bare tedge run all starts a c8y mapper configured with separate HTTP and MQTT urls
+    [Documentation]    A c8y mapper may be configured without `c8y.url`, by giving its MQTT
+    ...    and HTTP endpoints separately. Such a mapper is still a configured mapper, so a
+    ...    bare `tedge run all` (with no mapper named on the command line) must run it.
+    [Setup]    Start Bare Supervisor With Separate Http And Mqtt Urls
+
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-agent
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-c8y
+
+    # And the mapper picked up from the split configuration still talks to Cumulocity.
+    Wait Until Keyword Succeeds
+    ...    60s    2s    Service Health Status Should Be Up    tedge-mapper-bridge-c8y
+    Cumulocity.Should Have Services    name=tedge-mapper-c8y    service_type=service    status=up
+
+    [Teardown]    Stop Supervisor And Restore Url
 
 SIGUSR1 restarts the mapper
     # The mapper publishes a health `up` message every time it (re)starts, stamped
@@ -201,6 +220,29 @@ Start Supervisor With Restart On Failure
     # service manager to start it again.
     Execute Command
     ...    cmd=systemd-run --unit=tedge-run-all --collect -p User=tedge -p Group=tedge -p Restart=on-failure /usr/bin/tedge run all c8y
+
+Start Bare Supervisor With Separate Http And Mqtt Urls
+    # Replace `c8y.url` with the equivalent pair of explicit endpoints, which is a
+    # supported way of configuring a mapper whose HTTP and MQTT endpoints differ. Both
+    # point at the tenant the suite is connected to, so the mapper stays functional.
+    ${domain}=    Cumulocity.Get Domain
+    Execute Command    tedge config set c8y.mqtt ${domain}
+    Execute Command    tedge config set c8y.http ${domain}
+    Execute Command    tedge config unset c8y.url
+
+    # No mapper is named here: the supervisor has to work out for itself which mappers
+    # are configured, which is exactly what used to miss this c8y mapper.
+    Execute Command
+    ...    cmd=systemd-run --unit=tedge-run-all --collect -p User=tedge -p Group=tedge /usr/bin/tedge run all
+
+Stop Supervisor And Restore Url
+    # Put `c8y.url` back and drop the split endpoints, so the rest of the suite sees the
+    # configuration exactly as the suite setup left it.
+    ${domain}=    Cumulocity.Get Domain
+    Execute Command    tedge config set c8y.url ${domain}
+    Execute Command    tedge config unset c8y.mqtt
+    Execute Command    tedge config unset c8y.http
+    Stop Supervisor
 
 Stop Supervisor And Remove Config Type
     # Drop the config type declaration (and the file its update created) so the other
