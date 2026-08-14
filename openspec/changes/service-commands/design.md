@@ -342,19 +342,15 @@ so it belongs in the same table.
 and `InitConfigToml`'s `deny_unknown_fields` (`services.rs`) is dropped,
 since serde does not combine `deny_unknown_fields` with `flatten`.
 
-Every key except `name` is an action,
-so `InitConfig::action` (`services.rs`) resolves `is_available` and `is_active` too:
-a key a user writes in their own `system.toml` is one they can run.
-
-`is_available` asks about the init system rather than about a service,
-so it is the one action run without a `{}` placeholder (`general_manager.rs`).
+Every key is an action except `name` and `is_available`, which describe the init system
+rather than a service (`InitConfig::action`, `services.rs`).
 
 The cost is that a misspelled known key, `restrat` instead of `restart`,
 is now read as a custom action rather than rejected,
 and the device silently falls back to the systemd default for `restart`.
 Three things make that visible:
 the actions parsed from `[init]` are logged at start-up,
-`tedge service` lists the known actions when it rejects an unsupported one,
+`tedge service` lists the actions `[init]` defines when it rejects an unsupported one,
 and the fallback to a default template is logged.
 
 Alternative considered: a sub-table, `[init.actions]` or a top-level `[actions]`,

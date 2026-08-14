@@ -91,9 +91,10 @@ an argv list with a `{}` placeholder for the service name.
 `[init]` SHALL therefore stop rejecting unknown keys.
 To keep a misspelled key discoverable,
 the actions read from `[init]` SHALL be logged when the configuration is loaded,
-and `tedge service` SHALL list the known actions when it rejects an unsupported one.
+and `tedge service` SHALL list the actions `[init]` defines when it rejects an unsupported one.
 
-Every key of `[init]` except `name` SHALL be an action.
+Every key of `[init]` SHALL be an action, except `name` and `is_available`,
+which describe the init system rather than a service.
 
 #### Scenario: A custom action template is honoured
 - **WHEN** `[init]` defines a `reload` template and `tedge service reload nginx` is run
@@ -108,8 +109,8 @@ Every key of `[init]` except `name` SHALL be an action.
 - **WHEN** `tedge service is_active nginx` is run
 - **THEN** the configured `is_active` command SHALL be executed on `nginx`
 
-#### Scenario: name is not an action
-- **WHEN** `tedge service name nginx` is run
+#### Scenario: A key describing the init system is not an action
+- **WHEN** `tedge service name nginx` or `tedge service is_available nginx` is run
 - **THEN** it SHALL fail with the "not supported" exit code and SHALL NOT execute anything
 
 ### Requirement: Service plugin contract

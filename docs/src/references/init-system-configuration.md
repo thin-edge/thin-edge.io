@@ -57,8 +57,9 @@ will be interpreted as
 | `disable`      | The command to disable a service by the init system                                                  |
 | `is_active`    | The command to check if the service is running by the init system                                    |
 
-Every key except `name` is an **action** of this init system,
-and can be run with
+Every key is an **action** of this init system, except `name` and `is_available`,
+which describe the init system rather than a service.
+An action can be run with
 [`tedge service <action> <service-name>`](./cli/tedge-service.md).
 
 ## Custom actions

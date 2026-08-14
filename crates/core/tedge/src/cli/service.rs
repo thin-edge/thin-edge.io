@@ -423,7 +423,7 @@ reload = {}
         // The error tells which actions this init system does define
         assert!(
             err.to_string().contains(
-                "Known actions: disable, enable, is_active, is_available, reload, restart, start, stop"
+                "Defined actions: disable, enable, is_active, reload, restart, start, stop"
             ),
             "{err}"
         );
@@ -443,16 +443,18 @@ reload = {}
     }
 
     #[tokio::test]
-    async fn the_is_available_template_is_run_without_a_service_name() {
+    async fn is_available_is_not_a_service_action() {
         let config_dir = TempTedgeDir::new();
         let done = init_system(&config_dir);
 
         let cmd = command("is_available", "nginx", "service");
-        cmd.run_init_system_action(config_dir.utf8_path())
+        let err = cmd
+            .run_init_system_action(config_dir.utf8_path())
             .await
-            .unwrap();
+            .unwrap_err();
 
-        assert!(Utf8PathBuf::from(format!("{done}.is_available")).exists());
+        assert_matches!(err, ServiceActionError::NotSupported(_));
+        assert!(!Utf8PathBuf::from(format!("{done}.is_available")).exists());
     }
 
     #[tokio::test]

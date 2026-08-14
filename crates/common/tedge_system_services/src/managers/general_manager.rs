@@ -70,7 +70,7 @@ impl SystemServiceManager for GeneralServiceManager {
         &self,
         service: SystemService<'_>,
     ) -> Result<bool, SystemServiceError> {
-        let exec_command = ServiceCommand::IsActive(service).try_exec_command(self)?;
+        let exec_command = ServiceCommand::Action("is_active", service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())
             .await
             .map(|status| status.success())
@@ -157,13 +157,9 @@ fn replace_with_service_name<'a>(
     Ok(args)
 }
 
-/// The one action whose template names no service, so the only one run without a `{}`.
-const IS_AVAILABLE: &str = "is_available";
-
 #[derive(Debug, Copy, Clone)]
 enum ServiceCommand<'a> {
     CheckManager,
-    IsActive(SystemService<'a>),
     /// A named action, resolved from the `[init]` templates.
     Action(&'a str, SystemService<'a>),
 }
@@ -180,21 +176,12 @@ impl ServiceCommand<'_> {
             Self::CheckManager => {
                 ExecCommand::try_new(init_config.is_available.clone(), self, config_path)
             }
-            Self::IsActive(service) => ExecCommand::try_new_with_placeholder(
-                init_config.is_active.clone(),
-                self,
-                config_path,
-                service,
-            ),
-            Self::Action(IS_AVAILABLE, _service) => {
-                ExecCommand::try_new(init_config.is_available.clone(), self, config_path)
-            }
             Self::Action(action, service) => {
                 let Some(template) = init_config.action(action) else {
                     return Err(SystemServiceError::UnsupportedAction {
                         action: action.to_string(),
                         manager: init_config.name.clone(),
-                        known: init_config.action_names().join(", "),
+                        defined: init_config.action_names().join(", "),
                         path: config_path,
                     });
                 };
@@ -208,7 +195,6 @@ impl fmt::Display for ServiceCommand<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::CheckManager => write!(f, "is_available"),
-            Self::IsActive(_service) => write!(f, "is_active"),
             Self::Action(action, _service) => write!(f, "{action}"),
         }
     }

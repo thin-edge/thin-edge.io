@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 
 /// The `[init]` section of `system.toml`.
 ///
-/// Every field except `name` is an action template: an argv list with a `{}`
-/// placeholder for the service name.
+/// Every field except `name` and `is_available` is an action template: an argv list with a
+/// `{}` placeholder for the service name.
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(from = "InitConfigToml")]
 pub struct InitConfig {
@@ -28,7 +28,6 @@ impl InitConfig {
             "restart" => Some(&self.restart),
             "enable" => Some(&self.enable),
             "disable" => Some(&self.disable),
-            "is_available" => Some(&self.is_available),
             "is_active" => Some(&self.is_active),
             other => self.custom_actions.get(other).map(Vec::as_slice),
         }
@@ -36,15 +35,7 @@ impl InitConfig {
 
     /// Every action this init system can run, sorted.
     pub fn action_names(&self) -> Vec<&str> {
-        let mut names = vec![
-            "disable",
-            "enable",
-            "is_active",
-            "is_available",
-            "restart",
-            "start",
-            "stop",
-        ];
+        let mut names = vec!["disable", "enable", "is_active", "restart", "start", "stop"];
         names.extend(self.custom_actions.keys().map(String::as_str));
         names.sort_unstable();
         names
@@ -106,6 +97,7 @@ impl Default for InitConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_case::test_case;
 
     const PREDEFINED_KEYS: &str = r#"
         name = "systemd"
@@ -124,15 +116,7 @@ mod tests {
         assert!(config.custom_actions.is_empty());
         assert_eq!(
             config.action_names(),
-            [
-                "disable",
-                "enable",
-                "is_active",
-                "is_available",
-                "restart",
-                "start",
-                "stop"
-            ]
+            ["disable", "enable", "is_active", "restart", "start", "stop"]
         );
     }
 
@@ -155,7 +139,6 @@ mod tests {
                 "disable",
                 "enable",
                 "is_active",
-                "is_available",
                 "reload",
                 "restart",
                 "start",
@@ -167,15 +150,7 @@ mod tests {
     #[test]
     fn predefined_actions_are_looked_up_by_name() {
         let config = parse(PREDEFINED_KEYS);
-        for action in [
-            "start",
-            "stop",
-            "restart",
-            "enable",
-            "disable",
-            "is_available",
-            "is_active",
-        ] {
+        for action in ["start", "stop", "restart", "enable", "disable", "is_active"] {
             assert!(
                 config.action(action).is_some(),
                 "{action} should be an action"
@@ -183,9 +158,10 @@ mod tests {
         }
     }
 
-    #[test]
-    fn name_is_not_an_action() {
-        assert_eq!(parse(PREDEFINED_KEYS).action("name"), None);
+    #[test_case("name")]
+    #[test_case("is_available")]
+    fn a_key_describing_the_init_system_is_not_an_action(key: &str) {
+        assert_eq!(parse(PREDEFINED_KEYS).action(key), None);
     }
 
     #[test]
