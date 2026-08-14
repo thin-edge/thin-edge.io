@@ -1,3 +1,5 @@
+use crate::failure_reason;
+use crate::ServiceCommandOutput;
 use crate::SystemService;
 use crate::SystemServiceError;
 use crate::SystemServiceManager;
@@ -46,8 +48,8 @@ impl SystemServiceManager for GeneralServiceManager {
     async fn check_operational(&self) -> Result<(), SystemServiceError> {
         let exec_command = ServiceCommand::CheckManager.try_exec_command(self)?;
 
-        match exec_command.to_command().status().await {
-            Ok(status) if status.success() => Ok(()),
+        match exec_command.to_command().output().await {
+            Ok(output) if output.status.success() => Ok(()),
             _ => Err(SystemServiceError::ServiceManagerUnavailable {
                 cmd: exec_command.to_string(),
                 name: self.name().to_string(),
@@ -59,7 +61,7 @@ impl SystemServiceManager for GeneralServiceManager {
         &self,
         action: &str,
         service: SystemService<'_>,
-    ) -> Result<(), SystemServiceError> {
+    ) -> Result<ServiceCommandOutput, SystemServiceError> {
         let exec_command = ServiceCommand::Action(action, service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())
             .await?
@@ -114,9 +116,7 @@ impl ExecCommand {
 
     fn to_command(&self) -> tokio::process::Command {
         let mut cmd = tokio::process::Command::new(&self.exec);
-        cmd.args(&self.args)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+        cmd.args(&self.args).stdin(Stdio::null());
         cmd
     }
 }
@@ -206,9 +206,13 @@ impl GeneralServiceManager {
         exec_command: ExecCommand,
         config_path: &str,
     ) -> Result<ServiceCommandExitStatus, SystemServiceError> {
-        match exec_command.to_command().status().await {
-            Ok(status) => Ok(ServiceCommandExitStatus {
-                status,
+        match exec_command.to_command().output().await {
+            Ok(output) => Ok(ServiceCommandExitStatus {
+                status: output.status,
+                output: ServiceCommandOutput {
+                    stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                    stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                },
                 service_command: exec_command.to_string(),
             }),
             Err(_) => Err(SystemServiceError::ServiceCommandNotFound {
@@ -222,18 +226,20 @@ impl GeneralServiceManager {
 #[derive(Debug)]
 struct ServiceCommandExitStatus {
     status: ExitStatus,
+    output: ServiceCommandOutput,
     service_command: String,
 }
 
 impl ServiceCommandExitStatus {
-    fn must_succeed(self) -> Result<(), SystemServiceError> {
+    fn must_succeed(self) -> Result<ServiceCommandOutput, SystemServiceError> {
         if self.status.success() {
-            Ok(())
+            Ok(self.output)
         } else {
             match self.status.code() {
                 Some(code) => Err(SystemServiceError::ServiceCommandFailedWithCode {
                     service_command: self.service_command,
                     code,
+                    reason: failure_reason(&self.output.stderr),
                 }),
                 None => Err(SystemServiceError::ServiceCommandFailedBySignal {
                     service_command: self.service_command,

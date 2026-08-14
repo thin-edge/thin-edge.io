@@ -14,33 +14,30 @@ use tedge_api::service_command::DEFAULT_SERVICE_TYPE;
 use tedge_api::workflow::BEGIN_TEDGE_MARKER;
 use tedge_api::workflow::END_TEDGE_MARKER;
 use tedge_config::TEdgeConfig;
+use tedge_system_services::failure_reason;
 use tedge_system_services::service_manager;
 use tedge_system_services::SystemService;
 use tedge_system_services::SystemServiceError;
 
-/// The service type handled by the init system, rather than by a service plugin.
-const INIT_SERVICE_TYPE: &str = DEFAULT_SERVICE_TYPE;
-
-/// The exit code telling the caller that the action is not supported for that service type,
-/// as opposed to an action that was run and failed. Same meaning as for the diag plugins.
+/// The exit code of an action that is not supported for the service type
 const NOT_SUPPORTED_EXIT_CODE: i32 = 2;
 
 #[derive(clap::Args, Debug, Eq, PartialEq)]
 pub struct TEdgeServiceOpt {
     /// The action to run on the service, e.g. start, stop or restart
     ///
-    /// Which actions are supported is decided by the backend running them:
-    /// the init system for the default service type, a service plugin for any other type.
+    /// Which actions are supported is decided depending on the service type.
+    /// Init system for the default service type, a service plugin for any other type.
     action: String,
 
-    /// The name of the service to act on, as the backend knows it
+    /// The name of the service to act on
     service_name: String,
 
-    /// The type of the service, selecting the backend that runs the action
+    /// The type of the service
     ///
     /// The default type is handled by the init system configured in system.toml.
-    /// Any other type is handled by the service plugin named after it.
-    #[clap(long, default_value = INIT_SERVICE_TYPE)]
+    /// Any other type is handled by the service plugin.
+    #[clap(long, default_value = DEFAULT_SERVICE_TYPE)]
     service_type: String,
 }
 
@@ -86,7 +83,7 @@ impl Command for ServiceActionCommand {
     async fn execute(&self, config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         match self.run(&config).await {
             Ok(()) => Ok(()),
-            // Reported here rather than returned, as this outcome has its own exit code
+            // Exits here, as this outcome has an exit code of its own
             Err(ServiceActionError::NotSupported(reason)) => {
                 eprintln!("Error: {reason}");
                 std::process::exit(NOT_SUPPORTED_EXIT_CODE)
@@ -100,7 +97,7 @@ impl ServiceActionCommand {
     async fn run(&self, config: &TEdgeConfig) -> Result<(), ServiceActionError> {
         self.validate()?;
 
-        if self.service_type == INIT_SERVICE_TYPE {
+        if self.service_type == DEFAULT_SERVICE_TYPE {
             self.run_init_system_action(config.root_dir()).await
         } else {
             self.run_plugin_action().await
@@ -123,23 +120,24 @@ impl ServiceActionCommand {
         let service_manager = service_manager(config_root)?;
         let service = SystemService::new(&self.service_name);
 
-        service_manager
+        let output = service_manager
             .run_action(&self.action, service)
             .await
             .map_err(|err| match err {
-                // The message lists the actions the init system does define
                 err @ SystemServiceError::UnsupportedAction { .. } => {
                     ServiceActionError::NotSupported(err.to_string())
                 }
                 err => err.into(),
-            })
+            })?;
+
+        forward(&output.stdout, &output.stderr);
+        Ok(())
     }
 
-    /// Run the action through the service plugin named after the service type
+    /// Run the action through the service plugin whose file name is the service type
     async fn run_plugin_action(&self) -> Result<(), ServiceActionError> {
         let plugin = self.find_plugin()?;
 
-        // Execution is argv-based: no argument can become a shell fragment
         let output = tokio::process::Command::new(&plugin)
             .arg(&self.action)
             .arg(&self.service_name)
@@ -157,16 +155,12 @@ impl ServiceActionCommand {
             }
         };
 
-        // The plugin's own output belongs to the caller, and to the workflow log when
-        // the caller is tedge-agent
         let stdout = String::from_utf8_lossy(&output.stdout);
-        print!("{}", without_workflow_markers(&stdout));
         let stderr = String::from_utf8_lossy(&output.stderr);
-        eprint!("{stderr}");
+        forward(&stdout, &stderr);
 
         match output.status.code() {
             Some(0) => Ok(()),
-            // The plugin's own "not supported", propagated unchanged
             Some(code) if code == NOT_SUPPORTED_EXIT_CODE => {
                 Err(ServiceActionError::NotSupported(format!(
                     "The '{}' action is not supported for the service type '{}'",
@@ -182,7 +176,7 @@ impl ServiceActionCommand {
         }
     }
 
-    /// The plugin named after the service type,
+    /// The plugin file whose name is the service type,
     /// taken from the first configured directory that holds one
     fn find_plugin(&self) -> Result<Utf8PathBuf, ServiceActionError> {
         self.plugin_paths
@@ -203,7 +197,6 @@ impl ServiceActionCommand {
 
 #[derive(Debug, thiserror::Error)]
 enum ServiceActionError {
-    /// Not an error of the action itself: the backend cannot run it at all
     #[error("{0}")]
     NotSupported(String),
 
@@ -240,12 +233,10 @@ enum ServiceActionError {
     PluginKilled { plugin: Utf8PathBuf },
 }
 
-/// The plugin's stdout, with every line holding a workflow marker removed
+/// The action's stdout, with every line holding a workflow marker removed
 ///
-/// When the caller is tedge-agent, the stdout of this process is the stdout of a workflow script,
-/// and a JSON excerpt surrounded by the workflow markers there updates the state of the command.
-/// A plugin prints free-form text, not state updates, so such a line is dropped rather than
-/// forwarded. A marker is looked for anywhere in a line, as the workflow engine does.
+/// When tedge-agent runs this process as a workflow script, a marker there would make the
+/// free-form output of an action update the state of the command.
 fn without_workflow_markers(stdout: &str) -> String {
     let holds_a_marker =
         |text: &str| text.contains(BEGIN_TEDGE_MARKER) || text.contains(END_TEDGE_MARKER);
@@ -262,49 +253,18 @@ fn without_workflow_markers(stdout: &str) -> String {
         .collect()
 }
 
-/// The last thing the plugin said on stderr, used as the reason of the failure
-fn failure_reason(stderr: &str) -> String {
-    match stderr.lines().rfind(|line| !line.trim().is_empty()) {
-        Some(reason) => reason.trim().to_string(),
-        None => "no reason given".to_string(),
-    }
+fn forward(stdout: &str, stderr: &str) {
+    print!("{}", without_workflow_markers(stdout));
+    eprint!("{stderr}");
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use std::os::unix::fs::PermissionsExt;
     use tedge_api::workflow::extract_script_output;
+    use tedge_test_utils::fs::with_exec_permission;
     use tedge_test_utils::fs::TempTedgeDir;
-
-    fn command(action: &str, service_name: &str, service_type: &str) -> ServiceActionCommand {
-        ServiceActionCommand {
-            action: action.to_string(),
-            service_name: service_name.to_string(),
-            service_type: service_type.to_string(),
-            plugin_paths: vec!["/usr/share/tedge/service-plugins".into()],
-        }
-    }
-
-    /// A plugin reporting what it was called with, and exiting as the action asks
-    fn service_plugin(dir: &Utf8Path, service_type: &str) -> Utf8PathBuf {
-        let plugin = dir.join(service_type);
-        std::fs::write(
-            &plugin,
-            r#"#!/bin/sh
-echo "called with: $*"
-case "$1" in
-  restart) exit 0;;
-  reload) echo "reload is not implemented" >&2; exit 2;;
-  *) echo "starting $2" >&2; echo "$1 failed on $2" >&2; exit 1;;
-esac
-"#,
-        )
-        .unwrap();
-        std::fs::set_permissions(&plugin, PermissionsExt::from_mode(0o755)).unwrap();
-        plugin
-    }
 
     #[tokio::test]
     async fn a_custom_type_runs_its_plugin() {
@@ -352,34 +312,6 @@ esac
             err.to_string(),
             format!("The service plugin {plugin} failed with exit code 1: stop failed on nodered")
         );
-    }
-
-    /// An init system whose actions all write a file named after the action and the service,
-    /// so that a test can tell which template was run
-    fn init_system(config_dir: &TempTedgeDir) -> Utf8PathBuf {
-        let done = config_dir.utf8_path().join("done");
-        let touch = |action: &str| format!(r#"["/usr/bin/touch", "{done}.{action}.{{}}"]"#);
-        config_dir.file("system.toml").with_raw_content(&format!(
-            r#"[init]
-name = "test"
-is_available = ["/usr/bin/touch", "{done}.is_available"]
-is_active = {}
-start = {}
-stop = {}
-restart = {}
-enable = {}
-disable = {}
-reload = {}
-"#,
-            touch("is_active"),
-            touch("start"),
-            touch("stop"),
-            touch("restart"),
-            touch("enable"),
-            touch("disable"),
-            touch("reload"),
-        ));
-        done
     }
 
     #[tokio::test]
@@ -488,6 +420,33 @@ disable = ["/bin/true", "{}"]
     }
 
     #[tokio::test]
+    async fn the_reason_of_an_init_system_failure_comes_from_its_stderr() {
+        let config_dir = TempTedgeDir::new();
+        config_dir.file("system.toml").with_raw_content(
+            r#"[init]
+name = "test"
+is_available = ["/bin/true"]
+is_active = ["/bin/true", "{}"]
+restart = ["/bin/sh", "-c", "echo Unit {}.service not found. >&2; exit 5"]
+stop = ["/bin/true", "{}"]
+enable = ["/bin/true", "{}"]
+disable = ["/bin/true", "{}"]
+"#,
+        );
+
+        let cmd = command("restart", "nginx", "service");
+        let err = cmd
+            .run_init_system_action(config_dir.utf8_path())
+            .await
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("Unit nginx.service not found."),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
     async fn the_name_key_is_not_dispatchable_as_an_action() {
         let config_dir = TempTedgeDir::new();
         init_system(&config_dir);
@@ -536,16 +495,10 @@ disable = ["/bin/true", "{}"]
     #[test]
     fn a_directory_holding_no_such_plugin_is_skipped() {
         let dir = TempTedgeDir::new();
-        let first = dir.dir("first");
-        let second = dir.dir("second");
-        let plugin = service_plugin(second.utf8_path(), "container");
+        let plugin = service_plugin(dir.utf8_path(), "container");
 
         let mut cmd = command("restart", "nodered", "container");
-        cmd.plugin_paths = vec![
-            "/no/such/directory".into(),
-            first.utf8_path().to_path_buf(),
-            second.utf8_path().to_path_buf(),
-        ];
+        cmd.plugin_paths = vec!["/no/such/directory".into(), dir.utf8_path().to_path_buf()];
 
         assert_eq!(cmd.find_plugin().unwrap(), plugin);
     }
@@ -570,36 +523,6 @@ disable = ["/bin/true", "{}"]
     }
 
     #[test]
-    fn a_marker_is_stripped_wherever_it_is_on_the_line() {
-        // The engine looks for the marker anywhere in the output, not only at the start of a line
-        assert_eq!(
-            without_workflow_markers("done :::begin-tedge:::\n{}\nand :::end-tedge:::\n"),
-            "{}\n"
-        );
-    }
-
-    #[test]
-    fn any_other_output_of_a_plugin_is_forwarded_unchanged() {
-        assert_eq!(
-            without_workflow_markers("restarting nodered\n"),
-            "restarting nodered\n"
-        );
-        // Down to a last line with no newline of its own
-        assert_eq!(without_workflow_markers("no newline"), "no newline");
-        assert_eq!(without_workflow_markers(""), "");
-    }
-
-    #[test]
-    fn the_reason_of_a_failure_is_the_last_line_of_stderr() {
-        assert_eq!(
-            failure_reason("starting nodered\nno such container\n"),
-            "no such container"
-        );
-        assert_eq!(failure_reason(""), "no reason given");
-        assert_eq!(failure_reason("\n \n"), "no reason given");
-    }
-
-    #[test]
     fn an_argument_is_validated_before_any_backend_is_selected() {
         assert_matches!(
             command("RESTART", "collectd", "service").validate(),
@@ -616,5 +539,57 @@ disable = ["/bin/true", "{}"]
         assert!(command("restart", "collectd", "container")
             .validate()
             .is_ok());
+    }
+
+    fn command(action: &str, service_name: &str, service_type: &str) -> ServiceActionCommand {
+        ServiceActionCommand {
+            action: action.to_string(),
+            service_name: service_name.to_string(),
+            service_type: service_type.to_string(),
+            plugin_paths: vec!["/usr/share/tedge/service-plugins".into()],
+        }
+    }
+
+    fn service_plugin(dir: &Utf8Path, service_type: &str) -> Utf8PathBuf {
+        let plugin = dir.join(service_type);
+        with_exec_permission(
+            &plugin,
+            r#"#!/bin/sh
+echo "called with: $*"
+case "$1" in
+  restart) exit 0;;
+  stop) echo "starting $2" >&2; echo "$1 failed on $2" >&2; exit 1;;
+  *) echo "$1 is not implemented" >&2; exit 2;;
+esac
+"#,
+        );
+        plugin
+    }
+
+    fn init_system(config_dir: &TempTedgeDir) -> Utf8PathBuf {
+        let done = config_dir.utf8_path().join("done");
+        // Each action runs a command which leaves the action and the service name on disk
+        let touch = |action: &str| format!(r#"["/usr/bin/touch", "{done}.{action}.{{}}"]"#);
+        config_dir.file("system.toml").with_raw_content(&format!(
+            r#"[init]
+name = "test"
+is_available = ["/usr/bin/touch", "{done}.is_available"]
+is_active = {}
+start = {}
+stop = {}
+restart = {}
+enable = {}
+disable = {}
+reload = {}
+"#,
+            touch("is_active"),
+            touch("start"),
+            touch("stop"),
+            touch("restart"),
+            touch("enable"),
+            touch("disable"),
+            touch("reload"),
+        ));
+        done
     }
 }

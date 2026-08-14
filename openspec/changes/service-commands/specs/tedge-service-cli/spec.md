@@ -16,6 +16,9 @@ the same rule that applies to the `cmd/<action>` topic segment.
 
 The command SHALL exit `0` on success,
 and SHALL exit non-zero on failure with the reason written to stderr.
+
+Whichever backend runs the action, `tedge service` SHALL forward its stdout and stderr,
+and SHALL use the last non-empty line of that stderr as the reason of a failure.
 The exit code SHALL distinguish "the action failed" from
 "the action is not supported for this service type",
 so that a caller can tell a real failure from a missing backend.
@@ -32,6 +35,11 @@ No new privileged surface is added.
 #### Scenario: A failing backend is reported
 - **WHEN** the selected backend fails to run the action
 - **THEN** `tedge service` SHALL exit non-zero and SHALL write the reason to stderr
+
+#### Scenario: The init system says why the action failed
+- **WHEN** `tedge service restart nginx` is run and the init system writes
+  `Unit nginx.service not found.` to stderr
+- **THEN** that line SHALL be the reason of the failure
 
 #### Scenario: An unsupported action is distinguishable
 - **WHEN** the action is not supported for the given service type
