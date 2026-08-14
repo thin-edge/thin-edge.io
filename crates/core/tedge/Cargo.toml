@@ -39,6 +39,7 @@ mutants = { workspace = true }
 nix = { workspace = true }
 pad = { workspace = true }
 pem.workspace = true
+rand = { workspace = true }
 rasn = { workspace = true }
 rasn-cms = { workspace = true }
 reqwest = { workspace = true, features = [
