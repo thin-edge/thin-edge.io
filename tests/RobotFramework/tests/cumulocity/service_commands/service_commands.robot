@@ -27,28 +27,23 @@ Declares the actions of a service to Cumulocity
     Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
     Supported Service Commands Should Be    ${SERVICE_XID}    RESTART    START    STOP
 
-Declares the actions of thin-edge's own services
-    [Documentation]    tedge-agent and every cloud mapper declare their own actions when they
-    ...    start, with nobody asking for it. Neither declares STOP or START: the shipped
-    ...    workflow always refuses to stop them, so the action is never offered.
-    Supported Service Commands Should Be    ${AGENT_XID}    RESTART    ENABLE    DISABLE
+Declares the action of thin-edge's own services
+    [Documentation]    tedge-agent and every mapper declare RESTART when they start.
+    Supported Service Commands Should Be    ${AGENT_XID}    RESTART
     Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
 
-    Supported Service Commands Should Be    ${MAPPER_XID}    RESTART    ENABLE    DISABLE
+    Supported Service Commands Should Be    ${MAPPER_XID}    RESTART
     Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
 
-Declares every action of a mapper connected to no cloud
-    [Documentation]    The collectd mapper and the local mapper are connected to no cloud, so
-    ...    stopping one takes no way of reporting anything away and both declare all five
-    ...    actions. Neither runs by default, so this test starts them and stops them again.
+Declares the same action for a mapper connected to no cloud
+    [Documentation]    The collectd mapper and the local mapper are connected to no cloud, and
+    ...    declare RESTART as every other thin-edge service does.
     Execute Command    systemctl start tedge-mapper-collectd tedge-mapper-local
 
     Supported Service Commands Should Be
-    ...    ${DEVICE_SN}:device:main:service:tedge-mapper-collectd
-    ...    DISABLE    ENABLE    RESTART    START    STOP
+    ...    ${DEVICE_SN}:device:main:service:tedge-mapper-collectd    RESTART
     Supported Service Commands Should Be
-    ...    ${DEVICE_SN}:device:main:service:tedge-mapper-local
-    ...    DISABLE    ENABLE    RESTART    START    STOP
+    ...    ${DEVICE_SN}:device:main:service:tedge-mapper-local    RESTART
     [Teardown]    Stop The Mappers Connected To No Cloud
 
 Withdraws an action from Cumulocity

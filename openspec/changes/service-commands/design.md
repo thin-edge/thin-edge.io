@@ -178,21 +178,15 @@ so no supported operation is deregistered and no operation file is deleted.
 ### thin-edge's own services declare their own actions
 
 `service_actions` (`crates/core/tedge_api/src/service_command.rs`) decides what each
-thin-edge service publishes on its own service topic at startup.
-
-The agent and every `tedge-mapper-<x>` declare `restart`, `enable` and `disable`.
-`stop` is left out because the shipped workflow refuses it for them,
-nothing being left to report the outcome of the command that asked for it,
-and `start` with it: a service that cannot be stopped this way has nothing to start.
-`tedge-mapper-collectd` and `tedge-mapper-local` are connected to no cloud
-and declare all five.
+thin-edge service publishes on its own service topic at startup:
+`restart` alone, for the agent and for every `tedge-mapper-<x>`.
 
 Under `tedge run all` no init unit manages a component,
 so the agent declares `restart` alone — the one action which never reaches an init system —
 and a mapper declares nothing.
-There, and only there, what is not declared is withdrawn by clearing the capability topic:
+There, and only there, a mapper withdraws its `restart` by clearing the capability topic:
 a capability is retained, so it outlives the service that published it,
-and moving a device to `tedge run all` would otherwise leave the actions of the
+and moving a device to `tedge run all` would otherwise leave the action of the
 previous deployment on show.
 
 A declaration says what is offered, never what is enforced.

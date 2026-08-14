@@ -121,16 +121,17 @@ so it leaves the command untouched rather than driving a state machine it may no
 on the connection that publishes their service registration.
 Nobody has to declare anything for them.
 
-| Service | Declared actions |
-| --- | --- |
-| `tedge-agent` | `restart`, `enable`, `disable` |
-| any cloud mapper | `restart`, `enable`, `disable` |
-| `tedge-mapper-collectd` and `tedge-mapper-local` | `start`, `stop`, `restart`, `enable`, `disable` |
+`tedge-agent` and every mapper declare `restart`, and nothing else.
 
-`stop` is missing from the first two rows because the shipped workflow always refuses it there —
-see [services that cannot be stopped](#services-that-cannot-be-stopped) —
-and an action that can only fail is better not offered.
-`start` is missing because `restart` already starts a service that is not running.
+`restart` is the only action the cloud is given over `tedge-agent`.
+`start`, `stop`, `enable` and `disable` remain available through `tedge service`.
+`stop` is refused for these services in any case:
+see [services that cannot be stopped](#services-that-cannot-be-stopped).
+
+:::note
+Which actions a mapper declares is to become configurable per mapper, in its own `mapper.toml`.
+It is not configurable yet: every mapper declares `restart`.
+:::
 
 Under `tedge run all`, `tedge-agent` declares `restart` and the mappers declare nothing:
 the init system manages the shared process, not the components inside it,

@@ -44,18 +44,12 @@ A declared action SHALL be withdrawn by clearing its capability topic with a ret
 publishing the capabilities where they publish their service registration.
 Which actions are declared depends on how the service is deployed.
 
-A service managed by an init unit of its own SHALL declare:
+A service managed by an init unit of its own SHALL declare `restart` and nothing else.
 
-- `restart`, `enable` and `disable`, for `tedge-agent` and for every mapper;
-- the five standard actions, for `tedge-mapper-collectd` and `tedge-mapper-local`,
-  the two mappers connected to no cloud.
-
-Neither `start` nor `stop` SHALL be declared for `tedge-agent` and the cloud mappers.
-The shipped workflow always refuses `stop` for these services,
-so declaring it would put a button in the cloud for an action which can only fail.
-A `start` is only ever asked for while the service is stopped,
-and `tedge-agent` is what executes a service command:
-once it is stopped, nothing is left to run that command.
+`restart` is the only action the cloud is given over `tedge-agent`.
+A mapper declares the same one:
+each mapper has a `mapper.toml` of its own,
+which is where the actions it supports are to be decided, one mapper at a time.
 
 Leaving an action out of the list does not prevent it from being commanded:
 a capability is a plain retained message, so anyone can publish one,
@@ -67,35 +61,32 @@ Such a hosted service has no init unit of its own,
 so an action reaching an init system would act on a unit which is not what runs.
 A hosted service SHALL declare `restart` if it is `tedge-agent`, that being the one action
 which reaches no init system, and SHALL declare nothing otherwise.
-It SHALL also withdraw every standard action it does not declare,
+A hosted mapper SHALL withdraw the `restart` it declares as a service of its own,
+and nothing else,
 a capability being retained and outliving the deployment which published it.
 
 A capability lives as long as the registration of the service which published it.
 Uninstalling the software clears neither the registration nor its capabilities;
 deregistering the service SHALL clear both.
 
-#### Scenario: The agent declares its actions at startup
+#### Scenario: The agent declares its action at startup
 - **WHEN** `tedge-agent` starts as a service of its own
-- **THEN** `restart`, `enable` and `disable` SHALL be the actions it declares,
+- **THEN** `restart` SHALL be the only action it declares,
   with nothing else having been published
 
-#### Scenario: A cloud mapper declares the same actions
-- **WHEN** a mapper connected to a cloud starts as a service of its own
-- **THEN** `restart`, `enable` and `disable` SHALL be the actions it declares
-
-#### Scenario: A mapper connected to no cloud declares every action
-- **WHEN** `tedge-mapper-collectd` or `tedge-mapper-local` starts as a service of its own
-- **THEN** the five standard actions SHALL be the actions it declares
+#### Scenario: A mapper declares the same action
+- **WHEN** a mapper starts as a service of its own
+- **THEN** `restart` SHALL be the only action it declares
 
 #### Scenario: A service under `tedge run all` declares only what it can carry out
 - **WHEN** the agent and the mappers are hosted in a single process
 - **THEN** `restart` SHALL be the only action declared by the agent,
   and the mappers SHALL declare no action
 
-#### Scenario: Moving to `tedge run all` withdraws the actions of the previous deployment
-- **WHEN** a device whose services declared their actions as services of their own
+#### Scenario: Moving to `tedge run all` withdraws the action of the previous deployment
+- **WHEN** a device whose services declared their action as services of their own
   is moved to a single process
-- **THEN** every standard action a hosted service does not declare SHALL be withdrawn
+- **THEN** the `restart` of every hosted mapper SHALL be withdrawn
 
 #### Scenario: An action declared by hand is still refused
 - **WHEN** `stop` is declared by hand on the capability topic of `tedge-agent`

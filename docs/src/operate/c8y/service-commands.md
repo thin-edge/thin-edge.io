@@ -143,20 +143,6 @@ so Cumulocity keeps offering the operation with no action to pick.
 so their managed objects carry a command list from the start —
 see [actions of the shipped services](../../references/agent/service-commands.md#actions-of-the-shipped-services).
 
-```json title="managed object of the tedge-agent service"
-{
-  "c8y_SupportedServiceCommands": ["DISABLE", "ENABLE", "RESTART"]
-}
-```
-
-RESTART works, and the operation completes once the service is back.
-STOP and START are not on the list:
-the agent runs the command and the cloud mapper carries its outcome,
-so stopping either would leave the operator with no answer,
-and a service that cannot be stopped this way has nothing to start.
-`tedge-mapper-collectd` and `tedge-mapper-local` are connected to no cloud,
-so they offer START, STOP, RESTART, ENABLE and DISABLE.
-
 Under `tedge run all`, `tedge-agent` offers RESTART alone and the mappers offer nothing:
 the init system manages the shared process, not the components inside it.
 Restarting the agent there restarts the mappers with it.
