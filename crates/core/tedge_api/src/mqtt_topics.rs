@@ -167,6 +167,7 @@ impl MqttSchema {
         let channel = match channel {
             ChannelFilter::EntityMetadata => "".to_string(),
             ChannelFilter::EntityTwinData => "/twin/+".to_string(),
+            ChannelFilter::Config => "/config".to_string(),
             ChannelFilter::Measurement => "/m/+".to_string(),
             ChannelFilter::MeasurementMetadata => "/m/+/meta".to_string(),
             ChannelFilter::Event => "/e/+".to_string(),
@@ -597,6 +598,7 @@ pub enum Channel {
     EntityTwinData {
         fragment_key: String,
     },
+    Config,
     Measurement {
         measurement_type: String,
     },
@@ -640,6 +642,7 @@ impl FromStr for Channel {
             ["twin", fragment_key] => Ok(Channel::EntityTwinData {
                 fragment_key: fragment_key.to_string(),
             }),
+            ["config"] => Ok(Channel::Config),
             ["m", measurement_type] => Ok(Channel::Measurement {
                 measurement_type: measurement_type.to_string(),
             }),
@@ -686,6 +689,7 @@ impl Display for Channel {
         match self {
             Channel::EntityMetadata => Ok(()),
             Channel::EntityTwinData { fragment_key } => write!(f, "twin/{fragment_key}"),
+            Channel::Config => write!(f, "config"),
 
             Channel::Measurement { measurement_type } => write!(f, "m/{measurement_type}"),
             Channel::MeasurementMetadata { measurement_type } => {
@@ -722,6 +726,10 @@ impl Channel {
 
     pub fn is_entity_twin_data(&self) -> bool {
         matches!(self, Channel::EntityTwinData { .. })
+    }
+
+    pub fn is_config(&self) -> bool {
+        matches!(self, Channel::Config)
     }
 }
 
@@ -899,6 +907,7 @@ pub enum EntityFilter<'a> {
 pub enum ChannelFilter {
     EntityMetadata,
     EntityTwinData,
+    Config,
     Measurement,
     Event,
     Alarm,
@@ -921,6 +930,7 @@ impl From<&Channel> for ChannelFilter {
         match value {
             Channel::EntityMetadata => ChannelFilter::EntityMetadata,
             Channel::EntityTwinData { fragment_key: _ } => ChannelFilter::EntityTwinData,
+            Channel::Config => ChannelFilter::Config,
             Channel::Measurement {
                 measurement_type: _,
             } => ChannelFilter::Measurement,
@@ -1019,6 +1029,55 @@ mod tests {
                 }
             )
         );
+    }
+
+    #[test]
+    fn parses_config_channel_topic() {
+        let schema = MqttSchema::with_root(MQTT_ROOT.to_string());
+        let entity_topic = schema
+            .parse(&format!(
+                "{MQTT_ROOT}/device/main/service/tedge-agent/config"
+            ))
+            .unwrap();
+
+        assert_eq!(
+            entity_topic,
+            (
+                EntityTopicId("device/main/service/tedge-agent".to_string()),
+                Channel::Config
+            )
+        );
+    }
+
+    #[test]
+    fn config_channel_round_trips_through_display_and_parse() {
+        let channel = Channel::Config;
+        assert_eq!(channel.to_string(), "config");
+        assert_eq!(channel.to_string().parse::<Channel>().unwrap(), channel);
+        assert!(channel.is_config());
+    }
+
+    #[test]
+    fn config_channel_filter_matches_config_topic() {
+        let schema = MqttSchema::with_root(MQTT_ROOT.to_string());
+        let entity: EntityTopicId = "device/main/service/tedge-mapper-c8y".parse().unwrap();
+        let topics = schema.topics(EntityFilter::Entity(&entity), ChannelFilter::Config);
+
+        assert!(
+            topics.accept_topic(&mqtt_channel::Topic::new_unchecked(&format!(
+                "{MQTT_ROOT}/device/main/service/tedge-mapper-c8y/config"
+            )))
+        );
+        assert!(
+            !topics.accept_topic(&mqtt_channel::Topic::new_unchecked(&format!(
+                "{MQTT_ROOT}/device/main/service/tedge-mapper-c8y/twin/name"
+            )))
+        );
+    }
+
+    #[test]
+    fn config_channel_filter_from_channel() {
+        assert_eq!(ChannelFilter::from(&Channel::Config), ChannelFilter::Config);
     }
 
     #[test]

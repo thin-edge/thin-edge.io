@@ -488,6 +488,90 @@ Remove all of the child device's twin data using a single request.
 curl -f -X DELETE http://localhost:8000/te/v1/entities/device/child01///twin
 ```
 
+## Get exposed configuration
+
+The agent and the mappers publish a subset of their configuration
+as retained `config` MQTT messages
+(see the [MQTT API reference](../../references/mqtt-api.md#configuration)).
+The agent collects the `config` messages of all the services
+and serves them over HTTP,
+so that the configuration of each entity can be queried individually.
+
+This view is read-only: any other method (`POST`, `PUT`, `DELETE` etc)
+returns `405 Method Not Allowed`.
+A setting can only be changed with `tedge config set`,
+and the new value is published only once its owning service is restarted.
+
+Values are served as JSON, keeping the type the setting has in `tedge.toml`:
+a port comes back as a number, a flag as a boolean and a template set as an array.
+
+### Get a single configuration value
+
+**Endpoint**
+
+```
+GET /te/v1/entities/{topic-id}/config/{key}
+```
+
+**Response status codes**
+
+* 200: OK
+* 404: Not Found (the key is not exposed, or does not exist)
+
+:::note
+A key that is not exposed and a key that does not exist at all
+are indistinguishable here: both return `404 Not Found`.
+So the response tells nothing about the settings that are not exposed.
+:::
+
+#### Example: Get the agent's device.id setting
+
+```sh
+curl http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config/device.id
+```
+
+```json title="Response"
+"my-device-01"
+```
+
+#### Example: Get the agent's mqtt.client.port setting
+
+```sh
+curl http://localhost:8000/te/v1/entities/device/main/service/tedge-agent/config/mqtt.client.port
+```
+
+```json title="Response"
+1883
+```
+
+### Get all exposed configuration
+
+**Endpoint**
+
+```
+GET /te/v1/entities/{topic-id}/config
+```
+
+**Response status codes**
+
+* 200: OK
+* 404: Not Found
+
+#### Example: Get all of a c8y mapper's exposed configuration
+
+```sh
+curl http://localhost:8000/te/v1/entities/device/main/service/tedge-mapper-c8y/config
+```
+
+```json title="Response"
+{
+    "url": "example.cumulocity.com",
+    "device.id": "my-device-01",
+    "enable.log_upload": true,
+    "smartrest.templates": ["1234", "5678"]
+}
+```
+
 ## Query entities
 
 Get a list of entities which match given filter criteria.
