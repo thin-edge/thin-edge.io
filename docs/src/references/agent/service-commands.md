@@ -34,7 +34,7 @@ This is what lets an action name stay the same
 from a cloud command name, to a topic segment, to the argument of a command line.
 
 `start`, `stop`, `restart`, `enable` and `disable` are the standard actions,
-the ones %%te%% ships a workflow for.
+the ones an init system defines in [`system.toml`](../init-system-configuration.md).
 Any other name is a custom action, supported by whatever runs it.
 
 ## MQTT API
@@ -125,8 +125,6 @@ Nobody has to declare anything for them.
 
 `restart` is the only action the cloud is given over `tedge-agent`.
 `start`, `stop`, `enable` and `disable` remain available through `tedge service`.
-`stop` is refused for these services in any case:
-see [services that cannot be stopped](#services-that-cannot-be-stopped).
 
 :::note
 Which actions a mapper declares is to become configurable per mapper, in its own `mapper.toml`.
@@ -141,15 +139,14 @@ A capability lives as long as the registration of the service that published it.
 Uninstalling a service clears neither;
 [deregistering it](../../operate/entity-management/rest_api.md) clears both.
 
-## Shipped workflows
+## Shipped workflow
 
-`tedge-agent` installs a workflow for each standard action in
-`/etc/tedge/operations/service_start.toml`, `service_stop.toml`, `service_restart.toml`,
-`service_enable.toml` and `service_disable.toml`.
-Each declares `type = "service"`, which is what scopes it to service entities.
+`tedge-agent` installs the workflow of the `restart` action
+in `/etc/tedge/operations/service_restart.toml`.
+It declares `type = "service"`, which is what scopes it to service entities.
 See [scoping a workflow by entity type](./operation-workflow.md#workflow-entity-type).
 
-Each runs the action with:
+It runs the action with:
 
 ```sh
 sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type ${.payload.serviceType}
@@ -157,15 +154,13 @@ sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type
 
 Exit code `0` moves the command to `successful`, any other code to `failed`,
 with the reason given by the backend written to the operation log.
-The step carries a timeout, so a backend that never returns
-ends as a failed command rather than a stuck one:
-180 seconds for `start`, `stop` and `restart`,
+The step carries a timeout of 180 seconds,
 twice what systemd itself waits to stop and to start a unit,
-and 60 seconds for `enable` and `disable`, which wait for no service to change state.
+so a backend that never returns ends as a failed command rather than a stuck one.
 
-These five files are installed as *templates*:
-each is created when missing, and never overwritten once it differs from the shipped copy.
-An administrator can adapt a workflow, or delete it to disable the action altogether,
+The file is installed as a *template*:
+it is created when missing, and never overwritten once it differs from the shipped copy.
+An administrator can adapt the workflow, or delete it to disable the action altogether,
 and an upgrade will not restore it.
 
 Custom actions have no shipped workflow.
@@ -189,25 +184,6 @@ where no `tedge-agent` unit exists.
 Under `tedge run all` the whole process stops, so the mappers restart with the agent.
 Whatever started the process is what starts it again,
 so a unit written with no restart policy leaves the command with nothing to complete it.
-
-### Services that cannot be stopped
-
-The shipped `stop` workflow refuses two cases,
-both being components %%te%% needs in order to report the outcome of the command asking for it:
-
-- **tedge-agent**, which runs the command.
-  A stopped agent cannot report anything, and nothing would start it again.
-- **any mapper connected to a cloud**, which carries the outcome to that cloud.
-  A mapper is recognized by its name, always `tedge-mapper-<x>`,
-  whatever its cloud, topic prefix and profile.
-
-`tedge-mapper-collectd` and `tedge-mapper-local` are the exception, being connected to no cloud:
-the collectd mapper feeds local measurements in, and the local mapper transforms data on the device.
-Stopping one of them takes no way of reporting anything away,
-so both are stopped as any other service.
-Neither takes a cloud profile, so both always carry those exact names.
-
-A refused command moves to `failed` with the reason naming why.
 
 ## From the cloud
 

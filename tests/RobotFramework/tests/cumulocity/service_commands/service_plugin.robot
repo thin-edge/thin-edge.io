@@ -30,7 +30,7 @@ Ships a plugin directory the tedge user cannot write to
 Declares the actions of the service to Cumulocity
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
     Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
-    Supported Service Commands Should Be    PAUSE    RESTART    STOP
+    Supported Service Commands Should Be    FREEZE    PAUSE    RESTART
 
 Runs a standard action through the plugin of the service type
     Clear Plugin Log
@@ -77,12 +77,12 @@ Takes the service type from the registered entity
 Reports an action the plugin does not support
     Clear Plugin Log
     ${operation}=    Create Service Command Operation
-    ...    {"command":"STOP","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
+    ...    {"command":"FREEZE","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
     Cumulocity.Operation Should Be FAILED
     ...    ${operation}
     ...    failure_reason=.*not supported for that type of service.*
     ...    timeout=120
-    Plugin Should Have Been Called With    stop ${SERVICE_NAME}
+    Plugin Should Have Been Called With    freeze ${SERVICE_NAME}
 
 Runs an action from the command line
     Clear Plugin Log
@@ -107,8 +107,9 @@ Custom Setup
     ThinEdgeIO.Transfer To Device    ${CURDIR}/container    ${PLUGIN_DIR}/
     Execute Command    chown root:root ${PLUGIN_DIR}/container && chmod 755 ${PLUGIN_DIR}/container
 
-    # `pause` is a custom action, so it has no shipped workflow
+    # `pause` and `freeze` are custom actions, so they have no shipped workflow
     ThinEdgeIO.Transfer To Device    ${CURDIR}/service_pause.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/service_freeze.toml    /etc/tedge/operations/
     Restart Service    tedge-agent
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
 
@@ -117,8 +118,8 @@ Custom Setup
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
 
     Declare Action    restart
-    Declare Action    stop
     Declare Action    pause
+    Declare Action    freeze
 
 Declare Action
     [Arguments]    ${action}

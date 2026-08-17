@@ -1095,28 +1095,6 @@ action = "cleanup"
     Ok(())
 }
 
-/// A service workflow, sharing the `restart` operation name with the builtin device workflow
-const SERVICE_RESTART_WORKFLOW: &str = r#"
-operation = "restart"
-type = "service"
-
-[init]
-action = "proceed"
-on_success = "executing"
-
-[executing]
-action = "proceed"
-on_success = "successful"
-
-[successful]
-action = "cleanup"
-"#;
-
-fn service_of(service: &str, device: &str) -> EntityMetadata {
-    EntityMetadata::new(service.parse().unwrap(), EntityType::Service)
-        .with_parent(device.parse().unwrap())
-}
-
 #[tokio::test]
 async fn a_command_addressed_to_a_service_of_this_device_is_driven() -> Result<(), DynError> {
     let TestHandler {
@@ -1259,7 +1237,6 @@ async fn a_failed_lookup_leaves_the_command_untouched() -> Result<(), DynError> 
         ))
         .await?;
 
-    // Not even a failed state is published: the command is left for a retry
     assert_no_message_or_actor_exit(
         &mut mqtt_box,
         &mut actor_handle,
@@ -1283,7 +1260,6 @@ async fn a_service_command_is_driven_under_a_custom_topic_scheme() -> Result<(),
             "service-restart.toml".to_string(),
             SERVICE_RESTART_WORKFLOW.to_string(),
         )],
-        // Nothing in these topic identifiers says which is the parent of which
         FakeEntityStore::Entities(vec![service_of(
             "factory01/hallA/plc1/nginx",
             "factory01/hallA/plc1/",
@@ -1293,8 +1269,6 @@ async fn a_service_command_is_driven_under_a_custom_topic_scheme() -> Result<(),
 
     skip_device_restart_capability(&mut mqtt_box, "factory01/hallA/plc1/").await;
 
-    // A command addressed to the device itself is driven without any lookup,
-    // by the builtin device workflow
     mqtt_box
         .send(MqttMessage::new(
             &Topic::new_unchecked("te/factory01/hallA/plc1//cmd/restart/1"),
@@ -1313,7 +1287,6 @@ async fn a_service_command_is_driven_under_a_custom_topic_scheme() -> Result<(),
         "factory01/hallA/plc1/".parse::<EntityTopicId>()?
     );
 
-    // A command addressed to one of its services is driven by the service workflow
     mqtt_box
         .send(MqttMessage::new(
             &Topic::new_unchecked("te/factory01/hallA/plc1/nginx/cmd/restart/2"),
@@ -1329,27 +1302,6 @@ async fn a_service_command_is_driven_under_a_custom_topic_scheme() -> Result<(),
     .await;
 
     Ok(())
-}
-
-/// A device workflow, as every workflow was before the `type` field existed
-const DEVICE_PAUSE_WORKFLOW: &str = r#"
-operation = "pause"
-
-[init]
-action = "proceed"
-on_success = "successful"
-
-[successful]
-action = "cleanup"
-"#;
-
-/// Rewrite a workflow file, as an administrator adapting a definition does
-///
-/// Return the path inotify reports the change on.
-fn edit_workflow(tmp_dir: &TempTedgeDir, file_name: &str, definition: &str) -> std::path::PathBuf {
-    let path = tmp_dir.path().join("operations").join(file_name);
-    std::fs::write(&path, format!("# edited\n{definition}")).expect("the workflow file is written");
-    path
 }
 
 #[tokio::test]
@@ -1373,8 +1325,6 @@ async fn an_edited_service_workflow_declares_no_capability_of_the_device() -> Re
 
     skip_device_restart_capability(&mut mqtt_box, "device/main//").await;
 
-    // The capabilities of a service are declared by that service, so editing a service
-    // workflow declares nothing, and the device does not claim an action it cannot run
     let path = edit_workflow(&tmp_dir, "service-restart.toml", SERVICE_RESTART_WORKFLOW);
     inotify_box.send(FsWatchEvent::Modified(path)).await?;
 
@@ -1407,7 +1357,6 @@ async fn an_edited_device_workflow_declares_its_capability_again() -> Result<(),
     )
     .await?;
 
-    // On start, the builtin restart and the user defined workflow, in alphabetical order
     assert_received_contains_str(
         &mut mqtt_box,
         [
@@ -1432,11 +1381,6 @@ async fn an_edited_device_workflow_declares_its_capability_again() -> Result<(),
     Ok(())
 }
 
-// The workflows shipped with the agent, driving the standard actions of a service
-const SHIPPED_START_WORKFLOW: &str = include_str!("../resources/service_start.toml");
-const SHIPPED_STOP_WORKFLOW: &str = include_str!("../resources/service_stop.toml");
-const SHIPPED_RESTART_WORKFLOW: &str = include_str!("../resources/service_restart.toml");
-
 #[tokio::test]
 async fn a_successful_action_completes_the_command() -> Result<(), DynError> {
     let TestHandler {
@@ -1444,11 +1388,12 @@ async fn a_successful_action_completes_the_command() -> Result<(), DynError> {
         mut script_box,
         mut actor_handle,
         ..
-    } = spawn_agent_running(SHIPPED_START_WORKFLOW, "service_start.toml").await?;
+    } = spawn_agent_running(SHIPPED_RESTART_WORKFLOW, "service_restart.toml").await?;
 
-    trigger_service_command(&mut mqtt_box, "start", "collectd").await?;
+    trigger_service_command(&mut mqtt_box, "restart", "collectd", "collectd").await?;
 
-    // The action is run by `tedge service` as root, and is named by the topic only
+    pass_the_agent_guard(&mut script_box, &mut actor_handle).await;
+
     let script = recv_script(&mut script_box, &mut actor_handle).await;
     assert_eq!(script.request.command, "sudo");
     assert_eq!(
@@ -1457,7 +1402,7 @@ async fn a_successful_action_completes_the_command() -> Result<(), DynError> {
             "-n",
             "tedge",
             "service",
-            "start",
+            "restart",
             "collectd",
             "--service-type",
             "service"
@@ -1470,7 +1415,7 @@ async fn a_successful_action_completes_the_command() -> Result<(), DynError> {
     assert_command_status(
         &mut mqtt_box,
         &mut actor_handle,
-        "start",
+        "restart",
         "collectd",
         "successful",
     )
@@ -1479,342 +1424,50 @@ async fn a_successful_action_completes_the_command() -> Result<(), DynError> {
     Ok(())
 }
 
+#[test_case(exited(1), "operation log"; "the backend failed")]
+#[test_case(exited(2), "not supported"; "the action is not supported")]
+// A process killed on timeout is reported with signal 9, not with an exit code
+#[test_case(std::process::ExitStatus::from_raw(9), "did not complete in time"; "killed on timeout")]
 #[tokio::test]
-async fn an_unsupported_action_fails_with_a_reason_of_its_own() -> Result<(), DynError> {
+async fn a_failing_action_fails_the_command(
+    outcome: std::process::ExitStatus,
+    expected_reason: &str,
+) -> Result<(), DynError> {
     let TestHandler {
         mut mqtt_box,
         mut script_box,
         mut actor_handle,
         ..
-    } = spawn_agent_running(SHIPPED_START_WORKFLOW, "service_start.toml").await?;
+    } = spawn_agent_running(SHIPPED_RESTART_WORKFLOW, "service_restart.toml").await?;
 
-    trigger_service_command(&mut mqtt_box, "start", "collectd").await?;
+    trigger_service_command(&mut mqtt_box, "restart", "collectd", "collectd").await?;
 
-    // Exit code 2 tells the action is not supported for that service type
+    pass_the_agent_guard(&mut script_box, &mut actor_handle).await;
+
+    // The backend writes its own reason to the operation log, not on stdout,
+    // so the workflow has to give a reason of its own for each outcome
     let script = recv_script(&mut script_box, &mut actor_handle).await;
-    reply_with(script, exited(2)).await;
+    reply_with(script, outcome).await;
 
-    let reason = assert_command_failed(&mut mqtt_box, &mut actor_handle, "start", "collectd").await;
-    assert!(
-        reason.contains("not supported"),
-        "unexpected reason: {reason}"
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_failed_action_fails_the_command() -> Result<(), DynError> {
-    let TestHandler {
-        mut mqtt_box,
-        mut script_box,
-        mut actor_handle,
-        ..
-    } = spawn_agent_running(SHIPPED_START_WORKFLOW, "service_start.toml").await?;
-
-    trigger_service_command(&mut mqtt_box, "start", "collectd").await?;
-
-    // The reason given by the backend is in the operation log, not on stdout,
-    // so the workflow has to give a reason of its own
-    let script = recv_script(&mut script_box, &mut actor_handle).await;
-    reply_with(script, exited(1)).await;
-
-    let reason = assert_command_failed(&mut mqtt_box, &mut actor_handle, "start", "collectd").await;
-    assert!(
-        reason.contains("operation log"),
-        "unexpected reason: {reason}"
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn an_action_killed_on_timeout_fails_the_command() -> Result<(), DynError> {
-    let TestHandler {
-        mut mqtt_box,
-        mut script_box,
-        mut actor_handle,
-        ..
-    } = spawn_agent_running(SHIPPED_START_WORKFLOW, "service_start.toml").await?;
-
-    trigger_service_command(&mut mqtt_box, "start", "collectd").await?;
-
-    // A backend which never returns is killed once the timeout of the step has passed
-    let script = recv_script(&mut script_box, &mut actor_handle).await;
-    reply_with(script, killed()).await;
-
-    let reason = assert_command_failed(&mut mqtt_box, &mut actor_handle, "start", "collectd").await;
-    assert!(
-        reason.contains("did not complete in time"),
-        "unexpected reason: {reason}"
-    );
-
-    Ok(())
-}
-
-/// An init system knows the same service under more than one name, and the name comes from the
-/// cloud, so the agent is refused under either spelling
-#[test_case("tedge-agent"; "named as the service")]
-#[test_case("tedge-agent.service"; "named as the unit")]
-#[tokio::test]
-async fn stopping_the_agent_is_rejected(service_name: &str) -> Result<(), DynError> {
-    let TestHandler {
-        mut mqtt_box,
-        mut script_box,
-        mut actor_handle,
-        ..
-    } = spawn_agent_running(SHIPPED_STOP_WORKFLOW, "service_stop.toml").await?;
-
-    trigger_service_command_named(&mut mqtt_box, "stop", "tedge-agent", service_name).await?;
-
-    let check = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(check.request.command, "test");
-    assert_eq!(
-        check.request.args,
-        both_spellings_of(service_name, "tedge-agent")
-    );
-    reply_with(check, exited(0)).await;
-
-    let reason =
-        assert_command_failed(&mut mqtt_box, &mut actor_handle, "stop", "tedge-agent").await;
-    assert!(
-        reason.contains("cannot stop itself"),
-        "unexpected reason: {reason}"
-    );
-
-    // Nothing was asked of any backend
-    assert_no_message_or_actor_exit(&mut script_box, &mut actor_handle, "a script").await;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn stopping_a_mapper_is_rejected() -> Result<(), DynError> {
-    let TestHandler {
-        mut mqtt_box,
-        mut script_box,
-        mut actor_handle,
-        ..
-    } = spawn_agent_running(SHIPPED_STOP_WORKFLOW, "service_stop.toml").await?;
-
-    trigger_service_command(&mut mqtt_box, "stop", "tedge-mapper-c8y").await?;
-
-    for guarded in ["tedge-agent", "tedge-mapper-collectd", "tedge-mapper-local"] {
-        let check = recv_script(&mut script_box, &mut actor_handle).await;
-        assert_eq!(
-            check.request.args,
-            both_spellings_of("tedge-mapper-c8y", guarded)
-        );
-        reply_with(check, exited(1)).await;
-    }
-
-    // Any other mapper is named `tedge-mapper-<x>`, whatever its cloud and profile
-    let check = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(check.request.command, "expr");
-    assert_eq!(
-        check.request.args,
-        ["tedge-mapper-c8y", ":", "tedge-mapper-"]
-    );
-    reply_with(check, exited(0)).await;
-
-    let reason =
-        assert_command_failed(&mut mqtt_box, &mut actor_handle, "stop", "tedge-mapper-c8y").await;
-    assert!(
-        reason.contains("cannot be stopped this way"),
-        "unexpected reason: {reason}"
-    );
-
-    assert_no_message_or_actor_exit(&mut script_box, &mut actor_handle, "a script").await;
-
-    Ok(())
-}
-
-/// The exception is granted under either spelling too, otherwise the unit name would be caught
-/// by the guard on the mapper names that follows it
-#[test_case("tedge-mapper-collectd"; "named as the service")]
-#[test_case("tedge-mapper-collectd.service"; "named as the unit")]
-#[tokio::test]
-async fn stopping_the_collectd_mapper_is_allowed(service_name: &str) -> Result<(), DynError> {
-    let TestHandler {
-        mut mqtt_box,
-        mut script_box,
-        mut actor_handle,
-        ..
-    } = spawn_agent_running(SHIPPED_STOP_WORKFLOW, "service_stop.toml").await?;
-
-    trigger_service_command_named(&mut mqtt_box, "stop", "tedge-mapper-collectd", service_name)
-        .await?;
-
-    let check = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(
-        check.request.args,
-        both_spellings_of(service_name, "tedge-agent")
-    );
-    reply_with(check, exited(1)).await;
-
-    // The collectd mapper is connected to no cloud, so it is stopped as any other service,
-    // without the guard on the mapper names being reached
-    let check = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(
-        check.request.args,
-        both_spellings_of(service_name, "tedge-mapper-collectd")
-    );
-    reply_with(check, exited(0)).await;
-
-    let script = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(script.request.command, "sudo");
-    assert_eq!(
-        script.request.args,
-        [
-            "-n",
-            "tedge",
-            "service",
-            "stop",
-            service_name,
-            "--service-type",
-            "service"
-        ]
-    );
-    reply_with(script, exited(0)).await;
-
-    assert_command_status(
+    let failure = assert_command_status(
         &mut mqtt_box,
         &mut actor_handle,
-        "stop",
-        "tedge-mapper-collectd",
-        "successful",
-    )
-    .await;
-
-    Ok(())
-}
-
-#[test_case("tedge-mapper-local"; "named as the service")]
-#[test_case("tedge-mapper-local.service"; "named as the unit")]
-#[tokio::test]
-async fn stopping_the_local_mapper_is_allowed(service_name: &str) -> Result<(), DynError> {
-    let TestHandler {
-        mut mqtt_box,
-        mut script_box,
-        mut actor_handle,
-        ..
-    } = spawn_agent_running(SHIPPED_STOP_WORKFLOW, "service_stop.toml").await?;
-
-    trigger_service_command_named(&mut mqtt_box, "stop", "tedge-mapper-local", service_name)
-        .await?;
-
-    for guarded in ["tedge-agent", "tedge-mapper-collectd"] {
-        let check = recv_script(&mut script_box, &mut actor_handle).await;
-        assert_eq!(check.request.args, both_spellings_of(service_name, guarded));
-        reply_with(check, exited(1)).await;
-    }
-
-    // The local mapper transforms data on the device and is connected to no cloud either
-    let check = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(
-        check.request.args,
-        both_spellings_of(service_name, "tedge-mapper-local")
-    );
-    reply_with(check, exited(0)).await;
-
-    let script = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(script.request.command, "sudo");
-    assert_eq!(
-        script.request.args,
-        [
-            "-n",
-            "tedge",
-            "service",
-            "stop",
-            service_name,
-            "--service-type",
-            "service"
-        ]
-    );
-    reply_with(script, exited(0)).await;
-
-    assert_command_status(
-        &mut mqtt_box,
-        &mut actor_handle,
-        "stop",
-        "tedge-mapper-local",
-        "successful",
-    )
-    .await;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn stopping_any_other_service_runs_the_action() -> Result<(), DynError> {
-    let TestHandler {
-        mut mqtt_box,
-        mut script_box,
-        mut actor_handle,
-        ..
-    } = spawn_agent_running(SHIPPED_STOP_WORKFLOW, "service_stop.toml").await?;
-
-    trigger_service_command(&mut mqtt_box, "stop", "collectd").await?;
-
-    // No guard matches
-    for _ in 0..4 {
-        let check = recv_script(&mut script_box, &mut actor_handle).await;
-        reply_with(check, exited(1)).await;
-    }
-
-    let script = recv_script(&mut script_box, &mut actor_handle).await;
-    assert_eq!(script.request.command, "sudo");
-    assert_eq!(
-        script.request.args,
-        [
-            "-n",
-            "tedge",
-            "service",
-            "stop",
-            "collectd",
-            "--service-type",
-            "service"
-        ]
-    );
-    reply_with(script, exited(0)).await;
-
-    assert_command_status(
-        &mut mqtt_box,
-        &mut actor_handle,
-        "stop",
+        "restart",
         "collectd",
-        "successful",
+        "failed",
     )
     .await;
+    let reason = failure["reason"]
+        .as_str()
+        .expect("a failed command gives a reason");
+    assert!(
+        reason.contains(expected_reason),
+        "unexpected reason: {reason}"
+    );
 
     Ok(())
 }
 
-/// `expr` is what the shipped stop workflow uses to tell a mapper from any other service
-///
-/// The collectd mapper matches this guard too, and is let through by the step before it.
-#[test_case("tedge-mapper-c8y", true)]
-#[test_case("tedge-mapper-aws@my-profile", true)]
-#[test_case("tedge-mapper-mycloud", true)]
-#[test_case("collectd", false)]
-#[test_case("my-tedge-mapper-c8y", false)]
-#[test_case("tedge-agent", false)]
-fn expr_tells_a_mapper_name_from_any_other(service_name: &str, is_a_mapper: bool) {
-    let outcome = std::process::Command::new("expr")
-        .args([service_name, ":", "tedge-mapper-"])
-        .output()
-        .expect("expr is expected to be installed");
-
-    assert_eq!(
-        outcome.status.success(),
-        is_a_mapper,
-        "unexpected match of {service_name}: {outcome:?}"
-    );
-}
-
-/// `test` with `-o` is what the shipped workflows use to accept both spellings of a unit name
-///
-/// The name of a service and the name of the unit running it are the same service to systemd.
 #[test_case("tedge-agent", true)]
 #[test_case("tedge-agent.service", true)]
 #[test_case("tedge-agentx", false)]
@@ -1852,7 +1505,7 @@ async fn restarting_the_agent_restarts_the_process_once(
     )
     .await?;
 
-    trigger_service_command_named(&mut mqtt_box, "restart", "tedge-agent", service_name).await?;
+    trigger_service_command(&mut mqtt_box, "restart", "tedge-agent", service_name).await?;
 
     let check = recv_script(&mut script_box, &mut actor_handle).await;
     assert_eq!(
@@ -1928,19 +1581,11 @@ async fn spawn_agent_running_in(
 }
 
 /// Address a service of the main device with a command, as the c8y mapper does
-async fn trigger_service_command(
-    mqtt: &mut impl Sender<MqttMessage>,
-    action: &str,
-    service: &str,
-) -> Result<(), DynError> {
-    trigger_service_command_named(mqtt, action, service, service).await
-}
-
-/// The same, with the command naming the service differently from its topic
 ///
-/// The name is the one the cloud sends, and a backend may know the target under another name than
-/// the one it was registered with: a systemd unit is named `<service>` as well as `<service>.service`.
-async fn trigger_service_command_named(
+/// `service_name` is the name the cloud sends, which a backend may know the target under rather
+/// than the one it was registered with: a systemd unit is named `<service>` as well as
+/// `<service>.service`.
+async fn trigger_service_command(
     mqtt: &mut impl Sender<MqttMessage>,
     action: &str,
     service: &str,
@@ -1970,6 +1615,15 @@ fn both_spellings_of(service_name: &str, service: &str) -> Vec<String> {
     ]
 }
 
+/// Let the command of a service other than tedge-agent through the guard on the agent's own name
+async fn pass_the_agent_guard(
+    script_box: &mut impl MessageReceiver<RequestEnvelope<Execute, std::io::Result<Output>>>,
+    actor_handle: &mut JoinHandle<Result<(), RuntimeError>>,
+) {
+    let check = recv_script(script_box, actor_handle).await;
+    reply_with(check, exited(1)).await;
+}
+
 /// The next script run by the workflow, to be given its outcome with [reply_with]
 async fn recv_script(
     script_box: &mut impl MessageReceiver<RequestEnvelope<Execute, std::io::Result<Output>>>,
@@ -1980,7 +1634,6 @@ async fn recv_script(
         .expect("expected a script to be run")
 }
 
-/// Give the workflow the outcome of a script it runs
 async fn reply_with(
     script: RequestEnvelope<Execute, std::io::Result<Output>>,
     status: std::process::ExitStatus,
@@ -1996,14 +1649,8 @@ async fn reply_with(
         .expect("the workflow is expected to await the outcome of its script")
 }
 
-/// The status of a process which exited with the given code
 fn exited(code: i32) -> std::process::ExitStatus {
     std::process::ExitStatus::from_raw(code << 8)
-}
-
-/// The status of a process killed on timeout, as the script actor reports it
-fn killed() -> std::process::ExitStatus {
-    std::process::ExitStatus::from_raw(9)
 }
 
 async fn assert_command_status(
@@ -2015,21 +1662,6 @@ async fn assert_command_status(
 ) -> serde_json::Value {
     let topic = format!("te/device/main/service/{service}/cmd/{action}/1");
     recv_command_state_with_status(mqtt, actor_handle, &topic, status).await
-}
-
-/// The reason of a failed command, as reported to its requester
-async fn assert_command_failed(
-    mqtt: &mut impl MessageReceiver<MqttMessage>,
-    actor_handle: &mut JoinHandle<Result<(), RuntimeError>>,
-    action: &str,
-    service: &str,
-) -> String {
-    let payload = assert_command_status(mqtt, actor_handle, action, service, "failed").await;
-    payload
-        .get("reason")
-        .and_then(|reason| reason.as_str())
-        .expect("a failed command gives a reason")
-        .to_string()
 }
 
 struct TestHandler {
@@ -2058,7 +1690,6 @@ struct TestHandler {
 enum FakeEntityStore {
     /// Serve the given entities, answering `404` for any other
     Entities(Vec<EntityMetadata>),
-
     /// Answer `500` to every request, as an entity store that cannot be queried
     Failing,
 }
@@ -2094,7 +1725,6 @@ async fn spawn_mqtt_operation_converter(
     device_topic_id: &str,
     workflows: Vec<(String, String)>,
 ) -> Result<TestHandler, DynError> {
-    // The commands of these tests are addressed to the device itself, which needs no lookup
     spawn_workflow_actor(
         device_topic_id,
         workflows,
@@ -2117,9 +1747,6 @@ async fn spawn_workflow_actor(
     .await
 }
 
-/// Run the workflow actor with the given directory as its configuration and state directory
-///
-/// Running twice in the same directory is how a restart of the agent is tested.
 async fn spawn_workflow_actor_in(
     tmp_dir: Arc<TempTedgeDir>,
     device_topic_id: &str,
@@ -2132,8 +1759,6 @@ async fn spawn_workflow_actor_in(
     let sync_listener_builder =
         SyncListenerActorBuilder(SimpleMessageBoxBuilder::new("SyncListener", 5));
 
-    // A workflow publishes the state of a command on every step, and a test reads those states
-    // only once it has driven the command: the channel has to hold them all meanwhile
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
         SimpleMessageBoxBuilder::new("MQTT", 32);
     let mut script_builder: SimpleMessageBoxBuilder<
@@ -2155,7 +1780,7 @@ async fn spawn_workflow_actor_in(
     let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
     let config_root = TedgePaths::from_root_with_defaults(tmp_path, "", "");
     let operations_dir = tmp_dir.dir("operations");
-    // Where the agent persists the state of the commands under execution, as the packaging does
+
     tmp_dir.dir("running-operations");
     for (file_name, content) in workflows {
         operations_dir.file(&file_name).with_raw_content(&content);
@@ -2163,8 +1788,7 @@ async fn spawn_workflow_actor_in(
     let device_topic_id = device_topic_id
         .parse::<EntityTopicId>()
         .expect("Invalid topic id");
-    // Under a custom topic scheme the agent's own service topic id cannot be derived,
-    // it is configured. Here the last segment of the device topic id is simply replaced.
+
     let service_topic_id = device_topic_id
         .default_service_for_device("tedge-agent")
         .unwrap_or_else(|| {
@@ -2240,9 +1864,48 @@ async fn spawn_workflow_actor_in(
     })
 }
 
+fn service_of(service: &str, device: &str) -> EntityMetadata {
+    EntityMetadata::new(service.parse().unwrap(), EntityType::Service)
+        .with_parent(device.parse().unwrap())
+}
+
+const SHIPPED_RESTART_WORKFLOW: &str = include_str!("../resources/service_restart.toml");
+
+const SERVICE_RESTART_WORKFLOW: &str = r#"
+operation = "restart"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+"#;
+
+const DEVICE_PAUSE_WORKFLOW: &str = r#"
+operation = "pause"
+
+[init]
+action = "proceed"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+"#;
+
+/// Rewrite a workflow file, as an administrator adapting a definition does
+fn edit_workflow(tmp_dir: &TempTedgeDir, file_name: &str, definition: &str) -> std::path::PathBuf {
+    let path = tmp_dir.path().join("operations").join(file_name);
+    std::fs::write(&path, format!("# edited\n{definition}")).expect("the workflow file is written");
+    path
+}
+
 /// Skip the only capability message published on start when no software type is declared
-///
-/// The software capabilities are published by the software actor, which these tests do not drive.
 async fn skip_device_restart_capability(
     mqtt: &mut impl MessageReceiver<MqttMessage>,
     device: &str,

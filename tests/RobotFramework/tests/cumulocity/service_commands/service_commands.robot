@@ -63,37 +63,6 @@ Restarts a service managed by the init system
     ${after}=    Get Service PID    ${SERVICE_NAME}
     Should Not Be Equal    ${before}    ${after}    The service was not restarted
 
-Stops and starts a service managed by the init system
-    ${operation}=    Create Service Command Operation
-    ...    ${SERVICE_XID}
-    ...    {"command":"STOP","serviceName":"${SERVICE_NAME}","serviceType":"service"}
-    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    Service Should Be Stopped    ${SERVICE_NAME}
-
-    ${operation}=    Create Service Command Operation
-    ...    ${SERVICE_XID}
-    ...    {"command":"START","serviceName":"${SERVICE_NAME}","serviceType":"service"}
-    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    Service Should Be Running    ${SERVICE_NAME}
-
-Enables and disables a service managed by the init system
-    Declare Action    ${SERVICE_NAME}    enable
-    Declare Action    ${SERVICE_NAME}    disable
-    Supported Service Commands Should Be
-    ...    ${SERVICE_XID}    DISABLE    ENABLE    RESTART    START    STOP
-
-    ${operation}=    Create Service Command Operation
-    ...    ${SERVICE_XID}
-    ...    {"command":"ENABLE","serviceName":"${SERVICE_NAME}","serviceType":"service"}
-    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    Service Should Be Enabled    ${SERVICE_NAME}
-
-    ${operation}=    Create Service Command Operation
-    ...    ${SERVICE_XID}
-    ...    {"command":"DISABLE","serviceName":"${SERVICE_NAME}","serviceType":"service"}
-    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
-    Service Should Be Disabled    ${SERVICE_NAME}
-
 Rejects an action the service has not declared
     ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
@@ -138,32 +107,6 @@ Rejects a service type that names no plugin file
     ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
     Should Not Have MQTT Messages
     ...    te/device/main/service/${SERVICE_NAME}/cmd/restart/c8y-mapper-${operation_id}
-
-Refuses to stop tedge-agent
-    # The agent does not declare `stop`, so the action has to be declared by hand to reach the
-    # guard which refuses it. That guard is what enforces the refusal: a capability is a retained
-    # message anyone can publish, and the declaration only says what is offered.
-    Declare Action    tedge-agent    stop
-    ${operation}=    Create Service Command Operation
-    ...    ${AGENT_XID}
-    ...    {"command":"STOP","serviceName":"tedge-agent","serviceType":"service"}
-    Cumulocity.Operation Should Be FAILED
-    ...    ${operation}
-    ...    failure_reason=.*cannot stop itself.*
-    ...    timeout=120
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
-
-Refuses to stop a mapper connected to a cloud
-    # Declared by hand for the same reason as above: a cloud mapper offers no `stop` either.
-    Declare Action    tedge-mapper-c8y    stop
-    ${operation}=    Create Service Command Operation
-    ...    ${MAPPER_XID}
-    ...    {"command":"STOP","serviceName":"tedge-mapper-c8y","serviceType":"service"}
-    Cumulocity.Operation Should Be FAILED
-    ...    ${operation}
-    ...    failure_reason=.*cannot be stopped this way.*
-    ...    timeout=120
-    ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
 Restarts tedge-agent itself
     [Documentation]    tedge-agent is what runs the command, so it asks its runtime to stop and
