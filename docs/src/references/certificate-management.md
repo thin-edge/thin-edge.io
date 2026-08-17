@@ -81,7 +81,7 @@ The two steps, device registration on the tenant and certificate download reques
 the device generating a one-time password that is communicated by the operator to the tenant
 whilst the device keeps trying to download its certificate.
 
-This is what [`tedge cert download c8y`](../cli/tedge-cert.md) does by default: it generates a random one-time password
+This is what [`tedge cert download c8y`](../cli/tedge-cert) does by default: it generates a random one-time password
 and prints the URL of the Cumulocity device registration page, pre-filled with the device id and the one-time password.
 See [Registering a device from the device](../../operate/c8y/connect#cumulocity-ca-register-device).
 :::
