@@ -3,12 +3,13 @@ use crate::attrs;
 use crate::defaults::ValueOrigin;
 use facet::Def;
 use facet::Facet;
-use facet::MapDef;
 use facet::Shape;
 use facet::Type;
 use facet::UserType;
+use facet_reflect::HeapValue;
 use facet_reflect::Partial;
 use facet_reflect::Peek;
+use facet_reflect::Poke;
 
 /// Errors produced while navigating or mutating Facet-backed config DTOs.
 #[derive(Debug, thiserror::Error)]
@@ -127,24 +128,23 @@ pub fn config_get<T: for<'a> Facet<'a>>(dto: &T, key: &str) -> Result<Option<Str
     peek_dotted_key(peek, key)
 }
 
-/// Rebuilds a DTO with one dotted key set from its CLI string representation.
+/// Sets one dotted key in a DTO from its CLI string representation.
 pub fn config_set<T: for<'a> Facet<'a>>(
     dto: &mut T,
     key: &str,
     value: &str,
 ) -> Result<(), ConfigError> {
-    validate_key(T::SHAPE, key)?;
-    let new_dto: T = rebuild_dto(dto, key, FieldAction::Set(value))?;
-    *dto = new_dto;
-    Ok(())
+    let leaf_shape = leaf_shape_of(T::SHAPE, key)?;
+    // The value is parsed before the DTO is touched, so an invalid value leaves
+    // the DTO exactly as it was
+    let parsed = parse_to_value(leaf_shape, value)?;
+    poke_dotted_key(dto, key, FieldAction::Set(parsed))
 }
 
-/// Rebuilds a DTO with one dotted key reset to its unset `Option` state.
+/// Resets one dotted key in a DTO to its unset `Option` state.
 pub fn config_unset<T: for<'a> Facet<'a>>(dto: &mut T, key: &str) -> Result<(), ConfigError> {
-    validate_key(T::SHAPE, key)?;
-    let new_dto: T = rebuild_dto(dto, key, FieldAction::Unset)?;
-    *dto = new_dto;
-    Ok(())
+    leaf_shape_of(T::SHAPE, key)?;
+    poke_dotted_key(dto, key, FieldAction::Unset)
 }
 
 /// Applies the registered `add` semantics for the field at `key`.
@@ -396,324 +396,121 @@ fn format_peek(peek: Peek<'_, '_>) -> String {
     }
 }
 
-enum FieldAction<'a> {
-    Set(&'a str),
+/// The mutation to apply at the leaf of a dotted config key.
+enum FieldAction {
+    /// The already-parsed value to store, whose shape is the leaf's inner type
+    Set(HeapValue<'static, false>),
     Unset,
 }
 
-fn rebuild_dto<T: for<'a> Facet<'a>>(
-    dto: &T,
-    target_key: &str,
-    action: FieldAction<'_>,
-) -> Result<T, ConfigError> {
-    let peek = Peek::new(dto);
-    let partial = Partial::alloc::<T>().map_err(|e| ConfigError::ReflectError(format!("{e}")))?;
-    let partial = copy_struct_with_override(partial, peek, T::SHAPE, "", target_key, &action)?;
-    let heap_value = partial.build().map_err(reflect_err)?;
-    heap_value
-        .materialize::<T>()
-        .map_err(|e| ConfigError::ReflectError(format!("{e}")))
-}
-
-fn copy_struct_with_override<'f>(
-    mut partial: Partial<'f>,
-    peek: Peek<'_, '_>,
-    struct_shape: &'static Shape,
-    prefix: &str,
-    target_key: &str,
-    action: &FieldAction<'_>,
-) -> Result<Partial<'f>, ConfigError> {
-    let fields = get_struct_fields(struct_shape)
-        .ok_or_else(|| ConfigError::ReflectError("Expected struct shape".into()))?;
-
-    let peek_struct = peek
-        .into_struct()
-        .map_err(|_| ConfigError::ReflectError("Expected struct value".into()))?;
-
-    for field in fields {
-        let field_key = dotted_key(prefix, field_key_name(field));
-        let field_shape = field.shape();
-
-        partial = partial.begin_field(field.name).map_err(reflect_err)?;
-
-        let field_peek = peek_struct.field_by_name(field.name).map_err(|_| {
-            ConfigError::ReflectError(format!("Field '{}' not found in struct", field.name))
-        })?;
-
-        if field_key == target_key {
-            partial = apply_action_to_field(partial, field_shape, action)?;
-        } else if target_key.starts_with(&format!("{field_key}.")) {
-            partial = copy_group_with_override(
-                partial,
-                field_peek,
-                field_shape,
-                &field_key,
-                target_key,
-                action,
-            )?;
-        } else {
-            partial = copy_field_via_strings(partial, field_peek, field_shape, &field_key)?;
-        }
-
-        partial = partial.end().map_err(reflect_err)?;
-    }
-
-    Ok(partial)
-}
-
-fn apply_action_to_field<'f>(
-    partial: Partial<'f>,
-    field_shape: &'static Shape,
-    action: &FieldAction<'_>,
-) -> Result<Partial<'f>, ConfigError> {
-    match action {
-        FieldAction::Set(value) => {
-            if let Def::Option(_) = field_shape.def {
-                let partial = partial.begin_some().map_err(reflect_err)?;
-                let partial = partial
-                    .parse_from_str(value)
-                    .map_err(|e| ConfigError::ParseError(format!("{e}")))?;
-                partial.end().map_err(reflect_err)
-            } else {
-                partial
-                    .parse_from_str(value)
-                    .map_err(|e| ConfigError::ParseError(format!("{e}")))
-            }
-        }
-        FieldAction::Unset => {
-            if let Def::Option(_) = field_shape.def {
-                partial.set_default().map_err(reflect_err)
-            } else {
-                Err(ConfigError::ReflectError(
-                    "Cannot unset a non-Option field".into(),
-                ))
-            }
-        }
-    }
-}
-
-fn copy_group_with_override<'f>(
-    partial: Partial<'f>,
-    field_peek: Peek<'_, '_>,
-    field_shape: &'static Shape,
-    field_key: &str,
-    target_key: &str,
-    action: &FieldAction<'_>,
-) -> Result<Partial<'f>, ConfigError> {
-    if let Def::Option(opt_def) = field_shape.def {
-        let inner_shape = opt_def.t;
-        let partial = partial.begin_some().map_err(reflect_err)?;
-
-        let inner_peek = field_peek.into_option().ok().and_then(|opt| opt.value());
-
-        let partial = if let Some(inner_peek) = inner_peek {
-            copy_struct_with_override(
-                partial,
-                inner_peek,
-                inner_shape,
-                field_key,
-                target_key,
-                action,
-            )?
-        } else {
-            build_default_with_override(partial, inner_shape, field_key, target_key, action)?
-        };
-
-        partial.end().map_err(reflect_err)
-    } else if is_config_group(field_shape) {
-        copy_struct_with_override(
-            partial,
-            field_peek,
-            field_shape,
-            field_key,
-            target_key,
-            action,
-        )
-    } else {
-        Err(ConfigError::NotAStruct {
-            key: target_key.to_owned(),
-            segment: field_key.to_owned(),
-        })
-    }
-}
-
-fn build_default_with_override<'f>(
-    mut partial: Partial<'f>,
-    struct_shape: &'static Shape,
-    prefix: &str,
-    target_key: &str,
-    action: &FieldAction<'_>,
-) -> Result<Partial<'f>, ConfigError> {
-    let fields = get_struct_fields(struct_shape)
-        .ok_or_else(|| ConfigError::ReflectError("Expected struct shape".into()))?;
-
-    for field in fields {
-        let sub_key = dotted_key(prefix, field_key_name(field));
-        let field_shape = field.shape();
-
-        partial = partial.begin_field(field.name).map_err(reflect_err)?;
-
-        if sub_key == target_key {
-            partial = apply_action_to_field(partial, field_shape, action)?;
-        } else if target_key.starts_with(&format!("{sub_key}.")) {
-            if let Def::Option(opt_def) = field_shape.def {
-                partial = partial.begin_some().map_err(reflect_err)?;
-                partial =
-                    build_default_with_override(partial, opt_def.t, &sub_key, target_key, action)?;
-                partial = partial.end().map_err(reflect_err)?;
-            } else if is_config_group(field_shape) {
-                partial = build_default_with_override(
-                    partial,
-                    field_shape,
-                    &sub_key,
-                    target_key,
-                    action,
-                )?;
-            } else {
-                return Err(ConfigError::NotAStruct {
-                    key: target_key.to_owned(),
-                    segment: sub_key,
-                });
-            }
-        } else {
-            partial = partial.set_default().map_err(reflect_err)?;
-        }
-
-        partial = partial.end().map_err(reflect_err)?;
-    }
-
-    Ok(partial)
-}
-
-fn copy_field_via_strings<'f>(
-    partial: Partial<'f>,
-    field_peek: Peek<'_, '_>,
-    field_shape: &'static Shape,
-    field_key: &str,
-) -> Result<Partial<'f>, ConfigError> {
-    match field_shape.def {
-        Def::Option(opt_def) => {
-            let inner_shape = opt_def.t;
-            let inner_peek = field_peek.into_option().ok().and_then(|opt| opt.value());
-
-            match inner_peek {
-                Some(inner) => {
-                    let partial = partial.begin_some().map_err(reflect_err)?;
-                    let partial = copy_value_via_strings(partial, inner, inner_shape, field_key)?;
-                    partial.end().map_err(reflect_err)
-                }
-                None => partial.set_default().map_err(reflect_err),
-            }
-        }
-        _ => copy_value_via_strings(partial, field_peek, field_shape, field_key),
-    }
-}
-
-fn copy_value_via_strings<'f>(
-    partial: Partial<'f>,
-    peek: Peek<'_, '_>,
+/// Parses `value` into a standalone value of `shape`.
+fn parse_to_value(
     shape: &'static Shape,
-    field_key: &str,
-) -> Result<Partial<'f>, ConfigError> {
-    if is_config_group(shape) {
-        return copy_all_fields_via_strings(partial, peek, shape, field_key);
-    }
-
-    if let Def::Map(map_def) = shape.def {
-        return copy_map_via_strings(partial, peek, map_def, field_key);
-    }
-
-    if let Def::List(_) = shape.def {
-        return copy_list_via_strings(partial, peek, field_key);
-    }
-
-    let s = format_peek(peek);
-    partial
-        .parse_from_str(&s)
-        .map_err(|e| ConfigError::ParseError(format!("copying field '{field_key}': {e}")))
+    value: &str,
+) -> Result<HeapValue<'static, false>, ConfigError> {
+    alloc_shape(shape)?
+        .parse_from_str(value)
+        // The value is parsed on its own, so the reflection path is always the
+        // root of that value and adds nothing to the message
+        .map_err(|e| ConfigError::ParseError(format!("{}", e.kind)))?
+        .build()
+        .map_err(reflect_err)
 }
 
-fn copy_map_via_strings<'f>(
-    mut partial: Partial<'f>,
-    peek: Peek<'_, '_>,
-    map_def: MapDef,
-    field_key: &str,
-) -> Result<Partial<'f>, ConfigError> {
-    let peek_map = peek
-        .into_map()
-        .map_err(|e| ConfigError::ReflectError(format!("copying map '{field_key}': {e}")))?;
-
-    if peek_map.is_empty() {
-        return partial.set_default().map_err(reflect_err);
-    }
-
-    partial = partial.init_map().map_err(reflect_err)?;
-
-    for (key_peek, val_peek) in &peek_map {
-        let key_shape = map_def.k();
-        let val_shape = map_def.v();
-
-        partial = partial.begin_key().map_err(reflect_err)?;
-        partial = copy_value_via_strings(partial, key_peek, key_shape, field_key)?;
-        partial = partial.end().map_err(reflect_err)?;
-
-        partial = partial.begin_value().map_err(reflect_err)?;
-        partial = copy_value_via_strings(partial, val_peek, val_shape, field_key)?;
-        partial = partial.end().map_err(reflect_err)?;
-    }
-
-    Ok(partial)
+/// Builds an all-unset group so a nested key has somewhere to live.
+fn default_group(shape: &'static Shape) -> Result<HeapValue<'static, false>, ConfigError> {
+    alloc_shape(shape)?
+        .set_default()
+        .map_err(reflect_err)?
+        .build()
+        .map_err(reflect_err)
 }
 
-fn copy_list_via_strings<'f>(
-    mut partial: Partial<'f>,
-    peek: Peek<'_, '_>,
-    field_key: &str,
-) -> Result<Partial<'f>, ConfigError> {
-    let peek_list = peek
-        .into_list()
-        .map_err(|e| ConfigError::ReflectError(format!("copying list '{field_key}': {e}")))?;
-
-    let elem_shape = peek_list.def().t();
-
-    for elem_peek in peek_list.iter() {
-        partial = partial.begin_list_item().map_err(reflect_err)?;
-        partial = copy_value_via_strings(partial, elem_peek, elem_shape, field_key)?;
-        partial = partial.end().map_err(reflect_err)?;
-    }
-
-    Ok(partial)
+fn alloc_shape(shape: &'static Shape) -> Result<Partial<'static, false>, ConfigError> {
+    // SAFETY: `shape` is reached by walking the shape tree of a `Facet` type,
+    // so it describes a real type
+    unsafe { Partial::alloc_shape_owned(shape) }.map_err(|e| {
+        ConfigError::ReflectError(format!("allocating a value of type '{shape}': {e}"))
+    })
 }
 
-fn copy_all_fields_via_strings<'f>(
-    mut partial: Partial<'f>,
-    peek: Peek<'_, '_>,
-    struct_shape: &'static Shape,
-    prefix: &str,
-) -> Result<Partial<'f>, ConfigError> {
-    let fields = get_struct_fields(struct_shape)
-        .ok_or_else(|| ConfigError::ReflectError("Expected struct shape".into()))?;
+/// Applies `action` at the dotted `key`, editing `dto` in place.
+fn poke_dotted_key<T: for<'a> Facet<'a>>(
+    dto: &mut T,
+    key: &str,
+    action: FieldAction,
+) -> Result<(), ConfigError> {
+    let parts: Vec<&str> = key.split('.').collect();
+    poke_path(Poke::new(dto), &parts, key, action)
+}
 
-    let peek_struct = peek
-        .into_struct()
-        .map_err(|_| ConfigError::ReflectError("Expected struct value".into()))?;
+fn poke_path(
+    poke: Poke<'_, 'static>,
+    parts: &[&str],
+    full_key: &str,
+    action: FieldAction,
+) -> Result<(), ConfigError> {
+    let Some((&part, rest)) = parts.split_first() else {
+        return Err(ConfigError::UnknownKey(full_key.to_owned()));
+    };
 
-    for field in fields {
-        let field_key = dotted_key(prefix, field_key_name(field));
-        let field_shape = field.shape();
+    let not_a_struct = || ConfigError::NotAStruct {
+        key: full_key.to_owned(),
+        segment: part.to_owned(),
+    };
 
-        partial = partial.begin_field(field.name).map_err(reflect_err)?;
+    let fields = get_struct_fields(poke.shape()).ok_or_else(not_a_struct)?;
+    let index = fields
+        .iter()
+        .position(|f| field_key_name(f) == part)
+        .ok_or_else(|| ConfigError::UnknownKey(full_key.to_owned()))?;
+    let field_shape = fields[index].shape();
 
-        let field_peek = peek_struct
-            .field_by_name(field.name)
-            .map_err(|_| ConfigError::ReflectError(format!("Field '{}' not found", field.name)))?;
+    let mut poke_struct = poke.into_struct().map_err(|_| not_a_struct())?;
+    let field_poke = poke_struct.field(index).map_err(reflect_err)?;
 
-        partial = copy_field_via_strings(partial, field_peek, field_shape, &field_key)?;
-
-        partial = partial.end().map_err(reflect_err)?;
+    if rest.is_empty() {
+        return apply_action_to_field(field_poke, field_shape, action);
     }
 
-    Ok(partial)
+    match field_shape.def {
+        Def::Option(_) => {
+            let mut option = field_poke.into_option().map_err(reflect_err)?;
+            if option.is_none() {
+                let group = default_group(option.def().t())?;
+                option.set_some_from_heap(group).map_err(reflect_err)?;
+            }
+            let inner = option
+                .value_mut()
+                .expect("the group was just initialised, so it is set");
+            poke_path(inner, rest, full_key, action)
+        }
+        _ if is_config_group(field_shape) => poke_path(field_poke, rest, full_key, action),
+        _ => Err(not_a_struct()),
+    }
+}
+
+fn apply_action_to_field(
+    field_poke: Poke<'_, 'static>,
+    field_shape: &'static Shape,
+    action: FieldAction,
+) -> Result<(), ConfigError> {
+    // Generated DTOs wrap every leaf in an `Option` so an unset key is
+    // distinguishable from one set to its default value
+    if !matches!(field_shape.def, Def::Option(_)) {
+        return Err(ConfigError::ReflectError(format!(
+            "Cannot edit a non-Option field of type '{field_shape}'"
+        )));
+    }
+
+    let mut option = field_poke.into_option().map_err(reflect_err)?;
+    match action {
+        FieldAction::Set(value) => option.set_some_from_heap(value).map_err(reflect_err),
+        FieldAction::Unset => {
+            option.set_none();
+            Ok(())
+        }
+    }
 }
 
 fn find_leaf_shape_parts(shape: &'static Shape, parts: &[&str]) -> Option<&'static Shape> {
@@ -762,8 +559,13 @@ fn find_leaf_field_parts(shape: &'static Shape, parts: &[&str]) -> Option<&'stat
 }
 
 fn validate_key(shape: &'static Shape, key: &str) -> Result<(), ConfigError> {
-    find_leaf_shape(shape, key).ok_or_else(|| ConfigError::UnknownKey(key.to_owned()))?;
+    leaf_shape_of(shape, key)?;
     Ok(())
+}
+
+/// Returns the shape stored at `key`, unwrapping the leaf's `Option`.
+fn leaf_shape_of(shape: &'static Shape, key: &str) -> Result<&'static Shape, ConfigError> {
+    find_leaf_shape(shape, key).ok_or_else(|| ConfigError::UnknownKey(key.to_owned()))
 }
 
 /// Reads `tedge::example` attributes from a field, returning the example values.
