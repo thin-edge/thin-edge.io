@@ -72,7 +72,7 @@ mod invalid_default {
             problems::<InvalidDefaultConfig>(),
             [
                 "The built-in default for 'mqtt.port' is not a valid value: '188x' — \
-              failed to parse \"188x\" as u16 at mqtt. This is a bug in thin-edge.io."
+              failed to parse \"188x\" as u16. This is a bug in thin-edge.io."
             ]
         );
     }
@@ -102,7 +102,7 @@ mod inherited_invalid_default {
             problems::<InheritedInvalidDefaultConfig>(),
             [
                 "'mqtt.tls_port' is not set, so it falls back to 'mqtt.name', whose built-in \
-              default '188x' is not valid: failed to parse \"188x\" as u16 at mqtt. \
+              default '188x' is not valid: failed to parse \"188x\" as u16. \
               This is a bug in thin-edge.io."
             ]
         );
@@ -128,7 +128,7 @@ mod invalid_example {
         assert_eq!(
             problems::<InvalidExampleConfig>(),
             ["mqtt.port: example 'not-a-port' is not a valid value: \
-              failed to parse \"not-a-port\" as u16 at mqtt"]
+              failed to parse \"not-a-port\" as u16"]
         );
     }
 }
@@ -183,11 +183,11 @@ mod several_problems {
             problems::<SeveralProblemsConfig>(),
             [
                 "mqtt.port: example 'not-a-port' is not a valid value: \
-                 failed to parse \"not-a-port\" as u16 at mqtt",
+                 failed to parse \"not-a-port\" as u16",
                 "The built-in default for 'mqtt.port' is not a valid value: '188x' — \
-                 failed to parse \"188x\" as u16 at mqtt. This is a bug in thin-edge.io.",
+                 failed to parse \"188x\" as u16. This is a bug in thin-edge.io.",
                 "The built-in default for 'mqtt.tls_port' is not a valid value: '-1' — \
-                 failed to parse \"-1\" as u16 at mqtt. This is a bug in thin-edge.io.",
+                 failed to parse \"-1\" as u16. This is a bug in thin-edge.io.",
             ]
         );
     }
