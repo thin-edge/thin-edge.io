@@ -70,7 +70,6 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::paths::TedgePaths;
-use tokio::sync::watch;
 
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
@@ -88,103 +87,6 @@ async fn mapper_publishes_init_messages_on_startup() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
-}
-
-/// The built-in bridge starts alongside the mapper, and until it is subscribed to `c8y/s/us`
-/// anything published there on a fresh session is dropped rather than relayed to the cloud
-#[tokio::test]
-async fn builtin_bridge_mapper_defers_init_messages_until_the_bridge_is_subscribed() {
-    let ttd = TempTedgeDir::new();
-    let (handle, bridge_subscribed) = spawn_c8y_mapper_actor_with_builtin_bridge(&ttd).await;
-    let mut mqtt = handle.mqtt.with_timeout(Duration::from_millis(500));
-
-    // While the bridge is not subscribed, no init message is published
-    assert!(mqtt.recv().await.is_none());
-
-    // Once the built-in bridge is subscribed, the init messages are published
-    bridge_subscribed.send(true).unwrap();
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
-}
-
-/// Everything the mapper converts is bound for the cloud, so nothing may be converted before the
-/// bridge is subscribed — not just the init messages. The inputs are held back and converted
-/// afterwards.
-#[tokio::test]
-async fn builtin_bridge_mapper_converts_messages_received_while_waiting_once_subscribed() {
-    let ttd = TempTedgeDir::new();
-    let (handle, bridge_subscribed) = spawn_c8y_mapper_actor_with_builtin_bridge(&ttd).await;
-    let mut mqtt = handle.mqtt.with_timeout(Duration::from_millis(500));
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1//"),
-        r#"{ "@type": "child-device", "type": "RaspberryPi", "name": "Child1" }"#,
-    ))
-    .await
-    .unwrap();
-
-    // While the bridge is not subscribed, the registration is not converted
-    assert!(mqtt.recv().await.is_none());
-
-    bridge_subscribed.send(true).unwrap();
-
-    assert_received_contains_str(
-        &mut mqtt,
-        [
-            ("c8y/s/us", "114"),
-            ("c8y/s/us", "500"),
-            (
-                "c8y/s/us",
-                "101,test-device:device:child1,Child1,RaspberryPi,false",
-            ),
-        ],
-    )
-    .await;
-}
-
-/// The mapper cannot know when it is safe to publish unless the built-in bridge tells it, so a
-/// wiring mistake has to fail at startup rather than silently lose the cloud-bound messages
-#[tokio::test]
-async fn builtin_bridge_mapper_cannot_be_built_without_the_bridge_subscription_state() {
-    let ttd = TempTedgeDir::new();
-    let base = test_mapper_config(&ttd);
-    let config = C8yMapperConfig {
-        bridge_in_mapper: true,
-        ..base
-    };
-
-    let builders = c8y_mapper_builder(&ttd, config, true).await;
-
-    let Err(error) = builders.c8y.try_build() else {
-        panic!("the mapper must not be built without the bridge's subscription state")
-    };
-    assert!(
-        error.to_string().contains("subscription state"),
-        "unexpected error: {error}"
-    );
-}
-
-/// A device may stay offline long after the mapper starts, so the mapper has to keep receiving
-/// its inputs while it waits: a full input channel would stall the MQTT actor for every other
-/// actor in the process
-#[tokio::test]
-async fn builtin_bridge_mapper_keeps_receiving_its_inputs_while_waiting_for_the_bridge() {
-    let ttd = TempTedgeDir::new();
-    // The bridge stays unsubscribed for the whole test: holding on to the sender keeps the mapper
-    // waiting, as a dropped sender would end the wait
-    let (handle, _bridge_subscribed) = spawn_c8y_mapper_actor_with_builtin_bridge(&ttd).await;
-    let mut mqtt = handle.mqtt;
-
-    // More registrations than the mapper's input channel can hold at once
-    for i in 0..32 {
-        let registration = MqttMessage::new(
-            &Topic::new_unchecked(&format!("te/device/child{i}//")),
-            r#"{ "@type": "child-device" }"#,
-        );
-        tokio::time::timeout(TEST_TIMEOUT_MS, mqtt.send(registration))
-            .await
-            .expect("the mapper must keep receiving while it waits for the bridge")
-            .unwrap();
-    }
 }
 
 #[tokio::test]
@@ -3259,7 +3161,6 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     config: C8yMapperConfig,
     init: bool,
 ) -> TestHandle {
-    let bridge_health_topic = config.bridge_health_topic.clone();
     let builders = c8y_mapper_builder(tmp_dir, config, init).await;
 
     let actor = builders.c8y.build();
@@ -3267,10 +3168,6 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
 
     let actor = builders.flows.build();
     tokio::spawn(async move { actor.run().await });
-
-    let mut service_monitor_box = builders.service_monitor.build();
-    let bridge_status_msg = MqttMessage::new(&bridge_health_topic, "1");
-    service_monitor_box.send(bridge_status_msg).await.unwrap();
 
     TestHandle {
         mqtt: builders.mqtt.build(),
@@ -3282,42 +3179,6 @@ pub(crate) async fn spawn_c8y_mapper_actor_with_config(
     }
 }
 
-/// Spawns a mapper using the built-in bridge, with that bridge not yet subscribed
-///
-/// Unlike [spawn_c8y_mapper_actor_with_config], the caller decides when the bridge holds the
-/// subscriptions relaying the cloud topics, through the returned sender
-pub(crate) async fn spawn_c8y_mapper_actor_with_builtin_bridge(
-    tmp_dir: &TempTedgeDir,
-) -> (TestHandle, watch::Sender<bool>) {
-    let base = test_mapper_config(tmp_dir);
-    let config = C8yMapperConfig {
-        bridge_in_mapper: true,
-        bridge_service_name: format!("tedge-mapper-bridge-{}", base.bridge_config.c8y_prefix),
-        ..base
-    };
-
-    let mut builders = c8y_mapper_builder(tmp_dir, config, true).await;
-    let (bridge_subscribed, subscribed) = watch::channel(false);
-    builders.c8y.set_bridge_subscribed(subscribed);
-
-    let actor = builders.c8y.build();
-    tokio::spawn(async move { actor.run().await });
-
-    let actor = builders.flows.build();
-    tokio::spawn(async move { actor.run().await });
-
-    let handle = TestHandle {
-        mqtt: builders.mqtt.build(),
-        http: builders.http.build(),
-        fs: builders.fs.build(),
-        ul: builders.ul.build(),
-        dl: builders.dl.build(),
-        avail: builders.avail.build(),
-    };
-
-    (handle, bridge_subscribed)
-}
-
 pub(crate) struct TestHandleBuilder {
     pub c8y: C8yMapperBuilder,
     pub flows: FlowsMapperBuilder,
@@ -3327,7 +3188,6 @@ pub(crate) struct TestHandleBuilder {
     pub ul: FakeServerBoxBuilder<IdUploadRequest, IdUploadResult>,
     pub dl: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult>,
     pub avail: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
-    pub service_monitor: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
 }
 
 pub(crate) async fn c8y_mapper_builder(
@@ -3350,9 +3210,6 @@ pub(crate) async fn c8y_mapper_builder(
         FakeServerBoxBuilder::default();
     let mut downloader_builder: FakeServerBoxBuilder<IdDownloadRequest, IdDownloadResult> =
         FakeServerBoxBuilder::default();
-    let mut service_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
-        SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
-
     C8yMapperBuilder::init(&config).await.unwrap();
     let mut c8y_mapper_builder = C8yMapperBuilder::try_new(
         config,
@@ -3361,7 +3218,6 @@ pub(crate) async fn c8y_mapper_builder(
         &mut uploader_builder,
         &mut downloader_builder,
         &mut fs_watcher_builder,
-        &mut service_monitor_builder,
     )
     .unwrap();
 
@@ -3407,7 +3263,6 @@ pub(crate) async fn c8y_mapper_builder(
         ul: uploader_builder,
         dl: downloader_builder,
         avail: availability_box_builder,
-        service_monitor: service_monitor_builder,
     }
 }
 

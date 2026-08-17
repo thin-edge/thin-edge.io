@@ -2,7 +2,6 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::entity_cache::UpdateOutcome;
-use crate::service_monitor::is_c8y_bridge_established;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -43,8 +42,6 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::FileError;
 use tedge_utils::paths::PathsError;
-use tokio::sync::watch;
-use tracing::error;
 
 pub(crate) type CmdId = String;
 pub(crate) type IdUploadRequest = (CmdId, UploadRequest);
@@ -60,21 +57,8 @@ pub struct C8yMapperActor {
     converter: CumulocityConverter,
     messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: LoggingSender<MqttMessage>,
-    bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
-    /// Whether the built-in bridge is subscribed to the topics it relays to the cloud
-    ///
-    /// Only set when the bridge runs in this process, as it is signalled directly by that bridge
-    bridge_subscribed: Option<watch::Receiver<bool>>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 }
-
-/// Bounds the inputs held back while waiting for the built-in bridge to subscribe
-///
-/// That wait is normally sub-second, so reaching this limit means the bridge cannot subscribe at
-/// all — it is unable to connect to the local broker, say. Beyond it, messages are converted as
-/// usual: their cloud-bound conversions may be dropped by the broker, which is still better than
-/// holding on to every message a device produces.
-const MAX_PENDING_INPUTS: usize = 1024;
 
 #[async_trait]
 impl Actor for C8yMapperActor {
@@ -83,31 +67,26 @@ impl Actor for C8yMapperActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        // On a fresh session, anything published to the cloud topics before the bridge has
-        // subscribed to them is dropped, so nothing is converted until the bridge is ready
-        let Startup::BridgeReady(pending) = self.wait_until_bridge_is_ready().await? else {
-            return Ok(());
-        };
-        self.publish_init_messages().await?;
-
-        for event in pending {
-            self.process_input(event).await?;
+        // Nothing published here reaches the cloud before the bridge can relay it: the mapper shares
+        // its connection to the broker with the other actors of this process, and that connection is
+        // not opened until then. See the bridge_readiness module.
+        let init_messages = self.converter.init_messages();
+        for init_message in init_messages.into_iter() {
+            self.mqtt_publisher.send(init_message).await?;
         }
+
         while let Some(event) = self.messages.recv().await {
-            self.process_input(event).await?;
+            match event {
+                C8yMapperInput::MqttMessage(message) => {
+                    self.process_mqtt_message(message).await?;
+                }
+                C8yMapperInput::FsWatchEvent(event) => {
+                    self.process_file_watch_event(event).await?;
+                }
+            }
         }
         Ok(())
     }
-}
-
-/// Outcome of waiting for the bridge before the mapper announces itself to the cloud
-enum Startup {
-    /// The bridge can relay the messages the mapper publishes, and these inputs arrived while
-    /// waiting for it
-    BridgeReady(Vec<C8yMapperInput>),
-
-    /// The mapper was shut down while waiting for the bridge
-    Interrupted,
 }
 
 impl C8yMapperActor {
@@ -115,100 +94,14 @@ impl C8yMapperActor {
         converter: CumulocityConverter,
         messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
         mqtt_publisher: LoggingSender<MqttMessage>,
-        bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
-        bridge_subscribed: Option<watch::Receiver<bool>>,
         message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
     ) -> Self {
         Self {
             converter,
             messages,
             mqtt_publisher,
-            bridge_status_messages,
-            bridge_subscribed,
             message_handlers,
         }
-    }
-
-    /// Waits until the bridge can relay the mapper's messages to the cloud
-    ///
-    /// The built-in bridge waits until it has established a session with the local broker
-    /// before returning that it is ready. At this point, the mapper can safely publish
-    /// messages to the cloud topics as mosquitto is guarenteed to queue them if the
-    /// cloud is unreachable.
-    ///
-    /// This is awaited once, not on every reconnection: the bridge keeps its session on the local
-    /// broker, so from then on the broker queues what it cannot deliver instead of discarding it.
-    ///
-    /// If the bridge is not built-in (i.e. it runs inside the broker), we wait for the first sign
-    /// of a health message from the bridge. This ensures the bridge is configured with mosquitto
-    /// and it is queuing incoming messages even if it is not yet connected to the cloud.
-    async fn wait_until_bridge_is_ready(&mut self) -> Result<Startup, RuntimeError> {
-        let Some(mut bridge_subscribed) = self.bridge_subscribed.take() else {
-            // Non built-in bridge - wait for the health message
-            while let Some(message) = self.bridge_status_messages.recv().await {
-                if is_c8y_bridge_established(
-                    &message,
-                    &self.converter.config.mqtt_schema,
-                    &self.converter.config.bridge_health_topic,
-                ) {
-                    break;
-                }
-            }
-            return Ok(Startup::BridgeReady(vec![]));
-        };
-
-        // Built-in bridge - use the internal channel to know when it is subscribed
-        let mut pending = Vec::new();
-        let mut overflowed = false;
-        loop {
-            if *bridge_subscribed.borrow_and_update() {
-                return Ok(Startup::BridgeReady(pending));
-            }
-            tokio::select! {
-                subscribed = bridge_subscribed.changed() => {
-                    // The bridge has stopped, so nothing will signal this again
-                    if subscribed.is_err() {
-                        return Ok(Startup::BridgeReady(pending));
-                    }
-                }
-                event = self.messages.recv() => match event {
-                    None => return Ok(Startup::Interrupted),
-                    Some(event) if pending.len() < MAX_PENDING_INPUTS => pending.push(event),
-                    Some(event) => {
-                        if !overflowed {
-                            overflowed = true;
-                            error!(
-                                "The bridge is still not subscribed after {MAX_PENDING_INPUTS} messages: \
-                                 the messages received from now on are converted, but the cloud may not receive them"
-                            );
-                        }
-                        self.process_input(event).await?
-                    }
-                },
-            }
-        }
-    }
-
-    /// Publishes the messages the mapper sends once the bridge is ready: the operations it
-    /// supports and a request for any operation pending in the cloud
-    async fn publish_init_messages(&mut self) -> Result<(), RuntimeError> {
-        let init_messages = self.converter.init_messages();
-        for init_message in init_messages.into_iter() {
-            self.mqtt_publisher.send(init_message).await?;
-        }
-        Ok(())
-    }
-
-    async fn process_input(&mut self, event: C8yMapperInput) -> Result<(), RuntimeError> {
-        match event {
-            C8yMapperInput::MqttMessage(message) => {
-                self.process_mqtt_message(message).await?;
-            }
-            C8yMapperInput::FsWatchEvent(event) => {
-                self.process_file_watch_event(event).await?;
-            }
-        }
-        Ok(())
     }
 
     /// Processing an incoming message involves the following steps, if the message follows MQTT topic scheme v1:
@@ -436,8 +329,6 @@ pub struct C8yMapperBuilder {
     http_client: ClientMessageBox<HttpRequest, HttpResult>,
     downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
-    bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
-    bridge_subscribed: Option<watch::Receiver<bool>>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
     flow_context: Option<FlowContextHandle>,
 }
@@ -451,7 +342,6 @@ impl C8yMapperBuilder {
         uploader: &mut impl Service<IdUploadRequest, IdUploadResult>,
         downloader: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
-        service_monitor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Result<Self, FileError> {
         let box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput> =
             SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
@@ -470,14 +360,6 @@ impl C8yMapperBuilder {
             &box_builder.get_sender(),
         );
 
-        let bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
-            SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
-
-        service_monitor.connect_sink(
-            config.bridge_health_topic.clone().into(),
-            &bridge_monitor_builder,
-        );
-
         let message_handlers = HashMap::new();
 
         Ok(Self {
@@ -488,8 +370,6 @@ impl C8yMapperBuilder {
             http_client,
             uploader,
             downloader,
-            bridge_monitor_builder,
-            bridge_subscribed: None,
             message_handlers,
             flow_context: None,
         })
@@ -497,14 +377,6 @@ impl C8yMapperBuilder {
 
     pub fn set_flow_context(&mut self, flow_context: FlowContextHandle) {
         self.flow_context = Some(flow_context);
-    }
-
-    /// Tells the mapper when the built-in bridge is subscribed to the topics it relays
-    ///
-    /// This has to be set whenever the bridge runs in this process, as the mapper publishes
-    /// nothing to the cloud until the bridge holds those subscriptions
-    pub fn set_bridge_subscribed(&mut self, bridge_subscribed: watch::Receiver<bool>) {
-        self.bridge_subscribed = Some(bridge_subscribed);
     }
 
     pub async fn init(config: &C8yMapperConfig) -> Result<(), PathsError> {
@@ -542,12 +414,6 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
     type Error = RuntimeError;
 
     fn try_build(self) -> Result<C8yMapperActor, Self::Error> {
-        if self.config.bridge_in_mapper && self.bridge_subscribed.is_none() {
-            return Err(RuntimeError::ActorError(
-                anyhow!("the built-in bridge runs in the mapper, but the mapper was not given its subscription state").into(),
-            ));
-        }
-
         let mqtt_publisher = LoggingSender::new("C8yMapper => Mqtt".into(), self.mqtt_publisher);
 
         let converter = CumulocityConverter::new(
@@ -562,14 +428,11 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
         let message_box = self.box_builder.build();
-        let bridge_monitor_box = self.bridge_monitor_builder.build();
 
         Ok(C8yMapperActor::new(
             converter,
             message_box,
             mqtt_publisher,
-            bridge_monitor_box,
-            self.bridge_subscribed,
             self.message_handlers,
         ))
     }

@@ -41,6 +41,7 @@ use tedge_actors::Sequential;
 use tedge_actors::Server;
 use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
+use tokio::sync::watch;
 use tracing::Instrument;
 use trie::MqtTrie;
 use trie::RankTopicFilter;
@@ -65,6 +66,7 @@ pub struct MqttActorBuilder {
         TrieInsertRequest,
         Box<dyn CloneSender<MqttMessage> + 'static>,
     )>,
+    connection_gate: Option<ConnectionGate>,
 }
 
 impl MqttRequest {
@@ -270,6 +272,7 @@ impl MqttActorBuilder {
             current_id: 0,
             dynamic_connect_sender,
             dynamic_connect_receiver,
+            connection_gate: None,
         }
     }
 
@@ -297,6 +300,7 @@ impl MqttActorBuilder {
                 tx: self.dynamic_connect_sender,
             },
             self.dynamic_connect_receiver,
+            self.connection_gate,
         )
     }
 }
@@ -674,9 +678,85 @@ pub struct MqttActor {
         TrieInsertRequest,
         Box<dyn CloneSender<MqttMessage> + 'static>,
     )>,
+    connection_gate: Option<ConnectionGate>,
+}
+
+/// A connection to the broker that can be held back until the client may act on what it receives
+///
+/// Implemented by [MqttActorBuilder]; taken as a parameter by whoever decides when the client may
+/// connect, so that the decision and its effect cannot be wired up apart from one another.
+pub trait GateConnection {
+    /// Delays the connection to the broker until `ready` says the client may act on what it
+    /// receives and publish what its peers hand over
+    ///
+    /// Nothing is lost by waiting, and that is the point: the messages the peers publish meanwhile
+    /// are held by their senders, and those the broker holds for this client stay queued in its
+    /// session rather than being received and acknowledged before the client can make use of them.
+    ///
+    /// The connection is opened anyway once `timeout` has elapsed, as a client that never connects
+    /// is worse than one connecting too early: the delay is a precaution, not a requirement.
+    fn connect_when(&mut self, ready: watch::Receiver<bool>, timeout: Duration);
+}
+
+impl GateConnection for MqttActorBuilder {
+    fn connect_when(&mut self, ready: watch::Receiver<bool>, timeout: Duration) {
+        self.connection_gate = Some(ConnectionGate { ready, timeout });
+    }
+}
+
+/// Holds back the connection to the broker until the client may act on what it receives
+///
+/// See [GateConnection::connect_when]
+struct ConnectionGate {
+    ready: watch::Receiver<bool>,
+    timeout: Duration,
+}
+
+/// Whether the actor may carry on connecting to the broker
+#[derive(Debug, PartialEq, Eq)]
+enum Gate {
+    Open,
+
+    /// The actor was shut down before the connection was opened
+    ShutDown,
+}
+
+impl ConnectionGate {
+    /// Waits for the signal to connect, or for the runtime to shut the actor down
+    async fn wait(mut self, signals: &mut FromPeers) -> Gate {
+        let max_wait = self.timeout;
+        let deadline = tokio::time::sleep(max_wait);
+        tokio::pin!(deadline);
+
+        loop {
+            if *self.ready.borrow_and_update() {
+                return Gate::Open;
+            }
+
+            tokio::select! {
+                outcome = self.ready.changed() => if outcome.is_err() {
+                    // Nothing will ever signal readiness now, so waiting any longer would leave
+                    // this client disconnected for good. This is also the ordinary path on
+                    // shutdown, whoever was to give the go-ahead having stopped first.
+                    tracing::info!("Connecting to the broker, as nothing is left to tell this client when to connect");
+                    return Gate::Open;
+                },
+
+                () = &mut deadline => {
+                    tracing::warn!("Connecting to the broker, as this client has been waiting {max_wait:?} for the go-ahead");
+                    return Gate::Open;
+                }
+
+                Some(RuntimeRequest::Shutdown) = signals.recv_signal() => {
+                    return Gate::ShutDown;
+                }
+            }
+        }
+    }
 }
 
 impl MqttActor {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         mqtt_config: mqtt_channel::Config,
         base_config: mqtt_channel::Config,
@@ -688,6 +768,7 @@ impl MqttActor {
             TrieInsertRequest,
             Box<dyn CloneSender<MqttMessage> + 'static>,
         )>,
+        connection_gate: Option<ConnectionGate>,
     ) -> Self {
         MqttActor {
             mqtt_config,
@@ -703,6 +784,7 @@ impl MqttActor {
             trie_service,
             dynamic_client_handle,
             dynamic_connect_receiver,
+            connection_gate,
         }
     }
 
@@ -718,6 +800,12 @@ impl Actor for MqttActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
+        if let Some(gate) = self.connection_gate.take() {
+            if gate.wait(&mut self.from_peers).await == Gate::ShutDown {
+                return Ok(());
+            }
+        }
+
         let mut mqtt_client = tokio::select! {
             connection = mqtt_channel::Connection::new(&self.mqtt_config) => {
                 connection.map_err(Box::new)?
