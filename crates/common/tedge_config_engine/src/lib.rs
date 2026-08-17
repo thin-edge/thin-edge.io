@@ -16,6 +16,7 @@ mod reader;
 pub mod reader_helpers;
 mod reflect;
 mod schema;
+mod schema_check;
 pub mod type_action;
 
 /// Combines root config and mapper configs behind one key space.
@@ -33,8 +34,10 @@ pub use defaults::DefaultsRegistry;
 pub use defaults::DeriveFn;
 pub use defaults::EnvOverrides;
 pub use defaults::FieldDefault;
+pub use defaults::ResolvedValue;
 pub use defaults::RootDependency;
 pub use defaults::RootResolver;
+pub use defaults::ValueOrigin;
 pub use manager::ConfigManager;
 pub use optional::ConfigNotSet;
 pub use optional::OptionalConfig;
@@ -53,3 +56,5 @@ pub use reflect::KeyAliases;
 pub use reflect::KeyEntry;
 pub use schema::prefix_defaults;
 pub use schema::ConfigSchema;
+pub use schema_check::check_schema;
+pub use schema_check::SchemaProblems;

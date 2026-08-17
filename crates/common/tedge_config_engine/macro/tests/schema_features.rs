@@ -32,16 +32,6 @@ mod features {
                 #[tedge_config(default(function = "generated_value"))]
                 stamp: String,
             },
-
-            cycle: {
-                /// One half of a defaulting cycle
-                #[tedge_config(default(from_optional_key = "cycle.b"))]
-                a: String,
-
-                /// The other half of a defaulting cycle
-                #[tedge_config(default(from_optional_key = "cycle.a"))]
-                b: String,
-            },
         }
     }
 
@@ -102,15 +92,51 @@ mod features {
             Some("THIN-EDGE.IO".into())
         );
     }
+}
+
+mod cyclic {
+    use tedge_config_engine::*;
+
+    tedge_config_engine_macro::define_config! {
+        #[tedge_config(skip_generated_test)]
+        Cyclic {
+            cycle: {
+                /// One half of a defaulting cycle
+                #[tedge_config(default(from_optional_key = "cycle.b"))]
+                a: String,
+
+                /// The other half of a defaulting cycle
+                #[tedge_config(default(from_optional_key = "cycle.a"))]
+                b: String,
+            },
+        }
+    }
+
+    fn manager() -> ConfigManager {
+        ConfigManager::from_schema::<CyclicConfig>(std::path::Path::new("/etc/tedge"))
+    }
 
     #[test]
-    fn cyclic_optional_defaults_error_instead_of_looping() {
+    fn cyclic_optional_defaults_report_the_keys_forming_the_cycle() {
         let mgr = manager();
-        let dto = FeaturesConfigDto::default();
+        let dto = CyclicConfigDto::default();
         let err = mgr.read(&dto, "cycle.a").unwrap_err();
-        assert!(
-            err.to_string().contains("Cycle detected"),
-            "unexpected error: {err}"
+        assert_eq!(
+            err.to_string(),
+            "The default for 'cycle.a' is cyclic: cycle.a -> cycle.b -> cycle.a"
+        );
+    }
+
+    #[test]
+    fn building_a_reader_surfaces_a_cycle_instead_of_reading_as_unset() {
+        let mgr = manager();
+        let dto = CyclicConfigDto::default();
+        let err = mgr
+            .build_reader::<_, CyclicConfig>(&dto, None, "", None)
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "The default for 'cycle.a' is cyclic: cycle.a -> cycle.b -> cycle.a"
         );
     }
 }
@@ -119,6 +145,7 @@ mod broken {
     use tedge_config_engine::*;
 
     tedge_config_engine_macro::define_config! {
+        #[tedge_config(skip_generated_test)]
         Broken {
             device: {
                 /// Falls back to a key that has no default and may not be set

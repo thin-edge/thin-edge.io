@@ -1,5 +1,6 @@
 use crate::append_remove::AppendRemoveRegistry;
 use crate::attrs;
+use crate::defaults::ValueOrigin;
 use facet::Def;
 use facet::Facet;
 use facet::MapDef;
@@ -24,6 +25,21 @@ pub enum ConfigError {
     NotAStruct { key: String, segment: String },
     #[error("Failed to parse value: {0}")]
     ParseError(String),
+    #[error("{}", format_invalid_value(key, source_key, origin, value, reason))]
+    InvalidValue {
+        /// The key that was read
+        key: String,
+        /// The key that supplied the value, which may differ from `key`
+        source_key: String,
+        origin: ValueOrigin,
+        value: String,
+        reason: String,
+    },
+    #[error("{}", format_cycle_error(cycle))]
+    DefaultCycle {
+        /// The keys forming the cycle, starting and ending at the same key
+        cycle: Vec<String>,
+    },
     #[error("Config key '{0}' is read-only")]
     ReadOnly(String),
     #[error("Failed to derive a value for '{key}' from {source_key} '{source_value}': {reason}")]
@@ -206,6 +222,69 @@ pub fn list_key_entries(shape: &'static Shape, prefix: &str) -> Vec<KeyEntry> {
     let mut entries = Vec::new();
     list_keys_recursive(shape, prefix, &mut entries);
     entries
+}
+
+/// Renders [ConfigError::InvalidValue], naming where the offending value came from
+///
+/// A value the schema supplied is not something the reader can correct in
+/// their config file, so those messages say so rather than pointing at a key
+/// the reader never set.
+fn format_invalid_value(
+    key: &str,
+    source_key: &str,
+    origin: &ValueOrigin,
+    value: &str,
+    reason: &str,
+) -> String {
+    const BUG: &str = " This is a bug in thin-edge.io.";
+
+    match origin {
+        ValueOrigin::Derived { source_value } => format!(
+            "'{key}' is derived from '{source_key}' ('{source_value}'); the derived value '{value}' is not valid: {reason}"
+        ),
+        ValueOrigin::Root => format!(
+            "'{key}' falls back to the root config key '{source_key}', whose value '{value}' is not valid: {reason}"
+        ),
+        ValueOrigin::Explicit if source_key == key => {
+            format!("Invalid value for '{key}': '{value}' — {reason}")
+        }
+        ValueOrigin::Explicit => format!(
+            "'{key}' is not set, so it falls back to '{source_key}', whose value '{value}' is not valid: {reason}"
+        ),
+        ValueOrigin::SchemaDefault if source_key == key => format!(
+            "The built-in default for '{key}' is not a valid value: '{value}' — {reason}.{BUG}"
+        ),
+        ValueOrigin::SchemaDefault => format!(
+            "'{key}' is not set, so it falls back to '{source_key}', whose built-in default '{value}' is not valid: {reason}.{BUG}"
+        ),
+    }
+}
+
+/// The most keys shown in full before a cycle is abbreviated
+const MAX_CYCLE_KEYS: usize = 10;
+
+fn format_cycle_error(cycle: &[String]) -> String {
+    match cycle.first() {
+        Some(key) => format!("The default for '{key}' is cyclic: {}", format_cycle(cycle)),
+        None => "A default is cyclic".to_owned(),
+    }
+}
+
+/// Renders a cycle as the path around it, eliding the middle of a long one
+///
+/// A cycle spanning a whole schema is unreadable in full and the ends are what
+/// identify it, so only the keys either side of the loop are kept.
+pub(crate) fn format_cycle(cycle: &[String]) -> String {
+    const SEPARATOR: &str = " -> ";
+
+    if cycle.len() <= MAX_CYCLE_KEYS {
+        return cycle.join(SEPARATOR);
+    }
+
+    let head = cycle[..4].join(SEPARATOR);
+    let tail = cycle[cycle.len() - 3..].join(SEPARATOR);
+    let elided = cycle.len() - 7;
+    format!("{head}{SEPARATOR}... ({elided} more){SEPARATOR}{tail}")
 }
 
 fn format_known(known: &[String]) -> String {
@@ -784,6 +863,112 @@ fn list_keys_recursive(shape: &'static Shape, prefix: &str, entries: &mut Vec<Ke
                 doc: field.doc,
                 examples: field_examples(field),
             });
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_invalid_explicit_value_names_the_key_alone() {
+        assert_eq!(
+            invalid("mqtt.port", "mqtt.port", ValueOrigin::Explicit).to_string(),
+            "Invalid value for 'mqtt.port': '188x' — invalid digit found in string"
+        );
+    }
+
+    #[test]
+    fn an_invalid_built_in_default_is_reported_as_a_bug() {
+        assert_eq!(
+            invalid("mqtt.port", "mqtt.port", ValueOrigin::SchemaDefault).to_string(),
+            "The built-in default for 'mqtt.port' is not a valid value: '188x' — \
+             invalid digit found in string. This is a bug in thin-edge.io."
+        );
+    }
+
+    #[test]
+    fn an_inherited_invalid_value_names_the_key_it_fell_back_to() {
+        assert_eq!(
+            invalid("mqtt.tls_port", "mqtt.port", ValueOrigin::Explicit).to_string(),
+            "'mqtt.tls_port' is not set, so it falls back to 'mqtt.port', whose value \
+             '188x' is not valid: invalid digit found in string"
+        );
+    }
+
+    #[test]
+    fn an_inherited_invalid_default_names_both_keys_and_is_reported_as_a_bug() {
+        assert_eq!(
+            invalid("mqtt.tls_port", "mqtt.port", ValueOrigin::SchemaDefault).to_string(),
+            "'mqtt.tls_port' is not set, so it falls back to 'mqtt.port', whose built-in \
+             default '188x' is not valid: invalid digit found in string. \
+             This is a bug in thin-edge.io."
+        );
+    }
+
+    #[test]
+    fn an_invalid_derived_value_names_the_source_key_and_its_value() {
+        let origin = ValueOrigin::Derived {
+            source_value: "1883".into(),
+        };
+        assert_eq!(
+            invalid("mqtt.tls_port", "mqtt.port", origin).to_string(),
+            "'mqtt.tls_port' is derived from 'mqtt.port' ('1883'); the derived value \
+             '188x' is not valid: invalid digit found in string"
+        );
+    }
+
+    #[test]
+    fn an_invalid_value_from_the_root_config_names_the_root_key() {
+        assert_eq!(
+            invalid("mqtt.port", "mqtt.bind_port", ValueOrigin::Root).to_string(),
+            "'mqtt.port' falls back to the root config key 'mqtt.bind_port', whose value \
+             '188x' is not valid: invalid digit found in string"
+        );
+    }
+
+    #[test]
+    fn a_short_cycle_is_shown_in_full() {
+        let cycle = keys(&["mqtt.a", "mqtt.b", "mqtt.c", "mqtt.a"]);
+
+        assert_eq!(
+            ConfigError::DefaultCycle { cycle }.to_string(),
+            "The default for 'mqtt.a' is cyclic: mqtt.a -> mqtt.b -> mqtt.c -> mqtt.a"
+        );
+    }
+
+    #[test]
+    fn a_cycle_of_the_maximum_length_is_still_shown_in_full() {
+        let cycle: Vec<String> = (0..MAX_CYCLE_KEYS).map(|n| format!("k{n}")).collect();
+
+        assert_eq!(
+            format_cycle(&cycle),
+            "k0 -> k1 -> k2 -> k3 -> k4 -> k5 -> k6 -> k7 -> k8 -> k9"
+        );
+    }
+
+    #[test]
+    fn an_enormous_cycle_keeps_both_ends_and_counts_what_it_elides() {
+        let cycle: Vec<String> = (0..20).map(|n| format!("k{n}")).collect();
+
+        assert_eq!(
+            format_cycle(&cycle),
+            "k0 -> k1 -> k2 -> k3 -> ... (13 more) -> k17 -> k18 -> k19"
+        );
+    }
+
+    fn keys(keys: &[&str]) -> Vec<String> {
+        keys.iter().map(|k| (*k).to_owned()).collect()
+    }
+
+    fn invalid(key: &str, source_key: &str, origin: ValueOrigin) -> ConfigError {
+        ConfigError::InvalidValue {
+            key: key.to_owned(),
+            source_key: source_key.to_owned(),
+            origin,
+            value: "188x".to_owned(),
+            reason: "invalid digit found in string".to_owned(),
         }
     }
 }

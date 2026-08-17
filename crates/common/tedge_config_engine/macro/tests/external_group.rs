@@ -273,6 +273,7 @@ mod broken {
     use tedge_config_engine::*;
 
     tedge_config_engine_macro::define_config! {
+        #[tedge_config(skip_generated_test)]
         BrokenDevice {
             /// Falls back to a key that has no default and may not be set
             #[tedge_config(default(from_key = "name"))]
@@ -284,6 +285,7 @@ mod broken {
     }
 
     tedge_config_engine_macro::define_config! {
+        #[tedge_config(skip_generated_test)]
         BrokenHost {
             device: extern BrokenDeviceConfig,
         }
