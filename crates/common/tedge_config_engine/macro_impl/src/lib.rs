@@ -28,6 +28,7 @@ pub fn generate_configuration(input: TokenStream) -> TokenStream {
     let dto_tokens = dto::generate_dto(&model);
     let reader_tokens = reader::generate_reader(&model);
     let schema_tokens = schema::generate_schema(&model);
+    let test_tokens = generate_schema_test(&config, &model);
 
     let mod_name = quote::format_ident!(
         "__tedge_generated_{}",
@@ -48,7 +49,29 @@ pub fn generate_configuration(input: TokenStream) -> TokenStream {
             #dto_tokens
             #reader_tokens
             #schema_tokens
+            #test_tokens
         }
         #(#re_exports)*
+    }
+}
+
+/// Emits the test that checks the schema's own defaults and examples
+///
+/// The test lives inside the generated module, so its name cannot collide with
+/// another `define_config!` in the same crate.
+fn generate_schema_test(config: &Configuration, model: &Model) -> TokenStream {
+    if config.skip_generated_test {
+        return TokenStream::new();
+    }
+    let reader_ident = &model.root.reader_ident;
+    quote! {
+        #[test]
+        fn defaults_and_examples_are_valid() {
+            if let Err(problems) =
+                tedge::check_schema::<#reader_ident>(::std::path::Path::new("/etc/tedge"))
+            {
+                panic!("{problems}");
+            }
+        }
     }
 }

@@ -39,9 +39,13 @@ impl ConfigManager {
     pub fn from_schema<S: ConfigSchema>(config_dir: &std::path::Path) -> Self {
         let mut append_remove = AppendRemoveRegistry::new();
         S::register_types(&mut append_remove);
+        let defaults = DefaultsRegistry::new(S::defaults(config_dir))
+            .unwrap_or_else(|e| panic!("invalid defaults registry: {e}"));
+        defaults
+            .validate_source_keys(&list_keys(<S::Dto as Facet>::SHAPE, ""))
+            .unwrap_or_else(|e| panic!("invalid defaults registry: {e}"));
         Self {
-            defaults: DefaultsRegistry::new(S::defaults(config_dir))
-                .unwrap_or_else(|e| panic!("invalid defaults registry: {e}")),
+            defaults,
             append_remove,
             aliases: KeyAliases::from_shape(<S::Dto as Facet>::SHAPE),
             dto_shape: <S::Dto as Facet>::SHAPE,
@@ -83,6 +87,15 @@ impl ConfigManager {
         root_resolver: crate::defaults::RootResolver<'_>,
     ) -> Result<Option<String>, ConfigError> {
         config_get_with_defaults(dto, key, &self.defaults, root_resolver)
+    }
+
+    /// Returns the effective value for `key` along with where it came from.
+    pub fn resolve<T: for<'a> Facet<'a>>(
+        &self,
+        dto: &T,
+        key: &str,
+    ) -> Result<Option<crate::defaults::ResolvedValue>, ConfigError> {
+        crate::defaults::config_resolve(dto, key, &self.defaults, None)
     }
 
     /// Sets `key` to `value` in the DTO (parses and validates).

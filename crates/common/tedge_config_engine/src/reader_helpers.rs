@@ -5,9 +5,10 @@ use std::str::FromStr;
 
 use facet::Facet;
 
-use crate::defaults::config_get_with_defaults;
+use crate::defaults::config_resolve;
 use crate::defaults::DefaultSpec;
 use crate::defaults::DefaultsRegistry;
+use crate::defaults::ResolvedValue;
 use crate::defaults::RootResolver;
 use crate::reflect::ConfigError;
 use crate::OptionalConfig;
@@ -22,14 +23,33 @@ pub fn read_required<T: FromStr>(
 where
     T::Err: std::fmt::Display,
 {
-    let value = config_get_with_defaults(dto, key, defaults, root_resolver)?.ok_or_else(|| {
+    let resolved = config_resolve(dto, key, defaults, root_resolver)?.ok_or_else(|| {
         ConfigError::ReflectError(format!(
             "Required config key '{key}' is not set and has no default"
         ))
     })?;
+    parse_resolved(key, resolved)
+}
+
+/// Parses a resolved value into the field's type, reporting where a bad value came from
+fn parse_resolved<T: FromStr>(key: &str, resolved: ResolvedValue) -> Result<T, ConfigError>
+where
+    T::Err: std::fmt::Display,
+{
+    let ResolvedValue {
+        value,
+        source_key,
+        origin,
+    } = resolved;
     value
         .parse()
-        .map_err(|e: T::Err| ConfigError::ParseError(format!("Failed to parse '{key}': {e}")))
+        .map_err(|e: T::Err| ConfigError::InvalidValue {
+            key: key.to_owned(),
+            source_key,
+            origin,
+            reason: e.to_string(),
+            value,
+        })
 }
 
 /// Reads an optional field (no guaranteed default) into an `OptionalConfig`
@@ -44,23 +64,14 @@ pub fn read_optional<T: FromStr>(
 where
     T::Err: std::fmt::Display,
 {
-    let value = match config_get_with_defaults(dto, key, defaults, root_resolver) {
-        Ok(Some(v)) => Some(v),
-        Ok(None) => None,
-        Err(ConfigError::ReflectError(_)) => None,
-        Err(e) => return Err(e),
-    };
+    let resolved = config_resolve(dto, key, defaults, root_resolver)?;
 
     let profile_value = profile.map(str::to_owned);
 
-    match value {
-        Some(v) => {
+    match resolved {
+        Some(resolved) => {
             let display_key = dotted_key(display_prefix, key);
-            let parsed: T = v.parse().map_err(|e: T::Err| {
-                ConfigError::ParseError(format!(
-                    "Failed to parse value for optional field '{key}': {e}"
-                ))
-            })?;
+            let parsed: T = parse_resolved(key, resolved)?;
             Ok(OptionalConfig::present(parsed, display_key).with_profile(profile_value))
         }
         None => {

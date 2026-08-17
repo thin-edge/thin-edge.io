@@ -44,6 +44,50 @@ pub enum DefaultSpec {
 /// A fallible derivation used by [DefaultSpec::FromKeyVia].
 pub type DeriveFn = fn(&str) -> Result<Option<String>, String>;
 
+/// A resolved config value together with where it came from
+///
+/// Resolution turns every value into a string before the reader parses it into
+/// the field's type. Carrying the provenance alongside the string lets a parse
+/// failure say whether the offending value was written by the user or supplied
+/// by the schema, and which key it ultimately came from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedValue {
+    pub value: String,
+
+    /// The key that supplied the value: the requested key itself, or the end
+    /// of a fallback chain
+    pub source_key: String,
+
+    pub origin: ValueOrigin,
+}
+
+/// How a resolved value was produced
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ValueOrigin {
+    /// Set in the config file, or by an environment override
+    Explicit,
+
+    /// A fixed or computed default declared by the schema
+    SchemaDefault,
+
+    /// Computed by a `from_key_via` function from `source_value`
+    Derived { source_value: String },
+
+    /// Read from the root config
+    Root,
+}
+
+impl ResolvedValue {
+    /// A value the requested key supplied itself, rather than inheriting
+    fn own(key: &str, value: String, origin: ValueOrigin) -> Self {
+        Self {
+            value,
+            source_key: key.to_owned(),
+            origin,
+        }
+    }
+}
+
 /// Calls a typed derivation and stringifies its value for the defaults engine
 ///
 /// `define_config!` routes `from_key_via` functions through this, so a
@@ -156,10 +200,45 @@ impl DefaultsRegistry {
             .collect()
     }
 
+    /// Rejects same-schema fallbacks that name a key the schema does not define
+    ///
+    /// A misspelled `from_key`, `from_optional_key` or `from_key_via` source
+    /// would otherwise read as unset forever rather than failing. `from_root`
+    /// references name keys of the root config instead, and are checked
+    /// separately by [validate_root_dependencies].
+    pub fn validate_source_keys(&self, known_keys: &[String]) -> Result<(), String> {
+        for field in &self.defaults {
+            let source_key = match &field.spec {
+                DefaultSpec::FromKey(source)
+                | DefaultSpec::FromOptionalKey(source)
+                | DefaultSpec::FromKeyVia { key: source, .. } => source.as_ref(),
+                DefaultSpec::Value(_) | DefaultSpec::Function(_) | DefaultSpec::FromRoot(_) => {
+                    continue
+                }
+            };
+            if !known_keys.iter().any(|k| k == source_key) {
+                return Err(format!(
+                    "The default for '{}' falls back to '{source_key}', which is not a key in this schema",
+                    field.key
+                ));
+            }
+        }
+        Ok(())
+    }
+
     fn validate(&self) -> Result<(), String> {
         for field in &self.defaults {
             if let DefaultSpec::FromKey(source_key) = &field.spec {
-                if !self.is_resolvable(source_key, 0) {
+                // A cycle is why the chain never reaches a concrete value, so
+                // report it rather than blaming the key it happens to stop at.
+                if let Some(cycle) = self.find_cycle(&field.key) {
+                    return Err(format!(
+                        "The default for '{}' is cyclic: {}",
+                        field.key,
+                        crate::reflect::format_cycle(&cycle)
+                    ));
+                }
+                if !self.is_resolvable(source_key) {
                     return Err(format!(
                         "FromKey default for '{}' references '{}', which has no default and may not be set",
                         field.key, source_key
@@ -170,13 +249,43 @@ impl DefaultsRegistry {
         Ok(())
     }
 
-    fn is_resolvable(&self, key: &str, depth: usize) -> bool {
-        if depth > 10 {
-            return false;
+    /// Returns the cycle `key`'s fallback chain runs into, if any
+    ///
+    /// Each rule falls back to at most one key, so following them from `key`
+    /// walks a path: the first key it meets twice closes the cycle.
+    fn find_cycle(&self, key: &str) -> Option<Vec<String>> {
+        let mut visited: Vec<String> = Vec::new();
+        let mut current = key.to_owned();
+
+        loop {
+            if let Some(start) = visited.iter().position(|seen| *seen == current) {
+                let mut cycle = visited[start..].to_vec();
+                cycle.push(current);
+                return Some(cycle);
+            }
+            visited.push(current.clone());
+
+            current = match self.get(&current) {
+                Some(
+                    DefaultSpec::FromKey(source)
+                    | DefaultSpec::FromOptionalKey(source)
+                    | DefaultSpec::FromKeyVia { key: source, .. },
+                ) => source.to_string(),
+                Some(
+                    DefaultSpec::Value(_) | DefaultSpec::Function(_) | DefaultSpec::FromRoot(_),
+                )
+                | None => return None,
+            };
         }
+    }
+
+    /// Whether `key`'s chain reaches something that always produces a value
+    ///
+    /// Only sound on an acyclic chain; [find_cycle] rules that out first.
+    fn is_resolvable(&self, key: &str) -> bool {
         match self.get(key) {
             Some(DefaultSpec::Value(_) | DefaultSpec::Function(_)) => true,
-            Some(DefaultSpec::FromKey(source)) => self.is_resolvable(source.as_ref(), depth + 1),
+            Some(DefaultSpec::FromKey(source)) => self.is_resolvable(source.as_ref()),
             Some(
                 DefaultSpec::FromOptionalKey(_)
                 | DefaultSpec::FromRoot(_)
@@ -254,7 +363,18 @@ pub fn config_get_with_defaults<T: for<'a> Facet<'a>>(
     defaults: &DefaultsRegistry,
     root_resolver: RootResolver<'_>,
 ) -> Result<Option<String>, ConfigError> {
-    config_get_with_defaults_inner(dto, key, defaults, root_resolver, 0)
+    Ok(config_resolve(dto, key, defaults, root_resolver)?.map(|resolved| resolved.value))
+}
+
+/// Reads a value from a DTO along with its provenance, applying the key's
+/// default rule when unset
+pub fn config_resolve<T: for<'a> Facet<'a>>(
+    dto: &T,
+    key: &str,
+    defaults: &DefaultsRegistry,
+    root_resolver: RootResolver<'_>,
+) -> Result<Option<ResolvedValue>, ConfigError> {
+    config_resolve_inner(dto, key, defaults, root_resolver, &mut Vec::new())
 }
 
 /// Resolves an env suffix by treating underscores as either literal `_` or `.`.
@@ -273,22 +393,25 @@ pub fn resolve_env_key(raw: &str, known_keys: &[String]) -> Option<String> {
     substitute_underscores(&mut candidate, &underscores, 0, known_keys)
 }
 
-fn config_get_with_defaults_inner<T: for<'a> Facet<'a>>(
+fn config_resolve_inner<T: for<'a> Facet<'a>>(
     dto: &T,
     key: &str,
     defaults: &DefaultsRegistry,
     root_resolver: RootResolver<'_>,
-    depth: usize,
-) -> Result<Option<String>, ConfigError> {
-    if depth > 10 {
-        return Err(ConfigError::ReflectError(format!(
-            "Cycle detected resolving defaults for '{key}'"
-        )));
+    chain: &mut Vec<String>,
+) -> Result<Option<ResolvedValue>, ConfigError> {
+    // Each rule falls back to at most one key, so the keys visited so far form
+    // a path: meeting one of them again is a cycle, and the path from that key
+    // onwards is the cycle itself.
+    if let Some(start) = chain.iter().position(|visited| visited == key) {
+        let mut cycle = chain[start..].to_vec();
+        cycle.push(key.to_owned());
+        return Err(ConfigError::DefaultCycle { cycle });
     }
+    chain.push(key.to_owned());
 
-    let value = config_get(dto, key)?;
-    if value.is_some() {
-        return Ok(value);
+    if let Some(value) = config_get(dto, key)? {
+        return Ok(Some(ResolvedValue::own(key, value, ValueOrigin::Explicit)));
     }
 
     let Some(spec) = defaults.get(key) else {
@@ -296,57 +419,65 @@ fn config_get_with_defaults_inner<T: for<'a> Facet<'a>>(
     };
 
     match spec {
-        DefaultSpec::Value(v) => Ok(Some(v.clone())),
-        DefaultSpec::Function(f) => Ok(Some(f())),
+        DefaultSpec::Value(v) => Ok(Some(ResolvedValue::own(
+            key,
+            v.clone(),
+            ValueOrigin::SchemaDefault,
+        ))),
+        DefaultSpec::Function(f) => Ok(Some(ResolvedValue::own(
+            key,
+            f(),
+            ValueOrigin::SchemaDefault,
+        ))),
+        // A fallback keeps the provenance of whatever the chain ends at, so a
+        // failure names the key that actually supplied the value.
         DefaultSpec::FromKey(source_key) => {
-            let resolved = config_get_with_defaults_inner(
-                dto,
-                source_key.as_ref(),
-                defaults,
-                root_resolver,
-                depth + 1,
-            )?;
+            let resolved =
+                config_resolve_inner(dto, source_key.as_ref(), defaults, root_resolver, chain)?;
             match resolved {
-                Some(v) => Ok(Some(v)),
+                Some(resolved) => Ok(Some(resolved)),
                 None => Err(ConfigError::ReflectError(format!(
                     "'{key}' defaults to '{source_key}', but '{source_key}' is also not set"
                 ))),
             }
         }
-        DefaultSpec::FromOptionalKey(source_key) => config_get_with_defaults_inner(
-            dto,
-            source_key.as_ref(),
-            defaults,
-            root_resolver,
-            depth + 1,
-        ),
+        DefaultSpec::FromOptionalKey(source_key) => {
+            config_resolve_inner(dto, source_key.as_ref(), defaults, root_resolver, chain)
+        }
         DefaultSpec::FromKeyVia {
             key: source_key,
             function,
         } => {
-            let resolved = config_get_with_defaults_inner(
-                dto,
-                source_key.as_ref(),
-                defaults,
-                root_resolver,
-                depth + 1,
-            )?;
+            let resolved =
+                config_resolve_inner(dto, source_key.as_ref(), defaults, root_resolver, chain)?;
             match resolved {
                 None => Ok(None),
-                Some(source_value) => {
-                    defaults
-                        .derive(key, &source_value, *function)
-                        .map_err(|reason| ConfigError::DerivedValue {
-                            key: key.to_owned(),
-                            source_key: source_key.to_string(),
-                            source_value,
-                            reason,
-                        })
+                Some(source) => {
+                    let derived =
+                        defaults
+                            .derive(key, &source.value, *function)
+                            .map_err(|reason| ConfigError::DerivedValue {
+                                key: key.to_owned(),
+                                source_key: source_key.to_string(),
+                                source_value: source.value.clone(),
+                                reason,
+                            })?;
+                    Ok(derived.map(|value| ResolvedValue {
+                        value,
+                        source_key: source_key.to_string(),
+                        origin: ValueOrigin::Derived {
+                            source_value: source.value,
+                        },
+                    }))
                 }
             }
         }
         DefaultSpec::FromRoot(root_key) => match root_resolver {
-            Some(resolve) => resolve(root_key),
+            Some(resolve) => Ok(resolve(root_key)?.map(|value| ResolvedValue {
+                value,
+                source_key: (*root_key).to_owned(),
+                origin: ValueOrigin::Root,
+            })),
             None => Err(ConfigError::NoRootConfig {
                 key: key.to_owned(),
                 root_key: (*root_key).to_owned(),
@@ -681,6 +812,264 @@ mod tests {
         let keys = vec!["not.a.match".into()];
 
         assert_eq!(resolve_env_key_or_timeout(raw, &keys), None);
+    }
+
+    #[test]
+    fn an_explicitly_set_value_is_its_own_source() {
+        let defaults = from_key_via_defaults(uppercased);
+        let dto = ViaDto {
+            source: Some("my-device".into()),
+            ..<_>::default()
+        };
+
+        assert_eq!(
+            config_resolve(&dto, "source", &defaults, None).unwrap(),
+            Some(ResolvedValue {
+                value: "my-device".into(),
+                source_key: "source".into(),
+                origin: ValueOrigin::Explicit,
+            })
+        );
+    }
+
+    #[test]
+    fn a_fixed_default_is_its_own_source() {
+        let defaults = DefaultsRegistry::new(vec![FieldDefault {
+            key: "source".into(),
+            spec: DefaultSpec::Value("fallback".into()),
+        }])
+        .unwrap();
+
+        assert_eq!(
+            config_resolve(&ViaDto::default(), "source", &defaults, None).unwrap(),
+            Some(ResolvedValue {
+                value: "fallback".into(),
+                source_key: "source".into(),
+                origin: ValueOrigin::SchemaDefault,
+            })
+        );
+    }
+
+    #[test]
+    fn a_fallback_reports_the_key_at_the_end_of_the_chain() {
+        let defaults = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "source".into(),
+                spec: DefaultSpec::Value("fallback".into()),
+            },
+            FieldDefault {
+                key: "derived".into(),
+                spec: DefaultSpec::FromOptionalKey("source".into()),
+            },
+        ])
+        .unwrap();
+
+        assert_eq!(
+            config_resolve(&ViaDto::default(), "derived", &defaults, None).unwrap(),
+            Some(ResolvedValue {
+                value: "fallback".into(),
+                source_key: "source".into(),
+                origin: ValueOrigin::SchemaDefault,
+            })
+        );
+    }
+
+    #[test]
+    fn a_derived_value_reports_the_source_key_and_the_value_it_was_derived_from() {
+        let defaults = from_key_via_defaults(uppercased);
+        let dto = ViaDto {
+            source: Some("my-device".into()),
+            ..<_>::default()
+        };
+
+        assert_eq!(
+            config_resolve(&dto, "derived", &defaults, None).unwrap(),
+            Some(ResolvedValue {
+                value: "MY-DEVICE".into(),
+                source_key: "source".into(),
+                origin: ValueOrigin::Derived {
+                    source_value: "my-device".into()
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn a_value_from_the_root_config_reports_the_root_key() {
+        let defaults = root_fallback_defaults();
+        let resolve = |_: &str| Ok(Some("/root/cert.pem".into()));
+
+        assert_eq!(
+            config_resolve(
+                &RootFallbackDto::default(),
+                "cert",
+                &defaults,
+                Some(&resolve)
+            )
+            .unwrap(),
+            Some(ResolvedValue {
+                value: "/root/cert.pem".into(),
+                source_key: "device.cert_path".into(),
+                origin: ValueOrigin::Root,
+            })
+        );
+    }
+
+    #[test]
+    fn validate_source_keys_rejects_a_fallback_to_an_unknown_key() {
+        let defaults = DefaultsRegistry::new(vec![FieldDefault {
+            key: "derived".into(),
+            spec: DefaultSpec::FromOptionalKey("surce".into()),
+        }])
+        .unwrap();
+
+        let err = defaults
+            .validate_source_keys(&["source".to_owned(), "derived".to_owned()])
+            .unwrap_err();
+
+        assert_eq!(
+            err,
+            "The default for 'derived' falls back to 'surce', which is not a key in this schema"
+        );
+    }
+
+    #[test]
+    fn validate_source_keys_accepts_a_fallback_to_a_known_key() {
+        let defaults = from_key_via_defaults(uppercased);
+
+        assert_eq!(
+            defaults.validate_source_keys(&["source".to_owned(), "derived".to_owned()]),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn validate_source_keys_ignores_root_and_fixed_defaults() {
+        let defaults = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "cert".into(),
+                spec: DefaultSpec::FromRoot("device.cert_path"),
+            },
+            FieldDefault {
+                key: "port".into(),
+                spec: DefaultSpec::Value("1883".into()),
+            },
+        ])
+        .unwrap();
+
+        assert_eq!(defaults.validate_source_keys(&[]), Ok(()));
+    }
+
+    #[test]
+    fn a_key_defaulting_to_itself_is_a_cycle() {
+        let defaults = DefaultsRegistry::new(vec![FieldDefault {
+            key: "source".into(),
+            spec: DefaultSpec::FromOptionalKey("source".into()),
+        }])
+        .unwrap();
+
+        let err = config_resolve(&ViaDto::default(), "source", &defaults, None).unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "The default for 'source' is cyclic: source -> source"
+        );
+    }
+
+    #[test]
+    fn a_cycle_reached_through_a_lead_in_key_reports_only_the_cycle() {
+        // `derived` is not part of the cycle it walks into
+        let defaults = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "derived".into(),
+                spec: DefaultSpec::FromOptionalKey("source".into()),
+            },
+            FieldDefault {
+                key: "source".into(),
+                spec: DefaultSpec::FromOptionalKey("source".into()),
+            },
+        ])
+        .unwrap();
+
+        let err = config_resolve(&ViaDto::default(), "derived", &defaults, None).unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "The default for 'source' is cyclic: source -> source"
+        );
+    }
+
+    #[derive(Debug, Default, facet::Facet)]
+    struct ChainDto {
+        k0: Option<String>,
+        k1: Option<String>,
+        k2: Option<String>,
+        k3: Option<String>,
+        k4: Option<String>,
+        k5: Option<String>,
+        k6: Option<String>,
+        k7: Option<String>,
+        k8: Option<String>,
+        k9: Option<String>,
+        k10: Option<String>,
+        k11: Option<String>,
+    }
+
+    #[test]
+    fn a_long_fallback_chain_resolves_rather_than_being_taken_for_a_cycle() {
+        let defaults = chain_defaults(DefaultSpec::Value("end".into()));
+
+        assert_eq!(
+            config_get_with_defaults(&ChainDto::default(), "k0", &defaults, None).unwrap(),
+            Some("end".into())
+        );
+    }
+
+    #[test]
+    fn a_long_chain_closing_on_itself_reports_every_key_in_the_cycle() {
+        let defaults = chain_defaults(DefaultSpec::FromOptionalKey("k0".into()));
+
+        let err = config_resolve(&ChainDto::default(), "k0", &defaults, None).unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "The default for 'k0' is cyclic: k0 -> k1 -> k2 -> k3 -> ... (6 more) -> k10 -> k11 -> k0"
+        );
+    }
+
+    #[test]
+    fn a_required_fallback_cycle_is_rejected_when_the_registry_is_built() {
+        let registry = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "a".into(),
+                spec: DefaultSpec::FromKey("b".into()),
+            },
+            FieldDefault {
+                key: "b".into(),
+                spec: DefaultSpec::FromKey("a".into()),
+            },
+        ]);
+
+        assert_eq!(
+            registry.err(),
+            Some("The default for 'a' is cyclic: a -> b -> a".to_owned())
+        );
+    }
+
+    /// `k0` through `k11` each falling back to the next, with `k11` ending the
+    /// chain as `last`
+    fn chain_defaults(last: DefaultSpec) -> DefaultsRegistry {
+        let mut defaults: Vec<FieldDefault> = (0..11)
+            .map(|n| FieldDefault {
+                key: format!("k{n}").into(),
+                spec: DefaultSpec::FromOptionalKey(format!("k{}", n + 1).into()),
+            })
+            .collect();
+        defaults.push(FieldDefault {
+            key: "k11".into(),
+            spec: last,
+        });
+        DefaultsRegistry::new(defaults).unwrap()
     }
 
     fn root_fallback_defaults() -> DefaultsRegistry {

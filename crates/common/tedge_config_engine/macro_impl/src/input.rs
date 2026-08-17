@@ -12,6 +12,8 @@ use syn::Token;
 #[derive(Debug)]
 pub struct Configuration {
     pub name: syn::Ident,
+    /// Suppresses the generated `defaults_and_examples_are_valid` test
+    pub skip_generated_test: bool,
     pub groups: Punctuated<FieldOrGroup, Token![,]>,
 }
 
@@ -82,6 +84,16 @@ struct FieldAttributes {
     examples: Vec<String>,
 }
 
+/// Options declared on the config itself, before its name.
+#[derive(FromAttributes, Debug)]
+#[darling(attributes(tedge_config))]
+struct ConfigAttributes {
+    /// Suppresses the generated test, for schemas that are deliberately
+    /// invalid so the engine can test what a mis-specified default reports
+    #[darling(default)]
+    skip_generated_test: bool,
+}
+
 // Empty by design: `tedge_config` options only apply to fields.
 #[derive(FromAttributes, Debug)]
 #[darling(attributes(tedge_config))]
@@ -95,11 +107,17 @@ struct ExternalGroupAttributes {}
 
 impl Parse for Configuration {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let attrs = input.call(Attribute::parse_outer)?;
+        let options = parse_attributes::<ConfigAttributes>(&attrs)?;
         let name: syn::Ident = input.parse()?;
         let content;
         syn::braced!(content in input);
         let groups = content.parse_terminated(<_>::parse, Token![,])?;
-        Ok(Self { name, groups })
+        Ok(Self {
+            name,
+            skip_generated_test: options.skip_generated_test,
+            groups,
+        })
     }
 }
 
