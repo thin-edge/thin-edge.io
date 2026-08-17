@@ -3,11 +3,13 @@
 
 use tedge_config_engine::*;
 
+const DEFAULT_MQTT_PORT: u16 = 1883;
+
 tedge_config_engine_macro::define_config! {
     Derived {
         mqtt: {
             /// MQTT broker port
-            #[tedge_config(default(value = "1883"))]
+            #[tedge_config(default(variable = "DEFAULT_MQTT_PORT"))]
             port: u16,
 
             /// TLS port derived from the plain MQTT port

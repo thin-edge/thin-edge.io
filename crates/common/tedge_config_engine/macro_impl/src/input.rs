@@ -51,6 +51,7 @@ pub struct ConfigExternalGroup {
 #[derive(Debug, FromMeta)]
 pub enum FieldDefault {
     Value(String),
+    Variable(syn::Ident),
     Function(syn::Path),
     FromKey(String),
     FromOptionalKey(String),

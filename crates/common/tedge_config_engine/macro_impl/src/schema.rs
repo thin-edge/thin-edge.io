@@ -41,7 +41,10 @@ fn generate_defaults(model: &Model) -> TokenStream {
             let key = &f.key;
             let default = f.field.default.as_ref()?;
             let spec = match default {
+                // Values are string literals
                 FieldDefault::Value(v) => quote! { DefaultSpec::Value(#v.into()) },
+                // Variables are references to rust identifiers that we convert to values in the expansion
+                FieldDefault::Variable(v) => quote! { DefaultSpec::Value(#v.to_string()) },
                 FieldDefault::Function(func) => quote! { DefaultSpec::Function(#func) },
                 FieldDefault::FromKey(source) => quote! { DefaultSpec::FromKey(#source.into()) },
                 FieldDefault::FromOptionalKey(source) => {
