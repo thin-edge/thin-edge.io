@@ -112,32 +112,12 @@ mod cyclic {
         }
     }
 
-    fn manager() -> ConfigManager {
-        ConfigManager::from_schema::<CyclicConfig>(std::path::Path::new("/etc/tedge"))
-    }
-
     #[test]
-    fn cyclic_optional_defaults_report_the_keys_forming_the_cycle() {
-        let mgr = manager();
-        let dto = CyclicConfigDto::default();
-        let err = mgr.read(&dto, "cycle.a").unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "The default for 'cycle.a' is cyclic: cycle.a -> cycle.b -> cycle.a"
-        );
-    }
-
-    #[test]
-    fn building_a_reader_surfaces_a_cycle_instead_of_reading_as_unset() {
-        let mgr = manager();
-        let dto = CyclicConfigDto::default();
-        let err = mgr
-            .build_reader::<_, CyclicConfig>(&dto, None, "", None)
-            .unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "The default for 'cycle.a' is cyclic: cycle.a -> cycle.b -> cycle.a"
-        );
+    #[should_panic(
+        expected = "The default for 'cycle.a' is cyclic: cycle.a -> cycle.b -> cycle.a"
+    )]
+    fn cyclic_optional_defaults_are_rejected_at_startup() {
+        ConfigManager::from_schema::<CyclicConfig>(std::path::Path::new("/etc/tedge"));
     }
 }
 

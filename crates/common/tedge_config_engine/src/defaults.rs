@@ -228,16 +228,13 @@ impl DefaultsRegistry {
 
     fn validate(&self) -> Result<(), String> {
         for field in &self.defaults {
+            // A cycle never reaches a concrete value, whether the keys it is
+            // made of are required, optional or derived, so reject every kind
+            // when the schema is built rather than when a key is read.
+            if let Some(cycle) = self.find_cycle(&field.key) {
+                return Err(ConfigError::DefaultCycle { cycle }.to_string());
+            }
             if let DefaultSpec::FromKey(source_key) = &field.spec {
-                // A cycle is why the chain never reaches a concrete value, so
-                // report it rather than blaming the key it happens to stop at.
-                if let Some(cycle) = self.find_cycle(&field.key) {
-                    return Err(format!(
-                        "The default for '{}' is cyclic: {}",
-                        field.key,
-                        crate::reflect::format_cycle(&cycle)
-                    ));
-                }
                 if !self.is_resolvable(source_key) {
                     return Err(format!(
                         "FromKey default for '{}' references '{}', which has no default and may not be set",
@@ -400,9 +397,11 @@ fn config_resolve_inner<T: for<'a> Facet<'a>>(
     root_resolver: RootResolver<'_>,
     chain: &mut Vec<String>,
 ) -> Result<Option<ResolvedValue>, ConfigError> {
-    // Each rule falls back to at most one key, so the keys visited so far form
-    // a path: meeting one of them again is a cycle, and the path from that key
-    // onwards is the cycle itself.
+    // Building the registry rejects cyclic fallbacks, so this is a backstop
+    // against unbounded recursion rather than the primary check. Each rule
+    // falls back to at most one key, so the keys visited so far form a path:
+    // meeting one of them again is a cycle, and the path from that key onwards
+    // is the cycle itself.
     if let Some(start) = chain.iter().position(|visited| visited == key) {
         let mut cycle = chain[start..].to_vec();
         cycle.push(key.to_owned());
@@ -962,24 +961,21 @@ mod tests {
 
     #[test]
     fn a_key_defaulting_to_itself_is_a_cycle() {
-        let defaults = DefaultsRegistry::new(vec![FieldDefault {
+        let registry = DefaultsRegistry::new(vec![FieldDefault {
             key: "source".into(),
             spec: DefaultSpec::FromOptionalKey("source".into()),
-        }])
-        .unwrap();
-
-        let err = config_resolve(&ViaDto::default(), "source", &defaults, None).unwrap_err();
+        }]);
 
         assert_eq!(
-            err.to_string(),
-            "The default for 'source' is cyclic: source -> source"
+            registry.err(),
+            Some("The default for 'source' is cyclic: source -> source".to_owned())
         );
     }
 
     #[test]
     fn a_cycle_reached_through_a_lead_in_key_reports_only_the_cycle() {
         // `derived` is not part of the cycle it walks into
-        let defaults = DefaultsRegistry::new(vec![
+        let registry = DefaultsRegistry::new(vec![
             FieldDefault {
                 key: "derived".into(),
                 spec: DefaultSpec::FromOptionalKey("source".into()),
@@ -988,14 +984,11 @@ mod tests {
                 key: "source".into(),
                 spec: DefaultSpec::FromOptionalKey("source".into()),
             },
-        ])
-        .unwrap();
-
-        let err = config_resolve(&ViaDto::default(), "derived", &defaults, None).unwrap_err();
+        ]);
 
         assert_eq!(
-            err.to_string(),
-            "The default for 'source' is cyclic: source -> source"
+            registry.err(),
+            Some("The default for 'source' is cyclic: source -> source".to_owned())
         );
     }
 
@@ -1017,7 +1010,7 @@ mod tests {
 
     #[test]
     fn a_long_fallback_chain_resolves_rather_than_being_taken_for_a_cycle() {
-        let defaults = chain_defaults(DefaultSpec::Value("end".into()));
+        let defaults = chain_defaults(DefaultSpec::Value("end".into())).unwrap();
 
         assert_eq!(
             config_get_with_defaults(&ChainDto::default(), "k0", &defaults, None).unwrap(),
@@ -1027,13 +1020,11 @@ mod tests {
 
     #[test]
     fn a_long_chain_closing_on_itself_reports_every_key_in_the_cycle() {
-        let defaults = chain_defaults(DefaultSpec::FromOptionalKey("k0".into()));
-
-        let err = config_resolve(&ChainDto::default(), "k0", &defaults, None).unwrap_err();
+        let registry = chain_defaults(DefaultSpec::FromOptionalKey("k0".into()));
 
         assert_eq!(
-            err.to_string(),
-            "The default for 'k0' is cyclic: k0 -> k1 -> k2 -> k3 -> ... (6 more) -> k10 -> k11 -> k0"
+            registry.err(),
+            Some("The default for 'k0' is cyclic: k0 -> k1 -> k2 -> k3 -> ... (6 more) -> k10 -> k11 -> k0".to_owned())
         );
     }
 
@@ -1056,9 +1047,79 @@ mod tests {
         );
     }
 
+    #[test]
+    fn an_optional_fallback_cycle_is_rejected_when_the_registry_is_built() {
+        let registry = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "a".into(),
+                spec: DefaultSpec::FromOptionalKey("b".into()),
+            },
+            FieldDefault {
+                key: "b".into(),
+                spec: DefaultSpec::FromOptionalKey("a".into()),
+            },
+        ]);
+
+        assert_eq!(
+            registry.err(),
+            Some("The default for 'a' is cyclic: a -> b -> a".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_derivation_reading_a_key_derived_from_itself_is_rejected_when_the_registry_is_built() {
+        let registry = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "a".into(),
+                spec: DefaultSpec::FromKeyVia {
+                    key: "b".into(),
+                    function: uppercased,
+                },
+            },
+            FieldDefault {
+                key: "b".into(),
+                spec: DefaultSpec::FromKeyVia {
+                    key: "a".into(),
+                    function: uppercased,
+                },
+            },
+        ]);
+
+        assert_eq!(
+            registry.err(),
+            Some("The default for 'a' is cyclic: a -> b -> a".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_cycle_mixing_required_optional_and_derived_fallbacks_is_rejected() {
+        let registry = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "a".into(),
+                spec: DefaultSpec::FromKey("b".into()),
+            },
+            FieldDefault {
+                key: "b".into(),
+                spec: DefaultSpec::FromOptionalKey("c".into()),
+            },
+            FieldDefault {
+                key: "c".into(),
+                spec: DefaultSpec::FromKeyVia {
+                    key: "a".into(),
+                    function: uppercased,
+                },
+            },
+        ]);
+
+        assert_eq!(
+            registry.err(),
+            Some("The default for 'a' is cyclic: a -> b -> c -> a".to_owned())
+        );
+    }
+
     /// `k0` through `k11` each falling back to the next, with `k11` ending the
     /// chain as `last`
-    fn chain_defaults(last: DefaultSpec) -> DefaultsRegistry {
+    fn chain_defaults(last: DefaultSpec) -> Result<DefaultsRegistry, String> {
         let mut defaults: Vec<FieldDefault> = (0..11)
             .map(|n| FieldDefault {
                 key: format!("k{n}").into(),
@@ -1069,7 +1130,7 @@ mod tests {
             key: "k11".into(),
             spec: last,
         });
-        DefaultsRegistry::new(defaults).unwrap()
+        DefaultsRegistry::new(defaults)
     }
 
     fn root_fallback_defaults() -> DefaultsRegistry {
