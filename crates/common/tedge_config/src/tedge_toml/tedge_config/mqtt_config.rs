@@ -24,10 +24,10 @@ use mqtt_channel::read_password;
 use mqtt_channel::AuthenticationConfig;
 
 /// An MQTT authentication configuration for connecting to the remote cloud broker.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct MqttAuthConfigCloudBroker {
     pub ca_path: Utf8PathBuf,
-    pub client: Option<MqttAuthClientConfigCloudBroker>,
+    pub client: MqttAuthClientConfigCloudBroker,
 }
 
 /// MQTT TLS client authentication.
@@ -45,13 +45,10 @@ pub enum PrivateKeyType {
 
 impl MqttAuthConfigCloudBroker {
     pub fn to_rustls_client_config(self) -> anyhow::Result<rustls::ClientConfig> {
-        let Some(MqttAuthClientConfigCloudBroker {
+        let MqttAuthClientConfigCloudBroker {
             cert_file,
             private_key,
-        }) = self.client
-        else {
-            todo!("no client auth not supported yet");
-        };
+        } = self.client;
 
         let client_config = match private_key {
             PrivateKeyType::File(key_file) => {
@@ -188,7 +185,7 @@ impl TEdgeConfig {
 
         Ok(MqttAuthConfigCloudBroker {
             ca_path: cloud.root_cert_path().to_path_buf(),
-            client: Some(client_auth),
+            client: client_auth,
         })
     }
 

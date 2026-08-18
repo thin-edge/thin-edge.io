@@ -221,10 +221,10 @@ pub async fn build_cloud_mqtt_options(
             if tls_enabled {
                 let tls_config = MqttAuthConfigCloudBroker {
                     ca_path: ca_path.clone(),
-                    client: Some(MqttAuthClientConfigCloudBroker {
+                    client: MqttAuthClientConfigCloudBroker {
                         cert_file: cert_path.clone(),
                         private_key: PrivateKeyType::File(key_path.clone()),
-                    }),
+                    },
                 }
                 .to_rustls_client_config()
                 .context("Failed to create MQTT TLS config")?;
