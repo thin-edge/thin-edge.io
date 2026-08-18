@@ -433,12 +433,9 @@ fn config_resolve_inner<T: for<'a> Facet<'a>>(
         DefaultSpec::FromKey(source_key) => {
             let resolved =
                 config_resolve_inner(dto, source_key.as_ref(), defaults, root_resolver, chain)?;
-            match resolved {
-                Some(resolved) => Ok(Some(resolved)),
-                None => Err(ConfigError::ReflectError(format!(
-                    "'{key}' defaults to '{source_key}', but '{source_key}' is also not set"
-                ))),
-            }
+            Ok(Some(resolved.unwrap_or_else(|| {
+                panic!("'{key}' defaults to '{source_key}', but '{source_key}' is also not set")
+            })))
         }
         DefaultSpec::FromOptionalKey(source_key) => {
             config_resolve_inner(dto, source_key.as_ref(), defaults, root_resolver, chain)

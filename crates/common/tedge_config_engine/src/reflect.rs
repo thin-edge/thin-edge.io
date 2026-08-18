@@ -58,8 +58,6 @@ pub enum ConfigError {
     FromRootInRootConfig { key: String, root_key: String },
     #[error("A config source is already mounted at prefix '{0}'")]
     DuplicatePrefix(String),
-    #[error("Reflection error: {0}")]
-    ReflectError(String),
     #[error("I/O error: {0}")]
     IoError(String),
 }
@@ -156,9 +154,9 @@ pub fn config_add<T: for<'a> Facet<'a>>(
 ) -> Result<(), ConfigError> {
     validate_key(T::SHAPE, key)?;
     let current = config_get(dto, key)?;
-    let vtable = registry.get_for_key(T::SHAPE, key).ok_or_else(|| {
-        ConfigError::ReflectError(format!("No AppendRemoveItem registered for field '{key}'"))
-    })?;
+    let vtable = registry
+        .get_for_key(T::SHAPE, key)
+        .unwrap_or_else(|| panic!("No AppendRemoveItem registered for field '{key}'"));
     let result = (vtable.append_str)(current.as_deref(), value)?;
     match result {
         Some(v) => config_set(dto, key, &v),
@@ -175,9 +173,9 @@ pub fn config_remove<T: for<'a> Facet<'a>>(
 ) -> Result<(), ConfigError> {
     validate_key(T::SHAPE, key)?;
     let current = config_get(dto, key)?;
-    let vtable = registry.get_for_key(T::SHAPE, key).ok_or_else(|| {
-        ConfigError::ReflectError(format!("No AppendRemoveItem registered for field '{key}'"))
-    })?;
+    let vtable = registry
+        .get_for_key(T::SHAPE, key)
+        .unwrap_or_else(|| panic!("No AppendRemoveItem registered for field '{key}'"));
     let result = (vtable.remove_str)(current.as_deref(), value)?;
     match result {
         Some(v) => config_set(dto, key, &v),
@@ -335,8 +333,10 @@ pub(crate) fn dotted_key(prefix: &str, name: &str) -> String {
     }
 }
 
-fn reflect_err(e: facet_reflect::ReflectError) -> ConfigError {
-    ConfigError::ReflectError(format!("{e}"))
+fn expect_reflect<T>(result: Result<T, facet_reflect::ReflectError>) -> T {
+    result.unwrap_or_else(|e| {
+        panic!("facet reflection failed on a shape the config engine already validated: {e}")
+    })
 }
 
 fn peek_dotted_key(peek: Peek<'_, '_>, key: &str) -> Result<Option<String>, ConfigError> {
@@ -408,29 +408,26 @@ fn parse_to_value(
     shape: &'static Shape,
     value: &str,
 ) -> Result<HeapValue<'static, false>, ConfigError> {
-    alloc_shape(shape)?
-        .parse_from_str(value)
-        // The value is parsed on its own, so the reflection path is always the
-        // root of that value and adds nothing to the message
-        .map_err(|e| ConfigError::ParseError(format!("{}", e.kind)))?
-        .build()
-        .map_err(reflect_err)
+    Ok(expect_reflect(
+        alloc_shape(shape)
+            .parse_from_str(value)
+            // The value is parsed on its own, so the reflection path is always the
+            // root of that value and adds nothing to the message
+            .map_err(|e| ConfigError::ParseError(format!("{}", e.kind)))?
+            .build(),
+    ))
 }
 
 /// Builds an all-unset group so a nested key has somewhere to live.
-fn default_group(shape: &'static Shape) -> Result<HeapValue<'static, false>, ConfigError> {
-    alloc_shape(shape)?
-        .set_default()
-        .map_err(reflect_err)?
-        .build()
-        .map_err(reflect_err)
+fn default_group(shape: &'static Shape) -> HeapValue<'static, false> {
+    expect_reflect(expect_reflect(alloc_shape(shape).set_default()).build())
 }
 
-fn alloc_shape(shape: &'static Shape) -> Result<Partial<'static, false>, ConfigError> {
+fn alloc_shape(shape: &'static Shape) -> Partial<'static, false> {
     // SAFETY: `shape` is reached by walking the shape tree of a `Facet` type,
     // so it describes a real type
-    unsafe { Partial::alloc_shape_owned(shape) }.map_err(|e| {
-        ConfigError::ReflectError(format!("allocating a value of type '{shape}': {e}"))
+    unsafe { Partial::alloc_shape_owned(shape) }.unwrap_or_else(|e| {
+        panic!("allocating a value of type '{shape}': {e}")
     })
 }
 
@@ -467,7 +464,7 @@ fn poke_path(
     let field_shape = fields[index].shape();
 
     let mut poke_struct = poke.into_struct().map_err(|_| not_a_struct())?;
-    let field_poke = poke_struct.field(index).map_err(reflect_err)?;
+    let field_poke = expect_reflect(poke_struct.field(index));
 
     if rest.is_empty() {
         return apply_action_to_field(field_poke, field_shape, action);
@@ -475,10 +472,10 @@ fn poke_path(
 
     match field_shape.def {
         Def::Option(_) => {
-            let mut option = field_poke.into_option().map_err(reflect_err)?;
+            let mut option = expect_reflect(field_poke.into_option());
             if option.is_none() {
-                let group = default_group(option.def().t())?;
-                option.set_some_from_heap(group).map_err(reflect_err)?;
+                let group = default_group(option.def().t());
+                expect_reflect(option.set_some_from_heap(group));
             }
             let inner = option
                 .value_mut()
@@ -495,17 +492,17 @@ fn apply_action_to_field(
     field_shape: &'static Shape,
     action: FieldAction,
 ) -> Result<(), ConfigError> {
-    // Generated DTOs wrap every leaf in an `Option` so an unset key is
-    // distinguishable from one set to its default value
-    if !matches!(field_shape.def, Def::Option(_)) {
-        return Err(ConfigError::ReflectError(format!(
-            "Cannot edit a non-Option field of type '{field_shape}'"
-        )));
-    }
+    assert!(
+        matches!(field_shape.def, Def::Option(_)),
+        "Generated DTOs wrap every leaf in Option, but found non-Option field of type '{field_shape}'"
+    );
 
-    let mut option = field_poke.into_option().map_err(reflect_err)?;
+    let mut option = expect_reflect(field_poke.into_option());
     match action {
-        FieldAction::Set(value) => option.set_some_from_heap(value).map_err(reflect_err),
+        FieldAction::Set(value) => {
+            expect_reflect(option.set_some_from_heap(value));
+            Ok(())
+        }
         FieldAction::Unset => {
             option.set_none();
             Ok(())

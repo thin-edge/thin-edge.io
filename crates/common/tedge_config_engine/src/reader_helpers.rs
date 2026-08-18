@@ -23,11 +23,8 @@ pub fn read_required<T: FromStr>(
 where
     T::Err: std::fmt::Display,
 {
-    let resolved = config_resolve(dto, key, defaults, root_resolver)?.ok_or_else(|| {
-        ConfigError::ReflectError(format!(
-            "Required config key '{key}' is not set and has no default"
-        ))
-    })?;
+    let resolved = config_resolve(dto, key, defaults, root_resolver)?
+        .unwrap_or_else(|| panic!("Required config key '{key}' is not set and has no default"));
     parse_resolved(key, resolved)
 }
 
