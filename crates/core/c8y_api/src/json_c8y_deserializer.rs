@@ -40,6 +40,7 @@ pub enum C8yDeviceControlOperation {
     DownloadConfigFile(C8yDownloadConfigFile),
     Firmware(C8yFirmware),
     DeviceProfile(C8yDeviceProfile),
+    ServiceCommand(C8yServiceCommand),
     Custom,
 }
 
@@ -69,6 +70,10 @@ impl C8yDeviceControlOperation {
             C8yDeviceControlOperation::Firmware(C8yFirmware::from_json_value(value.clone())?)
         } else if let Some(value) = hashmap.get("c8y_DeviceProfile") {
             C8yDeviceControlOperation::DeviceProfile(C8yDeviceProfile::from_json_value(
+                value.clone(),
+            )?)
+        } else if let Some(value) = hashmap.get("c8y_ServiceCommand") {
+            C8yDeviceControlOperation::ServiceCommand(C8yServiceCommand::from_json_value(
                 value.clone(),
             )?)
         } else {
@@ -163,6 +168,35 @@ impl C8yOperation {
 /// ```
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct C8yRestart {}
+
+/// Representation of c8y_ServiceCommand JSON object
+///
+/// Cumulocity addresses this operation to a service, not to a device.
+///
+/// ```rust
+/// use c8y_api::json_c8y_deserializer::C8yServiceCommand;
+///
+/// // Example input from c8y
+/// let data = r#"{
+///     "command": "RESTART",
+///     "serviceName": "collectd",
+///     "serviceType": "container"
+/// }"#;
+///
+/// // Parse the data
+/// let req: C8yServiceCommand = serde_json::from_str(data).unwrap();
+///
+/// assert_eq!(req.command, "RESTART");
+/// assert_eq!(req.service_name, "collectd");
+/// assert_eq!(req.service_type, "container");
+/// ```
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct C8yServiceCommand {
+    pub command: String,
+    pub service_name: String,
+    pub service_type: String,
+}
 
 /// Representation of c8y_SoftwareUpdate JSON object
 ///
@@ -573,6 +607,8 @@ impl C8yDeviceControlOperationHelper for C8yDownloadConfigFile {}
 impl C8yDeviceControlOperationHelper for C8yFirmware {}
 
 impl C8yDeviceControlOperationHelper for C8yDeviceProfile {}
+
+impl C8yDeviceControlOperationHelper for C8yServiceCommand {}
 
 #[derive(thiserror::Error, Debug)]
 pub enum C8yJsonOverMqttDeserializerError {

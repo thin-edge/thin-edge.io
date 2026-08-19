@@ -1381,6 +1381,10 @@ define_tedge_config! {
         #[tedge_config(example = "unix")]
         #[tedge_config(default(variable = "TimeFormat::Unix"))]
         timestamp_format: TimeFormat,
+
+        /// The directories where the service plugins are stored.
+        #[tedge_config(example = "/usr/share/tedge/service-plugins,/usr/local/share/tedge/service-plugins", default(value = "/usr/share/tedge/service-plugins"))]
+        plugin_paths: TemplatesSet,
     },
 
     apt: {
@@ -1864,13 +1868,23 @@ impl TEdgeConfigReaderHttp {
     /// Builds the URLs at which the File Transfer Service HTTP server exposes files,
     /// as seen by a client connecting to `http.client.host:http.client.port`.
     pub fn file_transfer_urls(&self) -> FileTransferUrls {
-        let authority: Arc<str> = format!("{}:{}", self.client.host, self.client.port).into();
+        let (authority, protocol) = self.client_authority();
+        FileTransferUrls::new(authority, protocol)
+    }
+
+    pub fn entities_url(&self) -> Arc<str> {
+        let (authority, protocol) = self.client_authority();
+        format!("{}://{authority}/te/v1/entities", protocol.as_str()).into()
+    }
+
+    fn client_authority(&self) -> (Arc<str>, Protocol) {
+        let authority = format!("{}:{}", self.client.host, self.client.port).into();
         let protocol = if self.is_secure() {
             Protocol::Https
         } else {
             Protocol::Http
         };
-        FileTransferUrls::new(authority, protocol)
+        (authority, protocol)
     }
 }
 

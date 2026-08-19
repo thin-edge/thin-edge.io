@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use az_mapper_ext::AzureConverter;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::service_command::ServiceDeployment;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::mapper_config::AzMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
@@ -42,6 +43,7 @@ impl TEdgeComponent for AzureMapper {
         &self,
         tedge_config: TEdgeConfig,
         config_dir: &TedgePaths,
+        deployment: ServiceDeployment,
     ) -> Result<Runtime, anyhow::Error> {
         let az_config = tedge_config.mapper_config::<AzMapperSpecificConfig>(&self.profile)?;
         let prefix = &az_config.bridge.topic_prefix;
@@ -52,7 +54,7 @@ impl TEdgeComponent for AzureMapper {
             self.profile.as_ref(),
         )?;
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(&az_mapper_name, &tedge_config, exposed_config).await?;
+            start_basic_actors(&az_mapper_name, &tedge_config, exposed_config, deployment).await?;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
 
         if tedge_config.mqtt.bridge.built_in {

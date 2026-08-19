@@ -20,6 +20,7 @@ use std::fmt;
 use std::str::FromStr;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::EntityTopicId;
+use tedge_api::service_command::ServiceDeployment;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init_reloadable_for_services;
 use tedge_config::tedge_toml::ProfileName;
@@ -340,7 +341,7 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
             let mapper = mapper.clone();
             async move {
                 let config = TEdgeConfig::load(&config_dir).await?;
-                build(mapper, config).await
+                build(mapper, config, ServiceDeployment::OwnUnit).await
             }
             .boxed()
         });
@@ -352,12 +353,16 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
 /// Rebuildable factory the single-process supervisor calls (on each restart) for a
 /// mapper unit. Resolves the named component and assembles it via
 /// `TEdgeComponent::build` — no lock, no signal handling, no run-to-completion.
-pub async fn build(name: MapperName, config: TEdgeConfig) -> anyhow::Result<Runtime> {
+pub async fn build(
+    name: MapperName,
+    config: TEdgeConfig,
+    deployment: ServiceDeployment,
+) -> anyhow::Result<Runtime> {
     let component = lookup_component(name)?;
     let config_root = config.config_root();
     let mappers_dir = config_root.dir("mappers")?;
     core::mappers_dir::warn_misconfigured_mapper_dirs(mappers_dir.path()).await;
-    component.build(config, &config_root).await
+    component.build(config, &config_root, deployment).await
 }
 
 /// Acquires a mapper's single-instance lock, if locking is enabled.

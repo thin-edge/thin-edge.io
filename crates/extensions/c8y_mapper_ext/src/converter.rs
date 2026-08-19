@@ -12,6 +12,7 @@ use crate::error::MessageConversionError;
 use crate::mea::events::EventConverter;
 use crate::operations;
 use crate::operations::OperationHandler;
+use crate::service_command::ServiceCommands;
 use crate::supported_operations::operation::get_child_ops;
 use crate::supported_operations::operation::Operation;
 use crate::supported_operations::operation::ResultFormat;
@@ -179,6 +180,9 @@ pub struct CumulocityConverter {
 
     pub supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
+
+    // Keep the service actions declared by the services of this device and its children
+    pub(crate) service_commands: ServiceCommands,
 }
 
 impl CumulocityConverter {
@@ -260,6 +264,7 @@ impl CumulocityConverter {
             recently_completed_commands: HashMap::new(),
             active_commands_last_cleared: Instant::now(),
             operation_handler,
+            service_commands: ServiceCommands::default(),
         })
     }
 
@@ -282,6 +287,7 @@ impl CumulocityConverter {
         if message.payload().is_empty() {
             // Clear cached entity
             self.entity_cache.delete(&topic_id);
+            self.service_commands.forget(&topic_id);
             return Ok(UpdateOutcome::Deleted);
         }
 
@@ -583,6 +589,9 @@ impl CumulocityConverter {
                     warn!("Received a c8y_DeviceProfile operation, however, device_profile feature is disabled");
                     vec![]
                 }
+            }
+            C8yDeviceControlOperation::ServiceCommand(request) => {
+                self.convert_service_command_request(device_xid, cmd_id, &operation_id, request)
             }
             C8yDeviceControlOperation::Custom => {
                 return self
@@ -1130,6 +1139,13 @@ impl CumulocityConverter {
             }
 
             Channel::CommandMetadata { operation } => {
+                // Service commands are considered as actions of the service
+                if entity_type == EntityType::Service {
+                    return self
+                        .convert_service_command_metadata(&source, operation, message)
+                        .await;
+                }
+
                 // https://github.com/thin-edge/thin-edge.io/issues/2739
                 if message.payload().is_empty() {
                     warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing capabilities is not currently supported");
@@ -1175,6 +1191,7 @@ impl CumulocityConverter {
                 let entity = operations::EntityTarget {
                     topic_id: entity.topic_id().clone(),
                     external_id: entity.external_id.clone(),
+                    entity_type: entity.r#type(),
                     smartrest_publish_topic: self
                         .smartrest_publish_topic_for_entity(entity.topic_id())?,
                 };
@@ -3072,8 +3089,18 @@ pub(crate) mod tests {
         );
         let operation_msg = MqttMessage::new(&operation_topic, "{}");
 
+        // Command metadata messages for services are considered service commands
         let msgs = converter.convert(&operation_msg).await;
-        assert_messages_matching(&msgs, [("c8y/s/us/service0", "114,c8y_Operation".into())]);
+        assert_messages_matching(
+            &msgs,
+            [
+                ("c8y/s/us/service0", "114,c8y_ServiceCommand".into()),
+                (
+                    "c8y/inventory/managedObjects/update/service0",
+                    json!({"c8y_SupportedServiceCommands": ["MY_OPERATION"]}).into(),
+                ),
+            ],
+        );
     }
 
     fn registered_entities_into_mqtt_messages(

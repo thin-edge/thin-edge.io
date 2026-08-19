@@ -255,10 +255,18 @@ impl<T> WithContext for Result<T, String> {
     }
 }
 
+/// The marker opening the JSON excerpt of a script output
+pub const BEGIN_TEDGE_MARKER: &str = ":::begin-tedge:::";
+
+/// The marker closing the JSON excerpt of a script output
+pub const END_TEDGE_MARKER: &str = ":::end-tedge:::";
+
 /// Extract script output from stdout between :::begin-tedge::: and :::end-tedge::: markers
 pub fn extract_script_output(stdout: String) -> Option<String> {
-    if let Some((_, script_output_and_more)) = stdout.split_once(":::begin-tedge:::\n") {
-        if let Some((script_output, _)) = script_output_and_more.split_once("\n:::end-tedge:::") {
+    let begin = format!("{BEGIN_TEDGE_MARKER}\n");
+    let end = format!("\n{END_TEDGE_MARKER}");
+    if let Some((_, script_output_and_more)) = stdout.split_once(&begin) {
+        if let Some((script_output, _)) = script_output_and_more.split_once(&end) {
             return Some(script_output.to_string());
         }
     }

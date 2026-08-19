@@ -4,6 +4,7 @@ use anyhow::Context;
 use futures::FutureExt;
 use std::collections::HashSet;
 use tedge_agent::AgentOpt;
+use tedge_api::service_command::ServiceDeployment;
 use tedge_config::cli::CommonArgs;
 use tedge_config::log_init_reloadable_for_services;
 use tedge_config::TEdgeConfig;
@@ -63,7 +64,7 @@ pub async fn run(opt: RunAllOpt) -> anyhow::Result<()> {
             let agent_opt = agent_opt.clone();
             async move {
                 let config = TEdgeConfig::load(&config_dir).await?;
-                tedge_agent::build(agent_opt, config).await
+                tedge_agent::build(agent_opt, config, ServiceDeployment::Hosted).await
             }
             .boxed()
         });
@@ -86,7 +87,7 @@ pub async fn run(opt: RunAllOpt) -> anyhow::Result<()> {
             let mapper = mapper.clone();
             async move {
                 let config = TEdgeConfig::load(&config_dir).await?;
-                tedge_mapper::build(mapper, config).await
+                tedge_mapper::build(mapper, config, ServiceDeployment::Hosted).await
             }
             .boxed()
         });

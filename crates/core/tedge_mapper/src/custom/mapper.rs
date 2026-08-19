@@ -21,6 +21,7 @@ use camino::Utf8Path;
 use tedge_actors::MessageSink;
 use tedge_actors::Runtime;
 use tedge_api::mqtt_topics::MqttSchema;
+use tedge_api::service_command::ServiceDeployment;
 use tedge_api::service_health_topic;
 use tedge_config::tedge_toml::MqttAuthClientConfigCloudBroker;
 use tedge_config::tedge_toml::MqttAuthConfigCloudBroker;
@@ -326,6 +327,7 @@ impl TEdgeComponent for CustomMapper {
         &self,
         tedge_config: TEdgeConfig,
         config_dir: &TedgePaths,
+        deployment: ServiceDeployment,
     ) -> anyhow::Result<Runtime> {
         let mapper_dir = self.mapper_dir(config_dir);
         let service_name = self.service_name();
@@ -333,7 +335,7 @@ impl TEdgeComponent for CustomMapper {
         let startup = validate_and_load(mapper_dir.path(), config_dir.root()).await?;
 
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(&service_name, &tedge_config, Vec::new()).await?;
+            start_basic_actors(&service_name, &tedge_config, Vec::new(), deployment).await?;
 
         if let MapperStartup::WithBridge { ref config, .. } = startup {
             let bridge_dir = mapper_dir.dir("bridge")?;

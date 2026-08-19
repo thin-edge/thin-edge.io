@@ -1,0 +1,25 @@
+operation = "freeze"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "execute"
+
+[execute]
+script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type ${.payload.serviceType}"
+timeout_second = 180
+on_exit.0 = "successful"
+on_exit.1 = { status = "failed", reason = "The action failed, see the operation log for the reason" }
+on_exit.2 = { status = "failed", reason = "This action is not supported for that type of service" }
+on_exit.3-255 = { status = "failed", reason = "The action failed, see the operation log for the reason" }
+on_kill = { status = "failed", reason = "The action did not complete in time and was cancelled" }
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

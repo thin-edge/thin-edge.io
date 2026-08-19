@@ -5,6 +5,8 @@ use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::mqtt_topics::ServiceTopicId;
+use tedge_api::service_command::service_actions;
+use tedge_api::service_command::ServiceDeployment;
 use tedge_config::TEdgeConfig;
 use tedge_config_ext::ConfigPublisherBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
@@ -14,6 +16,7 @@ pub async fn start_basic_actors(
     mapper_name: &str,
     config: &TEdgeConfig,
     exposed_config: Vec<(String, Option<serde_json::Value>)>,
+    deployment: ServiceDeployment,
 ) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
     let mut runtime = Runtime::new();
 
@@ -41,7 +44,8 @@ pub async fn start_basic_actors(
         &mut mqtt_actor,
         &mqtt_schema,
         &config.service,
-    );
+    )
+    .with_actions(service_actions(mapper_name, deployment));
 
     let config_publisher = ConfigPublisherBuilder::new(
         mqtt_schema,
