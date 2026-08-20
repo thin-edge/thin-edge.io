@@ -71,6 +71,7 @@ use cryptoki::context::CInitializeArgs;
 use cryptoki::context::CInitializeFlags;
 use cryptoki::context::Pkcs11;
 use cryptoki::error::Error;
+use cryptoki::error::RvError;
 use cryptoki::mechanism::Mechanism;
 use cryptoki::object::Attribute;
 use cryptoki::object::AttributeType;
@@ -251,7 +252,6 @@ impl TedgeP11Service for Cryptoki {
             uri: request.uri,
             pin: request.pin,
         };
-        // Private key objects are only visible after a login, which open_session_ro performs.
         let session = self.open_session_ro(&params)?;
 
         let mut keys = Vec::new();
@@ -371,6 +371,18 @@ impl TedgeP11Service for Cryptoki {
                 );
             }
         };
+
+        // A token that doesn't require a login has no user PIN to change. Without this check the
+        // command would fail in C_Login with an error that says nothing about the actual problem.
+        let token_info = context
+            .get_token_info(slot)
+            .context("Failed to read token info")?;
+        anyhow::ensure!(
+            token_info.login_required(),
+            "The token '{}' does not use a PIN (it doesn't set CKF_LOGIN_REQUIRED), so there is no \
+             user PIN to change.",
+            token_info.label()
+        );
 
         // NOTE: changing a PIN mutates the token, so a read-write session is required.
         let session = context
@@ -496,8 +508,13 @@ impl TedgeP11Service for Cryptoki {
         let so_pin = request.so_pin.unwrap_or_else(|| user_pin.clone());
 
         let tokens = self.snapshot_tokens()?;
-        // A token that is initialized and has a user PIN is ready to use as-is.
-        let is_usable = |i: &TokenInfo| i.token_initialized() && i.user_pin_initialized();
+        // A token that is initialized and has a user PIN is ready to use as-is. A token that
+        // doesn't require a login has no user PIN to set, so CKF_USER_PIN_INITIALIZED stays unset
+        // even though the token is ready; treat it as usable too, otherwise a working token (e.g.
+        // a provisioned ATECC608) looks like it still needs initializing.
+        let is_usable = |i: &TokenInfo| {
+            i.token_initialized() && (i.user_pin_initialized() || !i.login_required())
+        };
 
         // The URI selects the slot to initialize. Only the attributes of the request URI are used,
         // not those of the configured `cryptoki.uri`: the latter points at the token tedge signs
@@ -875,19 +892,31 @@ impl Cryptoki {
             CryptokiSessionType::ReadWrite => context.open_rw_session(slot)?,
         };
 
-        let pin = uri_attributes
-            .pin_value
-            .as_ref()
-            .or(params.pin.as_ref())
-            .cloned()
-            .as_ref()
-            .unwrap_or(&self.config.pin)
-            .to_owned();
-        let pin = AuthPin::from(pin);
+        // A token that doesn't set CKF_LOGIN_REQUIRED gives access to its objects without a login,
+        // e.g. hardware that gates access by other means than a PIN. Logging in to such a token is
+        // not just redundant, it breaks it: the module rejects the login (CKR_USER_TYPE_INVALID with
+        // the p11-kit trust module, CKR_USER_PIN_NOT_INITIALIZED with others) and every operation
+        // fails. So only log in when the token asks for it, and ignore the configured PIN otherwise.
+        if token_info.login_required() {
+            let pin = uri_attributes
+                .pin_value
+                .as_ref()
+                .or(params.pin.as_ref())
+                .cloned()
+                .as_ref()
+                .unwrap_or(&self.config.pin)
+                .to_owned();
+            let pin = AuthPin::from(pin);
 
-        session.login(UserType::User, Some(&pin))?;
+            session.login(UserType::User, Some(&pin))?;
+        } else {
+            debug!(
+                "Token doesn't require a login (CKF_LOGIN_REQUIRED is not set), skipping C_Login"
+            );
+        }
+
         let session_info = session.get_session_info()?;
-        debug!(?session_info, "Opened a readonly session");
+        debug!(?session_info, "Opened a session");
 
         let session = CryptokiSession {
             session,
@@ -1175,7 +1204,7 @@ impl CryptokiSession<'_> {
 
     /// Create a new keypair on the token.
     fn create_key(&self, params: CreateKeyParams) -> anyhow::Result<ObjectHandle> {
-        let (mechanism, attrs_pub, attrs_priv) = match params.key {
+        let (mechanism, attrs_pub) = match params.key {
             KeyTypeParams::Rsa { bits } => {
                 anyhow::ensure!(
                     bits == 2048 || bits == 3072 || bits == 4096,
@@ -1187,7 +1216,6 @@ impl CryptokiSession<'_> {
                         // u64 or u32 depending on the platform
                         std::os::raw::c_ulong::from(bits).into(),
                     )],
-                    vec![],
                 )
             }
             KeyTypeParams::Ec { curve } => {
@@ -1207,7 +1235,6 @@ impl CryptokiSession<'_> {
                 (
                     Mechanism::EccKeyPairGen,
                     vec![Attribute::EcParams(curve_oid)],
-                    vec![],
                 )
             }
         };
@@ -1230,8 +1257,7 @@ impl CryptokiSession<'_> {
             Attribute::Id(id.to_vec()),
         ]);
 
-        let mut priv_key_template = attrs_priv;
-        priv_key_template.extend_from_slice(&[
+        let mut priv_key_template = vec![
             Attribute::Token(true),
             Attribute::Private(true),
             Attribute::Sensitive(true),
@@ -1240,13 +1266,41 @@ impl CryptokiSession<'_> {
             Attribute::Decrypt(true),
             Attribute::Label(params.label.clone().into()),
             Attribute::Id(id.to_vec()),
-        ]);
+        ];
 
         trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
-        let (pub_handle, _priv_handle) = self
-            .session
-            .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
-            .context("Failed to generate keypair")?;
+        let result =
+            self.session
+                .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template);
+
+        // PKCS #11 puts the curve in the public key template and leaves CKA_CLASS implied, but
+        // Microchip's cryptoauthlib reads both from the private key template and rejects the
+        // request when they are missing. Which dialect a module speaks cannot be queried (and both
+        // SoftHSM2 and tpm2-pkcs11 reject a private key template carrying CKA_EC_PARAMS, so
+        // cryptoauthlib's cannot be the default), which leaves the module's own answer as the only
+        // reliable signal: when the standard template is rejected, extend it with the attributes
+        // cryptoauthlib wants and try again. A rejected template creates nothing, so the retry is
+        // safe.
+        let result = match result {
+            Err(Error::Pkcs11(RvError::TemplateInconsistent, _)) => {
+                debug!("Keypair template was rejected, retrying with the cryptoauthlib attributes");
+                priv_key_template.push(Attribute::Class(ObjectClass::PRIVATE_KEY));
+                // Copy the curve from the public key template, where the spec puts it (for RSA
+                // there is none and nothing is copied).
+                priv_key_template.extend(
+                    pub_key_template
+                        .iter()
+                        .find(|attr| matches!(attr, Attribute::EcParams(_)))
+                        .cloned(),
+                );
+                trace!(?pub_key_template, ?priv_key_template, "Generating keypair");
+                self.session
+                    .generate_key_pair(&mechanism, &pub_key_template, &priv_key_template)
+            }
+            result => result,
+        };
+
+        let (pub_handle, _priv_handle) = result.context("Failed to generate keypair")?;
 
         Ok(pub_handle)
     }

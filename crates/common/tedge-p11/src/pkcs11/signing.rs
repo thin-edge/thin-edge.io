@@ -18,6 +18,10 @@ use rustls::SignatureAlgorithm;
 use rustls::SignatureScheme;
 use serde::Deserialize;
 use serde::Serialize;
+use sha2::Digest as _;
+use sha2::Sha256;
+use sha2::Sha384;
+use sha2::Sha512;
 use tracing::debug;
 use tracing::trace;
 use tracing::warn;
@@ -40,10 +44,17 @@ impl Pkcs11Signer {
 
         let sigscheme = sigscheme.unwrap_or(self.sigscheme);
         let mechanism = sigscheme.into();
-        let (mechanism, digest_mechanism) = match mechanism {
-            Mechanism::EcdsaSha256 => (Mechanism::Ecdsa, Some(Mechanism::Sha256)),
-            Mechanism::EcdsaSha384 => (Mechanism::Ecdsa, Some(Mechanism::Sha384)),
-            Mechanism::EcdsaSha512 => (Mechanism::Ecdsa, Some(Mechanism::Sha512)),
+
+        // CKM_ECDSA signs a digest that the caller provides, so the message has to be hashed
+        // first. That is done here rather than on the token: hashing involves no key material, so
+        // the token has nothing to add, and modules exposing a single hardware key (e.g. the
+        // Raspberry Pi firmware OTP key) commonly leave C_DigestInit as a stub that returns
+        // CKR_FUNCTION_NOT_SUPPORTED. The RSA mechanisms below hash on the token as part of
+        // signing, so they take the message as-is.
+        let (mechanism, digest) = match mechanism {
+            Mechanism::EcdsaSha256 => (Mechanism::Ecdsa, Some(Sha256::digest(message).to_vec())),
+            Mechanism::EcdsaSha384 => (Mechanism::Ecdsa, Some(Sha384::digest(message).to_vec())),
+            Mechanism::EcdsaSha512 => (Mechanism::Ecdsa, Some(Sha512::digest(message).to_vec())),
             Mechanism::Sha256RsaPkcs => (Mechanism::Sha256RsaPkcs, None),
             Mechanism::Sha384RsaPkcs => (Mechanism::Sha384RsaPkcs, None),
             Mechanism::Sha512RsaPkcs => (Mechanism::Sha512RsaPkcs, None),
@@ -52,23 +63,13 @@ impl Pkcs11Signer {
             Mechanism::Sha512RsaPkcsPss(p) => (Mechanism::Sha512RsaPkcsPss(p), None),
             _ => {
                 warn!(?mechanism, "Unsupported mechanism, trying it out anyway.");
-                (Mechanism::Ecdsa, Some(Mechanism::Sha256))
+                (Mechanism::Ecdsa, Some(Sha256::digest(message).to_vec()))
             }
         };
 
-        let direct_sign = digest_mechanism.is_none();
+        let to_sign = digest.as_deref().unwrap_or(message);
 
-        trace!(input_message = %String::from_utf8_lossy(message), len=message.len(), ?mechanism, direct_sign);
-
-        let digest;
-        let to_sign = if direct_sign {
-            message
-        } else {
-            digest = session
-                .digest(&digest_mechanism.unwrap(), message)
-                .context("pkcs11: Failed to digest message")?;
-            &digest
-        };
+        trace!(input_message = %String::from_utf8_lossy(message), len=message.len(), ?mechanism, hashed = digest.is_some());
 
         trace!(?mechanism, "Session::sign");
         let signature_raw = session

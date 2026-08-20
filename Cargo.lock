@@ -5098,6 +5098,7 @@ dependencies = [
  "rsa",
  "rustls",
  "serde",
+ "sha2",
  "tempfile",
  "tokio",
  "tracing",
