@@ -1,5 +1,3 @@
-//! The service command naming rules shared by the c8y mapper and `tedge service`.
-
 pub const DEFAULT_SERVICE_TYPE: &str = "service";
 
 /// Tells whether a name can be used as a service command action.
