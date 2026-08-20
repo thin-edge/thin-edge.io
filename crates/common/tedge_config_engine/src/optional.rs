@@ -1,8 +1,6 @@
 use facet::Facet;
 use std::ops::Deref;
 
-pub(crate) const OPTIONAL_CONFIG_TYPE_TAG: &str = "optional_config";
-
 /// The value of an optional configuration (i.e. one without a default value)
 #[derive(Debug, Clone, PartialEq, Eq, Facet)]
 #[repr(u8)]
@@ -34,7 +32,7 @@ impl std::fmt::Display for ConfigNotSet {
         match &self.profile {
             Some(profile) => write!(
                 f,
-                "A value for '{key}' is missing (profile '{profile}').\n    \
+                "A value for '{key}' (profile '{profile}') is missing.\n    \
                  A value can be set with `tedge config set --profile {profile} {key} <value>`",
                 key = self.key
             ),
@@ -246,7 +244,7 @@ mod tests {
         let err = config.or_config_not_set().unwrap_err();
         assert_eq!(
             err.to_string(),
-            "A value for 'c8y.url' is missing (profile 'staging').\n    \
+            "A value for 'c8y.url' (profile 'staging') is missing.\n    \
              A value can be set with `tedge config set --profile staging c8y.url <value>`"
         );
     }

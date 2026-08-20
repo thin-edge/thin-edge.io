@@ -277,7 +277,7 @@ mod tests {
         let generated = generate(&input);
         let expected = position_of(src, "Mapper");
         let positions = ident_positions(&generated, "MapperConfig");
-        assert!(positions.len() >= 1);
+        assert!(!positions.is_empty());
         assert!(positions.iter().all(|p| *p == expected));
     }
 
@@ -323,7 +323,7 @@ mod tests {
         let generated = generate(&input);
         let expected = position_of(src, "MapperDeviceConfig");
         let positions = ident_positions(&generated, "MapperDeviceConfig");
-        assert!(positions.len() >= 1);
+        assert!(!positions.is_empty());
         assert!(positions.iter().all(|p| *p == expected));
     }
 

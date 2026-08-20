@@ -297,10 +297,6 @@ pub(crate) fn is_config_group(shape: &'static Shape) -> bool {
     shape.type_tag == Some("config_group")
 }
 
-pub(crate) fn is_optional_config(shape: &'static Shape) -> bool {
-    shape.type_tag == Some(crate::optional::OPTIONAL_CONFIG_TYPE_TAG)
-}
-
 pub(crate) fn get_struct_fields(shape: &'static Shape) -> Option<&'static [facet::Field]> {
     match shape.ty {
         Type::User(UserType::Struct(s)) => Some(s.fields),
@@ -426,9 +422,8 @@ fn default_group(shape: &'static Shape) -> HeapValue<'static, false> {
 fn alloc_shape(shape: &'static Shape) -> Partial<'static, false> {
     // SAFETY: `shape` is reached by walking the shape tree of a `Facet` type,
     // so it describes a real type
-    unsafe { Partial::alloc_shape_owned(shape) }.unwrap_or_else(|e| {
-        panic!("allocating a value of type '{shape}': {e}")
-    })
+    unsafe { Partial::alloc_shape_owned(shape) }
+        .unwrap_or_else(|e| panic!("allocating a value of type '{shape}': {e}"))
 }
 
 /// Applies `action` at the dotted `key`, editing `dto` in place.
