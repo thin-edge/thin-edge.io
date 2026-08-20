@@ -30,4 +30,23 @@ pub enum SystemServiceError {
         cmd: String,
         path: Utf8PathBuf,
     },
+
+    #[error(
+        "Action '{action}' is not supported by the '{manager}' init system.\n\
+    Defined actions: {defined}.\n\
+    Add a template for '{action}' to the [init] table of '{path}' to support it."
+    )]
+    UnsupportedAction {
+        action: String,
+        manager: String,
+        defined: String,
+        path: Utf8PathBuf,
+    },
+
+    #[error(
+        "'{action}' is not a service action: the [init] table uses that key to describe the init \
+    system.\n\
+    Defined actions: {defined}."
+    )]
+    NotAnAction { action: String, defined: String },
 }

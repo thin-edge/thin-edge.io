@@ -1381,6 +1381,10 @@ define_tedge_config! {
         #[tedge_config(example = "unix")]
         #[tedge_config(default(variable = "TimeFormat::Unix"))]
         timestamp_format: TimeFormat,
+
+        /// The directories where the service plugins are stored.
+        #[tedge_config(example = "/usr/share/tedge/service-plugins,/usr/local/share/tedge/service-plugins", default(value = "/usr/share/tedge/service-plugins"))]
+        plugin_paths: TemplatesSet,
     },
 
     apt: {

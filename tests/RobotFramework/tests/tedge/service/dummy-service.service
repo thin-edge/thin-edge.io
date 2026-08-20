@@ -1,0 +1,11 @@
+[Unit]
+Description=A service the tedge service tests can restart and reload
+
+[Service]
+Type=exec
+ExecStart=/bin/sleep infinity
+ExecReload=/bin/sh -c 'echo reloaded >> /tmp/dummy-service-reload.log'
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

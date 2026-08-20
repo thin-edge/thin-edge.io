@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(from = "InitConfigToml")]
@@ -11,10 +12,42 @@ pub struct InitConfig {
     pub enable: Vec<String>,
     pub disable: Vec<String>,
     pub is_active: Vec<String>,
+    pub custom_actions: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum ActionTemplate<'a> {
+    Template(&'a [String]),
+    NotAnAction,
+    Undefined,
+}
+
+impl InitConfig {
+    pub fn action(&self, action: &str) -> ActionTemplate<'_> {
+        match action {
+            "start" => ActionTemplate::Template(&self.start),
+            "stop" => ActionTemplate::Template(&self.stop),
+            "restart" => ActionTemplate::Template(&self.restart),
+            "enable" => ActionTemplate::Template(&self.enable),
+            "disable" => ActionTemplate::Template(&self.disable),
+            "is_active" => ActionTemplate::Template(&self.is_active),
+            "name" | "is_available" => ActionTemplate::NotAnAction,
+            other => match self.custom_actions.get(other) {
+                Some(template) => ActionTemplate::Template(template),
+                None => ActionTemplate::Undefined,
+            },
+        }
+    }
+
+    pub fn action_names(&self) -> Vec<&str> {
+        let mut names = vec!["disable", "enable", "is_active", "restart", "start", "stop"];
+        names.extend(self.custom_actions.keys().map(String::as_str));
+        names.sort_unstable();
+        names
+    }
 }
 
 #[derive(Deserialize, Debug, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
 struct InitConfigToml {
     name: String,
     is_available: Vec<String>,
@@ -24,6 +57,8 @@ struct InitConfigToml {
     enable: Vec<String>,
     disable: Vec<String>,
     is_active: Vec<String>,
+    #[serde(flatten)]
+    custom_actions: BTreeMap<String, Vec<String>>,
 }
 
 impl From<InitConfigToml> for InitConfig {
@@ -37,6 +72,7 @@ impl From<InitConfigToml> for InitConfig {
             enable: value.enable,
             disable: value.disable,
             is_active: value.is_active,
+            custom_actions: value.custom_actions,
         }
     }
 }
@@ -52,6 +88,93 @@ impl Default for InitConfig {
             enable: vec!["/bin/systemctl".into(), "enable".into(), "{}".into()],
             disable: vec!["/bin/systemctl".into(), "disable".into(), "{}".into()],
             is_active: vec!["/bin/systemctl".into(), "is-active".into(), "{}".into()],
+            custom_actions: BTreeMap::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    const PREDEFINED_KEYS: &str = r#"
+        name = "systemd"
+        is_available = ["/bin/systemctl", "--version"]
+        restart = ["/bin/systemctl", "restart", "{}"]
+        stop = ["/bin/systemctl", "stop", "{}"]
+        start = ["/bin/systemctl", "start", "{}"]
+        enable = ["/bin/systemctl", "enable", "{}"]
+        disable = ["/bin/systemctl", "disable", "{}"]
+        is_active = ["/bin/systemctl", "is-active", "{}"]
+    "#;
+
+    #[test]
+    fn predefined_keys_only_leaves_no_custom_action() {
+        let config = parse(PREDEFINED_KEYS);
+        assert!(config.custom_actions.is_empty());
+        assert_eq!(
+            config.action_names(),
+            ["disable", "enable", "is_active", "restart", "start", "stop"]
+        );
+    }
+
+    #[test]
+    fn an_unknown_key_becomes_a_custom_action() {
+        let input = format!(r#"{PREDEFINED_KEYS} reload = ["/bin/systemctl", "reload", "{{}}"]"#);
+        let config = parse(&input);
+
+        assert_eq!(
+            config.action("reload"),
+            ActionTemplate::Template(
+                ["/bin/systemctl", "reload", "{}"]
+                    .map(String::from)
+                    .as_slice()
+            )
+        );
+        assert_eq!(
+            config.action_names(),
+            [
+                "disable",
+                "enable",
+                "is_active",
+                "reload",
+                "restart",
+                "start",
+                "stop"
+            ]
+        );
+    }
+
+    #[test]
+    fn predefined_actions_are_looked_up_by_name() {
+        let config = parse(PREDEFINED_KEYS);
+        for action in ["start", "stop", "restart", "enable", "disable", "is_active"] {
+            assert!(
+                matches!(config.action(action), ActionTemplate::Template(_)),
+                "{action} should be an action"
+            );
+        }
+    }
+
+    #[test_case("name")]
+    #[test_case("is_available")]
+    fn a_key_describing_the_init_system_is_not_an_action(key: &str) {
+        assert_eq!(
+            parse(PREDEFINED_KEYS).action(key),
+            ActionTemplate::NotAnAction
+        );
+    }
+
+    #[test]
+    fn an_undefined_action_is_absent() {
+        assert_eq!(
+            parse(PREDEFINED_KEYS).action("reload"),
+            ActionTemplate::Undefined
+        );
+    }
+
+    fn parse(input: &str) -> InitConfig {
+        toml::from_str(input).unwrap()
     }
 }
