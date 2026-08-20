@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+ACTION="${1:-}"
+NAME="${2:-}"
+
+echo "$ACTION $NAME" >>/tmp/dummy-service-plugin.log
+
+case "$ACTION" in
+    restart | reload)
+        echo "dummy plugin: $ACTION $NAME"
+        ;;
+    *)
+        echo "dummy plugin: unsupported action '$ACTION'" >&2
+        exit 2
+        ;;
+esac
