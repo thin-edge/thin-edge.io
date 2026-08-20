@@ -61,10 +61,9 @@ For any other type, they are whatever the plugin implements.
 
 * For `tedge service <action> <name> --service-type <type>`,
   the runner executes `<plugin-dir>/<type> <action> <name>`.
-* The runner forwards the plugin's stdout and stderr to its own,
-  and uses the last non-empty line of stderr as the reason of a failure.
+* The runner forwards the plugin's stdout and stderr to its own.
 * The runner maps the plugin's exit code to its own:
-  `0` stays `0`, `2` stays `2`, any other non-zero code becomes a failure with that reason.
+  `0` stays `0`, `2` stays `2`, any other non-zero code is reported as a failure of that action.
 * A service type with no plugin file is reported as not supported, with exit code `2`.
 
 ### Exit codes
@@ -81,12 +80,6 @@ when the service type has no plugin file,
 and when the plugin itself exits `2`.
 When an action is rejected this way by the init system,
 the error message lists the actions `system.toml` does define.
-
-:::note
-Only the plugin path reports the reason of a failure.
-The init system backend runs its templates with their output discarded,
-so a failed `systemctl` gives no reason beyond its exit code.
-:::
 
 ### Validating the arguments
 
