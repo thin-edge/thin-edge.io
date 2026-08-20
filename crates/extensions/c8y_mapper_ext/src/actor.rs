@@ -2,7 +2,6 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::entity_cache::UpdateOutcome;
-use crate::service_monitor::is_c8y_bridge_established;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -58,7 +57,6 @@ pub struct C8yMapperActor {
     converter: CumulocityConverter,
     messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
     mqtt_publisher: LoggingSender<MqttMessage>,
-    bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
 }
 
@@ -69,19 +67,9 @@ impl Actor for C8yMapperActor {
     }
 
     async fn run(mut self) -> Result<(), RuntimeError> {
-        if !self.converter.config.bridge_in_mapper {
-            // Wait till the c8y bridge is established
-            while let Some(message) = self.bridge_status_messages.recv().await {
-                if is_c8y_bridge_established(
-                    &message,
-                    &self.converter.config.mqtt_schema,
-                    &self.converter.config.bridge_health_topic,
-                ) {
-                    break;
-                }
-            }
-        }
-
+        // Nothing published here reaches the cloud before the bridge can relay it: the mapper shares
+        // its connection to the broker with the other actors of this process, and that connection is
+        // not opened until then. See the bridge_readiness module.
         let init_messages = self.converter.init_messages();
         for init_message in init_messages.into_iter() {
             self.mqtt_publisher.send(init_message).await?;
@@ -106,14 +94,12 @@ impl C8yMapperActor {
         converter: CumulocityConverter,
         messages: SimpleMessageBox<C8yMapperInput, C8yMapperOutput>,
         mqtt_publisher: LoggingSender<MqttMessage>,
-        bridge_status_messages: SimpleMessageBox<MqttMessage, MqttMessage>,
         message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
     ) -> Self {
         Self {
             converter,
             messages,
             mqtt_publisher,
-            bridge_status_messages,
             message_handlers,
         }
     }
@@ -343,7 +329,6 @@ pub struct C8yMapperBuilder {
     http_client: ClientMessageBox<HttpRequest, HttpResult>,
     downloader: ClientMessageBox<IdDownloadRequest, IdDownloadResult>,
     uploader: ClientMessageBox<IdUploadRequest, IdUploadResult>,
-    bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     message_handlers: HashMap<ChannelFilter, Vec<LoggingSender<MqttMessage>>>,
     flow_context: Option<FlowContextHandle>,
 }
@@ -357,7 +342,6 @@ impl C8yMapperBuilder {
         uploader: &mut impl Service<IdUploadRequest, IdUploadResult>,
         downloader: &mut impl Service<IdDownloadRequest, IdDownloadResult>,
         fs_watcher: &mut impl MessageSource<FsWatchEvent, PathBuf>,
-        service_monitor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
     ) -> Result<Self, FileError> {
         let box_builder: SimpleMessageBoxBuilder<C8yMapperInput, C8yMapperOutput> =
             SimpleMessageBoxBuilder::new("CumulocityMapper", 16);
@@ -376,14 +360,6 @@ impl C8yMapperBuilder {
             &box_builder.get_sender(),
         );
 
-        let bridge_monitor_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
-            SimpleMessageBoxBuilder::new("ServiceMonitor", 1);
-
-        service_monitor.connect_sink(
-            config.bridge_health_topic.clone().into(),
-            &bridge_monitor_builder,
-        );
-
         let message_handlers = HashMap::new();
 
         Ok(Self {
@@ -394,7 +370,6 @@ impl C8yMapperBuilder {
             http_client,
             uploader,
             downloader,
-            bridge_monitor_builder,
             message_handlers,
             flow_context: None,
         })
@@ -453,13 +428,11 @@ impl Builder<C8yMapperActor> for C8yMapperBuilder {
         .map_err(|err| RuntimeError::ActorError(Box::new(err)))?;
 
         let message_box = self.box_builder.build();
-        let bridge_monitor_box = self.bridge_monitor_builder.build();
 
         Ok(C8yMapperActor::new(
             converter,
             message_box,
             mqtt_publisher,
-            bridge_monitor_box,
             self.message_handlers,
         ))
     }

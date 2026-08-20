@@ -9,6 +9,7 @@ use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
 use c8y_mapper_ext::availability::AvailabilityBuilder;
 use c8y_mapper_ext::availability::AvailabilityConfig;
+use c8y_mapper_ext::bridge_readiness::BridgeMonitorBuilder;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
 use mqtt_channel::Config;
@@ -97,6 +98,7 @@ impl TEdgeComponent for CumulocityMapper {
             self.profile.clone(),
         )?;
         let auth_method = auth_method(&c8y_config);
+        let mut bridge_subscribed = None;
         if tedge_config.mqtt.bridge.built_in {
             let (tc, cloud_config, reconnect_message_mapper) = mqtt_bridge_config(
                 &tedge_config,
@@ -107,20 +109,18 @@ impl TEdgeComponent for CumulocityMapper {
                 auth_method,
             )
             .await?;
-            runtime
-                .spawn(
-                    MqttBridgeActorBuilder::new(
-                        &tedge_config,
-                        &c8y_mapper_config.bridge_service_name,
-                        &c8y_mapper_config.bridge_health_topic,
-                        tc,
-                        cloud_config,
-                        Some(reconnect_message_mapper),
-                        c8y_config.mapper.mqtt.max_payload_size.0 as usize,
-                    )
-                    .await,
-                )
-                .await?;
+            let bridge_builder = MqttBridgeActorBuilder::new(
+                &tedge_config,
+                &c8y_mapper_config.bridge_service_name,
+                &c8y_mapper_config.bridge_health_topic,
+                tc,
+                cloud_config,
+                Some(reconnect_message_mapper),
+                c8y_config.mapper.mqtt.max_payload_size.0 as usize,
+            )
+            .await;
+            bridge_subscribed = Some(bridge_builder.local_subscriptions_ready());
+            runtime.spawn(bridge_builder).await?;
         } else if tedge_config.proxy.address.or_none().is_some() {
             warn!("`proxy.address` is configured without the built-in bridge enabled. The bridge MQTT connection to the cloud will {} communicate via the configured proxy.", "not".bold())
         }
@@ -149,6 +149,17 @@ impl TEdgeComponent for CumulocityMapper {
             &c8y_config,
         )?);
 
+        // Holds back the connection shared by the actors below until the bridge can relay what
+        // they publish to the cloud topics. See the bridge_readiness module.
+        let bridge_monitor = match bridge_subscribed {
+            Some(subscribed) => BridgeMonitorBuilder::built_in(subscribed, &mut mqtt_actor),
+            None => BridgeMonitorBuilder::in_broker(
+                &mut service_monitor_actor,
+                &c8y_mapper_config,
+                &mut mqtt_actor,
+            ),
+        };
+
         C8yMapperBuilder::init(&c8y_mapper_config).await?;
         let mut c8y_mapper_actor = C8yMapperBuilder::try_new(
             c8y_mapper_config,
@@ -157,7 +168,6 @@ impl TEdgeComponent for CumulocityMapper {
             &mut uploader_actor,
             &mut downloader_actor,
             &mut fs_watch_actor,
-            &mut service_monitor_actor,
         )?;
 
         let availability_actor = if c8y_config.cloud_specific.availability.enable {
@@ -181,6 +191,7 @@ impl TEdgeComponent for CumulocityMapper {
         flows_mapper.connect_cmd(&mut cmd_watcher_actor);
         c8y_mapper_actor.set_flow_context(flows_mapper.context_handle());
 
+        runtime.spawn(bridge_monitor).await?;
         runtime.spawn(flows_mapper).await?;
         runtime.spawn(cmd_watcher_actor).await?;
         runtime.spawn(mqtt_actor).await?;

@@ -22,7 +22,11 @@ mqtt_channel = { workspace = true }
 serde_json = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_utils = { workspace = true }
-tokio = { workspace = true, default_features = false, features = ["macros"] }
+tokio = { workspace = true, default_features = false, features = [
+    "macros",
+    "sync",
+    "time",
+] }
 tracing = { workspace = true }
 
 [dev-dependencies]

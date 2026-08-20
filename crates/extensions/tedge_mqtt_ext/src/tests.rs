@@ -7,6 +7,7 @@ use tedge_actors::Builder;
 use tedge_actors::NoConfig;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tokio::sync::watch;
 
 /// Prefixes a topic/session name with a module path and line number
 ///
@@ -549,6 +550,110 @@ async fn retrieve_retain_does_not_forward_last_will() {
         TryRecvError::Empty,
         "Last will should not be published by retrieve retain"
     );
+}
+
+/// A client publishing on topics nothing relays yet, or receiving messages it cannot act on, is
+/// better off waiting: what its peers publish meanwhile is held by their senders, and what the
+/// broker has for it stays queued in its session rather than being acknowledged and lost
+#[tokio::test]
+async fn the_connection_is_delayed_until_the_client_is_told_it_may_connect() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let topic = Topic::new_unchecked(uniquify!("published/by/the/client"));
+    let mut published = broker.messages_published_on(topic.name.as_str()).await;
+
+    let mut mqtt = MqttActorBuilder::new(
+        MqttConfig::default()
+            .with_port(broker.port)
+            .with_session_name(uniquify!("session")),
+    );
+    let (ready, connect_when) = watch::channel(false);
+    mqtt.connect_when(connect_when, Duration::from_secs(60));
+
+    let mut client: MqttClient = MqttClientBuilder::new("client", &TopicFilter::empty())
+        .with_connection(&mut mqtt)
+        .build();
+    tokio::spawn(mqtt_actor(mqtt));
+
+    // Both assertions allow the same window: nothing arriving within it only tells us the client
+    // is holding back if a message would have arrived within it once the client is released
+    const DELIVERY: Duration = Duration::from_secs(1);
+
+    client
+        .send(MqttMessage::new(&topic, "published while waiting"))
+        .await
+        .unwrap();
+    assert!(
+        tokio::time::timeout(DELIVERY, published.next())
+            .await
+            .is_err(),
+        "the client has not been told it may connect, so nothing reaches the broker yet"
+    );
+
+    ready.send_replace(true);
+
+    assert_eq!(
+        tokio::time::timeout(DELIVERY, published.next())
+            .await
+            .expect("the client connects once it is told it may"),
+        Some("published while waiting".to_string())
+    );
+}
+
+/// Whatever the client is waiting for may never come, and a client that never connects is worse
+/// than one connecting too early: nothing is lost by connecting, only relayed later than it should
+#[tokio::test]
+async fn the_connection_is_opened_anyway_once_the_wait_has_timed_out() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let topic = Topic::new_unchecked(uniquify!("published/by/the/client"));
+    let mut published = broker.messages_published_on(topic.name.as_str()).await;
+
+    let mut mqtt = MqttActorBuilder::new(
+        MqttConfig::default()
+            .with_port(broker.port)
+            .with_session_name(uniquify!("session")),
+    );
+    // Held for the whole test, as a dropped sender would end the wait of its own accord
+    let (_never_ready, connect_when) = watch::channel(false);
+    mqtt.connect_when(connect_when, Duration::from_millis(200));
+
+    let mut client: MqttClient = MqttClientBuilder::new("client", &TopicFilter::empty())
+        .with_connection(&mut mqtt)
+        .build();
+    tokio::spawn(mqtt_actor(mqtt));
+
+    client
+        .send(MqttMessage::new(&topic, "published while waiting"))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), published.next())
+            .await
+            .expect("the client gives up waiting and connects"),
+        Some("published while waiting".to_string())
+    );
+}
+
+/// Waiting to connect must not keep the process from stopping
+#[tokio::test]
+async fn a_client_shut_down_while_waiting_to_connect_stops_without_connecting() {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let mut mqtt = MqttActorBuilder::new(
+        MqttConfig::default()
+            .with_port(broker.port)
+            .with_session_name(uniquify!("session")),
+    );
+    let (_never_ready, connect_when) = watch::channel(false);
+    mqtt.connect_when(connect_when, Duration::from_secs(60));
+    let mut shutdown = mqtt.get_signal_sender();
+
+    let running = tokio::spawn(mqtt_actor(mqtt));
+    shutdown.send(RuntimeRequest::Shutdown).await.unwrap();
+
+    tokio::time::timeout(Duration::from_secs(5), running)
+        .await
+        .expect("the client stops rather than waiting for a signal that is never coming")
+        .unwrap();
 }
 
 async fn timeout<T>(fut: impl Future<Output = T>) -> T {
