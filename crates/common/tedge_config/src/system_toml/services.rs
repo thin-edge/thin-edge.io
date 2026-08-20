@@ -1,10 +1,6 @@
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-/// The `[init]` section of `system.toml`.
-///
-/// Every field except `name` and `is_available` is an action template: an argv list with a
-/// `{}` placeholder for the service name.
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 #[serde(from = "InitConfigToml")]
 pub struct InitConfig {
@@ -19,21 +15,30 @@ pub struct InitConfig {
     pub custom_actions: BTreeMap<String, Vec<String>>,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum ActionTemplate<'a> {
+    Template(&'a [String]),
+    NotAnAction,
+    Undefined,
+}
+
 impl InitConfig {
-    /// The argv template for a service action, or `None` if this init system has none.
-    pub fn action(&self, action: &str) -> Option<&[String]> {
+    pub fn action(&self, action: &str) -> ActionTemplate<'_> {
         match action {
-            "start" => Some(&self.start),
-            "stop" => Some(&self.stop),
-            "restart" => Some(&self.restart),
-            "enable" => Some(&self.enable),
-            "disable" => Some(&self.disable),
-            "is_active" => Some(&self.is_active),
-            other => self.custom_actions.get(other).map(Vec::as_slice),
+            "start" => ActionTemplate::Template(&self.start),
+            "stop" => ActionTemplate::Template(&self.stop),
+            "restart" => ActionTemplate::Template(&self.restart),
+            "enable" => ActionTemplate::Template(&self.enable),
+            "disable" => ActionTemplate::Template(&self.disable),
+            "is_active" => ActionTemplate::Template(&self.is_active),
+            "name" | "is_available" => ActionTemplate::NotAnAction,
+            other => match self.custom_actions.get(other) {
+                Some(template) => ActionTemplate::Template(template),
+                None => ActionTemplate::Undefined,
+            },
         }
     }
 
-    /// Every action this init system can run, sorted.
     pub fn action_names(&self) -> Vec<&str> {
         let mut names = vec!["disable", "enable", "is_active", "restart", "start", "stop"];
         names.extend(self.custom_actions.keys().map(String::as_str));
@@ -42,11 +47,6 @@ impl InitConfig {
     }
 }
 
-/// Deserialization proxy for [`InitConfig`].
-///
-/// This does not use `deny_unknown_fields`: an unknown key is a custom action template,
-/// collected by the flattened map. Serde does not combine `deny_unknown_fields` with
-/// `flatten`, so a misspelled known key is read as a custom action rather than rejected.
 #[derive(Deserialize, Debug, Eq, PartialEq)]
 struct InitConfigToml {
     name: String,
@@ -57,7 +57,6 @@ struct InitConfigToml {
     enable: Vec<String>,
     disable: Vec<String>,
     is_active: Vec<String>,
-
     #[serde(flatten)]
     custom_actions: BTreeMap<String, Vec<String>>,
 }
@@ -127,7 +126,7 @@ mod tests {
 
         assert_eq!(
             config.action("reload"),
-            Some(
+            ActionTemplate::Template(
                 ["/bin/systemctl", "reload", "{}"]
                     .map(String::from)
                     .as_slice()
@@ -152,7 +151,7 @@ mod tests {
         let config = parse(PREDEFINED_KEYS);
         for action in ["start", "stop", "restart", "enable", "disable", "is_active"] {
             assert!(
-                config.action(action).is_some(),
+                matches!(config.action(action), ActionTemplate::Template(_)),
                 "{action} should be an action"
             );
         }
@@ -161,12 +160,18 @@ mod tests {
     #[test_case("name")]
     #[test_case("is_available")]
     fn a_key_describing_the_init_system_is_not_an_action(key: &str) {
-        assert_eq!(parse(PREDEFINED_KEYS).action(key), None);
+        assert_eq!(
+            parse(PREDEFINED_KEYS).action(key),
+            ActionTemplate::NotAnAction
+        );
     }
 
     #[test]
     fn an_undefined_action_is_absent() {
-        assert_eq!(parse(PREDEFINED_KEYS).action("reload"), None);
+        assert_eq!(
+            parse(PREDEFINED_KEYS).action("reload"),
+            ActionTemplate::Undefined
+        );
     }
 
     fn parse(input: &str) -> InitConfig {

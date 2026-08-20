@@ -1,4 +1,4 @@
-use crate::failure_reason;
+use crate::ServiceCommandOutcome;
 use crate::ServiceCommandOutput;
 use crate::SystemService;
 use crate::SystemServiceError;
@@ -6,8 +6,8 @@ use crate::SystemServiceManager;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::fmt;
-use std::process::ExitStatus;
 use std::process::Stdio;
+use tedge_config::ActionTemplate;
 use tedge_config::InitConfig;
 use tedge_config::SystemConfig;
 use tedge_config::SystemTomlError;
@@ -61,11 +61,10 @@ impl SystemServiceManager for GeneralServiceManager {
         &self,
         action: &str,
         service: SystemService<'_>,
-    ) -> Result<ServiceCommandOutput, SystemServiceError> {
+    ) -> Result<ServiceCommandOutcome, SystemServiceError> {
         let exec_command = ServiceCommand::Action(action, service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())
-            .await?
-            .must_succeed()
+            .await
     }
 
     async fn is_service_running(
@@ -75,7 +74,7 @@ impl SystemServiceManager for GeneralServiceManager {
         let exec_command = ServiceCommand::Action("is_active", service).try_exec_command(self)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())
             .await
-            .map(|status| status.success())
+            .map(|outcome| outcome.success())
     }
 }
 
@@ -160,7 +159,6 @@ fn replace_with_service_name<'a>(
 #[derive(Debug, Copy, Clone)]
 enum ServiceCommand<'a> {
     CheckManager,
-    /// A named action, resolved from the `[init]` templates.
     Action(&'a str, SystemService<'a>),
 }
 
@@ -176,17 +174,24 @@ impl ServiceCommand<'_> {
             Self::CheckManager => {
                 ExecCommand::try_new(init_config.is_available.clone(), self, config_path)
             }
-            Self::Action(action, service) => {
-                let Some(template) = init_config.action(action) else {
-                    return Err(SystemServiceError::UnsupportedAction {
-                        action: action.to_string(),
-                        manager: init_config.name.clone(),
-                        defined: init_config.action_names().join(", "),
-                        path: config_path,
-                    });
-                };
-                ExecCommand::try_new_with_placeholder(template.to_vec(), self, config_path, service)
-            }
+            Self::Action(action, service) => match init_config.action(action) {
+                ActionTemplate::Template(template) => ExecCommand::try_new_with_placeholder(
+                    template.to_vec(),
+                    self,
+                    config_path,
+                    service,
+                ),
+                ActionTemplate::NotAnAction => Err(SystemServiceError::NotAnAction {
+                    action: action.to_string(),
+                    defined: init_config.action_names().join(", "),
+                }),
+                ActionTemplate::Undefined => Err(SystemServiceError::UnsupportedAction {
+                    action: action.to_string(),
+                    manager: init_config.name.clone(),
+                    defined: init_config.action_names().join(", "),
+                    path: config_path,
+                }),
+            },
         }
     }
 }
@@ -205,9 +210,9 @@ impl GeneralServiceManager {
         &self,
         exec_command: ExecCommand,
         config_path: &str,
-    ) -> Result<ServiceCommandExitStatus, SystemServiceError> {
+    ) -> Result<ServiceCommandOutcome, SystemServiceError> {
         match exec_command.to_command().output().await {
-            Ok(output) => Ok(ServiceCommandExitStatus {
+            Ok(output) => Ok(ServiceCommandOutcome {
                 status: output.status,
                 output: ServiceCommandOutput {
                     stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
@@ -220,36 +225,6 @@ impl GeneralServiceManager {
                 path: config_path.to_string(),
             }),
         }
-    }
-}
-
-#[derive(Debug)]
-struct ServiceCommandExitStatus {
-    status: ExitStatus,
-    output: ServiceCommandOutput,
-    service_command: String,
-}
-
-impl ServiceCommandExitStatus {
-    fn must_succeed(self) -> Result<ServiceCommandOutput, SystemServiceError> {
-        if self.status.success() {
-            Ok(self.output)
-        } else {
-            match self.status.code() {
-                Some(code) => Err(SystemServiceError::ServiceCommandFailedWithCode {
-                    service_command: self.service_command,
-                    code,
-                    reason: failure_reason(&self.output.stderr),
-                }),
-                None => Err(SystemServiceError::ServiceCommandFailedBySignal {
-                    service_command: self.service_command,
-                }),
-            }
-        }
-    }
-
-    fn success(self) -> bool {
-        self.status.success()
     }
 }
 
