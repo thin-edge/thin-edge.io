@@ -31,6 +31,7 @@ tedge_actors = { workspace = true, features = ["test-helpers"] }
 tedge_config = { workspace = true, features = ["test"] }
 tedge_http_ext = { workspace = true, features = ["test_helpers"] }
 tedge_test_utils = { workspace = true }
+test-case = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time", "test-util"] }
 

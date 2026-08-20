@@ -93,6 +93,16 @@ aws.device.key_pin  User PIN value for logging into the PKCS#11 token provided b
                     Examples: 123456, my-pin
 ```
 
+:::note
+Not every token is protected by a PIN.
+If a token reports that no login is required (the `CKF_LOGIN_REQUIRED` flag is not set),
+%%te%% uses it without logging in,
+and both `device.cryptoki.pin` and `device.key_pin` are ignored for that token.
+Such a token has no user PIN to manage either,
+so `tedge hsm change-pin` reports that there is nothing to change,
+and `tedge hsm init` treats an already initialized token as ready to use.
+:::
+
 ## Setup guide
 <!-- split the guide into a separate page under "Operate Devices" category? -->
 <!-- also would be nice to write a test for this guide -->
@@ -282,18 +292,89 @@ key may be wrong if there are multiple to choose from. Also if the URI contain a
 identify a key, but doesn't contain attributes that identify a token, still the first token will be
 selected, even if another token contains the intended key.
 
+## Token initialization
+
+Typically a token must be initialized before it can hold any keys. The `tedge hsm init` command runs
+the PKCS #11 initialization sequence, so the only thing you have to know about the device is the
+module path (`device.cryptoki.module_path`) that points to the PKCS #11 dynamic library.
+
+In most cases the command can be run without any arguments:
+
+```sh
+tedge hsm init
+```
+
+The command prints the resulting token URI to `stdout` (and human-readable status to `stderr`):
+
+```sh title="Output"
+pkcs11:model=SoftHSM%20v2;manufacturer=SoftHSM%20project;serial=a30ed1ca6244fc5f;token=tedge
+```
+
+:::note
+Other tools, such as `p11tool`, can also be used to initialize a token if
+required, for example when the token needs vendor specific initialization options.
+:::
+
+Without arguments, the following defaults are used:
+
+- the slot is selected automatically: an uninitialized token is initialized, or, if there is none, an
+  already usable token is reused. If there are several candidates to choose from, the command fails
+  rather than guessing, and the slot has to be selected explicitly
+- the token is labelled `tedge`
+- the **user PIN**, used by all subsequent operations, is the PIN configured for `tedge-p11-server`
+  (`device.cryptoki.pin`)
+- the **Security Officer (SO) PIN**, only needed to initialize the token, is the same as the user PIN,
+  which works for tokens that do not enforce distinct PINs (such as SoftHSM2)
+
+Each of these can be overridden if the token requires it. The slot to initialize is selected by
+passing a PKCS #11 URI, as printed by `tedge hsm list-tokens`. A token only gets a label and a serial
+once it is initialized, so an uninitialized slot is addressed by its model and slot id:
+
+```sh
+tedge hsm init --label my-token --pin 123456 --so-pin 654321 "pkcs11:model=SoftHSM%20v2;slot-id=1"
+```
+
+:::note
+Slot ids are assigned by the PKCS #11 module and can change, for instance when another token is
+initialized. Read the URI from `tedge hsm list-tokens` right before using it, rather than storing it.
+:::
+
+The command is idempotent: if a token with the requested label is already initialized, it is left
+untouched and its URI is returned, and duplicate labels are never created. A given URI must match a
+token though, otherwise the command fails. In particular, since slot ids can change once a token is
+initialized, re-running the same command with a stored slot URI fails once the URI has gone stale;
+re-runnable scripts should omit the URI and rely on the label, or read the URI from
+`tedge hsm list-tokens` each time.
+
+Because the URI is the only thing written to `stdout`, the command is easy to use in scripts:
+
+```sh
+TOKEN_URI=$(tedge hsm init --label my-token)
+tedge hsm create-key --type ecdsa "$TOKEN_URI"
+```
+
+:::note
+
+`tedge hsm create-key` also initializes a token automatically when no initialized token exists yet
+(see below), so on a fresh device with a single HSM you can go straight from setting the module path to
+creating a key in a single command.
+
+:::
+
 ## Key generation
 
-```sh command="tedge cert create-key-hsm --help" title="tedge cert create-key-hsm --help"
+```sh command="tedge hsm create-key --help" title="tedge hsm create-key --help"
 Generate a new keypair on the PKCS #11 token and select it to be used.
 
-Can be used to generate a keypair on the TOKEN. If TOKEN argument is not provided, the command prints the available tokens.
+Can be used to generate a keypair on the TOKEN. If the TOKEN argument is not provided, the command auto-discovers the token to use: if no initialized token exists yet, an uninitialized slot is initialized automatically; if exactly one initialized token exists, it is used; if several exist, the available tokens are printed so one can be selected.
 
-If TOKEN is provided, the command generates an RSA or an ECDSA keypair on the token. When using RSA, `--bits` is used to set the size of the key, when using ECDSA, `--curve` is used.
+The command generates an RSA or an ECDSA keypair on the token. When using RSA, `--bits` is used to set the size of the key, when using ECDSA, `--curve` is used.
 
-After the key is generated, tedge config is updated to use the new key using `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting for that cloud, e.g. `create-key-hsm c8y` will write to `c8y.device.key_uri`.
+The command is idempotent: if a key matching the given label (and id, if provided) already exists on the token, it is reused instead of creating a duplicate. Pass `--force-new` to always generate a new key.
 
-Usage: tedge cert create-key-hsm [OPTIONS] [TOKEN] [COMMAND]
+After the key is generated (or reused), tedge config is updated to use the key using the `device.key_uri` property. Depending on the selected cloud, we use `device.key_uri` setting for that cloud, e.g. `create-key c8y` will write to `c8y.device.key_uri`. However, if the setting already points to a different key that exists on the token, it is left unchanged so a working key selection is never silently replaced; the `tedge config set` command to switch to the new key is printed instead.
+
+Usage: tedge hsm create-key [OPTIONS] [TOKEN] [COMMAND]
 
 Commands:
   c8y   
@@ -305,7 +386,7 @@ Arguments:
   [TOKEN]
           The URI of the token where the keypair should be created.
           
-          If this argument is missing, a list of available initialized tokens will be shown. The token needs to be initialized to be able to generate keys.
+          If this argument is missing, the token is auto-discovered: an uninitialized token is initialized automatically, a single initialized token is used as-is, and if several exist the available tokens are listed so one can be selected.
 
 Options:
       --config-dir <CONFIG_DIR>
@@ -326,7 +407,7 @@ Options:
           
           If provided and no object exists on the token with the same ID, this will be the ID of the new keypair. If an object with this ID already exists, the operation will return an error. If not provided, a random ID will be generated and used by the keypair.
           
-          The id shall be provided as a sequence of hex digits without `0x` prefix, optionally separated by spaces, e.g. `--id 010203` or `--id "01 02 03"`.
+          The id shall be provided as hex digits without `0x` prefix, e.g. `--id 010203`. Byte separators as printed by other tools (e.g. `01:02:03`) are accepted as well.
 
       --log-level <LOG_LEVEL>
           Configures the logging level.
@@ -360,6 +441,21 @@ Options:
           
           Note that in contrast to the URI of the key, which will be written to tedge-config automatically when the keypair is created, PIN will not be written automatically and may be needed to written manually using tedge config set (if not using tedge-p11-server with the correct default PIN).
 
+      --so-pin <SO_PIN>
+          Security Officer (SO) PIN used if a token has to be initialized automatically.
+          
+          When no initialized token exists, an uninitialized slot is initialized automatically before the key is created. The SO PIN is required to initialize a token; if not provided, the user PIN is used as the SO PIN (which works for tokens that do not enforce distinct PINs, such as SoftHSM2).
+
+      --token-label <TOKEN_LABEL>
+          Label (CKA_LABEL) to assign to the token if one has to be initialized automatically
+          
+          [default: tedge]
+
+      --force-new
+          Always create a new key, even if one with the same label already exists.
+          
+          By default the command is idempotent: if a key matching the given label (and id, if provided) already exists on the token, it is reused instead of creating a duplicate. Pass this flag to force generating a new key regardless.
+
       --outfile-pubkey <OUTFILE_PUBKEY>
           Path where public key will be saved when a keypair is generated
 
@@ -367,14 +463,14 @@ Options:
           Print help (see a summary with '-h')
 ```
 
-`tedge cert create-key-hsm` command generates a new keypair on the PKCS #11 token.
+`tedge hsm create-key` command generates a new keypair on the PKCS #11 token.
 
 1. Configure cryptoki in `module` or `socket` mode as described in previous sections.
-2. Run the `tedge cert create-key-hsm` command. You'll need to provide key type, size and label of the
+2. Run the `tedge hsm create-key` command. You'll need to provide key type, size and label of the
    key object.
 
     ```sh
-    tedge cert create-key-hsm --type ecdsa --curve p256 --label my-key
+    tedge hsm create-key --type ecdsa --curve p256 --label my-key
     ```
 
     ```sh title="Output"
@@ -402,3 +498,20 @@ Options:
 
 Now you're free to use the new key to either request a signed certificate using a CSR or to create a
 self-signed certificate.
+
+:::note
+
+`tedge cert download c8y` creates a key automatically (as if running `tedge hsm create-key`,
+including initializing the token if needed) when the PKCS #11 token verifiably holds no private key
+yet, so a fresh device with a single HSM can be provisioned with just:
+
+```sh
+tedge cert download c8y --device-id "$DEVICE_ID" --one-time-password "$PASSWORD"
+```
+
+The automatic key creation stays predictable by only handling the unambiguous case: if the HSM
+can't be inspected (e.g. due to a wrong PIN), if the token holds keys but none matches the
+configured `key_uri`, or if several tokens are available, the command fails and lists the options
+instead of guessing.
+
+:::

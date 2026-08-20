@@ -26,6 +26,7 @@ use serde::Serialize;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 use std::collections::hash_map::Entry;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -105,6 +106,7 @@ impl EntityStore {
             parent: None,
             health_endpoint: None,
             twin_data: main_device.twin_data,
+            config: BTreeMap::new(),
         };
 
         let message_log = if clean_start {
@@ -153,6 +155,10 @@ impl EntityStore {
                     }
                     Channel::EntityTwinData { .. } => {
                         // Twin fragments are intentionally not restored from the entity store log.
+                    }
+                    Channel::Config => {
+                        // Config values are intentionally not restored from the entity store log;
+                        // they are re-ingested from the owning component's retained MQTT messages.
                     }
                     Channel::CommandMetadata { .. } => {
                         // Do nothing for now as supported operations are not part of the entity store
@@ -312,6 +318,7 @@ impl EntityStore {
             parent,
             health_endpoint: message.health_endpoint,
             twin_data: message.twin_data,
+            config: BTreeMap::new(),
         };
 
         match self.entities.insert(topic_id.clone(), entity_metadata) {
@@ -477,6 +484,52 @@ impl EntityStore {
         Ok(old)
     }
 
+    /// Returns a single exposed configuration value collected from an entity's own
+    /// retained `config` MQTT topic.
+    ///
+    /// An unknown entity is reported as an error, exactly as with [get_config](Self::get_config);
+    /// `Ok(None)` means the entity exists but the key was never set.
+    pub fn get_config_value(
+        &self,
+        topic_id: &EntityTopicId,
+        key: &str,
+    ) -> Result<Option<&JsonValue>, entity_store::Error> {
+        let entity = self.try_get(topic_id)?;
+        Ok(entity.config.get(key))
+    }
+
+    /// Returns every exposed configuration value collected from an entity's own
+    /// retained `config` MQTT topic.
+    pub fn get_config(
+        &self,
+        topic_id: &EntityTopicId,
+    ) -> Result<&BTreeMap<String, JsonValue>, entity_store::Error> {
+        let entity = self.try_get(topic_id)?;
+        Ok(&entity.config)
+    }
+
+    /// Replaces an entity's whole config document with the one received on its own
+    /// retained `config` MQTT topic.
+    ///
+    /// This is an ingestion primitive for ingesting the config published by the
+    /// owning entity, not an external write API.
+    pub fn set_config(
+        &mut self,
+        topic_id: &EntityTopicId,
+        config: BTreeMap<String, JsonValue>,
+    ) -> Result<(), entity_store::Error> {
+        if let Some(key) = config
+            .keys()
+            .find(|key| key.is_empty() || key.starts_with('@') || key.contains('/'))
+        {
+            return Err(Error::InvalidConfigKey(key.clone()));
+        }
+
+        let entity = self.try_get_mut(topic_id)?;
+        entity.config = config;
+        Ok(())
+    }
+
     pub fn cache_early_data_message(&mut self, message: MqttMessage) {
         self.pending_entity_store.cache_early_data_message(message)
     }
@@ -631,8 +684,11 @@ impl EntityTree {
 
                 let mut merged_other = existing_entity.twin_data.clone();
                 merged_other.extend(entity_metadata.twin_data.clone());
+                // Config values are never carried by a registration message; they only ever
+                // arrive via `set_config`, so they must be preserved as-is here.
                 let merged_entity = EntityMetadata {
                     twin_data: merged_other,
+                    config: existing_entity.config.clone(),
                     ..entity_metadata
                 };
 
@@ -833,6 +889,9 @@ pub enum Error {
 
     #[error("Invalid twin key: '{0}'. Keys that are empty, containing '/' or starting with '@' are not allowed")]
     InvalidTwinData(String),
+
+    #[error("Invalid config key: '{0}'. Keys that are empty, containing '/' or starting with '@' are not allowed")]
+    InvalidConfigKey(String),
 
     #[error("Entity: '{0}' can not be its own parent")]
     InvalidSelfParent(EntityTopicId),
@@ -1623,6 +1682,7 @@ mod tests {
             external_id: None,
             health_endpoint: None,
             twin_data: Map::new(),
+            config: BTreeMap::new(),
         };
         // Assert main device registered with custom topic scheme
         assert_eq!(
@@ -1650,6 +1710,7 @@ mod tests {
             external_id: None,
             health_endpoint: None,
             twin_data: Map::new(),
+            config: BTreeMap::new(),
         };
         // Assert service registered under main device with custom topic scheme
         assert_eq!(
@@ -1745,6 +1806,139 @@ mod tests {
 
         let entity_metadata = store.get(&topic_id).unwrap();
         assert!(entity_metadata.twin_data.get("foo").is_none());
+    }
+
+    #[test]
+    fn set_config_stores_the_whole_document_with_typed_values() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        let topic_id = EntityTopicId::default_main_device();
+
+        store
+            .set_config(
+                &topic_id,
+                [
+                    ("device.id".to_string(), json!("my-device")),
+                    ("mqtt.client.port".to_string(), json!(1883)),
+                ]
+                .into(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            store.get_config_value(&topic_id, "device.id").unwrap(),
+            Some(&json!("my-device"))
+        );
+        assert_eq!(
+            store.get_config(&topic_id).unwrap().get("device.id"),
+            Some(&json!("my-device"))
+        );
+        assert_eq!(
+            store
+                .get_config_value(&topic_id, "mqtt.client.port")
+                .unwrap(),
+            Some(&json!(1883)),
+            "a value keeps the type it was published with"
+        );
+    }
+
+    #[test]
+    fn set_config_replaces_the_previous_document() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        let topic_id = EntityTopicId::default_main_device();
+
+        store
+            .set_config(
+                &topic_id,
+                [
+                    ("device.id".to_string(), json!("my-device")),
+                    ("mqtt.client.port".to_string(), json!(1883)),
+                ]
+                .into(),
+            )
+            .unwrap();
+
+        store
+            .set_config(
+                &topic_id,
+                [("device.id".to_string(), json!("other-device"))].into(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            store.get_config_value(&topic_id, "device.id").unwrap(),
+            Some(&json!("other-device"))
+        );
+        assert_eq!(
+            store
+                .get_config_value(&topic_id, "mqtt.client.port")
+                .unwrap(),
+            None,
+            "a key absent from the new document is dropped, with no separate clearing step"
+        );
+    }
+
+    #[test]
+    fn set_config_with_an_empty_document_clears_all_values() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        let topic_id = EntityTopicId::default_main_device();
+
+        store
+            .set_config(
+                &topic_id,
+                [("device.id".to_string(), json!("my-device"))].into(),
+            )
+            .unwrap();
+
+        store.set_config(&topic_id, BTreeMap::new()).unwrap();
+
+        assert_eq!(
+            store.get_config_value(&topic_id, "device.id").unwrap(),
+            None
+        );
+        assert!(store.get_config(&topic_id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn config_rejects_invalid_keys() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        let topic_id = EntityTopicId::default_main_device();
+
+        assert!(matches!(
+            store.set_config(&topic_id, [("".to_string(), json!("x"))].into()),
+            Err(Error::InvalidConfigKey(_))
+        ));
+        assert!(matches!(
+            store.set_config(&topic_id, [("@type".to_string(), json!("x"))].into()),
+            Err(Error::InvalidConfigKey(_))
+        ));
+        assert!(matches!(
+            store.set_config(&topic_id, [("a/b".to_string(), json!("x"))].into()),
+            Err(Error::InvalidConfigKey(_))
+        ));
+    }
+
+    #[test]
+    fn config_value_unknown_entity_errors() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        let unknown = EntityTopicId::default_child_device("does-not-exist").unwrap();
+
+        assert!(matches!(
+            store.set_config(&unknown, [("device.id".to_string(), json!("x"))].into()),
+            Err(Error::UnknownEntity(_))
+        ));
+        assert!(matches!(
+            store.get_config(&unknown),
+            Err(Error::UnknownEntity(_))
+        ));
+        assert!(matches!(
+            store.get_config_value(&unknown, "device.id"),
+            Err(Error::UnknownEntity(_))
+        ));
     }
 
     #[test]
@@ -1879,6 +2073,41 @@ mod tests {
         let mut store = new_entity_store(&temp_dir, false);
         let affected_entities = store.update(reg_message).unwrap();
         assert!(affected_entities.is_empty());
+    }
+
+    #[test]
+    fn config_preserved_across_re_registration() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, false);
+        let entity_topic_id = EntityTopicId::default_child_device("child1").unwrap();
+        let reg_message = EntityRegistrationMessage {
+            topic_id: entity_topic_id.clone(),
+            r#type: EntityType::ChildDevice,
+            external_id: Some("child1".into()),
+            parent: None,
+            health_endpoint: None,
+            twin_data: Map::new(),
+        };
+
+        store.update(reg_message.clone()).unwrap();
+
+        store
+            .set_config(
+                &entity_topic_id,
+                [("device.id".to_string(), json!("my-device"))].into(),
+            )
+            .unwrap();
+
+        // Re-registering the entity must not wipe out config values ingested since,
+        // as registration messages have no way of carrying config values.
+        store.update(reg_message).unwrap();
+
+        assert_eq!(
+            store
+                .get_config_value(&entity_topic_id, "device.id")
+                .unwrap(),
+            Some(&json!("my-device"))
+        );
     }
 
     #[test]

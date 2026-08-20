@@ -3,8 +3,8 @@ set -e
 
 TOKEN_URL="${TOKEN_URL:-}"
 
-export GNUTLS_PIN="${GNUTLS_PIN:-123456}"
-export GNUTLS_SO_PIN="${GNUTLS_SO_PIN:-12345678}"
+export PIN="${PIN:-123456}"
+export SO_PIN="${SO_PIN:-12345678}"
 export TOKEN_LABEL="${TOKEN_LABEL:-tedge}"
 export TEDGE_CONFIG_DIR="${TEDGE_CONFIG_DIR:-/etc/tedge}"
 export PUBLIC_KEY="${PUBLIC_KEY:-${TEDGE_CONFIG_DIR}/device-certs/tedge.pub}"
@@ -56,18 +56,20 @@ of HSMs.
 
 ## TPM2
 
-$0 --type tpm2 --pin $GNUTLS_PIN --so-pin $GNUTLS_SO_PIN --token-url 'pkcs11:model=SLB9672%00%00%00%00%00%00%00%00%00;manufacturer=Infineon;serial=0000000000000000;token='
+$0 --type tpm2 --pin $PIN --so-pin $SO_PIN
 # Initialize a new slot and create a new private key pair in a TPM 2.0 module
+# (the uninitialized slot is auto-discovered)
 
 ## Nitrokey
 
-$0 --type nitrokey --pin $GNUTLS_PIN --so-pin $GNUTLS_SO_PIN --token-url 'pkcs11:model=PKCS%2315%20emulated;manufacturer=www.CardContact.de;serial=DENK0400089;token=SmartCard-HSM%20%28UserPIN%29'
-# Initialize a new slot and create a new private key pair using a nitrokey (USB based HSM)
+$0 --type nitrokey --pin $PIN --so-pin $SO_PIN
+# Set the user PIN on a pre-initialized nitrokey (USB based HSM) and create a new key pair.
+# The token is auto-selected; add --token-url '<uri>' to pick a specific token if several exist.
 
 
 ## SoftHSM2
 
-$0 --type softhsm2 --pin $GNUTLS_PIN --so-pin $GNUTLS_SO_PIN
+$0 --type softhsm2 --pin $PIN --so-pin $SO_PIN
 # Initialize a new slot and create a new private key pair using softhsm2 (for testing only)
 
 EOT
@@ -99,11 +101,11 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --pin)
-            GNUTLS_PIN="$2"
+            PIN="$2"
             shift
             ;;
         --so-pin)
-            GNUTLS_SO_PIN="$2"
+            SO_PIN="$2"
             shift
             ;;
         --key-type)
@@ -192,32 +194,43 @@ configure_tedge() {
     tedge config set mqtt.bridge.built_in true
     tedge config set device.cryptoki.mode socket
     tedge config set device.cryptoki.module_path "$PKCS11_MODULE"
-    tedge config set device.cryptoki.pin "$GNUTLS_PIN"
+    tedge config set device.cryptoki.pin "$PIN"
+}
+
+# (Re)start tedge-p11-server so it (re)loads the configured module and any HSM-specific
+# environment. It must be running before `tedge hsm init` / `tedge hsm create-key`, which
+# initialize the token and create the key through it via the PKCS#11 interface.
+restart_p11_server() {
+    if command -V systemctl >/dev/null 2>&1; then
+        systemctl restart tedge-p11-server.socket ||:
+    fi
+}
+
+# Set (reset) the token's user PIN using the Security Officer PIN through tedge-p11-server, i.e. an
+# SO login followed by C_InitPIN. This replaces `p11tool --initialize-pin` for tokens that ship
+# pre-initialized (e.g. Nitrokey/SmartCard-HSM). The token is auto-selected when it is the only
+# initialized one; $TOKEN_URL selects a specific token when several are present (change-pin lists
+# the available URIs if it cannot pick one).
+set_user_pin_via_so() {
+    if [ -n "$TOKEN_URL" ]; then
+        tedge hsm change-pin --reset --new-pin "$PIN" --so-pin "$SO_PIN" "$TOKEN_URL"
+    else
+        tedge hsm change-pin --reset --new-pin "$PIN" --so-pin "$SO_PIN"
+    fi
 }
 
 init_private_key() {
-    # set common arguments to ensure p11tool finds the correct module if there are multiple
-    P11_TOOL_ARGS=
-    PKCS11_MODULE=$(tedge config get device.cryptoki.module_path ||:)
-    if [ -n "$PKCS11_MODULE" ]; then
-        P11_TOOL_ARGS="--provider=$PKCS11_MODULE"
-    fi
-
-    # Target token URL
-    TEDGE_TOKEN_URL="pkcs11:token=$TOKEN_LABEL"
-
     case "$1" in
-        nitrokey)
-            if [ -z "$TOKEN_URL" ]; then
-                show_available_token_urls_then_exit
-            fi
-            # shellcheck disable=SC2086
-            p11tool $P11_TOOL_ARGS --initialize-pin "$TOKEN_URL"
+        softhsm2|softhsm)
+            # SoftHSM2 supports token initialization via the PKCS#11 interface (C_InitToken), so
+            # tedge-p11-server can initialize the token directly - no softhsm2-util needed. Allow the
+            # tedge user (which runs the server) to access the softhsm token store.
+            # Note: softhsm does not require a TOKEN_URL.
+            usermod -a -G softhsm tedge ||:
+            restart_p11_server
+            tedge hsm init --label "$TOKEN_LABEL" --pin "$PIN" --so-pin "$SO_PIN"
             ;;
         tpm2)
-            if [ -z "$TOKEN_URL" ]; then
-                show_available_token_urls_then_exit
-            fi
             usermod -a -G tss tedge ||:
 
             mkdir -p "$TPM2_PKCS11_STORE"
@@ -230,30 +243,28 @@ TPM2_PKCS11_STORE="$TPM2_PKCS11_STORE"
 EOT
             fi
 
-            # must be run as the tedge user
-            # shellcheck disable=SC2086
-            sudo -u tedge env TPM2_PKCS11_LOG_LEVEL=0 TPM2_PKCS11_STORE="$TPM2_PKCS11_STORE" GNUTLS_PIN="$GNUTLS_PIN" GNUTLS_SO_PIN="$GNUTLS_SO_PIN" p11tool $P11_TOOL_ARGS --initialize --label "$TOKEN_LABEL" "$TOKEN_URL"
-
-            # initialize the new slot's pin and so-pin
-            # shellcheck disable=SC2086
-            sudo -u tedge env TPM2_PKCS11_LOG_LEVEL=0 TPM2_PKCS11_STORE="$TPM2_PKCS11_STORE" GNUTLS_PIN="$GNUTLS_PIN" GNUTLS_SO_PIN="$GNUTLS_SO_PIN" p11tool $P11_TOOL_ARGS --initialize-pin "$TEDGE_TOKEN_URL"
+            # Restart so the server picks up TPM2_PKCS11_STORE, then let it initialize the token
+            # (C_InitToken + C_InitPIN) through the PKCS#11 interface. The uninitialized slot is
+            # auto-discovered, so a TOKEN_URL is not required.
+            restart_p11_server
+            tedge hsm init --label "$TOKEN_LABEL" --pin "$PIN" --so-pin "$SO_PIN"
             ;;
-        softhsm2|softhsm)
-            # Note: softhsm does not require a TOKEN_URL
-            usermod -a -G softhsm tedge ||:
-            sudo -u tedge softhsm2-util --init-token --free --label "$TOKEN_LABEL" --pin "$GNUTLS_PIN" --so-pin "$GNUTLS_SO_PIN"
+        nitrokey)
+            # Nitrokey (SmartCard-HSM) tokens ship pre-initialized, so the token itself does not
+            # need C_InitToken (which these tokens don't support anyway) - only the user PIN needs
+            # to be set. tedge-p11-server must be running first, since it performs the PIN change
+            # through the PKCS#11 interface.
+            restart_p11_server
+            set_user_pin_via_so
             ;;
         *)
-            echo "Warning: Unknown HSM type (name=$1). Trying to initialize using standard p11tool commands" >&2
-            # shellcheck disable=SC2086
-            sudo -u tedge GNUTLS_PIN="$GNUTLS_PIN" GNUTLS_SO_PIN="$GNUTLS_SO_PIN" p11tool $P11_TOOL_ARGS --initialize-pin "$TOKEN_URL"
+            # Unknown HSM type: assume the token ships pre-initialized (like a Nitrokey) and just
+            # set the user PIN via the Security Officer PIN through the PKCS#11 interface.
+            echo "Warning: Unknown HSM type (name=$1). Assuming a pre-initialized token and setting the user PIN via the Security Officer PIN." >&2
+            restart_p11_server
+            set_user_pin_via_so
             ;;
     esac
-
-    # Restart the existing tedge-p11-server instance so it can reload the new key (used later on)
-    if command -V systemctl >/dev/null 2>&1; then
-        systemctl restart tedge-p11-server.socket ||:
-    fi
 
     echo "Creating a private key" >&2
     TEDGE_TOKEN_URL="pkcs11:token=$TOKEN_LABEL"
@@ -276,25 +287,12 @@ EOT
     fi
 
     # shellcheck disable=SC2086
-    tedge cert create-key-hsm \
+    tedge hsm create-key \
         $CREATE_KEY_OPTIONS \
         --label "$TOKEN_LABEL" \
         --outfile-pubkey "$PUBLIC_KEY" \
         "$TEDGE_TOKEN_URL"
 }
-
-show_available_token_urls_then_exit() {
-    printf "You must provide the slot URL required for initialization. Available token urls:\n\n" >&2
-    AVAILABLE_TOKENS=$(TPM2_PKCS11_LOG_LEVEL=0 p11tool --list-token-urls 2>/dev/null ||:)
-    echo "$AVAILABLE_TOKENS"
-    echo "" >&2
-    FIRST_AVAILABLE_TOKEN=$(echo "$AVAILABLE_TOKENS" | head -n1)
-    echo "Example:" >&2
-    echo "  $0 --type $HSM_TYPE --token-url '$FIRST_AVAILABLE_TOKEN'" >&2
-    echo "" >&2
-    exit 1
-}
-
 
 #
 # Main

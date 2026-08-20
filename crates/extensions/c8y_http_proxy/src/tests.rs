@@ -8,13 +8,16 @@ use c8y_api::proxy_url::Protocol;
 use c8y_api::proxy_url::ProxyUrlGenerator;
 use http::StatusCode;
 use std::collections::HashMap;
+use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::Builder;
 use tedge_actors::MessageReceiver;
 use tedge_actors::Sender;
 use tedge_config::TEdgeConfig;
+use tedge_http_ext::backoff::ExponentialBackoff;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
 use tedge_http_ext::HttpActor;
+use tedge_http_ext::HttpError;
 use tedge_http_ext::HttpRequest;
 use tedge_http_ext::HttpRequestBuilder;
 use tedge_http_ext::HttpResult;
@@ -146,46 +149,50 @@ async fn get_internal_id_before_posting_software_list() {
 // Time is paused so the retry back-off intervals elapse instantly.
 #[tokio::test(start_paused = true)]
 async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
-    let c8y_host = "c8y.tenant.io";
-    let main_device_id = "device-001";
+    let external_id = "device-001";
     let child_device_id = "child-101";
 
-    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), main_device_id.into()).await;
-
-    // Mock server definition
-    tokio::spawn(async move {
-        // Always fail the internal id lookup for the child device
-        loop {
-            let get_internal_id_url = format!(
-                "http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{child_device_id}"
-            );
-            assert_recv(
-                &mut c8y,
-                Some(
-                    HttpRequestBuilder::get(&get_internal_id_url)
-                        .build()
-                        .unwrap(),
-                ),
-            )
-            .await;
-            let c8y_response = HttpResponseBuilder::new()
-                .status(StatusCode::NOT_FOUND)
-                .build()
-                .unwrap();
-            c8y.send(Ok(c8y_response)).await.unwrap();
-        }
-    });
-
-    // Fetch the software list so that it internally invokes get_internal_id
-    let res = proxy
-        .send_software_list_http(
-            C8yUpdateSoftwareListResponse::default(),
-            child_device_id.into(),
-        )
+    let mut server = mockito::Server::new_async().await;
+    let _mock = server
+        .mock("GET", "/c8y/identity/externalIds/c8y_Serial/child-101")
+        .with_status(StatusCode::NOT_FOUND.as_u16().into())
+        .expect_at_least(2)
+        .create_async()
         .await;
+
+    let target_url = "remote.c8y.com".to_string();
+    let server_url = server.host_with_port();
+    let (proxy_host, proxy_port) = server_url.split_once(':').unwrap();
+    let proxy = ProxyUrlGenerator::new(
+        proxy_host.into(),
+        proxy_port.parse().unwrap(),
+        Protocol::Http,
+    );
+
+    let tedge_config = TEdgeConfig::load_toml_str("");
+    let tls_config = tedge_config.http.client_tls_config().unwrap();
+    let mut http_actor = HttpActor::new(tls_config)
+        .with_backoff(test_backoff())
+        .builder();
+
+    let config = C8YHttpConfig {
+        c8y_http_host: target_url.clone(),
+        c8y_mqtt_host: target_url,
+        device_id: external_id.into(),
+        proxy,
+    };
+    let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
+
+    tokio::spawn(async move { http_actor.run().await });
+
+    let res = proxy.c8y_internal_id(child_device_id).await;
     assert!(
-        res.is_err(),
-        "Expected software list request to fail once the internal id lookup gives up"
+        matches!(
+            res,
+            Err(crate::messages::C8YRestError::FromHttpError(HttpError::HttpStatusError { code, .. }))
+                if code == StatusCode::NOT_FOUND
+        ),
+        "Expected the internal id lookup to fail after exhausting retries: {res:?}"
     );
 }
 
@@ -196,83 +203,53 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
 // Time is paused so the retry back-off intervals elapse instantly.
 #[tokio::test(start_paused = true)]
 async fn get_internal_id_retries_until_the_device_is_created() {
-    let c8y_host = "c8y.tenant.io";
-    let main_device_id = "device-001";
+    let external_id = "device-001";
     let child_device_id = "child-101";
 
-    let (mut proxy, mut c8y) = spawn_c8y_http_proxy(c8y_host.into(), main_device_id.into()).await;
-
-    // Mock server definition
-    tokio::spawn(async move {
-        let get_internal_id_url =
-            format!("http://localhost:8001/c8y/identity/externalIds/c8y_Serial/{child_device_id}");
-
-        // The child device is not created in the c8y inventory yet: fail the first lookups
-        for _ in 0..3 {
-            assert_recv(
-                &mut c8y,
-                Some(
-                    HttpRequestBuilder::get(&get_internal_id_url)
-                        .build()
-                        .unwrap(),
-                ),
-            )
-            .await;
-            let c8y_response = HttpResponseBuilder::new()
-                .status(StatusCode::NOT_FOUND)
-                .build()
-                .unwrap();
-            c8y.send(Ok(c8y_response)).await.unwrap();
-        }
-
-        // Once the child device has been created, the internal id lookup succeeds
-        assert_recv(
-            &mut c8y,
-            Some(
-                HttpRequestBuilder::get(&get_internal_id_url)
-                    .build()
-                    .unwrap(),
-            ),
-        )
+    let mut server = mockito::Server::new_async().await;
+    let _mock = server
+        .mock("GET", "/c8y/identity/externalIds/c8y_Serial/child-101")
+        .with_status(StatusCode::NOT_FOUND.as_u16().into())
+        .expect(3)
+        .create_async()
         .await;
-        let c8y_response = HttpResponseBuilder::new()
-            .status(200)
-            .json(&InternalIdResponse::new("200", child_device_id))
-            .build()
-            .unwrap();
-        c8y.send(Ok(c8y_response)).await.unwrap();
-
-        // ... and the software list is finally posted against the resolved internal id
-        let c8y_software_list = C8yUpdateSoftwareListResponse::default();
-        assert_recv(
-            &mut c8y,
-            Some(
-                HttpRequestBuilder::put(
-                    "http://localhost:8001/c8y/inventory/managedObjects/200".to_string(),
-                )
-                .header("content-type", "application/json")
-                .header("accept", "application/json")
-                .json(&c8y_software_list)
-                .build()
-                .unwrap(),
-            ),
-        )
+    let _mock_success = server
+        .mock("GET", "/c8y/identity/externalIds/c8y_Serial/child-101")
+        .with_status(200)
+        .with_body(serde_json::to_string(&InternalIdResponse::new("200", child_device_id)).unwrap())
+        .expect(1)
+        .create_async()
         .await;
-        let c8y_response = HttpResponseBuilder::new().status(200).build().unwrap();
-        c8y.send(Ok(c8y_response)).await.unwrap();
-    });
 
-    // Fetch the software list so that it internally invokes get_internal_id
-    let res = proxy
-        .send_software_list_http(
-            C8yUpdateSoftwareListResponse::default(),
-            child_device_id.into(),
-        )
-        .await;
-    assert!(
-        res.is_ok(),
-        "Expected software list request to succeed once the device is created: {res:?}"
+    let target_url = "remote.c8y.com".to_string();
+    let server_url = server.host_with_port();
+    let (proxy_host, proxy_port) = server_url.split_once(':').unwrap();
+    let proxy = ProxyUrlGenerator::new(
+        proxy_host.into(),
+        proxy_port.parse().unwrap(),
+        Protocol::Http,
     );
+
+    let tedge_config = TEdgeConfig::load_toml_str("");
+    let tls_config = tedge_config.http.client_tls_config().unwrap();
+    let mut http_actor = HttpActor::new(tls_config)
+        .with_backoff(test_backoff())
+        .builder();
+
+    let config = C8YHttpConfig {
+        c8y_http_host: target_url.clone(),
+        c8y_mqtt_host: target_url,
+        device_id: external_id.into(),
+        proxy,
+    };
+    let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
+
+    tokio::spawn(async move { http_actor.run().await });
+
+    let result = proxy.c8y_internal_id(child_device_id).await;
+    assert_eq!(result.unwrap(), "200");
+    _mock.assert();
+    _mock_success.assert();
 }
 
 #[tokio::test]
@@ -440,6 +417,57 @@ async fn request_internal_id_before_posting_software_list() {
     )
     .await;
 }
+#[tokio::test(start_paused = true)]
+#[test_case::test_case(501, false; "don't retry when header is non-retryable")]
+#[test_case::test_case(404, true; "retry when external identity is not found")]
+#[test_case::test_case(500, true; "retry when header is retryable")]
+async fn get_internal_id_retries_depending_on_response_status(status: usize, retryable: bool) {
+    let external_id = "device-001";
+
+    let mut server = mockito::Server::new_async().await;
+    let mock = server
+        .mock("GET", "/c8y/identity/externalIds/c8y_Serial/device-001")
+        .with_status(status);
+    // NOTE: The retries are only bounded by the back-off `max_elapsed_time`, not by a number of attempts
+    let _mock = match retryable {
+        true => mock.expect_at_least(2),
+        false => mock.expect(1),
+    }
+    .create_async()
+    .await;
+    let target_url = "remote.c8y.com".to_string();
+    let server_url = server.host_with_port();
+    let (proxy_host, proxy_port) = server_url.split_once(':').unwrap();
+    let proxy = ProxyUrlGenerator::new(
+        proxy_host.into(),
+        proxy_port.parse().unwrap(),
+        Protocol::Http,
+    );
+
+    let tedge_config = TEdgeConfig::load_toml_str("");
+    let tls_config = tedge_config.http.client_tls_config().unwrap();
+    let mut http_actor = HttpActor::new(tls_config)
+        .with_backoff(test_backoff())
+        .builder();
+
+    let config = C8YHttpConfig {
+        c8y_http_host: target_url.clone(),
+        c8y_mqtt_host: target_url,
+        device_id: external_id.into(),
+        proxy,
+    };
+    let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
+
+    tokio::spawn(async move { http_actor.run().await });
+
+    let result = proxy.c8y_internal_id(external_id).await;
+    let status = StatusCode::from_u16(status as u16).unwrap();
+    assert!(matches!(
+        result.unwrap_err(),
+        crate::messages::C8YRestError::FromHttpError(HttpError::HttpStatusError { code, .. }) if code == status
+    ));
+    _mock.assert();
+}
 
 /// Return two handles:
 /// - one `C8YHttpProxy` to send HTTP requests to C8Y
@@ -467,4 +495,14 @@ async fn assert_recv(
 ) {
     let actual = from.recv().await;
     tedge_http_ext::test_helpers::assert_request_eq(actual, expected)
+}
+
+fn test_backoff() -> ExponentialBackoff {
+    ExponentialBackoff {
+        initial_interval: Duration::from_millis(1),
+        multiplier: 2.0,
+        randomization_factor: f64::EPSILON,
+        max_elapsed_time: Some(Duration::from_secs(1)),
+        ..Default::default()
+    }
 }

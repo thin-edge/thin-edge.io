@@ -22,6 +22,7 @@ rand.workspace = true
 rsa.workspace = true
 rustls.workspace = true
 serde.workspace = true
+sha2.workspace = true
 tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",

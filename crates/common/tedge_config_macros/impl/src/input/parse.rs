@@ -134,6 +134,8 @@ pub struct ConfigurableField {
     pub note: Option<SpannedValue<String>>,
     #[darling(multiple, rename = "example")]
     pub examples: Vec<SpannedValue<String>>,
+    #[darling(default)]
+    pub exposable: bool,
     pub ident: Option<syn::Ident>,
     pub ty: syn::Type,
     #[darling(default)]

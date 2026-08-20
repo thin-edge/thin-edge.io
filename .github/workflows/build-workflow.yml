@@ -554,7 +554,7 @@ jobs:
         with:
           context: containers/tedge-p11-server
           push: ${{ github.event_name != 'pull_request_target' }}
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |

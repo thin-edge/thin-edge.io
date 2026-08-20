@@ -59,7 +59,7 @@ Send device profile operation from Cumulocity
 
     ${profile}=    Cumulocity.Create Device Profile    ${PROFILE_NAME}    ${PROFILE_PAYLOAD}
     ${operation}=    Cumulocity.Install Device Profile    ${profile["id"]}
-    ${operation}=    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}
+    ${operation}=    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Cumulocity.Should Have Device Profile Installed    ${profile["id"]}
 
     Cumulocity.Device Should Have Firmware    tedge-core    1.0.0

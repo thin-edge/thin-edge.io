@@ -273,7 +273,7 @@ where
 /// This trait provides a uniform interface for accessing common fields
 /// from different cloud configuration readers (C8y, Az, Aws).
 pub trait CloudConfigAccessor {
-    fn url(&self) -> &OptionalConfig<ConnectUrl>;
+    fn url(&self) -> OptionalConfig<ConnectUrl>;
     fn device_id(&self) -> Result<String, ReadError>;
     fn device_id_key(&self, profile: Option<&str>) -> ReadableKey;
     fn device_key_path(&self) -> &AbsolutePath;
@@ -289,8 +289,31 @@ pub trait CloudConfigAccessor {
 }
 
 impl CloudConfigAccessor for TEdgeConfigReaderC8y {
-    fn url(&self) -> &OptionalConfig<ConnectUrl> {
-        &self.url
+    fn url(&self) -> OptionalConfig<ConnectUrl> {
+        match self.url.clone() {
+            OptionalConfig::Present { value, key } => OptionalConfig::Present { value, key },
+            OptionalConfig::Empty(url_key) => {
+                let host = self
+                    .http
+                    .as_ref()
+                    .map(|h| h.host())
+                    .or(self.mqtt.as_ref().map(|h| h.host()));
+
+                match host {
+                    OptionalConfig::Present {
+                        value,
+                        key: http_key,
+                    } => OptionalConfig::Present {
+                        value: value
+                            .to_string()
+                            .parse()
+                            .expect("same validation for c8y.http/c8y.mqtt and c8y.url"),
+                        key: http_key.clone(),
+                    },
+                    OptionalConfig::Empty(_) => OptionalConfig::Empty(url_key),
+                }
+            }
+        }
     }
 
     fn device_id_key(&self, profile: Option<&str>) -> ReadableKey {
@@ -349,8 +372,8 @@ impl CloudConfigAccessor for TEdgeConfigReaderC8y {
 }
 
 impl CloudConfigAccessor for TEdgeConfigReaderAz {
-    fn url(&self) -> &OptionalConfig<ConnectUrl> {
-        &self.url
+    fn url(&self) -> OptionalConfig<ConnectUrl> {
+        self.url.clone()
     }
 
     fn device_id_key(&self, profile: Option<&str>) -> ReadableKey {
@@ -409,8 +432,8 @@ impl CloudConfigAccessor for TEdgeConfigReaderAz {
 }
 
 impl CloudConfigAccessor for TEdgeConfigReaderAws {
-    fn url(&self) -> &OptionalConfig<ConnectUrl> {
-        &self.url
+    fn url(&self) -> OptionalConfig<ConnectUrl> {
+        self.url.clone()
     }
 
     fn device_id_key(&self, profile: Option<&str>) -> ReadableKey {

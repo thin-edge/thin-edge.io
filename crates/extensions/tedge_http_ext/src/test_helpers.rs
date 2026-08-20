@@ -24,7 +24,7 @@ pub trait HttpRequestExt {
 #[async_trait]
 impl HttpRequestExt for HttpRequest {
     async fn json<T: DeserializeOwned>(self) -> Result<T, HttpError> {
-        let bytes = self.into_body().collect().await?.to_bytes();
+        let bytes = self.request.into_body().unwrap_or_default();
         Ok(serde_json::from_slice(&bytes)?)
     }
 }

@@ -673,6 +673,108 @@ async fn config_manager_processes_concurrently() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
+async fn execute_config_get_operation_step() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let mut handle = spawn_config_manager_actor(&tempdir).await;
+
+    // Let's ignore the reload messages sent on start
+    handle.mqtt.skip(2).await;
+
+    let command_state = GenericCommandState::new(
+        Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234"),
+        "get".to_string(),
+        json!({
+            "type": "type_two",
+            "tedgeUrl": "http://127.0.0.1:3000/te/v1/files/main/config_snapshot/type_two-1234",
+        }),
+    );
+
+    let step_request = OperationStepRequest {
+        command_step: "get".to_string(),
+        command_state,
+    };
+
+    let response = handle.steps.await_response(step_request).await?;
+    let payload = response.expect("get step should succeed");
+    let path = payload
+        .get("path")
+        .and_then(|v| v.as_str())
+        .expect("path should be present");
+    assert!(
+        path.contains("config_snapshot"),
+        "expected a snapshot temp path, got {path}"
+    );
+    // Mock file plugin writes the type's file name to stdout (see tests/data/file)
+    let content = read_to_string(path)?;
+    assert_eq!(content.trim(), "file_b");
+    // tedgeUrl already provided — must not be regenerated
+    assert!(payload.get("tedgeUrl").is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn execute_config_get_operation_step_generates_tedge_url() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let mut handle = spawn_config_manager_actor(&tempdir).await;
+
+    // Let's ignore the reload messages sent on start
+    handle.mqtt.skip(2).await;
+
+    let command_state = GenericCommandState::new(
+        Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234"),
+        "get".to_string(),
+        json!({
+            "type": "type_two",
+        }),
+    );
+
+    let step_request = OperationStepRequest {
+        command_step: "get".to_string(),
+        command_state,
+    };
+
+    let response = handle.steps.await_response(step_request).await?;
+    let payload = response.expect("get step should succeed");
+    assert!(payload.get("path").and_then(|v| v.as_str()).is_some());
+    let tedge_url = payload
+        .get("tedgeUrl")
+        .and_then(|v| v.as_str())
+        .expect("tedgeUrl should be generated when missing");
+    assert!(
+        tedge_url.contains("config_snapshot/type_two-1234"),
+        "unexpected tedgeUrl: {tedge_url}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn execute_config_get_operation_step_missing_type() -> Result<(), anyhow::Error> {
+    let tempdir = prepare()?;
+    let mut handle = spawn_config_manager_actor(&tempdir).await;
+
+    // Let's ignore the reload messages sent on start
+    handle.mqtt.skip(2).await;
+
+    let command_state = GenericCommandState::new(
+        Topic::new_unchecked("te/device/main///cmd/config_snapshot/1234"),
+        "get".to_string(),
+        json!({}),
+    );
+
+    let step_request = OperationStepRequest {
+        command_step: "get".to_string(),
+        command_state,
+    };
+
+    let response = handle.steps.await_response(step_request).await?;
+    assert_matches!(response, Err(err) if err.contains("Missing key: type"));
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn execute_config_set_operation_step() -> Result<(), anyhow::Error> {
     let tempdir = prepare()?;
     let mut handle = spawn_config_manager_actor(&tempdir).await;
@@ -871,22 +973,27 @@ async fn test_init_creates_config_and_template() -> anyhow::Result<()> {
 
     ConfigManagerBuilder::init(&config).await?;
 
-    let toml_file = config.ops_dir.path().join("config_update.toml");
-    let template_file = config.ops_dir.path().join("config_update.toml.template");
+    for operation in ["config_update", "config_snapshot"] {
+        let toml_file = config.ops_dir.path().join(format!("{operation}.toml"));
+        let template_file = config
+            .ops_dir
+            .path()
+            .join(format!("{operation}.toml.template"));
 
-    assert!(toml_file.exists(), "config_update.toml should exist");
-    assert!(
-        template_file.exists(),
-        "config_update.toml.template should exist"
-    );
+        assert!(toml_file.exists(), "{operation}.toml should exist");
+        assert!(
+            template_file.exists(),
+            "{operation}.toml.template should exist"
+        );
 
-    let toml_content = tokio::fs::read_to_string(&toml_file).await?;
-    let template_content = tokio::fs::read_to_string(&template_file).await?;
+        let toml_content = tokio::fs::read_to_string(&toml_file).await?;
+        let template_content = tokio::fs::read_to_string(&template_file).await?;
 
-    assert_eq!(
-        toml_content, template_content,
-        "Initial config and template should have identical content"
-    );
+        assert_eq!(
+            toml_content, template_content,
+            "Initial {operation} config and template should have identical content"
+        );
+    }
 
     Ok(())
 }

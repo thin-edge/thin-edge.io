@@ -4,6 +4,7 @@ use base64::prelude::*;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
+use std::time::Duration;
 use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeMqttClientAuthConfig;
 use tracing::info;
@@ -22,7 +23,9 @@ pub struct MqttPublishCommand {
     pub base64: bool,
     pub auth_config: TEdgeMqttClientAuthConfig,
     pub count: u32,
-    pub sleep: std::time::Duration,
+    pub sleep: Duration,
+    /// Maximum time spent connecting to the broker. `None` means retry forever.
+    pub connection_timeout: Option<Duration>,
 }
 
 #[async_trait::async_trait]
@@ -56,7 +59,8 @@ fn build_config(cmd: &MqttPublishCommand) -> Result<mqtt_channel::Config, anyhow
         .with_session_prefix(cmd.client_id.clone())
         .with_clean_session(true)
         .with_max_packet_size(MAX_PACKET_SIZE)
-        .with_queue_capacity(DEFAULT_QUEUE_CAPACITY);
+        .with_queue_capacity(DEFAULT_QUEUE_CAPACITY)
+        .with_connection_timeout(cmd.connection_timeout);
     config.with_client_auth(cmd.auth_config.clone().try_into()?)?;
     Ok(config)
 }
@@ -125,7 +129,20 @@ mod tests {
             base64: false,
             auth_config: TEdgeMqttClientAuthConfig::default(),
             count: 1,
-            sleep: std::time::Duration::ZERO,
+            sleep: Duration::ZERO,
+            connection_timeout: Some(Duration::from_secs(10)),
         }
+    }
+
+    #[test]
+    fn build_config_applies_connection_timeout() {
+        let mut cmd = pub_command_with_client_id("tedge-pub-timeout");
+        cmd.connection_timeout = Some(Duration::from_secs(3));
+        let config = build_config(&cmd).unwrap();
+        assert_eq!(config.connection_timeout, Some(Duration::from_secs(3)));
+
+        cmd.connection_timeout = None;
+        let config = build_config(&cmd).unwrap();
+        assert_eq!(config.connection_timeout, None);
     }
 }

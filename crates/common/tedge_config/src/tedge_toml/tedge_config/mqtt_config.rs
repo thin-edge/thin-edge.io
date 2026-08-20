@@ -24,10 +24,10 @@ use mqtt_channel::read_password;
 use mqtt_channel::AuthenticationConfig;
 
 /// An MQTT authentication configuration for connecting to the remote cloud broker.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct MqttAuthConfigCloudBroker {
     pub ca_path: Utf8PathBuf,
-    pub client: Option<MqttAuthClientConfigCloudBroker>,
+    pub client: MqttAuthClientConfigCloudBroker,
 }
 
 /// MQTT TLS client authentication.
@@ -45,13 +45,10 @@ pub enum PrivateKeyType {
 
 impl MqttAuthConfigCloudBroker {
     pub fn to_rustls_client_config(self) -> anyhow::Result<rustls::ClientConfig> {
-        let Some(MqttAuthClientConfigCloudBroker {
+        let MqttAuthClientConfigCloudBroker {
             cert_file,
             private_key,
-        }) = self.client
-        else {
-            todo!("no client auth not supported yet");
-        };
+        } = self.client;
 
         let client_config = match private_key {
             PrivateKeyType::File(key_file) => {
@@ -101,21 +98,25 @@ impl TryFrom<TEdgeMqttClientAuthConfig> for mqtt_channel::AuthenticationConfig {
         if let Some(ca_file) = config.ca_file {
             debug!(target: "MQTT", "Using CA certificate file: {}", ca_file);
             let cert_store = &mut authentication_config.get_cert_store_mut();
-            parse_root_certificate::add_certs_from_file(cert_store, ca_file)?;
+            parse_root_certificate::add_certs_from_file(cert_store, ca_file)
+                .context("Invalid 'mqtt.client.auth.ca_file'")?;
         }
 
         // Adds all certificate from all files in the directory `ca_dir` to the trust store.
         if let Some(ca_dir) = config.ca_dir {
             debug!(target: "MQTT", "Using CA certificate directory: {}", ca_dir);
             let cert_store = &mut authentication_config.get_cert_store_mut();
-            parse_root_certificate::add_certs_from_directory(cert_store, ca_dir)?;
+            parse_root_certificate::add_certs_from_directory(cert_store, ca_dir)
+                .context("Invalid 'mqtt.client.auth.ca_dir'")?;
         }
 
         // Provides client certificate and private key for authentication.
         if let Some(client_cert) = config.client_cert {
             debug!(target: "MQTT", "Using client certificate file: {}", client_cert.cert_file);
             debug!(target: "MQTT", "Using client private key file: {}", client_cert.key_file);
-            authentication_config.set_cert_config(client_cert.cert_file, client_cert.key_file)?;
+            authentication_config
+                .set_cert_config(client_cert.cert_file, client_cert.key_file)
+                .context("Invalid 'mqtt.client.auth.cert_file' or 'mqtt.client.auth.key_file'")?;
         }
 
         // Provides client username/password for authentication.
@@ -184,7 +185,7 @@ impl TEdgeConfig {
 
         Ok(MqttAuthConfigCloudBroker {
             ca_path: cloud.root_cert_path().to_path_buf(),
-            client: Some(client_auth),
+            client: client_auth,
         })
     }
 

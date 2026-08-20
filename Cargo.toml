@@ -61,6 +61,7 @@ tedge_config = { path = "crates/common/tedge_config" }
 tedge_config_engine = { path = "crates/common/tedge_config_engine" }
 tedge_config_engine-impl = { path = "crates/common/tedge_config_engine/macro_impl" }
 tedge_config_engine-macro = { path = "crates/common/tedge_config_engine/macro" }
+tedge_config_ext = { path = "crates/extensions/tedge_config_ext" }
 tedge_config_macros = { path = "crates/common/tedge_config_macros" }
 tedge_config_macros-impl = { path = "crates/common/tedge_config_macros/impl" }
 tedge_config_manager = { path = "crates/extensions/tedge_config_manager" }
@@ -213,6 +214,7 @@ serde = "1.0"
 serde_json = "1.0"
 serde_spanned = "1.0"
 sha1 = "0.10"
+sha2 = "0.10"
 sha256 = "1.1"
 shell-words = "1.1"
 strum = "0.27"

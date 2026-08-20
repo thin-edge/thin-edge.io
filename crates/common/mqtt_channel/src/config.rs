@@ -13,6 +13,7 @@ use std::io::BufReader;
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use zeroize::Zeroizing;
 
 pub const MAX_PACKET_SIZE: usize = 268435455;
@@ -61,6 +62,17 @@ pub struct Config {
     ///
     /// Default: None
     pub initial_message: Option<InitMessageFn>,
+
+    /// Maximum time spent establishing the initial MQTT connection.
+    ///
+    /// When set, `Connection::new` gives up after this duration while still
+    /// failing to reach the broker, instead of retrying forever.
+    ///
+    /// A value of `None` or `Some(Duration::ZERO)` means no timeout (infinite
+    /// connection retries) — the historical behaviour.
+    ///
+    /// Default: `None`
+    pub connection_timeout: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -265,6 +277,7 @@ impl Default for Config {
             max_packet_size: 16 * 1024 * 1024,
             last_will_message: None,
             initial_message: None,
+            connection_timeout: None,
         }
     }
 }
@@ -374,6 +387,17 @@ impl Config {
     ) -> Self {
         Self {
             initial_message: Some(InitMessageFn::new(initial_message)),
+            ..self
+        }
+    }
+
+    /// Set the maximum time spent establishing the initial MQTT connection.
+    ///
+    /// Pass `None` or `Duration::ZERO` for no timeout (retry forever).
+    pub fn with_connection_timeout(self, connection_timeout: impl Into<Option<Duration>>) -> Self {
+        let connection_timeout = connection_timeout.into().filter(|d| !d.is_zero());
+        Self {
+            connection_timeout,
             ..self
         }
     }

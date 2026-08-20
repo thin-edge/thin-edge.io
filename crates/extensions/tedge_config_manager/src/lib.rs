@@ -102,15 +102,21 @@ impl ConfigManagerBuilder {
     }
 
     pub async fn init(config: &ConfigManagerConfig) -> Result<(), anyhow::Error> {
-        // Initialize config_update.toml with template pattern:
-        // - Always update config_update.toml.template with the latest template definition
-        // - Only update config_update.toml if it doesn't exist or hasn't been customized by the user
-        let workflow_definition = include_str!("resources/config_update.toml");
-
+        // Initialize config_update.toml and config_snapshot.toml with template pattern:
+        // - Always update *.toml.template with the latest template definition
+        // - Only update the active *.toml if it doesn't exist or hasn't been customized by the user
+        let config_update_workflow = include_str!("resources/config_update.toml");
         config
             .ops_dir
             .template_file("config_update.toml")?
-            .persist(workflow_definition)
+            .persist(config_update_workflow)
+            .await?;
+
+        let config_snapshot_workflow = include_str!("resources/config_snapshot.toml");
+        config
+            .ops_dir
+            .template_file("config_snapshot.toml")?
+            .persist(config_snapshot_workflow)
             .await?;
 
         if config.plugin_config_path.path().exists() {
@@ -310,10 +316,15 @@ impl SyncOnCommand for ConfigManagerBuilder {
 
 impl OperationStepHandler for ConfigManagerBuilder {
     fn supported_operation_steps(&self) -> Vec<(OperationType, OperationStep)> {
-        ConfigOperationStep::all()
+        let mut steps: Vec<(OperationType, OperationStep)> = ConfigOperationStep::update_steps()
             .iter()
             .map(|step| (OperationType::ConfigUpdate, step.as_str().into()))
-            .collect()
+            .collect();
+        steps.push((
+            OperationType::ConfigSnapshot,
+            ConfigOperationStep::Get.as_str().into(),
+        ));
+        steps
     }
 }
 

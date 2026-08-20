@@ -221,10 +221,10 @@ pub async fn build_cloud_mqtt_options(
             if tls_enabled {
                 let tls_config = MqttAuthConfigCloudBroker {
                     ca_path: ca_path.clone(),
-                    client: Some(MqttAuthClientConfigCloudBroker {
+                    client: MqttAuthClientConfigCloudBroker {
                         cert_file: cert_path.clone(),
                         private_key: PrivateKeyType::File(key_path.clone()),
-                    }),
+                    },
                 }
                 .to_rustls_client_config()
                 .context("Failed to create MQTT TLS config")?;
@@ -333,7 +333,7 @@ impl TEdgeComponent for CustomMapper {
         let startup = validate_and_load(mapper_dir.path(), config_dir.root()).await?;
 
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(&service_name, &tedge_config).await?;
+            start_basic_actors(&service_name, &tedge_config, Vec::new()).await?;
 
         if let MapperStartup::WithBridge { ref config, .. } = startup {
             let bridge_dir = mapper_dir.dir("bridge")?;

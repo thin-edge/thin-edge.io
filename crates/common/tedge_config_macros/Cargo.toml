@@ -16,6 +16,7 @@ doku = { workspace = true }
 once_cell = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 tedge_config_macros-macro = { path = "macro" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -25,7 +26,6 @@ url = { workspace = true }
 certificate = { workspace = true, features = ["reqwest"] }
 clap = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
-serde_json = { workspace = true }
 toml = { workspace = true }
 
 [lints]

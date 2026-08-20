@@ -240,6 +240,7 @@ pub struct ReadOnlyField {
     pub ident: syn::Ident,
     pub ty: syn::Type,
     pub from: Option<syn::Type>,
+    pub exposable: bool,
 }
 
 impl ReadOnlyField {
@@ -323,6 +324,7 @@ pub struct ReadWriteField {
     pub ty: syn::Type,
     pub default: FieldDefault,
     pub from: Option<syn::Type>,
+    pub exposable: bool,
 }
 
 impl ConfigurableField {
@@ -380,6 +382,13 @@ impl ConfigurableField {
         match self {
             Self::ReadOnly(ReadOnlyField { dto, .. })
             | Self::ReadWrite(ReadWriteField { dto, .. }) => dto,
+        }
+    }
+
+    pub fn exposable(&self) -> bool {
+        match self {
+            Self::ReadOnly(ReadOnlyField { exposable, .. })
+            | Self::ReadWrite(ReadWriteField { exposable, .. }) => *exposable,
         }
     }
 
@@ -552,6 +561,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                 dto: value.dto,
                 reader: value.reader,
                 from: value.from,
+                exposable: value.exposable,
             }))
         } else {
             Ok(Self::ReadWrite(ReadWriteField {
@@ -566,6 +576,7 @@ impl TryFrom<super::parse::ConfigurableField> for ConfigurableField {
                 reader: value.reader,
                 default: value.default.unwrap_or(FieldDefault::None),
                 from: value.from,
+                exposable: value.exposable,
             }))
         }
     }

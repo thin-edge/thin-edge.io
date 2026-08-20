@@ -23,7 +23,7 @@ Tedge cert create without HSM key
     ...    exp_exit_code=1
     Should Contain
     ...    ${stderr}
-    ...    When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.
+    ...    When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge hsm create-key` to create the key first.
 
     Execute Command    cmd=tedge config set device.key_uri "pkcs11:object=nonexistent"
     ${stderr}=    Execute Command
@@ -33,4 +33,4 @@ Tedge cert create without HSM key
     ...    exp_exit_code=1
     Should Contain
     ...    ${stderr}
-    ...    When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge cert create-key-hsm` to create the key first.
+    ...    When using HSM, `tedge cert create` can't create the keypair automatically. Use `tedge hsm create-key` to create the key first.

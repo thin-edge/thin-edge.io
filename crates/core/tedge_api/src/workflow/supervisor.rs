@@ -3,6 +3,7 @@ use crate::workflow::*;
 use on_disk::OnDiskCommandBoard;
 use serde::Serialize;
 use std::string::ToString;
+use tracing::error;
 use tracing::info;
 
 /// Dispatch actions to operation participants
@@ -78,10 +79,25 @@ impl WorkflowSupervisor {
     /// Update on start the set of pending commands
     pub fn load_pending_commands(&mut self, commands: CommandBoard) -> Vec<GenericCommandState> {
         self.commands = commands;
-        self.commands
+        let resumed_commands: Vec<GenericCommandState> = self
+            .commands
             .iter()
             .filter_map(|(t, s)| self.resume_command(t, s.clone()))
-            .collect()
+            .collect();
+
+        // The commands should be updated with the resumed states,
+        // and not only the caller notified of these new states.
+        //
+        // A resumed command can be the sub-command of another resumed command
+        // which has then to observe the actual state of its sub-command
+        // and not the state persisted before the agent was interrupted.
+        for command in resumed_commands.iter() {
+            if let Err(err) = self.commands.update(command.clone()) {
+                error!("Fail to resume command: {err}");
+            }
+        }
+
+        resumed_commands
     }
 
     /// List the capabilities provided by the registered workflows
@@ -607,5 +623,122 @@ mod tests {
             workflows.root_invoking_command_state(&level_2_cmd),
             Some(&level_1_cmd)
         );
+    }
+
+    /// On restart, the state of a command awaiting the agent restart must be moved
+    /// to its `on_success` state and not only in the returned states.
+    #[test]
+    fn agent_restart_is_persisted_on_the_command_board() {
+        let mut workflows = restart_workflows();
+        let cmd_topic = "te/device/main///cmd/restart-agent/robot-1";
+        let board = command_board(vec![pending_command(cmd_topic, "restarting")]);
+
+        let resumed = workflows.load_pending_commands(board);
+
+        assert_eq!(resumed.len(), 1);
+        assert_eq!(resumed[0].status, "successful");
+        assert_eq!(
+            workflows.get_state(cmd_topic).map(|s| s.status.as_ref()),
+            Some("successful")
+        );
+    }
+
+    /// On restart, a command awaiting the completion of a sub-command which was itself
+    /// awaiting the agent restart, must observe the resumed state of that sub-command.
+    #[test]
+    fn agent_restart_is_visible_from_the_invoking_command() {
+        let mut workflows = restart_workflows();
+        let wrapper_topic = "te/device/main///cmd/restart-agent-wrapper/robot-1";
+        let sub_cmd_topic = "te/device/main///cmd/restart-agent/sub:restart-agent-wrapper:robot-1";
+        let wrapper_cmd = pending_command(wrapper_topic, "restarting");
+        let board = command_board(vec![
+            wrapper_cmd.clone(),
+            pending_command(sub_cmd_topic, "restarting"),
+        ]);
+
+        workflows.load_pending_commands(board);
+
+        // The invoking command must see its sub-command as successful, whatever the order
+        // in which the pending commands have been resumed.
+        let sub_cmd_state = workflows.sub_command_state(&wrapper_cmd);
+        assert_eq!(
+            sub_cmd_state.map(|s| s.status.as_ref()),
+            Some("successful"),
+            "the invoking command still sees a sub-command awaiting the agent restart"
+        );
+    }
+
+    /// A workflow awaiting the agent restart, moving on success to a state which is not a step
+    /// of this workflow but the final state of a `cleanup` action.
+    const RESTART_WORKFLOW: &str = r#"
+operation = "restart-agent"
+
+[init]
+action = "proceed"
+on_success = "restarting"
+
+[restarting]
+action = "await-agent-restart"
+on_success = "successful"
+on_timeout = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+    /// A workflow awaiting the completion of the restart-agent sub-operation
+    const WRAPPER_WORKFLOW: &str = r#"
+operation = "restart-agent-wrapper"
+
+[init]
+operation = "restart-agent"
+on_exec = "restarting"
+
+[restarting]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+    const VERSION: &str = "1.0";
+
+    fn pending_command(topic: &str, status: &str) -> GenericCommandState {
+        GenericCommandState::from_command_message(&MqttMessage::new(
+            &Topic::new_unchecked(topic),
+            format!(r#"{{ "@version": "{VERSION}", "status": "{status}" }}"#),
+        ))
+        .unwrap()
+    }
+
+    fn restart_workflows() -> WorkflowSupervisor {
+        let mut workflows = WorkflowSupervisor::default();
+        for definition in [RESTART_WORKFLOW, WRAPPER_WORKFLOW] {
+            let workflow: OperationWorkflow = toml::from_str(definition).unwrap();
+            let operation = workflow.operation.to_string();
+            workflows
+                .register_custom_workflow(UserDefined(VERSION.to_string()), workflow)
+                .unwrap();
+            // Mark the version as in-use, as done when a command is created
+            workflows.use_current_version(&operation);
+        }
+        workflows
+    }
+
+    fn command_board(commands: Vec<GenericCommandState>) -> CommandBoard {
+        let now = time::OffsetDateTime::now_utc();
+        CommandBoard::new(
+            commands
+                .into_iter()
+                .map(|command| (command.topic.name.clone(), (now, command)))
+                .collect(),
+        )
     }
 }

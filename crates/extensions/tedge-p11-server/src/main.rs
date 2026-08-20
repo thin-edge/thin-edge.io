@@ -517,10 +517,37 @@ module_path = """#;
         fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
             unimplemented!()
         }
+        fn list_tokens(&self) -> anyhow::Result<tedge_p11::service::ListTokensResponse> {
+            unimplemented!()
+        }
+        fn list_keys(
+            &self,
+            _: tedge_p11::service::ListKeysRequest,
+        ) -> anyhow::Result<tedge_p11::service::ListKeysResponse> {
+            unimplemented!()
+        }
+        fn change_pin(
+            &self,
+            _: tedge_p11::service::ChangePinRequest,
+        ) -> anyhow::Result<tedge_p11::service::ChangePinResponse> {
+            unimplemented!()
+        }
+        fn delete_key(
+            &self,
+            _: tedge_p11::service::DeleteKeyRequest,
+        ) -> anyhow::Result<tedge_p11::service::DeleteKeyResponse> {
+            unimplemented!()
+        }
         fn create_key(
             &self,
             _: tedge_p11::service::CreateKeyRequest,
         ) -> anyhow::Result<tedge_p11::service::CreateKeyResponse> {
+            unimplemented!()
+        }
+        fn init_token(
+            &self,
+            _: tedge_p11::service::InitTokenRequest,
+        ) -> anyhow::Result<tedge_p11::service::InitTokenResponse> {
             unimplemented!()
         }
     }

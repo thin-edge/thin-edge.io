@@ -132,6 +132,9 @@ enum Error {
 
     #[error("Actions on channel: {0} are not supported")]
     UnsupportedChannel(String),
+
+    #[error("Configuration value for entity: {0} with key: {1} not found")]
+    EntityConfigNotFound(EntityTopicId, String),
 }
 
 impl IntoResponse for Error {
@@ -155,6 +158,7 @@ impl IntoResponse for Error {
             Error::EntityTwinDataNotFound(_, _) => StatusCode::NOT_FOUND,
             Error::UnsupportedChannel(_) => StatusCode::NOT_FOUND,
             Error::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
+            Error::EntityConfigNotFound(_, _) => StatusCode::NOT_FOUND,
         };
         let error_message = self.to_string();
 
@@ -225,8 +229,10 @@ async fn get_resource(
 ) -> impl IntoResponse {
     let (topic_id, channel) = parse_path(&path)?;
     match channel {
-        Channel::EntityMetadata => Ok(get_entity(state, topic_id).await.into_response()),
-        Channel::EntityTwinData { fragment_key } => {
+        ResourceChannel::Mqtt(Channel::EntityMetadata) => {
+            Ok(get_entity(state, topic_id).await.into_response())
+        }
+        ResourceChannel::Mqtt(Channel::EntityTwinData { fragment_key }) => {
             if fragment_key.is_empty() {
                 return Ok(get_entity_twin_fragments(state, topic_id)
                     .await
@@ -239,6 +245,12 @@ async fn get_resource(
                     .into_response(),
             )
         }
+        ResourceChannel::Mqtt(Channel::Config) => {
+            Ok(get_entity_config(state, topic_id).await.into_response())
+        }
+        ResourceChannel::ConfigValue(key) => Ok(get_entity_config_value(state, topic_id, key)
+            .await
+            .into_response()),
         _ => Err(Error::MethodNotAllowed),
     }
 }
@@ -250,7 +262,7 @@ async fn put_resource(
 ) -> impl IntoResponse {
     let (topic_id, channel) = parse_path(&path)?;
     match channel {
-        Channel::EntityTwinData { fragment_key } => {
+        ResourceChannel::Mqtt(Channel::EntityTwinData { fragment_key }) => {
             if fragment_key.is_empty() {
                 let fragments = serde_json::from_str(&payload)?;
                 return Ok(set_entity_twin_fragments(state, topic_id, fragments)
@@ -276,7 +288,7 @@ async fn patch_resource(
 ) -> impl IntoResponse {
     let (topic_id, channel) = parse_path(&path)?;
     match channel {
-        Channel::EntityMetadata => {
+        ResourceChannel::Mqtt(Channel::EntityMetadata) => {
             let entity_update: EntityUpdateMessage = serde_json::from_str(&payload)?;
             Ok(update_entity(state, topic_id, entity_update)
                 .await
@@ -292,8 +304,8 @@ async fn delete_resource(
 ) -> Result<Response, Error> {
     let (topic_id, channel) = parse_path(&path)?;
     match channel {
-        Channel::EntityMetadata => deregister_entity(state, topic_id).await,
-        Channel::EntityTwinData { fragment_key } => {
+        ResourceChannel::Mqtt(Channel::EntityMetadata) => deregister_entity(state, topic_id).await,
+        ResourceChannel::Mqtt(Channel::EntityTwinData { fragment_key }) => {
             if fragment_key.is_empty() {
                 return Ok(delete_entity_twin_fragments(state, topic_id)
                     .await
@@ -306,42 +318,58 @@ async fn delete_resource(
     }
 }
 
-fn parse_path(path: &str) -> Result<(EntityTopicId, Channel), Error> {
+/// The channel of an entity HTTP resource path. Wraps the MQTT [`Channel`], plus the
+/// single-key config lookup, which is an HTTP-only convenience with no MQTT equivalent.
+enum ResourceChannel {
+    Mqtt(Channel),
+    ConfigValue(String),
+}
+
+/// Parses an entity HTTP resource path into the entity's topic id and its [`ResourceChannel`].
+fn parse_path(path: &str) -> Result<(EntityTopicId, ResourceChannel), Error> {
     let segments = path.split('/').collect::<Vec<&str>>();
     match segments.as_slice() {
         [seg1, seg2] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), None, None)?;
-            Ok((topic_id, Channel::EntityMetadata))
+            Ok((topic_id, ResourceChannel::Mqtt(Channel::EntityMetadata)))
         }
         [seg1, seg2, seg3] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), None)?;
-            Ok((topic_id, Channel::EntityMetadata))
+            Ok((topic_id, ResourceChannel::Mqtt(Channel::EntityMetadata)))
         }
         [seg1, seg2, seg3, seg4, "twin"] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
             Ok((
                 topic_id,
-                Channel::EntityTwinData {
+                ResourceChannel::Mqtt(Channel::EntityTwinData {
                     fragment_key: "".to_string(),
-                },
+                }),
             ))
         }
         [seg1, seg2, seg3, seg4] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
-            Ok((topic_id, Channel::EntityMetadata))
+            Ok((topic_id, ResourceChannel::Mqtt(Channel::EntityMetadata)))
         }
         [seg1, seg2, seg3, seg4, "twin", fragment_key] => {
             let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
             Ok((
                 topic_id,
-                Channel::EntityTwinData {
+                ResourceChannel::Mqtt(Channel::EntityTwinData {
                     fragment_key: fragment_key.to_string(),
-                },
+                }),
             ))
         }
         [_, _, _, _, "twin", keys @ ..] => Err(Error::EntityStoreError(
             entity_store::Error::InvalidTwinData(keys.join("/")),
         )),
+        [seg1, seg2, seg3, seg4, "config"] => {
+            let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
+            Ok((topic_id, ResourceChannel::Mqtt(Channel::Config)))
+        }
+        [seg1, seg2, seg3, seg4, "config", key] => {
+            let topic_id = topic_id_from_path_segments(seg1, Some(seg2), Some(seg3), Some(seg4))?;
+            Ok((topic_id, ResourceChannel::ConfigValue(key.to_string())))
+        }
         [_, _, _, _, channel, ..] => Err(Error::UnsupportedChannel(channel.to_string())),
         _ => Err(Error::ResourceNotFound),
     }
@@ -556,6 +584,52 @@ async fn delete_entity_twin_fragments(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn get_entity_config(
+    state: AgentState,
+    topic_id: EntityTopicId,
+) -> Result<impl IntoResponse, Error> {
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::GetConfig(topic_id.clone()))
+        .await?;
+
+    let EntityStoreResponse::GetConfig(config) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+
+    Ok(Json(config?))
+}
+
+async fn get_entity_config_value(
+    state: AgentState,
+    topic_id: EntityTopicId,
+    key: String,
+) -> Result<impl IntoResponse, Error> {
+    let response = state
+        .entity_store_handle
+        .clone()
+        .await_response(EntityStoreRequest::GetConfigValue(
+            topic_id.clone(),
+            key.clone(),
+        ))
+        .await?;
+    let EntityStoreResponse::GetConfigValue(value) = response else {
+        return Err(Error::InvalidEntityStoreResponse);
+    };
+
+    // A non-exposed key and a non-existent key are indistinguishable here: the agent has no
+    // source of truth for a key besides what has arrived over MQTT, so both cases look
+    // identical: no value was ever ingested for this key.
+    let Some(value) = value? else {
+        return Err(Error::EntityConfigNotFound(topic_id, key));
+    };
+
+    // Served as JSON rather than as a bare body, so the value keeps the type it has in
+    // `tedge.toml`: a port comes back as `1883` and a flag as `true`, not as quoted strings.
+    Ok(Json(value))
+}
+
 #[cfg(test)]
 mod tests {
     use super::AgentState;
@@ -572,6 +646,7 @@ mod tests {
     use hyper::StatusCode;
     use serde_json::json;
     use serde_json::Value;
+    use std::collections::BTreeMap;
     use std::collections::HashSet;
     use tedge_actors::Builder;
     use tedge_actors::ClientMessageBox;
@@ -1447,6 +1522,249 @@ mod tests {
 
         let response = app.call(req).await.unwrap();
         assert_non_existent_entity_response(response).await;
+    }
+
+    #[tokio::test]
+    async fn get_entity_config_object() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::GetConfig(topic_id) = req.request {
+                    if topic_id == EntityTopicId::default_child_device("test-child").unwrap() {
+                        req.reply_to
+                            .send(EntityStoreResponse::GetConfig(Ok(BTreeMap::from([
+                                ("url".to_string(), json!("example.cumulocity.com")),
+                                ("mqtt.client.port".to_string(), json!(1883)),
+                            ]))))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities/device/test-child///config")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let config: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            config,
+            json!({"url": "example.cumulocity.com", "mqtt.client.port": 1883})
+        );
+    }
+
+    #[tokio::test]
+    async fn get_entity_config_object_unknown_entity() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::GetConfig(topic_id) = req.request {
+                    if topic_id == EntityTopicId::default_child_device("test-child").unwrap() {
+                        req.reply_to
+                            .send(EntityStoreResponse::GetConfig(Err(
+                                entity_store::Error::UnknownEntity(
+                                    "device/test-child//".to_string(),
+                                ),
+                            )))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities/device/test-child///config")
+            .body(Body::empty())
+            .expect("request builder");
+        let response = app.call(req).await.unwrap();
+        assert_non_existent_entity_response(response).await;
+    }
+
+    #[tokio::test]
+    async fn get_entity_config_value() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::GetConfigValue(topic_id, key) = req.request {
+                    if topic_id == EntityTopicId::default_child_device("test-child").unwrap()
+                        && key == "device.id"
+                    {
+                        req.reply_to
+                            .send(EntityStoreResponse::GetConfigValue(Ok(Some(json!(
+                                "my-device-01"
+                            )))))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities/device/test-child///config/device.id")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body.as_ref(), br#""my-device-01""#);
+    }
+
+    #[tokio::test]
+    async fn get_entity_config_value_unknown_entity() {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::GetConfigValue(topic_id, _) = req.request {
+                    if topic_id == EntityTopicId::default_child_device("test-child").unwrap() {
+                        req.reply_to
+                            .send(EntityStoreResponse::GetConfigValue(Err(
+                                entity_store::Error::UnknownEntity(
+                                    "device/test-child//".to_string(),
+                                ),
+                            )))
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities/device/test-child///config/device.id")
+            .body(Body::empty())
+            .expect("request builder");
+        let response = app.call(req).await.unwrap();
+        assert_non_existent_entity_response(response).await;
+    }
+
+    /// A single-key lookup returns the value with the type it has in `tedge.toml`, so a number is
+    /// served as a number rather than as a quoted string.
+    #[test_case(json!(1883), b"1883"; "number")]
+    #[test_case(json!(true), b"true"; "boolean")]
+    #[tokio::test]
+    async fn get_entity_config_value_keeps_its_type(value: Value, expected_body: &[u8]) {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::GetConfigValue(_, _) = req.request {
+                    req.reply_to
+                        .send(EntityStoreResponse::GetConfigValue(Ok(Some(value))))
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/entities/device/test-child///config/mqtt.client.port")
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(body.as_ref(), expected_body);
+    }
+
+    // A key that isn't exposed and a key that doesn't exist both hit this same response: the
+    // agent has no other source of truth for a key besides what has arrived over MQTT.
+    #[test_case("device.key_pin"; "non_exposed_key")]
+    #[test_case("no.such.key"; "non_existent_key")]
+    #[tokio::test]
+    async fn get_entity_config_value_not_found(key: &str) {
+        let TestHandle {
+            mut app,
+            mut entity_store_box,
+        } = setup();
+
+        // Mock entity store actor response
+        tokio::spawn(async move {
+            if let Some(mut req) = entity_store_box.recv().await {
+                if let EntityStoreRequest::GetConfigValue(_, _) = req.request {
+                    req.reply_to
+                        .send(EntityStoreResponse::GetConfigValue(Ok(None)))
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(format!("/v1/entities/device/test-child///config/{key}"))
+            .body(Body::empty())
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let entity: Value = serde_json::from_slice(&body).unwrap();
+        assert_json_eq!(
+            entity,
+            json!({"error": format!("Configuration value for entity: device/test-child// with key: {key} not found")})
+        );
+    }
+
+    #[test_case(Method::PUT; "PUT")]
+    #[test_case(Method::PATCH; "PATCH")]
+    #[test_case(Method::DELETE; "DELETE")]
+    #[tokio::test]
+    async fn config_resource_rejects_writes(method: Method) {
+        let TestHandle {
+            mut app,
+            entity_store_box: _, // Not used
+        } = setup();
+
+        let req = Request::builder()
+            .method(method)
+            .uri("/v1/entities/device/test-child///config/device.id")
+            .header("Content-Type", "application/json")
+            .body(Body::from(json!("new-value").to_string()))
+            .expect("request builder");
+
+        let response = app.call(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
     }
 
     #[test_case(Method::GET; "GET")]

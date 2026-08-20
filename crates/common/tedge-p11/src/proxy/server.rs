@@ -67,7 +67,12 @@ impl TedgeP11Server {
             | Frame1::GetPublicKeyPemResponse(_)
             | Frame1::Pong
             | Frame1::CreateKeyResponse { .. }
-            | Frame1::GetTokensUrisResponse(_) => {
+            | Frame1::GetTokensUrisResponse(_)
+            | Frame1::InitTokenResponse { .. }
+            | Frame1::ListTokensResponse { .. }
+            | Frame1::ChangePinResponse { .. }
+            | Frame1::DeleteKeyResponse { .. }
+            | Frame1::ListKeysResponse { .. } => {
                 let error = ProtocolError("invalid request".to_string());
                 let _ = connection.write_frame(&Frame1::Error(error));
                 anyhow::bail!("protocol error: invalid request")
@@ -114,6 +119,28 @@ impl TedgeP11Server {
                 .service
                 .get_tokens_uris()
                 .map(Frame1::GetTokensUrisResponse),
+
+            Frame1::InitTokenRequest(request) => self
+                .service
+                .init_token(request)
+                .map(Frame1::InitTokenResponse),
+
+            Frame1::ListTokensRequest => self.service.list_tokens().map(Frame1::ListTokensResponse),
+
+            Frame1::ChangePinRequest(request) => self
+                .service
+                .change_pin(request)
+                .map(Frame1::ChangePinResponse),
+
+            Frame1::DeleteKeyRequest(request) => self
+                .service
+                .delete_key(request)
+                .map(Frame1::DeleteKeyResponse),
+
+            Frame1::ListKeysRequest(request) => self
+                .service
+                .list_keys(request)
+                .map(Frame1::ListKeysResponse),
         };
 
         match response {
@@ -179,6 +206,26 @@ mod tests {
         }
 
         fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
+            todo!()
+        }
+
+        fn list_tokens(&self) -> anyhow::Result<ListTokensResponse> {
+            todo!()
+        }
+
+        fn list_keys(&self, _request: ListKeysRequest) -> anyhow::Result<ListKeysResponse> {
+            todo!()
+        }
+
+        fn change_pin(&self, _request: ChangePinRequest) -> anyhow::Result<ChangePinResponse> {
+            todo!()
+        }
+
+        fn delete_key(&self, _request: DeleteKeyRequest) -> anyhow::Result<DeleteKeyResponse> {
+            todo!()
+        }
+
+        fn init_token(&self, _request: InitTokenRequest) -> anyhow::Result<InitTokenResponse> {
             todo!()
         }
     }

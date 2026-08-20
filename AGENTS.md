@@ -288,6 +288,16 @@ Use the `.agent/skills/add-integration-test` skill while creating new tests.
 - **Safety**: `#![forbid(unsafe_code)]` in all crates
 - **Release profile**: `opt-level = "z"`, LTO enabled, symbol stripping (optimized for embedded)
 
+## Markdown style
+
+When writing or editing Markdown documents, use [semantic line breaks](https://sembr.org/):
+start a new line after each sentence, and optionally break long sentences
+at clause boundaries (after commas, semicolons, colons, or dashes).
+
+When editing existing documents that don't use semantic line breaks,
+apply them only to the lines you add or modify.
+Do not reformat the rest of the document.
+
 ## Troubleshooting
 
 ### Build Issues

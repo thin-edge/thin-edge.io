@@ -389,7 +389,7 @@ impl ConnectCommand {
         &self,
         tedge_config: &TEdgeConfig,
         _bridge_config: &BridgeConfig,
-        _certificate_shift: &CertificateShift,
+        certificate_shift: &CertificateShift,
     ) -> anyhow::Result<()> {
         match &self.cloud {
             #[cfg(feature = "c8y")]
@@ -399,14 +399,17 @@ impl ConnectCommand {
                     tedge_config.mapper_config::<C8yMapperSpecificConfig>(profile_name)?;
                 let mut mqtt_auth_config =
                     tedge_config.mqtt_auth_config_cloud_broker(&c8y_config)?;
-                if let Some(client_config) = mqtt_auth_config.client.as_mut() {
-                    _certificate_shift
-                        .new_cert_path
-                        .clone_into(&mut client_config.cert_file)
-                }
+                certificate_shift
+                    .new_cert_path
+                    .clone_into(&mut mqtt_auth_config.client.cert_file);
 
-                create_device_with_direct_connection(_bridge_config, device_type, mqtt_auth_config)
-                    .await
+                create_device_with_direct_connection(
+                    _bridge_config,
+                    profile_name.as_deref(),
+                    device_type,
+                    mqtt_auth_config,
+                )
+                .await
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => Ok(()),
@@ -1090,6 +1093,7 @@ impl ConnectCommand {
                     let spinner = Spinner::start("Creating device in Cumulocity cloud");
                     let res = create_device_with_direct_connection(
                         bridge_config,
+                        profile_name.as_deref(),
                         &tedge_config.device.ty,
                         mqtt_auth_config,
                     )
@@ -1454,11 +1458,11 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
             let err = validate_config(&config, &cloud).unwrap_err();
-            pretty_assertions::assert_eq!(err.to_string(), format!("You have matching URLs and device IDs for different profiles.
+            pretty_assertions::assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
 
 c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
 
-Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud."))
+Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.")
         }
 
         #[tokio::test]
@@ -1476,11 +1480,11 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
             let err = validate_config(&config, &cloud).unwrap_err();
-            pretty_assertions::assert_eq!(err.to_string(), format!("You have matching URLs and device IDs for different profiles.
+            pretty_assertions::assert_eq!(err.to_string(), "You have matching URLs and device IDs for different profiles.
 
 c8y.url, c8y.profiles.new.url are set to the same value, but so are c8y.device.id, c8y.profiles.new.device.id.
 
-Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud."))
+Each cloud profile requires either a unique URL or unique device ID, so it corresponds to a unique device in the associated cloud.")
         }
 
         #[tokio::test]

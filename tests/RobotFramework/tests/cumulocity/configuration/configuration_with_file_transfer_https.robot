@@ -62,7 +62,7 @@ Configuration operation fails when configuration-plugin does not supply client c
     Enable Certificate Authentication for File Transfer Service
     Disable HTTP Client Certificate for FTS client
     Get Configuration Should Fail
-    ...    failure_reason=config-manager failed uploading configuration snapshot:.+https://${FTS_IP}:8000/te/v1/files/
+    ...    failure_reason=.+Upload failed:.+https://${FTS_IP}:8000/te/v1/files/
     ...    external_id=${PARENT_SN}:device:${CHILD_SN}
     Update Configuration Should Fail
     ...    failure_reason=.+Download failed:.+https://${parent_ip}:8001/c8y/inventory/binaries/

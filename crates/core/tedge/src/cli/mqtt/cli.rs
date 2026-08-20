@@ -39,6 +39,10 @@ pub enum TEdgeMqttCli {
         /// Pause between repeated messages (e.g., 60s, 1h)
         #[clap(long, default_value = "1s")]
         sleep: SecondsOrHumanTime,
+        /// Give up connecting to the broker after this duration (e.g., 10s, 500ms).
+        /// Use 0 / 0s / 0ms for no timeout (retry forever).
+        #[clap(long, default_value = "10s")]
+        connection_timeout: SecondsOrHumanTime,
     },
 
     /// Subscribe a MQTT topic.
@@ -67,6 +71,10 @@ pub enum TEdgeMqttCli {
         /// the first non-retained message
         #[clap(long)]
         retained_only: bool,
+        /// Give up connecting to the broker after this duration (e.g., 10s, 500ms).
+        /// Use 0 / 0s / 0ms for no timeout (retry forever).
+        #[clap(long, default_value = "10s")]
+        connection_timeout: SecondsOrHumanTime,
     },
 }
 
@@ -88,6 +96,7 @@ impl BuildCommand for TEdgeMqttCli {
                     base64,
                     repeat,
                     sleep,
+                    connection_timeout,
                 } => MqttPublishCommand {
                     host: config.mqtt.client.host.clone(),
                     port: config.mqtt.client.port.into(),
@@ -100,6 +109,7 @@ impl BuildCommand for TEdgeMqttCli {
                     auth_config,
                     count: repeat.unwrap_or(1),
                     sleep: sleep.duration(),
+                    connection_timeout: optional_connection_timeout(connection_timeout),
                 }
                 .into_boxed(),
                 TEdgeMqttCli::Sub {
@@ -110,6 +120,7 @@ impl BuildCommand for TEdgeMqttCli {
                     duration,
                     count,
                     retained_only,
+                    connection_timeout,
                 } => MqttSubscribeCommand {
                     host: config.mqtt.client.host.clone(),
                     port: config.mqtt.client.port.into(),
@@ -122,12 +133,25 @@ impl BuildCommand for TEdgeMqttCli {
                     duration: duration.map(|v| v.duration()),
                     count,
                     retained_only,
+                    connection_timeout: optional_connection_timeout(connection_timeout),
                 }
                 .into_boxed(),
             }
         };
 
         Ok(cmd)
+    }
+}
+
+/// Map a CLI duration to an optional connection timeout.
+///
+/// Zero (including `0`, `0s`, `0ms`) means no timeout / infinite retries.
+fn optional_connection_timeout(timeout: SecondsOrHumanTime) -> Option<std::time::Duration> {
+    let duration = timeout.duration();
+    if duration.is_zero() {
+        None
+    } else {
+        Some(duration)
     }
 }
 
@@ -157,8 +181,12 @@ fn qos_completions() -> Vec<CompletionCandidate> {
 
 #[cfg(test)]
 mod tests {
+    use super::optional_connection_timeout;
     use super::parse_qos;
     use rumqttc::QoS;
+    use std::str::FromStr;
+    use std::time::Duration;
+    use tedge_config::models::SecondsOrHumanTime;
 
     #[test]
     fn test_parse_qos_at_most_once() {
@@ -179,5 +207,26 @@ mod tests {
         let input_qos = "2";
         let expected_qos = QoS::ExactlyOnce;
         assert_eq!(parse_qos(input_qos).unwrap(), expected_qos);
+    }
+
+    #[test]
+    fn zero_connection_timeout_means_infinite_retries() {
+        for input in ["0", "0s", "0ms"] {
+            let timeout = SecondsOrHumanTime::from_str(input).unwrap();
+            assert_eq!(
+                optional_connection_timeout(timeout),
+                None,
+                "input {input:?} should disable the connection timeout"
+            );
+        }
+    }
+
+    #[test]
+    fn non_zero_connection_timeout_is_preserved() {
+        let timeout = SecondsOrHumanTime::from_str("10s").unwrap();
+        assert_eq!(
+            optional_connection_timeout(timeout),
+            Some(Duration::from_secs(10))
+        );
     }
 }
