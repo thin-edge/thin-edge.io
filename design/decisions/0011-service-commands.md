@@ -111,14 +111,7 @@ A service command is addressed as below:
 * It needs the workflow engine to scope workflows by entity type,
   so that a service `restart` does not also trigger the device reboot workflow.
   -> Add `type = "service"` filter in the workflow definition.
-* (c8y) The c8y mapper has to aggregate an open set of `cmd/<action>` topics into one `c8y_SupportedServiceCommands` list.
-
-An action name must match `[a-z][a-z0-9_-]*`:
-lowercase letters, digits, `_` and `-`, starting with a letter.
-MQTT topic names are case-sensitive and do accept spaces,
-so this is a restriction thin-edge puts on itself, not one the protocol imposes.
-A name with spaces or mixed case, such as `do something` or `doSomething`,
-is out of scope and is rejected wherever it enters the system.
+* (c8y) The c8y mapper has to aggregate an open set of `cmd/<x>` topics into one `c8y_SupportedServiceCommands` list.
 
 ##### JSON field
 * `status`: the states used by workflow
@@ -127,13 +120,12 @@ is out of scope and is rejected wherever it enters the system.
 
 ##### (c8y) Aggregation of capabilities
 
-* On mapper restart, the retained `cmd/<action>` messages replay,
+* On mapper restart, the retained `cmd/<x>` messages replay,
   so the mapper rebuilds the full set and no capability is lost.
-* A capability is removed when its `cmd/<action>` topic is cleared (retained empty message).
+* A capability is removed when its `cmd/<x>` topic is cleared (retained empty message).
   The mapper drops it from the set and re-publishes the reduced `c8y_SupportedServiceCommands` array.
-* Withdrawing every action leaves an empty array.
-  `c8y_ServiceCommand` stays a registered supported operation of the service,
-  so Cumulocity still offers the operation, with no action to pick.
+* Withdrawing all actions leaves an empty array.
+  `c8y_ServiceCommand` stays a registered supported operation of the service.
 
 #### Capability declaration: Who publishes it?
 
@@ -166,8 +158,7 @@ This part deliberately reuses existing mapper mechanisms; no new concepts are in
   Nothing changes for a device.
 * **An action name breaking the rule is not declared at all.**
   Such a capability is only logged, and dropped.
-  Cumulocity would otherwise show a command whose lowercased name matches no capability topic,
-  so it could never be routed back to the service.
+  Otherwise, Cumulocity would show a command whose name matches no capability topic.
 * **Operation → command.**
   The mapper natively understands the `c8y_ServiceCommand` fragment from the JSON-over-MQTT operation channel
   (first-class, *not* a shipped custom operation handler file):
@@ -178,21 +169,15 @@ This part deliberately reuses existing mapper mechanisms; no new concepts are in
     In addition, the action name must pass the single-token validation
     described under Security considerations;
   * the command topic is built from the lowercased `command` value.
-    The action is named by the topic only:
-    the cloud's `command` value is not copied into the thin-edge payload;
-  * `serviceName` is taken from the cloud payload.
-    Cumulocity holds one name per service, the one thin-edge published when registering it,
-    so this is the name a backend is asked for.
-    It is validated like the service name of `tedge service`,
-    and an absent or invalid name fails the cloud operation;
+    For example, `RESTART` becomes `cmd/restart`;
+  * `serviceName` is taken from the cloud payload;
   * `serviceType` is taken from the service's registration data (its `type` property),
     falling back to the payload value.
     Declaring the service type at registration is optional today,
     but effectively becomes mandatory for services using this feature:
     a service registered without a type is dispatched as the default type `service` (init-managed).
-    It is validated the same way, after being resolved.
 * **Status → Cumulocity.**
-  * The existing command-status mapping (SmartREST `501`–`506`) and the service's own SmartREST topic are reused.
+  * The existing command-status mapping (SmartREST `501`–`506`) is used.
 
 ### Execution: central executor with pluggable dispatch
 
@@ -201,39 +186,30 @@ extended to also react to commands addressed to *services of its own device*
 (today it only reacts to commands addressed to the device itself).
 
 **Opening up the workflow engine, deliberately narrow.**
-The scope is not expressed by the subscription.
-tedge-agent subscribes to the commands of every entity and decides per message
-whether the target is a service of its own device:
+The scope is the services of the agent's device.
 
-* the target is resolved through the REST API of the entity store,
-  which is where the device–service relation is kept.
-  A topic filter would work only with the default topic scheme
-  (`te/device/<device>/service/<service>`), where the topic itself names the parent device.
-* the one exception is the device the agent runs on:
-  it is recognized by comparing topic identifiers, and needs no lookup.
-* when the lookup fails, the command is left untouched, so that it can be retried
-  rather than half-driven.
+* The entity store is used to resolve if a service is owned by the agent's device or not.
+  Resolving it by the topic scheme is not enough because it works
+  only under the default topic scheme (`te/device/<device>/service/<service>`).
 * Introduce a `type` field in the workflow definition to avoid name collision between different targets.
   (e.g. `restart` for a device and a service must have a different workflow.)
   ```toml
   operation = "restart"
   type = "service" # Can take one of the `@type` values: <device|child-device|service>
   ```
-  The device an agent runs on is matched as `device`, whatever `@type` the entity store reports for it.
-  An agent running on a child device reports itself as `child-device`,
-  and matching it on its reported type would leave it unable to find its own workflows.
-  So `child-device` matches nothing today.
+  The device where an agent runs is matched as `device`, regardless of whether
+  the device is main or child.
+  If `type` is not given, it targets `device`.
+  `child-device` matches nothing today.
   It is reserved for the future case of an agent driving the workflows of another device.
 * The file name of a workflow is free.
-  The operation name comes from the `operation` field parsed from the definition
-  (`load_operation_workflow` in `crates/core/tedge_agent/src/operation_workflows/persist.rs`),
-  never from the file name, so a device `restart` and a service `restart`
-  live in the same directory under any two names.
+  The operation name comes from the `operation` field parsed from the definition,
+  so a device `restart` and a service `restart`
+  can exist in the same directory under any two names.
 
 The model is per-device.
 A child device running its own tedge-agent executes the actions for its own services,
 using its own `system.toml`, its own `tedge` CLI/sudoers rule and its own service plugins.
-No agent executes a command on behalf of another device.
 Lookups do cross devices: an agent on a child device queries the entity store of the main device
 over HTTP to learn the parent of a service.
 
@@ -269,21 +245,13 @@ with the same form as the templates already there:
 an argv list with a `{}` placeholder for the service name.
 `[init]` therefore stops rejecting unknown keys: `deny_unknown_fields` is dropped.
 
-Two things keep a misspelled key discoverable:
-the actions read from `[init]` are logged when the configuration is loaded,
-and `tedge service` lists the known actions when it rejects an unsupported one.
-
-The keys of `[init]` that are not service actions — the init system name
-and the templates that query state rather than act on a service — stay reserved,
-and are not dispatchable as actions.
-
 #### Service plugin contract
 
 * an executable at `/usr/share/tedge/service-plugins/<service-type>`.
 * invoked as `<plugin> <action> <service-name>`,
   where `<action>` is `start`, `stop`, `restart` or a plugin-defined custom action.
 * exit `0` on success;
-  `2`, reserved for this meaning, when the action is not supported by this plugin;
+  `2`, reserved for when the action is not supported by this plugin;
   any other non-zero code on failure, with the reason on stderr.
 * an action a plugin defines is named within the `[a-z][a-z0-9_-]*` rule.
   The plugin receives the name exactly as the service declared it,
@@ -304,9 +272,6 @@ and are not dispatchable as actions.
   (e.g. the agent's workflow engine *and* an owner daemon),
   they would publish conflicting state transitions on the same topic and corrupt each other,
   independently of who is "right".
-  The agent does filter per message, so it could drive a subset.
-  It deliberately claims *every* service of its own device instead,
-  because a shared state record has to have exactly one driver:
   **tedge-agent is the sole driver for its device's services,
   and third parties integrate *below* the state machine (an executed plugin process),
   never *beside* it (a competing MQTT subscriber)**.
@@ -328,19 +293,10 @@ and are not dispatchable as actions.
   the agent is killed mid-workflow and, on resume, the step would re-execute: a restart loop.
   The shipped workflow uses the `restart-agent` action instead:
   the agent persists the state awaiting its restart and asks its runtime to stop.
-  No backend is asked to restart it.
-  This holds whether the agent runs as a service of its own,
-  or is co-hosted with the mappers under `tedge run all`, where no `tedge-agent` unit exists.
 * `stop` of **tedge-agent** (the executor) and of any **cloud mapper** (e.g. tedge-mapper-c8y)
   is rejected with a clear failure reason.
   A stopped executor cannot report completion, and a stopped mapper loses the cloud connection,
   so the operation would hang in the cloud forever.
-  A mapper is recognized by its name, always `tedge-mapper-<x>`,
-  whatever its cloud, topic prefix and profile.
-  `tedge-mapper-collectd` and `tedge-mapper-local` are the exception, being connected to no cloud.
-  Stopping one of them takes no way of reporting anything away,
-  so both are stopped as any other service.
-  Neither takes a cloud profile, so both names are fixed.
 
 The workflow carries a timeout so that a hung backend surfaces as a clean failure rather than a stuck operation.
 
@@ -450,9 +406,6 @@ action = "cleanup"
 * The `execute` script resolves to `sudo -n tedge service restart collectd --service-type service`.
 * Then type `service` routes to `systemctl restart collectd`.
 * Exit code `0` → status `successful` → the mapper reports `506`.
-* A reason is declared per exit code, not once for every failure.
-  A wildcard `on_error = { status = "failed", reason = "..." }` does not do what it looks like:
-  the engine replaces the reason of a wildcard handler by `<program> returned exit code <n>`.
 
 ### A container service with standard and custom actions
 
@@ -502,7 +455,7 @@ Topic: `te/device/main/service/nodered/cmd/pause/c8y-mapper-124`
 ```
 
 A custom action has no shipped workflow.
-The user writes one, with the same execution step as the shipped ones:
+The user writes one:
 
 File: `/etc/tedge/operations/service_pause.toml`
 ```toml
@@ -672,5 +625,3 @@ Today, every `te/device/<device>/service/<service>/cmd/+` topic is treated as a 
 declared to the cloud.
 If a user wants to limit which capabilities are declared, how do we support that?
 
-A service declaring both `cmd/restart` and `cmd/collect_measurements`
-gets both in `c8y_SupportedServiceCommands`, with no way to expose only one.
