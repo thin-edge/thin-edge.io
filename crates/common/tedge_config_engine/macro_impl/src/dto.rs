@@ -90,6 +90,9 @@ fn generate_leaf_field(field: &ConfigField) -> TokenStream {
     if field.readonly {
         extra_attrs.push(quote! { #[facet(tedge::readonly)] });
     }
+    if field.exposable {
+        extra_attrs.push(quote! { #[facet(tedge::exposable)] });
+    }
     if let Some(deprecated_key) = &field.deprecated_key {
         extra_attrs.push(quote! { #[facet(tedge::deprecated_key = #deprecated_key)] });
     }
@@ -304,6 +307,28 @@ mod tests {
             .find_field("port")
             .assert_eq(&parse_quote! {
                 #[facet(tedge::deprecated_key = "mqtt.external.port")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
+                pub port: Option<u16>,
+            });
+    }
+
+    #[test]
+    fn exposable_fields_get_the_facet_attribute() {
+        let input: Configuration = parse_quote!(
+            Test {
+                mqtt: {
+                    #[tedge_config(exposable)]
+                    port: u16,
+                },
+            }
+        );
+        let generated = generate(&input);
+
+        TokenQuery::new(&generated)
+            .find_struct("MqttConfigDto")
+            .find_field("port")
+            .assert_eq(&parse_quote! {
+                #[facet(tedge::exposable)]
                 #[facet(default, skip_serializing_if = Option::is_none)]
                 pub port: Option<u16>,
             });

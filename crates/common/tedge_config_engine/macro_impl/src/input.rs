@@ -35,6 +35,7 @@ pub struct ConfigGroup {
 pub struct ConfigField {
     pub doc_attrs: Vec<syn::Attribute>,
     pub readonly: bool,
+    pub exposable: bool,
     rename: Option<String>,
     pub deprecated_key: Option<String>,
     pub default: Option<FieldDefault>,
@@ -74,6 +75,8 @@ pub struct FromKeyVia {
 struct FieldAttributes {
     #[darling(default)]
     readonly: bool,
+    #[darling(default)]
+    exposable: bool,
     #[darling(default)]
     rename: Option<String>,
     #[darling(default)]
@@ -152,6 +155,7 @@ impl Parse for FieldOrGroup {
             Ok(Self::Field(Box::new(ConfigField {
                 doc_attrs: doc_attrs(attrs),
                 readonly: options.readonly,
+                exposable: options.exposable,
                 rename: options.rename,
                 deprecated_key: options.deprecated_key,
                 default: options.default,
@@ -502,6 +506,33 @@ mod tests {
                 },
                 _ => panic!("expected field"),
             },
+            _ => panic!("expected group"),
+        }
+    }
+
+    #[test]
+    fn parse_exposable_attribute() {
+        let config: Configuration = parse_quote!(
+            Test {
+                mqtt: {
+                    #[tedge_config(exposable)]
+                    port: u16,
+
+                    host: String,
+                },
+            }
+        );
+        match &config.groups[0] {
+            FieldOrGroup::Group(g) => {
+                match &g.contents[0] {
+                    FieldOrGroup::Field(f) => assert!(f.exposable),
+                    _ => panic!("expected field"),
+                }
+                match &g.contents[1] {
+                    FieldOrGroup::Field(f) => assert!(!f.exposable),
+                    _ => panic!("expected field"),
+                }
+            }
             _ => panic!("expected group"),
         }
     }

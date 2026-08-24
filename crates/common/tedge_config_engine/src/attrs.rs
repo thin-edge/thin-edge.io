@@ -23,5 +23,8 @@ facet::define_attr_grammar! {
 
         /// An example value shown in `config list` output.
         Example(&'static str),
+
+        /// Marks a field as safe to publish to external clients.
+        Exposable,
     }
 }

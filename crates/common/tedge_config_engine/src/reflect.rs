@@ -83,6 +83,7 @@ pub struct KeyEntry {
     pub key: String,
     pub doc: &'static [&'static str],
     pub examples: Vec<&'static str>,
+    pub exposable: bool,
 }
 
 impl KeyAliases {
@@ -106,6 +107,11 @@ impl KeyAliases {
         }
         (key.to_owned(), None)
     }
+}
+
+/// Whether the field at `key` is marked safe to publish via `tedge::exposable`.
+pub fn is_exposable(shape: &'static Shape, key: &str) -> bool {
+    find_leaf_field(shape, key).is_some_and(|field| field.has_attr(Some(attrs::NS), "exposable"))
 }
 
 /// Returns an error if the field at `key` is marked read-only via `tedge::readonly`.
@@ -656,6 +662,7 @@ fn list_keys_recursive(shape: &'static Shape, prefix: &str, entries: &mut Vec<Ke
                 key: field_key,
                 doc: field.doc,
                 examples: field_examples(field),
+                exposable: field.has_attr(Some(attrs::NS), "exposable"),
             });
         }
     }

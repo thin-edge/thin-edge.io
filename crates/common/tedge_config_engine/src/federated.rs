@@ -119,6 +119,7 @@ impl FederatedConfig {
                     key: format!("{}{}", m.prefix, e.key),
                     doc: e.doc,
                     examples: e.examples,
+                    exposable: e.exposable,
                 })
             })
             .collect()

@@ -48,6 +48,7 @@ pub use reflect::check_read_only;
 pub use reflect::config_get;
 pub use reflect::config_set;
 pub use reflect::config_unset;
+pub use reflect::is_exposable;
 pub use reflect::list_key_entries;
 pub use reflect::list_keys;
 pub use reflect::ConfigError;

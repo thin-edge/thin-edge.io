@@ -19,7 +19,7 @@ mod features {
 
             device: {
                 /// Device type identifier
-                #[tedge_config(rename = "type", default(value = "thin-edge.io"))]
+                #[tedge_config(rename = "type", default(value = "thin-edge.io"), exposable)]
                 ty: String,
 
                 /// Device type, loudly
@@ -84,6 +84,17 @@ mod features {
     }
 
     #[test]
+    fn exposable_key_is_reported_in_key_entries() {
+        let mgr = manager();
+        let entries = mgr.key_entries::<FeaturesConfigDto>();
+        let ty_entry = entries.iter().find(|e| e.key == "device.type").unwrap();
+        assert!(ty_entry.exposable, "device.type should be exposable");
+
+        let url_entry = entries.iter().find(|e| e.key == "c8y.url").unwrap();
+        assert!(!url_entry.exposable, "c8y.url should not be exposable");
+    }
+
+    #[test]
     fn derived_default_follows_a_renamed_source_key() {
         let mgr = manager();
         let dto = FeaturesConfigDto::default();
@@ -113,9 +124,7 @@ mod cyclic {
     }
 
     #[test]
-    #[should_panic(
-        expected = "The default for 'cycle.a' is cyclic: cycle.a -> cycle.b -> cycle.a"
-    )]
+    #[should_panic(expected = "The default for 'cycle.a' is cyclic: cycle.a -> cycle.b -> cycle.a")]
     fn cyclic_optional_defaults_are_rejected_at_startup() {
         ConfigManager::from_schema::<CyclicConfig>(std::path::Path::new("/etc/tedge"));
     }
