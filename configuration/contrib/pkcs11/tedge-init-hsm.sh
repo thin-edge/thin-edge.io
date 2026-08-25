@@ -36,7 +36,7 @@ to your HSM's manufacturer notes.
 $0 [OPTIONS]
 
 ARGUMENTS
-  --type <string>           Type of HSM (using the PKCS#11 interface) to use. Available values: [tpm2, nitrokey, softhsm2]
+  --type <string>           Type of HSM (using the PKCS#11 interface) to use. Available values: [tpm2, nitrokey, softhsm2, rpi_otp]
   --token-url <url>         Token PKCS#11 URL which is to be used for initialization.
   --label <string>          Token label to be associated with the created key pair. Defaults to tedge
   --id <string>             Token id to be associated with the created key pair. Defaults to a randomized value
@@ -71,6 +71,10 @@ $0 --type nitrokey --pin $PIN --so-pin $SO_PIN
 
 $0 --type softhsm2 --pin $PIN --so-pin $SO_PIN
 # Initialize a new slot and create a new private key pair using softhsm2 (for testing only)
+
+## Raspberry Pi 4/5 (requires latest EEPROM and https://github.com/embetrix/rpifwcrypto-pkcs11 to be installed)
+$0 --type rpi_otp
+# Initialize the rpi-otp to create a single token (which can only be written once).
 
 EOT
 }
@@ -134,6 +138,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$PKCS11_MODULE" ]; then
+    # TODO: Should it override the value here?
     VALUE=$(tedge config get device.cryptoki.module_path 2>/dev/null ||:)
     if [ -n "$VALUE" ]; then
         if [ -f "$VALUE" ]; then
@@ -180,6 +185,9 @@ find_pkcs11_module() {
         tpm2)
             PKCS11_MODULE=$(find /usr/lib -name libtpm2_pkcs11.so | head -n1)
             ;;
+        rpi_otp)
+            PKCS11_MODULE=$(find /usr/lib -name rpifwcrypto-pkcs11.so | head -n1)
+            ;;
         *)
             # Don't use an explicit pkcs11 module, let the tooling choose the default
             ;;
@@ -221,6 +229,29 @@ set_user_pin_via_so() {
 
 init_private_key() {
     case "$1" in
+        rpi_otp)
+            # NOTES: Supported on Raspberry 4 and 5, but also needs an up-to-date EEPROM
+            if ! command -V rpi-fw-crypto >/dev/null 2>&1; then
+                echo "ERROR: Missing 'rpi-fw-crypto' command. Please install it (see https://github.com/embetrix/rpifwcrypto-pkcs11) and try again" >&2
+                exit 1
+            fi
+            # NOTE: tedge hsm create-key isn't supported so it needs to be manually created
+            if ! rpi-fw-crypto pubkey --key-id 1 >/dev/null 2>&1; then
+                echo "Initializing Raspberry Pi OTP Key" >&2
+                if ! rpi-fw-crypto genkey --key-id 1 --alg ec; then
+                    echo "ERROR: Failed to create a key. Try updating the Raspberry PI EEPROM using 'sudo rpi-eeprom-update -a' and try again"
+                    exit 1
+                fi
+            fi
+            restart_p11_server
+
+            # No token initialization and no PIN: the token ships initialized and doesn't set
+            # CKF_LOGIN_REQUIRED. Select the key by id - the module ignores CKA_LABEL, so a
+            # label-based URI would be recorded but meaningless.
+            TEDGE_TOKEN_URL="pkcs11:id=%01"
+            TOKEN_LABEL="OTP Key 1"
+            TOKEN_ID=
+            ;;
         softhsm2|softhsm)
             # SoftHSM2 supports token initialization via the PKCS#11 interface (C_InitToken), so
             # tedge-p11-server can initialize the token directly - no softhsm2-util needed. Allow the
