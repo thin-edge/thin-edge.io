@@ -50,7 +50,7 @@ sudo tedge config set service.plugin_paths /usr/local/share/tedge/service-plugin
 sudo tedge service restart collectd
 
 # Handled by /usr/share/tedge/service-plugins/container
-sudo tedge service restart nodered --service-type container
+sudo tedge service restart nodered --type container
 ```
 
 Acting on a service usually requires root, so the runner is normally called under `sudo`.
@@ -64,7 +64,7 @@ For any other type, they are whatever the plugin implements.
 
 ### Running a plugin
 
-* For `tedge service <action> <name> --service-type <type>`,
+* For `tedge service <action> <name> --type <type>`,
   the runner executes `<plugin-dir>/<type> <action> <name>`.
 * The runner forwards the plugin's stdout and stderr to its own.
 * The runner maps the plugin's exit code to its own:
@@ -172,5 +172,5 @@ sudo chmod 755 /usr/share/tedge/service-plugins/container
 It can then be used on its own:
 
 ```sh
-sudo tedge service pause nodered --service-type container
+sudo tedge service pause nodered --type container
 ```

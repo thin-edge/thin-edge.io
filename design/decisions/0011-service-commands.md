@@ -218,7 +218,7 @@ over HTTP to learn the parent of a service.
 The workflow's execution step delegates to a new CLI command:
 
 ```
-sudo -n tedge service <action> <service-name> [--service-type <type>]
+sudo -n tedge service <action> <service-name> [--type <type>]
 ```
 
 where `<action>` is a validated single token, e.g. `start`, `stop` or `restart`.
@@ -258,9 +258,9 @@ an argv list with a `{}` placeholder for the service name.
   and does not have to accept another spelling of it.
 
 #### Examples
-* `sudo tedge service restart collectd --service-type service`
+* `sudo tedge service restart collectd --type service`
 -> executes `sudo systemctl restart collectd` (`service` type mapped to `system.toml` init system definition)
-* `sudo tedge service restart nodered --service-type container`
+* `sudo tedge service restart nodered --type container`
 -> executes `sudo /usr/share/tedge/service-plugins/container restart nodered` (`container` type mapped to a service plugin)
 
 
@@ -385,7 +385,7 @@ on_success = "successful"
 on_timeout = { status = "failed", reason = "tedge-agent did not restart in time" }
 
 [execute]
-script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type ${.payload.serviceType}"
+script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
 # systemd waits for the service to stop and to start again, 90 seconds each by default
 timeout_second = 180
 on_exit.0 = "successful"
@@ -403,7 +403,7 @@ action = "cleanup"
 action = "cleanup"
 ```
 
-* The `execute` script resolves to `sudo -n tedge service restart collectd --service-type service`.
+* The `execute` script resolves to `sudo -n tedge service restart collectd --type service`.
 * Then type `service` routes to `systemctl restart collectd`.
 * Exit code `0` → status `successful` → the mapper reports `506`.
 
@@ -471,7 +471,7 @@ action = "proceed"
 on_success = "execute"
 
 [execute]
-script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --service-type ${.payload.serviceType}"
+script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
 timeout_second = 180
 on_exit.0 = "successful"
 on_exit.1 = { status = "failed", reason = "The action failed, see the operation log for the reason given by the backend" }
@@ -486,7 +486,7 @@ action = "cleanup"
 action = "cleanup"
 ```
 
-* The `execute` script resolves to `sudo -n tedge service pause nodered --service-type container`,
+* The `execute` script resolves to `sudo -n tedge service pause nodered --type container`,
 which executes `/usr/share/tedge/service-plugins/container pause nodered`.
 * The plugin maps the action to its container engine (e.g. `docker pause`).
 
