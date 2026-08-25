@@ -138,14 +138,10 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$PKCS11_MODULE" ]; then
-    # TODO: Should it override the value here?
     VALUE=$(tedge config get device.cryptoki.module_path 2>/dev/null ||:)
     if [ -n "$VALUE" ]; then
-        if [ -f "$VALUE" ]; then
-            PKCS11_MODULE="$VALUE"
-        else
-            tedge config unset device.cryptoki.module_path 2>/dev/null ||:
-        fi
+        echo "Removing previous 'device.cryptoki.module_path' setting. value=$VALUE" >&2
+        tedge config unset device.cryptoki.module_path 2>/dev/null ||:
     fi
 fi
 
@@ -199,6 +195,10 @@ find_pkcs11_module() {
 #
 
 configure_tedge() {
+    if [ ! -f "$PKCS11_MODULE" ]; then
+        echo "ERROR: PKCS11 module does not exist. path=$PKCS11_MODULE"
+        exit 1
+    fi
     tedge config set mqtt.bridge.built_in true
     tedge config set device.cryptoki.mode socket
     tedge config set device.cryptoki.module_path "$PKCS11_MODULE"
