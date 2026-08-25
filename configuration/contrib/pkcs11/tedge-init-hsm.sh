@@ -267,31 +267,19 @@ EOT
     esac
 
     echo "Creating a private key" >&2
-    TEDGE_TOKEN_URL="pkcs11:token=$TOKEN_LABEL"
-
-    CREATE_KEY_OPTIONS=
-    if [ -n "$TOKEN_ID" ]; then
-        CREATE_KEY_OPTIONS="$CREATE_KEY_OPTIONS --id $TOKEN_ID"
+    if [ -z "$TEDGE_TOKEN_URL" ]; then
+        TEDGE_TOKEN_URL="pkcs11:token=$TOKEN_LABEL"
     fi
 
-    if [ -n "$KEY_TYPE" ]; then
-        CREATE_KEY_OPTIONS="$CREATE_KEY_OPTIONS --type $KEY_TYPE"
-    fi
+    set -- --outfile-pubkey "$PUBLIC_KEY"
+    if [ -n "$TOKEN_ID" ]; then set -- "$@" --id "$TOKEN_ID"; fi
+    if [ -n "$KEY_TYPE" ]; then set -- "$@" --type "$KEY_TYPE"; fi
+    if [ -n "$RSA_BITS" ]; then set -- "$@" --bits "$RSA_BITS"; fi
+    if [ -n "$ECDSA_CURVE" ]; then set -- "$@" --curve "$ECDSA_CURVE"; fi
+    if [ -n "$TOKEN_LABEL" ]; then set -- "$@" --label "$TOKEN_LABEL"; fi
+    if [ -n "$TEDGE_TOKEN_URL" ]; then set -- "$@" "$TEDGE_TOKEN_URL"; fi
 
-    if [ -n "$RSA_BITS" ]; then
-        CREATE_KEY_OPTIONS="$CREATE_KEY_OPTIONS --bits $RSA_BITS"
-    fi
-
-    if [ -n "$ECDSA_CURVE" ]; then
-        CREATE_KEY_OPTIONS="$CREATE_KEY_OPTIONS --curve $ECDSA_CURVE"
-    fi
-
-    # shellcheck disable=SC2086
-    tedge hsm create-key \
-        $CREATE_KEY_OPTIONS \
-        --label "$TOKEN_LABEL" \
-        --outfile-pubkey "$PUBLIC_KEY" \
-        "$TEDGE_TOKEN_URL"
+    tedge hsm create-key "$@"
 }
 
 #
