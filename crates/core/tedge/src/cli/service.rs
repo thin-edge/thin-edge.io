@@ -36,7 +36,7 @@ pub struct TEdgeServiceOpt {
     ///
     /// The default type is handled by the init system configured in system.toml.
     /// Any other type is handled by the service plugin.
-    #[clap(long, default_value = DEFAULT_SERVICE_TYPE)]
+    #[clap(long("type"), default_value = DEFAULT_SERVICE_TYPE)]
     service_type: String,
 }
 
