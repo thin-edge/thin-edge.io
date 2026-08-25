@@ -27,12 +27,12 @@ Run tedge service for systemd service with a custom action
     Execute Command    grep reloaded /tmp/dummy-service-reload.log
 
 Run tedge service for service plugin
-    Execute Command    tedge service restart name --service-type dummy
+    Execute Command    tedge service restart name --type dummy
     # Confirm that the plugin was really executed
     File Should Exist    /tmp/dummy-service-plugin.log
     Execute Command    grep "restart name" /tmp/dummy-service-plugin.log
     # Unsupported action should return exit code 2
-    Execute Command    tedge service invalid name --service-type dummy    exp_exit_code=2
+    Execute Command    tedge service invalid name --type dummy    exp_exit_code=2
 
 tedge service does not support name and is_available
     ${stderr}=    Execute Command
