@@ -37,7 +37,7 @@ or hands it to the service plugin named after the type of the service.
 
 ```sh
 sudo tedge service restart nodered
-sudo tedge service restart nodered --service-type container
+sudo tedge service restart nodered --type container
 ```
 
 So a third party that manages its own services, a container engine for instance,
@@ -55,7 +55,7 @@ and writes no state machine of its own.
 - Make tedge-agent the single executor for commands addressed to services of its own device.
   The workflow engine gains a `type` field so that a service `restart` and a device `restart`
   are distinct workflows.
-- Add a `tedge service <action> <name> --service-type <type>` CLI.
+- Add a `tedge service <action> <name> --type <type>` CLI.
   It dispatches on the service type:
   the built-in init-system abstraction (`system.toml`) for the default `service` type,
   or a service plugin at `/usr/share/tedge/service-plugins/<type>` for other types.

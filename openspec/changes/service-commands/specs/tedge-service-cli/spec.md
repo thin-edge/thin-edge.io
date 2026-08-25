@@ -5,14 +5,14 @@
 The `tedge` CLI SHALL provide a `service` subcommand:
 
 ```
-tedge service <action> <service-name> [--service-type <type>]
+tedge service <action> <service-name> [--type <type>]
 ```
 
 `<action>` names the action to perform, for example `start`, `stop` or `restart`.
 It is a single lowercase token, matching `[a-z][a-z0-9_-]*`,
 the same rule that applies to the `cmd/<action>` topic segment.
 `<service-name>` is the name of the service to act on.
-`--service-type` selects the execution backend and SHALL default to `service` when omitted.
+`--type` selects the execution backend and SHALL default to `service` when omitted.
 
 The command SHALL exit `0` on success,
 and SHALL exit non-zero on failure with the reason written to stderr.
@@ -63,21 +63,21 @@ The set of supported actions SHALL be decided by the backend, not by the CLI.
 The CLI SHALL pass the action through unchanged.
 
 #### Scenario: Default type uses the init system
-- **WHEN** `tedge service restart collectd --service-type service` is run
+- **WHEN** `tedge service restart collectd --type service` is run
   and `system.toml` defines the init system as systemd
 - **THEN** it SHALL run the configured restart command for `collectd`, for example `systemctl restart collectd`
 
 #### Scenario: A custom type uses its service plugin
-- **WHEN** `tedge service restart nodered --service-type container` is run
+- **WHEN** `tedge service restart nodered --type container` is run
 - **THEN** it SHALL run `/usr/share/tedge/service-plugins/container restart nodered`
 
 #### Scenario: A plugin is taken from the first directory holding one
-- **WHEN** `tedge service restart nodered --service-type container` is run
+- **WHEN** `tedge service restart nodered --type container` is run
   and more than one directory of `service.plugin_paths` holds a `container` file
 - **THEN** it SHALL run the one from the first of those directories
 
 #### Scenario: No plugin installed for the type
-- **WHEN** `tedge service restart nodered --service-type container` is run
+- **WHEN** `tedge service restart nodered --type container` is run
   and no directory of `service.plugin_paths` holds a `container` file
 - **THEN** the command SHALL fail with the "not supported" exit code and an error message naming the type
 
