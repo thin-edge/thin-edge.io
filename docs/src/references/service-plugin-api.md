@@ -7,18 +7,23 @@ description: Service Plugin API reference
 
 # Service Plugin API
 
-A **service plugin** runs the actions of the services that the init system does not manage:
-containers, an application-specific supervisor, or anything else with its own way to start and stop things.
+A **service plugin** runs the actions of services with a type other than the default type `service`.
+The service type is the `type` field of the
+[service registration message](./mqtt-api#register-a-service-of-the-main-device).
 
-[`tedge service`](./cli/tedge-service) is the runner.
-It dispatches on the service type:
-the default type `service` is handled by the init system configured in
-[`system.toml`](./init-system-configuration),
-and any other type by the plugin named after it.
+For example, given a service `my_service` is registered as below:
+```sh te2mqtt formats=v1
+tedge mqtt pub -r 'te/device/main/service/my_service' '{
+  "@type": "service",
+  "name": "my_service",
+  "type": "container"
+}'
+```
+The request to restart the service will be handled by the plugin `container`.
 
 ## Runner
 
-The runner is the `tedge service` command,
+The runner of service plugins is the `tedge service` command,
 called either by an operator or by the
 service command workflows of `tedge-agent`.
 

@@ -95,12 +95,8 @@ lowercase letters, digits, `_` and `-`, starting with a letter.
 
 :::caution
 `[init]` accepts any key, so a misspelled key is read as a custom action rather than rejected.
-Writing `restrat` instead of `restart` gives the device a `restrat` action it will never be asked for,
-and leaves `restart` at its default.
-
-Two things make such a typo visible:
-the actions read from `[init]` are logged when the configuration is loaded,
-and `tedge service` lists the actions it does know when it rejects one as unsupported.
+For example, writing `restrat` instead of `restart` gives the device a `restrat` action
+that will never be asked for.
 :::
 
 ## Default settings
