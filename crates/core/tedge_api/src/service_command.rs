@@ -1,47 +1,64 @@
+use std::fmt;
+use std::str::FromStr;
+
 pub const DEFAULT_SERVICE_TYPE: &str = "service";
 
-/// Tells whether a name can be used as a service command action.
-pub fn is_valid_action_name(name: &str) -> bool {
-    validate_action_name(name).is_ok()
-}
-
-/// Check that a name can be used as a service command action.
+/// The name of a service action, e.g, `restart`.
 ///
 /// A name is a single lowercase token: `[a-z][a-z0-9_-]*`.
 ///
 /// ```
-/// use tedge_api::service_command::validate_action_name;
+/// use tedge_api::service_command::ActionName;
 ///
-/// assert!(validate_action_name("restart").is_ok());
-/// assert!(validate_action_name("collect_measurements").is_ok());
-/// assert!(validate_action_name("is-active").is_ok());
+/// assert!("restart".parse::<ActionName>().is_ok());
+/// assert!("collect_measurements".parse::<ActionName>().is_ok());
+/// assert!("is-active".parse::<ActionName>().is_ok());
 ///
-/// assert!(validate_action_name("RESTART").is_err());
-/// assert!(validate_action_name("do something").is_err());
-/// assert!(validate_action_name("-restart").is_err());
+/// assert!("RESTART".parse::<ActionName>().is_err());
+/// assert!("do something".parse::<ActionName>().is_err());
+/// assert!("-restart".parse::<ActionName>().is_err());
 /// ```
-pub fn validate_action_name(name: &str) -> Result<(), InvalidActionName> {
-    let invalid = |reason: &str| {
-        Err(InvalidActionName {
-            name: name.to_string(),
-            reason: reason.to_string(),
-        })
-    };
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ActionName(String);
 
-    if name.is_empty() {
-        return invalid("an action name cannot be empty");
-    }
-    if !name.starts_with(|c: char| c.is_ascii_lowercase()) {
-        return invalid("an action name must start with a lowercase letter");
-    }
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
-    {
-        return invalid("an action name must only hold lowercase letters, digits, '_' and '-'");
-    }
+impl FromStr for ActionName {
+    type Err = InvalidActionName;
 
-    Ok(())
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        let invalid = |reason: &str| {
+            Err(InvalidActionName {
+                name: name.to_string(),
+                reason: reason.to_string(),
+            })
+        };
+
+        if name.is_empty() {
+            return invalid("an action name cannot be empty");
+        }
+        if !name.starts_with(|c: char| c.is_ascii_lowercase()) {
+            return invalid("an action name must start with a lowercase letter");
+        }
+        if !name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
+        {
+            return invalid("an action name must only hold lowercase letters, digits, '_' and '-'");
+        }
+
+        Ok(ActionName(name.to_string()))
+    }
+}
+
+impl ActionName {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ActionName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -51,37 +68,56 @@ pub struct InvalidActionName {
     pub reason: String,
 }
 
-/// Check that a name can be used as the name of a service.
+/// The name of a service itself, e.g. `collectd`.
 ///
 /// A name is not empty and does not start with `-`, which `systemctl restart --now` and
 /// `rc-service --now restart` would read as an option.
 ///
 /// ```
-/// use tedge_api::service_command::validate_service_name;
+/// use tedge_api::service_command::ServiceName;
 ///
-/// assert!(validate_service_name("collectd").is_ok());
-/// assert!(validate_service_name("getty@tty1").is_ok());
-/// assert!(validate_service_name("dbus-:1.2-org.freedesktop.problems@0").is_ok());
+/// assert!("collectd".parse::<ServiceName>().is_ok());
+/// assert!("getty@tty1".parse::<ServiceName>().is_ok());
+/// assert!("dbus-:1.2-org.freedesktop.problems@0".parse::<ServiceName>().is_ok());
 ///
-/// assert!(validate_service_name("").is_err());
-/// assert!(validate_service_name("--now").is_err());
+/// assert!("".parse::<ServiceName>().is_err());
+/// assert!("--now".parse::<ServiceName>().is_err());
 /// ```
-pub fn validate_service_name(name: &str) -> Result<(), InvalidServiceName> {
-    let invalid = |reason: &str| {
-        Err(InvalidServiceName {
-            name: name.to_string(),
-            reason: reason.to_string(),
-        })
-    };
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ServiceName(String);
 
-    if name.is_empty() {
-        return invalid("a service name cannot be empty");
-    }
-    if name.starts_with('-') {
-        return invalid("a service name cannot start with '-'");
-    }
+impl FromStr for ServiceName {
+    type Err = InvalidServiceName;
 
-    Ok(())
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        let invalid = |reason: &str| {
+            Err(InvalidServiceName {
+                name: name.to_string(),
+                reason: reason.to_string(),
+            })
+        };
+
+        if name.is_empty() {
+            return invalid("a service name cannot be empty");
+        }
+        if name.starts_with('-') {
+            return invalid("a service name cannot start with '-'");
+        }
+
+        Ok(ServiceName(name.to_string()))
+    }
+}
+
+impl ServiceName {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ServiceName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -91,37 +127,60 @@ pub struct InvalidServiceName {
     pub reason: String,
 }
 
-/// Check that a name can be used as the type of a service.
+/// The type of a service, e.g., `container`.
 ///
 /// A service type names a file in the service plugin directory, so it must be a plain file name.
 ///
 /// ```
-/// use tedge_api::service_command::validate_service_type;
+/// use tedge_api::service_command::ServiceType;
 ///
-/// assert!(validate_service_type("container").is_ok());
+/// assert!("container".parse::<ServiceType>().is_ok());
 ///
-/// assert!(validate_service_type("../../bin/sh").is_err());
-/// assert!(validate_service_type("Container").is_err());
+/// assert!("../../bin/sh".parse::<ServiceType>().is_err());
+/// assert!("Container".parse::<ServiceType>().is_err());
 /// ```
-pub fn validate_service_type(ty: &str) -> Result<(), InvalidServiceType> {
-    let invalid = |reason: &str| {
-        Err(InvalidServiceType {
-            ty: ty.to_string(),
-            reason: reason.to_string(),
-        })
-    };
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ServiceType(String);
 
-    if ty.is_empty() {
-        return invalid("a service type cannot be empty");
+impl FromStr for ServiceType {
+    type Err = InvalidServiceType;
+
+    fn from_str(ty: &str) -> Result<Self, Self::Err> {
+        let invalid = |reason: &str| {
+            Err(InvalidServiceType {
+                ty: ty.to_string(),
+                reason: reason.to_string(),
+            })
+        };
+
+        if ty.is_empty() {
+            return invalid("a service type cannot be empty");
+        }
+        if !ty
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
+        {
+            return invalid("a service type must only hold lowercase letters, digits, '_' and '-'");
+        }
+
+        Ok(ServiceType(ty.to_string()))
     }
-    if !ty
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
-    {
-        return invalid("a service type must only hold lowercase letters, digits, '_' and '-'");
+}
+
+impl ServiceType {
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 
-    Ok(())
+    pub fn is_default(&self) -> bool {
+        self.0 == DEFAULT_SERVICE_TYPE
+    }
+}
+
+impl fmt::Display for ServiceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -146,7 +205,7 @@ mod tests {
     #[test_case("is-active"; "with a dash")]
     #[test_case("r"; "single char")]
     fn accepted_action_names(name: &str) {
-        assert!(is_valid_action_name(name), "{name} should be accepted");
+        assert!(name.parse::<ActionName>().is_ok(), "{name}");
     }
 
     #[test_case(""; "empty")]
@@ -164,12 +223,12 @@ mod tests {
     #[test_case("restart;reboot"; "with a shell separator")]
     #[test_case("--help"; "looking like an option")]
     fn rejected_action_names(name: &str) {
-        assert!(!is_valid_action_name(name), "{name} should be rejected");
+        assert!(name.parse::<ActionName>().is_err(), "{name}");
     }
 
     #[test]
     fn the_reason_names_the_rejected_value() {
-        let err = validate_action_name("Restart").unwrap_err();
+        let err = "Restart".parse::<ActionName>().unwrap_err();
         assert_eq!(
             err.to_string(),
             "Invalid action name 'Restart': an action name must start with a lowercase letter"
@@ -188,19 +247,19 @@ mod tests {
     #[test_case("Nginx Web Server"; "a display name")]
     #[test_case("メインサービス"; "not written in ascii")]
     fn accepted_service_names(name: &str) {
-        assert!(validate_service_name(name).is_ok(), "{name}");
+        assert!(name.parse::<ServiceName>().is_ok(), "{name}");
     }
 
     #[test_case(""; "empty")]
     #[test_case("--now"; "looking like an option")]
     #[test_case("-"; "a single dash")]
     fn rejected_service_names(name: &str) {
-        assert!(validate_service_name(name).is_err(), "{name}");
+        assert!(name.parse::<ServiceName>().is_err(), "{name}");
     }
 
     #[test]
     fn the_reason_names_the_rejected_service_name() {
-        let err = validate_service_name("--now").unwrap_err();
+        let err = "--now".parse::<ServiceName>().unwrap_err();
         assert_eq!(
             err.to_string(),
             "Invalid service name '--now': a service name cannot start with '-'"
@@ -211,7 +270,7 @@ mod tests {
     #[test_case("container")]
     #[test_case("my_type-2")]
     fn accepted_service_types(ty: &str) {
-        assert!(validate_service_type(ty).is_ok(), "{ty}");
+        assert!(ty.parse::<ServiceType>().is_ok(), "{ty}");
     }
 
     #[test_case(""; "empty")]
@@ -220,6 +279,6 @@ mod tests {
     #[test_case("sub/type"; "with a path separator")]
     #[test_case(".."; "parent directory")]
     fn rejected_service_types(ty: &str) {
-        assert!(validate_service_type(ty).is_err(), "{ty}");
+        assert!(ty.parse::<ServiceType>().is_err(), "{ty}");
     }
 }

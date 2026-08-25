@@ -4,12 +4,9 @@ use crate::log::MaybeFancy;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::process::Stdio;
-use tedge_api::service_command::validate_action_name;
-use tedge_api::service_command::validate_service_name;
-use tedge_api::service_command::validate_service_type;
-use tedge_api::service_command::InvalidActionName;
-use tedge_api::service_command::InvalidServiceName;
-use tedge_api::service_command::InvalidServiceType;
+use tedge_api::service_command::ActionName;
+use tedge_api::service_command::ServiceName;
+use tedge_api::service_command::ServiceType;
 use tedge_api::service_command::DEFAULT_SERVICE_TYPE;
 use tedge_api::workflow::BEGIN_TEDGE_MARKER;
 use tedge_api::workflow::END_TEDGE_MARKER;
@@ -27,17 +24,17 @@ pub struct TEdgeServiceOpt {
     ///
     /// Which actions are supported is decided depending on the service type.
     /// Init system for the default service type, a service plugin for any other type.
-    action: String,
+    action: ActionName,
 
     /// The name of the service to act on
-    service_name: String,
+    service_name: ServiceName,
 
     /// The type of the service
     ///
     /// The default type is handled by the init system configured in system.toml.
     /// Any other type is handled by the service plugin.
     #[clap(long("type"), default_value = DEFAULT_SERVICE_TYPE)]
-    service_type: String,
+    service_type: ServiceType,
 }
 
 #[async_trait::async_trait]
@@ -64,9 +61,9 @@ impl BuildCommand for TEdgeServiceOpt {
 
 #[derive(Debug)]
 pub struct ServiceActionCommand {
-    action: String,
-    service_name: String,
-    service_type: String,
+    action: ActionName,
+    service_name: ServiceName,
+    service_type: ServiceType,
     plugin_paths: Vec<Utf8PathBuf>,
 }
 
@@ -93,21 +90,11 @@ impl Command for ServiceActionCommand {
 
 impl ServiceActionCommand {
     async fn run(&self, config: &TEdgeConfig) -> Result<(), ServiceActionError> {
-        // Check every argument before use, since this process runs as root
-        self.validate()?;
-
-        if self.service_type == DEFAULT_SERVICE_TYPE {
+        if self.service_type.is_default() {
             self.run_init_system_action(config.root_dir()).await
         } else {
             self.run_plugin_action().await
         }
-    }
-
-    fn validate(&self) -> Result<(), ServiceActionError> {
-        validate_action_name(&self.action)?;
-        validate_service_name(&self.service_name)?;
-        validate_service_type(&self.service_type)?;
-        Ok(())
     }
 
     async fn run_init_system_action(
@@ -115,10 +102,10 @@ impl ServiceActionCommand {
         config_root: &Utf8Path,
     ) -> Result<(), ServiceActionError> {
         let service_manager = service_manager(config_root)?;
-        let service = SystemService::new(&self.service_name);
+        let service = SystemService::new(self.service_name.as_str());
 
         let outcome = service_manager
-            .run_action(&self.action, service)
+            .run_action(self.action.as_str(), service)
             .await
             // Any error occurred before running a process
             .map_err(|err| match err {
@@ -149,8 +136,8 @@ impl ServiceActionCommand {
         let plugin = self.find_plugin()?;
 
         let output = tokio::process::Command::new(&plugin)
-            .arg(&self.action)
-            .arg(&self.service_name)
+            .arg(self.action.as_str())
+            .arg(self.service_name.as_str())
             .stdin(Stdio::null())
             .output()
             .await;
@@ -187,7 +174,7 @@ impl ServiceActionCommand {
     fn find_plugin(&self) -> Result<Utf8PathBuf, ServiceActionError> {
         self.plugin_paths
             .iter()
-            .map(|dir| dir.join(&self.service_type))
+            .map(|dir| dir.join(self.service_type.as_str()))
             .find(|plugin| plugin.is_file())
             .ok_or_else(|| {
                 let dirs: Vec<&str> = self.plugin_paths.iter().map(|dir| dir.as_str()).collect();
@@ -205,15 +192,6 @@ impl ServiceActionCommand {
 enum ServiceActionError {
     #[error("{0}")]
     NotSupported(String),
-
-    #[error(transparent)]
-    InvalidActionName(#[from] InvalidActionName),
-
-    #[error(transparent)]
-    InvalidServiceName(#[from] InvalidServiceName),
-
-    #[error(transparent)]
-    InvalidServiceType(#[from] InvalidServiceType),
 
     #[error(transparent)]
     InitSystem(#[from] SystemServiceError),
@@ -468,9 +446,9 @@ disable = ["/bin/true", "{}"]
 
     fn command(action: &str, service_name: &str, service_type: &str) -> ServiceActionCommand {
         ServiceActionCommand {
-            action: action.to_string(),
-            service_name: service_name.to_string(),
-            service_type: service_type.to_string(),
+            action: action.parse().unwrap(),
+            service_name: service_name.parse().unwrap(),
+            service_type: service_type.parse().unwrap(),
             plugin_paths: vec!["/usr/share/tedge/service-plugins".into()],
         }
     }
