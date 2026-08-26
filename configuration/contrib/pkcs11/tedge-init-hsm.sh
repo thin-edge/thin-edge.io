@@ -36,7 +36,7 @@ to your HSM's manufacturer notes.
 $0 [OPTIONS]
 
 ARGUMENTS
-  --type <string>           Type of HSM (using the PKCS#11 interface) to use. Available values: [tpm2, nitrokey, softhsm2]
+  --type <string>           Type of HSM (using the PKCS#11 interface) to use. Available values: [tpm2, nitrokey, softhsm2, rpi_otp]
   --token-url <url>         Token PKCS#11 URL which is to be used for initialization.
   --label <string>          Token label to be associated with the created key pair. Defaults to tedge
   --id <string>             Token id to be associated with the created key pair. Defaults to a randomized value
@@ -71,6 +71,10 @@ $0 --type nitrokey --pin $PIN --so-pin $SO_PIN
 
 $0 --type softhsm2 --pin $PIN --so-pin $SO_PIN
 # Initialize a new slot and create a new private key pair using softhsm2 (for testing only)
+
+## Raspberry Pi 4/5 (requires latest EEPROM and https://github.com/embetrix/rpifwcrypto-pkcs11 to be installed)
+$0 --type rpi_otp
+# Initialize the rpi-otp to create a single token (which can only be written once).
 
 EOT
 }
@@ -136,11 +140,8 @@ done
 if [ -z "$PKCS11_MODULE" ]; then
     VALUE=$(tedge config get device.cryptoki.module_path 2>/dev/null ||:)
     if [ -n "$VALUE" ]; then
-        if [ -f "$VALUE" ]; then
-            PKCS11_MODULE="$VALUE"
-        else
-            tedge config unset device.cryptoki.module_path 2>/dev/null ||:
-        fi
+        echo "Removing previous 'device.cryptoki.module_path' setting. value=$VALUE" >&2
+        tedge config unset device.cryptoki.module_path 2>/dev/null ||:
     fi
 fi
 
@@ -180,6 +181,9 @@ find_pkcs11_module() {
         tpm2)
             PKCS11_MODULE=$(find /usr/lib -name libtpm2_pkcs11.so | head -n1)
             ;;
+        rpi_otp)
+            PKCS11_MODULE=$(find /usr/lib -name rpifwcrypto-pkcs11.so | head -n1)
+            ;;
         *)
             # Don't use an explicit pkcs11 module, let the tooling choose the default
             ;;
@@ -191,6 +195,10 @@ find_pkcs11_module() {
 #
 
 configure_tedge() {
+    if [ ! -f "$PKCS11_MODULE" ]; then
+        echo "ERROR: PKCS11 module does not exist. path=$PKCS11_MODULE"
+        exit 1
+    fi
     tedge config set mqtt.bridge.built_in true
     tedge config set device.cryptoki.mode socket
     tedge config set device.cryptoki.module_path "$PKCS11_MODULE"
@@ -221,6 +229,29 @@ set_user_pin_via_so() {
 
 init_private_key() {
     case "$1" in
+        rpi_otp)
+            # NOTES: Supported on Raspberry 4 and 5, but also needs an up-to-date EEPROM
+            if ! command -V rpi-fw-crypto >/dev/null 2>&1; then
+                echo "ERROR: Missing 'rpi-fw-crypto' command. Please install it (see https://github.com/embetrix/rpifwcrypto-pkcs11) and try again" >&2
+                exit 1
+            fi
+            # NOTE: tedge hsm create-key isn't supported so it needs to be manually created
+            if ! rpi-fw-crypto pubkey --key-id 1 >/dev/null 2>&1; then
+                echo "Initializing Raspberry Pi OTP Key" >&2
+                if ! rpi-fw-crypto genkey --key-id 1 --alg ec; then
+                    echo "ERROR: Failed to create a key. Try updating the Raspberry PI EEPROM using 'sudo rpi-eeprom-update -a' and try again"
+                    exit 1
+                fi
+            fi
+            restart_p11_server
+
+            # No token initialization and no PIN: the token ships initialized and doesn't set
+            # CKF_LOGIN_REQUIRED. Select the key by id - the module ignores CKA_LABEL, so a
+            # label-based URI would be recorded but meaningless.
+            TEDGE_TOKEN_URL="pkcs11:id=%01"
+            TOKEN_LABEL="OTP Key 1"
+            TOKEN_ID=
+            ;;
         softhsm2|softhsm)
             # SoftHSM2 supports token initialization via the PKCS#11 interface (C_InitToken), so
             # tedge-p11-server can initialize the token directly - no softhsm2-util needed. Allow the
@@ -267,31 +298,19 @@ EOT
     esac
 
     echo "Creating a private key" >&2
-    TEDGE_TOKEN_URL="pkcs11:token=$TOKEN_LABEL"
-
-    CREATE_KEY_OPTIONS=
-    if [ -n "$TOKEN_ID" ]; then
-        CREATE_KEY_OPTIONS="$CREATE_KEY_OPTIONS --id $TOKEN_ID"
+    if [ -z "$TEDGE_TOKEN_URL" ]; then
+        TEDGE_TOKEN_URL="pkcs11:token=$TOKEN_LABEL"
     fi
 
-    if [ -n "$KEY_TYPE" ]; then
-        CREATE_KEY_OPTIONS="$CREATE_KEY_OPTIONS --type $KEY_TYPE"
-    fi
+    set -- --outfile-pubkey "$PUBLIC_KEY"
+    if [ -n "$TOKEN_ID" ]; then set -- "$@" --id "$TOKEN_ID"; fi
+    if [ -n "$KEY_TYPE" ]; then set -- "$@" --type "$KEY_TYPE"; fi
+    if [ -n "$RSA_BITS" ]; then set -- "$@" --bits "$RSA_BITS"; fi
+    if [ -n "$ECDSA_CURVE" ]; then set -- "$@" --curve "$ECDSA_CURVE"; fi
+    if [ -n "$TOKEN_LABEL" ]; then set -- "$@" --label "$TOKEN_LABEL"; fi
+    if [ -n "$TEDGE_TOKEN_URL" ]; then set -- "$@" "$TEDGE_TOKEN_URL"; fi
 
-    if [ -n "$RSA_BITS" ]; then
-        CREATE_KEY_OPTIONS="$CREATE_KEY_OPTIONS --bits $RSA_BITS"
-    fi
-
-    if [ -n "$ECDSA_CURVE" ]; then
-        CREATE_KEY_OPTIONS="$CREATE_KEY_OPTIONS --curve $ECDSA_CURVE"
-    fi
-
-    # shellcheck disable=SC2086
-    tedge hsm create-key \
-        $CREATE_KEY_OPTIONS \
-        --label "$TOKEN_LABEL" \
-        --outfile-pubkey "$PUBLIC_KEY" \
-        "$TEDGE_TOKEN_URL"
+    tedge hsm create-key "$@"
 }
 
 #
