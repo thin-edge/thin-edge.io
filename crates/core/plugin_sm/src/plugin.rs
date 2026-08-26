@@ -453,7 +453,7 @@ impl Plugin for ExternalPluginCommand {
                     format!(
                         "install\t{}\t{}\t{}\n",
                         module.name,
-                        module.version.clone().map_or("".into(), |v| v),
+                        module.version.clone().unwrap_or("".into()),
                         module.file_path.clone().map_or("".into(), |v| v
                             .to_str()
                             .map_or("".into(), |u| u.to_string()))
@@ -464,7 +464,7 @@ impl Plugin for ExternalPluginCommand {
                     format!(
                         "remove\t{}\t{}\t\n",
                         module.name,
-                        module.version.clone().map_or("".into(), |v| v),
+                        module.version.clone().unwrap_or("".into()),
                     )
                 }
             };
