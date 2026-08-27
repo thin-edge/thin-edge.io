@@ -25,13 +25,23 @@ use serde::Deserialize;
 use tedge_p11::CryptokiConfigDirect;
 use tedge_p11::TedgeP11Client;
 use tedge_p11::TedgeP11Server;
+use time::format_description::BorrowedFormatItem;
+use time::macros::format_description;
 use tokio::signal::unix::SignalKind;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
 use tracing::Level;
+use tracing_subscriber::fmt::time::UtcTime;
 use tracing_subscriber::EnvFilter;
+
+/// The RFC 3339 timestamp format shared with the other thin-edge.io services:
+/// fractional seconds always zero-padded to 9 digits, so the log columns stay
+/// aligned. Duplicated from `tedge_config` to keep this server's dependencies
+/// minimal.
+const TIMESTAMP_FORMAT: &[BorrowedFormatItem<'static>] =
+    format_description!("[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:9]Z");
 
 /// thin-edge.io service for passing PKCS#11 cryptographic tokens.
 #[derive(Debug, Clone, PartialEq, Eq, Parser)]
@@ -244,6 +254,7 @@ async fn main() -> anyhow::Result<()> {
     let if_dev_logging = std::env::var("RUST_LOG").is_ok();
 
     tracing_subscriber::fmt()
+        .with_timer(UtcTime::new(TIMESTAMP_FORMAT))
         .with_file(if_dev_logging)
         .with_line_number(if_dev_logging)
         .with_env_filter(

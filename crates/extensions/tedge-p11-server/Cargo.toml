@@ -19,6 +19,7 @@ rustls.workspace = true
 sd-listen-fds.workspace = true
 serde.workspace = true
 tedge-p11.workspace = true
+time = { workspace = true, features = ["formatting", "macros"] }
 tokio = { workspace = true, features = [
     "macros",
     "rt-multi-thread",
