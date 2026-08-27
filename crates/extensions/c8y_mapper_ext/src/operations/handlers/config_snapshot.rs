@@ -349,7 +349,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/config_snapshot/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/te/v1/files/child1/config_snapshot/typeA-c8y-mapper-1234"),
+            "tedgeUrl": "http://localhost:8888/te/v1/files/child1/config_snapshot/typeA-c8y-mapper-1234",
             "type": "typeA",
             "reason": "Something went wrong"
         })

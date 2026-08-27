@@ -373,7 +373,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/te/v1/files/test-device/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -393,7 +393,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/te/v1/files/test-device/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -436,7 +436,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/te/v1/files/child1/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": "http://localhost:8888/te/v1/files/child1/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -463,7 +463,7 @@ mod tests {
             &Topic::new_unchecked("te/device/child1///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/te/v1/files/child1/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": "http://localhost:8888/te/v1/files/child1/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -506,7 +506,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "executing",
-            "tedgeUrl": format!("http://localhost:8888/te/v1/files/test-device/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",
@@ -526,7 +526,7 @@ mod tests {
             &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1234"),
             json!({
             "status": "failed",
-            "tedgeUrl": format!("http://localhost:8888/te/v1/files/test-device/log_upload/typeA-c8y-mapper-1234"),
+            "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/log_upload/typeA-c8y-mapper-1234",
             "type": "typeA",
             "dateFrom": "2013-06-22T17:03:14.123+02:00",
             "dateTo": "2013-06-23T18:03:14.123+02:00",

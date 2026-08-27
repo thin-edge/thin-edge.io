@@ -89,7 +89,7 @@ impl FlowContextHandle {
 
     pub(crate) fn drain_updates(&mut self) -> Vec<FlowContextUpdate> {
         let mut data = self.handle.lock().unwrap();
-        data.updates.drain(..).collect()
+        std::mem::take(&mut data.updates)
     }
 
     pub(crate) fn store_as_userdata(&self, ctx: &Ctx<'_>) {

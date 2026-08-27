@@ -233,7 +233,6 @@ mod tests {
     use super::*;
     use serde::Deserialize;
     use serde_json::json;
-    use tedge_config_macros_macro::define_tedge_config;
 
     #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
     struct TEdgeConfigDto {
@@ -468,7 +467,6 @@ mod tests {
     }
 
     mod cleanup_on_unset {
-        use super::*;
         use crate::*;
 
         define_tedge_config! {
