@@ -49,7 +49,7 @@ use tracing::Instrument;
 
 pub type MqttConfig = mqtt_channel::Config;
 
-use crate::health::BridgeHealth;
+use crate::health::BridgeConnectionLog;
 use crate::health::BridgeHealthMonitor;
 use crate::mqtt_logging::LoggingAsyncClient;
 pub use mqtt_channel::DebugPayload;
@@ -139,7 +139,8 @@ impl<C: MqttClient + 'static> SubackTracker<C> {
         );
     }
 
-    fn handle_timeout(&mut self, name: &'static str, gate: &SubscriptionGateController) {
+    async fn handle_timeout(&mut self, readiness: &mut BridgeHalfReadiness) {
+        let name = readiness.name;
         if self.subscribe_round < MAX_SUBSCRIBE_ROUNDS {
             self.subscribe_round += 1;
             log_event!(warn: name,
@@ -161,7 +162,9 @@ impl<C: MqttClient + 'static> SubackTracker<C> {
                 needed = self.subacks_needed,
                 outstanding = self.outstanding_subs,
             );
-            gate.open();
+            // Forwarding resumes despite the missing acknowledgements, so the half is
+            // reported up rather than left down forever
+            readiness.ready().await;
             self.deadline = None;
             self.subscribe_round = 0;
         }
@@ -172,6 +175,7 @@ pub struct MqttBridgeActorBuilder {
     tasks: Vec<JoinHandle<()>>,
     signal_tx: futures_mpsc::Sender<RuntimeRequest>,
     signal_rx: futures_mpsc::Receiver<RuntimeRequest>,
+    local_subscriptions_ready: watch::Receiver<bool>,
 }
 
 impl MqttBridgeActorBuilder {
@@ -257,6 +261,7 @@ impl MqttBridgeActorBuilder {
             rules.converters_and_bidirectional_topic_filters();
         let (tx_status, monitor) =
             BridgeHealthMonitor::new(health_topic.name.clone(), &local_target);
+        let local_subscriptions_ready = local_gate_controller.watch();
         let cloud_tx = cloud_target.clone_sender();
         let local_tx = local_target.clone_sender();
         let monitor_task = tokio::spawn(
@@ -313,7 +318,14 @@ impl MqttBridgeActorBuilder {
             tasks,
             signal_tx,
             signal_rx,
+            local_subscriptions_ready,
         }
+    }
+
+    /// A signal used to prevent the mapper starting until the bridge is ready to receive messages
+    /// from the local broker
+    pub fn local_subscriptions_ready(&self) -> watch::Receiver<bool> {
+        self.local_subscriptions_ready.clone()
     }
 
     pub(crate) fn build_actor(self) -> MqttBridgeActor {
@@ -350,14 +362,13 @@ fn bidirectional_channel<Client: MqttClient + 'static>(
 
 /// Gates outbound publishes until a connection's subscriptions are acknowledged
 ///
-/// On a clean session the broker has no record of our subscriptions, so a message
-/// published before the relevant `SUBACK` could trigger a response on a topic we
-/// have not finished subscribing to. The gate lets a publisher hold outbound
-/// messages until the subscriptions for that connection are acknowledged.
+/// On a clean session the broker has no record of our subscriptions, so a message published
+/// before the relevant `SUBACK` could trigger a response on a topic we have not finished
+/// subscribing to.
 ///
-/// The reader ([SubscriptionGate]) is held by the publisher feeding a broker, while
-/// the writer ([SubscriptionGateController]) is held by the half bridge polling that
-/// broker's event loop — the half that receives the connection's `SUBACK`s.
+/// The reader ([SubscriptionGate]) is held by the publisher feeding a broker, while the writer
+/// ([SubscriptionGateController]) is held by the half bridge polling that broker's event loop —
+/// the half that receives the connection's `SUBACK`s.
 #[derive(Clone)]
 struct SubscriptionGate {
     open: watch::Receiver<bool>,
@@ -403,6 +414,69 @@ impl SubscriptionGateController {
     /// Holds outbound messages until the subscriptions are acknowledged again
     fn close(&self) {
         let _ = self.open.send(false);
+    }
+
+    /// Watches whether the subscriptions this gate tracks are acknowledged
+    fn watch(&self) -> watch::Receiver<bool> {
+        self.open.subscribe()
+    }
+}
+
+/// Tracks whether one bridge half is able to relay the messages it is given
+///
+/// A half is ready when it is connected to its broker and that connection's subscriptions are
+/// live. The gate and the health status of a half are driven from here together, so what the
+/// bridge forwards and what it reports can never disagree.
+struct BridgeHalfReadiness {
+    name: &'static str,
+    gate: SubscriptionGateController,
+    tx_health: mpsc::Sender<(&'static str, Status)>,
+    reported: Option<Status>,
+}
+
+impl BridgeHalfReadiness {
+    fn new(
+        name: &'static str,
+        gate: SubscriptionGateController,
+        tx_health: mpsc::Sender<(&'static str, Status)>,
+    ) -> Self {
+        Self {
+            name,
+            gate,
+            tx_health,
+            reported: None,
+        }
+    }
+
+    /// Releases the publishes held for this half and reports it as up
+    ///
+    /// The gate is opened before the status is sent, as the health message itself is published
+    /// through the buffer this gate holds back
+    async fn ready(&mut self) {
+        self.gate.open();
+        self.report(Status::Up).await
+    }
+
+    /// Holds back this half's publishes and reports it as down
+    async fn not_ready(&mut self) {
+        self.gate.close();
+        self.report(Status::Down).await
+    }
+
+    /// Holds back this half's publishes without reporting it as down
+    ///
+    /// A half that is still subscribing cannot relay messages, but it has either never been up
+    /// or already reported the failure that brought it down
+    fn hold_publishes(&self) {
+        self.gate.close()
+    }
+
+    /// Reports a change of status, skipping repeats so consumers only see transitions
+    async fn report(&mut self, status: Status) {
+        if self.reported != Some(status) {
+            self.reported = Some(status);
+            self.tx_health.send((self.name, status)).await.unwrap()
+        }
     }
 }
 
@@ -506,11 +580,9 @@ impl<Client: MqttClient + 'static> BridgeAsyncClient<Client> {
         let mut gate = self.gate.clone();
         tokio::spawn(
             async move {
-                // While the gate is closed (the target's subscriptions are not yet
-                // acknowledged on a clean session), outbound publishes are held here in
-                // order and flushed once the gate opens. Every publish goes through the
-                // buffer, so they are always forwarded in arrival order. Acks are never
-                // gated.
+                // Publishes held back by the gate are flushed once it opens. Every publish
+                // goes through this buffer, even when the gate is open, so they are always
+                // forwarded in arrival order.
                 let mut buffer: VecDeque<BridgeMessage> = VecDeque::new();
                 loop {
                     if gate.is_open() {
@@ -699,13 +771,12 @@ impl BridgeMessageSender {
 /// - The `half_bridge(cloud_event_loop,local_client)` receives cloud messages and publishes these message locally.
 /// - The `half_bridge(local_event_loop,cloud_client)` handles the acknowledgements: waiting for messages be acknowledged locally, before sending acks for the original messages.
 ///
-/// # Health topics
-/// The bridge will publish health information to `health_topic` (if supplied) on `target` to enable
-/// other components to establish bridge health. This is intended to be used the half with cloud
-/// event loop, so the status of this connection will be relayed to a relevant `te` topic like its
-/// mosquitto-based predecessor. The payload is either `1` (healthy) or `0` (unhealthy). When the
-/// connection is created, the last-will message is set to send the `0` payload when the connection
-/// is dropped.
+/// # Health
+/// Each half reports to [BridgeHealthMonitor] whether it is able to relay messages, which the
+/// monitor aggregates into the status published on the bridge health topic. A half is up once
+/// it is connected and its subscriptions are acknowledged, as until then anything it is asked
+/// to publish is held back (see [SubscriptionGate]). The local connection's last will covers
+/// the case where the bridge dies without reporting anything.
 #[allow(clippy::too_many_arguments)]
 async fn half_bridge(
     mut recv_event_loop: impl MqttEvents,
@@ -729,7 +800,8 @@ async fn half_bridge(
         reconnect_policy.reset_window.duration(),
     );
     let mut forward_pkid_to_received_msg = HashMap::<u16, Option<Publish>>::new();
-    let mut bridge_health = BridgeHealth::new(name, tx_health);
+    let mut readiness = BridgeHalfReadiness::new(name, gate, tx_health);
+    let mut connection_log = BridgeConnectionLog::new(name);
     let mut loop_breaker =
         MessageLoopBreaker::new(recv_client.clone(), bidirectional_topic_filters);
 
@@ -752,14 +824,14 @@ async fn half_bridge(
                 biased;
                 res = recv_event_loop.poll() => res,
                 _ = tokio::time::sleep_until(deadline) => {
-                    suback_tracker.handle_timeout(name, &gate);
+                    suback_tracker.handle_timeout(&mut readiness).await;
                     continue;
                 }
             }
         } else {
             recv_event_loop.poll().await
         };
-        bridge_health.update(&res).await;
+        connection_log.update(&res);
 
         let notification = match res {
             Ok(notification) => {
@@ -767,9 +839,9 @@ async fn half_bridge(
                 notification
             }
             Err(_) => {
-                // The connection is gone: hold outbound publishes until it is
-                // re-established and its subscriptions are acknowledged again.
-                gate.close();
+                // The connection is gone: hold outbound publishes until it is re-established
+                // and its subscriptions are acknowledged again
+                readiness.not_ready().await;
                 suback_tracker.deadline = None;
                 let time = backoff.backoff();
                 if !time.is_zero() {
@@ -815,22 +887,21 @@ async fn half_bridge(
                     self_tx.internal_publish(msg);
                 }
 
-                // Reset the subscription-acknowledgement tracking for this connection
-                // before the gate is (re)evaluated below.
+                // Reset the acknowledgement tracking before the readiness is re-evaluated below
                 suback_tracker.subscribe_round = 1;
                 suback_tracker.start_subscribe_round();
 
-                // Gate outbound publishes until this connection's subscriptions are
-                // acknowledged. On a resumed session the broker still holds our
-                // subscriptions, so it is safe to publish immediately; likewise when
-                // there are no subscriptions to wait for. The gate is opened only after
-                // the subscriptions above have been enqueued, so a publish woken by the
-                // gate opening cannot overtake them onto the wire.
+                // On a resumed session the broker still holds our subscriptions, so this half
+                // is ready as soon as it is connected; likewise when there is nothing to
+                // subscribe to. The subscriptions above are enqueued first, so a publish woken
+                // by the gate opening cannot overtake them onto the wire.
                 if conn_ack.session_present || suback_tracker.subacks_needed == 0 {
-                    gate.open();
+                    readiness.ready().await;
                     suback_tracker.deadline = None;
                 } else {
-                    gate.close();
+                    // Not reported as down: this half has either never been up, or the failure
+                    // that brought it down was reported when it happened
+                    readiness.hold_publishes();
                     suback_tracker.deadline = Some(tokio::time::Instant::now() + SUBACK_TIMEOUT);
                 }
 
@@ -929,7 +1000,7 @@ async fn half_bridge(
                 suback_tracker.outstanding_subs.insert(pkid);
             }
 
-            // Open the gate once the connection's subscriptions are acknowledged
+            // This half becomes ready once the connection's subscriptions are acknowledged
             Event::Incoming(Incoming::SubAck(suback)) => {
                 if !suback_tracker.outstanding_subs.remove(&suback.pkid) {
                     continue;
@@ -943,7 +1014,7 @@ async fn half_bridge(
                 }
                 suback_tracker.subacks_seen += suback.return_codes.len();
                 if suback_tracker.subacks_seen >= suback_tracker.subacks_needed {
-                    gate.open();
+                    readiness.ready().await;
                     suback_tracker.deadline = None;
                     suback_tracker.subscribe_round = 0;
                     log_event!(name, "All subscriptions acknowledged, forwarding resumed ({seen} return codes across {needed} filters)",
@@ -955,7 +1026,7 @@ async fn half_bridge(
 
             Event::Incoming(Incoming::Disconnect) => {
                 log_event!(info: name, "Connection closed by peer");
-                gate.close();
+                readiness.not_ready().await;
                 suback_tracker.deadline = None;
             }
 
@@ -1722,6 +1793,8 @@ mod tests {
 
         #[tokio::test]
         async fn health_success_is_published_on_connack() {
+            // This bridge is configured without subscriptions, so connecting is all it takes
+            // for a half to be able to relay messages
             let mut bridge = Bridge::default()
                 .with_local_events([inc!(connack)])
                 .process_all_events()
@@ -1770,6 +1843,81 @@ mod tests {
                 .await;
             assert_eq!(bridge.next_health_message(), Some(("local", Status::Down)));
             assert_eq!(bridge.next_health_message(), Some(("local", Status::Up)));
+        }
+
+        #[tokio::test]
+        async fn health_is_not_reported_until_the_subscriptions_are_acknowledged() {
+            let mut bridge = Bridge::default()
+                .with_subscription_topics(vec![SubscribeFilter::new(
+                    "s/ds".into(),
+                    QoS::AtLeastOnce,
+                )])
+                .with_local_events([inc!(clean_connack), out!(subscribe(1))])
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                bridge.next_health_message(),
+                None,
+                "a half that is still subscribing must not be reported as up, and it was never up
+                 to report as down"
+            );
+        }
+
+        #[tokio::test]
+        async fn health_is_up_once_the_subscriptions_are_acknowledged() {
+            let mut bridge = Bridge::default()
+                .with_subscription_topics(vec![SubscribeFilter::new(
+                    "s/ds".into(),
+                    QoS::AtLeastOnce,
+                )])
+                .with_local_events([inc!(clean_connack), out!(subscribe(1)), inc!(suback)])
+                .process_all_events()
+                .await;
+
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Up)));
+            assert_eq!(bridge.next_health_message(), None);
+        }
+
+        #[tokio::test]
+        async fn health_is_only_reported_when_it_changes() {
+            let mut bridge = Bridge::default()
+                .with_local_events([inc!(network_error), inc!(network_error), inc!(disconnect)])
+                .process_all_events()
+                .await;
+
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Down)));
+            assert_eq!(
+                bridge.next_health_message(),
+                None,
+                "repeated failures must not be reported over and over"
+            );
+        }
+
+        #[tokio::test]
+        async fn health_is_up_without_subacks_when_the_session_is_resumed() {
+            // The broker still holds the subscriptions of a resumed session
+            let mut bridge = Bridge::default()
+                .with_subscription_topics(vec![SubscribeFilter::new(
+                    "s/ds".into(),
+                    QoS::AtLeastOnce,
+                )])
+                .with_local_events([inc!(connack)])
+                .process_all_events()
+                .await;
+
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Up)));
+        }
+
+        #[tokio::test]
+        async fn health_is_down_again_after_a_peer_disconnect() {
+            let mut bridge = Bridge::default()
+                .with_local_events([inc!(connack), inc!(disconnect)])
+                .process_all_events()
+                .await;
+
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Up)));
+            assert_eq!(bridge.next_health_message(), Some(("local", Status::Down)));
         }
 
         #[tokio::test]
@@ -2435,6 +2583,33 @@ mod tests {
                     subscribe_rounds >= 2,
                     "expected multiple subscribe rounds, got {subscribe_rounds}"
                 );
+            }
+
+            #[tokio::test(start_paused = true)]
+            async fn health_is_up_after_exhausting_resubscribe_rounds() {
+                let subscription_topics = vec![
+                    SubscribeFilter::new("s/ds".into(), QoS::AtLeastOnce),
+                    SubscribeFilter::new("s/dat".into(), QoS::AtLeastOnce),
+                ];
+                // One SUBACK for two topics — this half never becomes subscribed
+                let local_events = [inc!(clean_connack), out!(subscribe(1)), inc!(suback)];
+
+                let mut bridge = Bridge::default()
+                    .with_subscription_topics(subscription_topics)
+                    .with_local_events(local_events)
+                    .process_all_events()
+                    .await;
+
+                assert_eq!(bridge.next_health_message(), None);
+
+                for _ in 0..MAX_SUBSCRIBE_ROUNDS {
+                    tokio::time::advance(SUBACK_TIMEOUT + Duration::from_millis(1)).await;
+                    settle().await;
+                }
+
+                // Messages are forwarded again once the retries are exhausted, so reporting
+                // this half as down would misrepresent what the bridge is doing
+                assert_eq!(bridge.next_health_message(), Some(("local", Status::Up)));
             }
 
             #[tokio::test(start_paused = true)]
