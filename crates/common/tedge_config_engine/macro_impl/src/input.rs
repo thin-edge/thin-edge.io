@@ -92,7 +92,7 @@ struct FieldAttributes {
 #[darling(attributes(tedge_config))]
 struct ConfigAttributes {
     /// Suppresses the generated test, for schemas that are deliberately
-    /// invalid so the engine can test what a mis-specified default reports
+    /// invalid so the engine can test what a misspecified default reports
     #[darling(default)]
     skip_generated_test: bool,
 }
