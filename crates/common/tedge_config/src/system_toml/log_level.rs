@@ -8,10 +8,13 @@ use std::fmt;
 use std::io::IsTerminal;
 use std::str::FromStr;
 use std::sync::Arc;
+use time::format_description::BorrowedFormatItem;
+use time::macros::format_description;
 use tracing::field::Visit;
 use tracing::Subscriber;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::fmt::time::UtcTime;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
@@ -29,8 +32,27 @@ macro_rules! subscriber_builder {
         tracing_subscriber::fmt()
             .with_writer(std::io::stderr)
             .with_ansi(std::io::stderr().is_terminal() && yansi::Condition::no_color())
-            .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339())
+            .with_timer($crate::utc_timer())
     };
+}
+
+/// The RFC 3339 timestamp format used by every thin-edge.io subscriber.
+///
+/// Identical to the `time` crate's `Rfc3339` well-known format, except that the
+/// fractional seconds are always 9 digits, zero-padded on the right.
+const TIMESTAMP_FORMAT: &[BorrowedFormatItem<'static>] =
+    format_description!("[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:9]Z");
+
+/// The UTC timer used by every thin-edge.io subscriber.
+///
+/// [`UtcTime::rfc_3339`] formats the fractional seconds with the `time` crate's
+/// `Rfc3339` well-known format, which emits only as many subsecond digits as
+/// are needed and so produces a variable-width field (`.20652489Z` vs
+/// `.183284722Z`), shifting the rest of the log line horizontally.
+/// [`TIMESTAMP_FORMAT`] keeps the same layout and nanosecond precision, but pads
+/// the fractional part to a fixed 9 digits so the columns stay aligned.
+pub fn utc_timer() -> UtcTime<&'static [BorrowedFormatItem<'static>]> {
+    UtcTime::new(TIMESTAMP_FORMAT)
 }
 
 /// Configures and enables logging taking into account flags, env variables and file config.
@@ -484,7 +506,7 @@ pub fn set_log_level(log_level: tracing::Level) {
     let subscriber = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_ansi(std::io::stderr().is_terminal() && yansi::Condition::no_color())
-        .with_timer(tracing_subscriber::fmt::time::UtcTime::rfc_3339());
+        .with_timer(utc_timer());
 
     if std::env::var("RUST_LOG").is_ok() {
         subscriber
@@ -503,7 +525,7 @@ enum TimeFormat {
 impl FormatTime for TimeFormat {
     fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
         match self {
-            Self::Enabled => tracing_subscriber::fmt::time::UtcTime::rfc_3339().format_time(w),
+            Self::Enabled => utc_timer().format_time(w),
             Self::Disabled => ().format_time(w),
         }
     }
@@ -516,7 +538,41 @@ mod tests {
     use std::io;
     use std::sync::Mutex;
     use tempfile::TempDir;
+    use time::macros::datetime;
+    use time::Duration;
     use tracing::Level;
+    use tracing_subscriber::fmt::format::Writer;
+
+    #[test_case::test_case(0, "2026-08-27T13:25:28.000000000Z"; "no fractional part")]
+    #[test_case::test_case(1, "2026-08-27T13:25:28.000000001Z"; "single significant digit")]
+    #[test_case::test_case(206_524_890, "2026-08-27T13:25:28.206524890Z"; "one trailing zero")]
+    #[test_case::test_case(183_284_722, "2026-08-27T13:25:28.183284722Z"; "all digits significant")]
+    #[test_case::test_case(500_000_000, "2026-08-27T13:25:28.500000000Z"; "eight trailing zeroes")]
+    #[test_case::test_case(999_999_999, "2026-08-27T13:25:28.999999999Z"; "maximum nanoseconds")]
+    fn timestamps_are_padded_to_nine_fractional_digits(nanos: i64, expected: &str) {
+        let timestamp = datetime!(2026-08-27 13:25:28 UTC) + Duration::nanoseconds(nanos);
+        assert_eq!(timestamp.format(&TIMESTAMP_FORMAT).unwrap(), expected);
+    }
+
+    /// The timer is fed the current time, so only its shape can be asserted.
+    #[test]
+    fn utc_timer_always_emits_nine_fractional_digits() {
+        for _ in 0..1_000 {
+            let mut formatted = String::new();
+            utc_timer()
+                .format_time(&mut Writer::new(&mut formatted))
+                .unwrap();
+
+            let (_, fraction) = formatted.split_once('.').expect("a fractional part");
+            let fraction = fraction.strip_suffix('Z').expect("a Z suffix");
+            assert_eq!(
+                fraction.len(),
+                9,
+                "expected 9 fractional digits in {formatted}"
+            );
+            assert!(fraction.chars().all(|c| c.is_ascii_digit()));
+        }
+    }
 
     #[test]
     fn valid_log_level() -> anyhow::Result<()> {
