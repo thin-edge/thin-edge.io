@@ -50,7 +50,7 @@ For e.g, an empty file named `c8y_Restart` in this directory represents that
 the tedge device supports Cumulocity device restart operation.
 
 The aggregated list of all the operation files in this directory represents the [Cumulocity supported operations list](https://cumulocity.com/docs/device-integration/fragment-library/#announcing-capabilities) of that device.
-Whenever a new operation file is added to 
+Whenever a new operation file is added to this directory, the supported operations list for that device is updated.
 
 Similarly, an operation file at `/etc/tedge/operations/c8y/<child-device-xid>` indicates that
 the child device with the given external id `<child-device-xid>` supports that operation.
