@@ -55,6 +55,15 @@ pub struct DownloadCertCmd {
     /// nor added to the device registration URL.
     pub one_time_password: String,
 
+    /// Treat a supplied one-time password as freshly generated:
+    /// display it and embed it in the registration URL.
+    ///
+    /// Set by callers that generate the password themselves
+    /// (e.g. `tedge bootstrap`, which generates it upfront so the
+    /// registration URL can be exposed to bootstrap hooks);
+    /// a password actually supplied by the user is kept secret
+    pub show_one_time_password: bool,
+
     /// Prompt for the one-time password instead of generating a random one
     pub prompt: bool,
 
@@ -333,6 +342,7 @@ impl DownloadCertCmd {
         let self_device_id = self.device_id.clone();
         let self_one_time_password = self.one_time_password.clone();
         let self_prompt = self.prompt;
+        let self_show_one_time_password = self.show_one_time_password;
         tokio::task::spawn_blocking(move || {
             let device_id = if self_device_id.is_empty() {
                 print!("Enter device id: ");
@@ -345,7 +355,7 @@ impl DownloadCertCmd {
             };
 
             let (one_time_password, generated) = if !self_one_time_password.is_empty() {
-                (self_one_time_password, false)
+                (self_one_time_password, self_show_one_time_password)
             } else if self_prompt {
                 // Read the security token from /dev/tty
                 (
@@ -453,7 +463,7 @@ struct RegistrationData {
 ///
 /// The password is URL friendly, as it is meant to be passed
 /// as a query parameter of the Cumulocity device registration URL.
-fn generate_one_time_password() -> String {
+pub(crate) fn generate_one_time_password() -> String {
     Alphanumeric.sample_string(&mut rand::rng(), GENERATED_ONE_TIME_PASSWORD_LEN)
 }
 
@@ -463,7 +473,7 @@ fn generate_one_time_password() -> String {
 /// The one-time password query parameter is always set,
 /// left empty when the password is kept secret,
 /// so the registration form highlights the field to be filled in.
-fn registration_url(
+pub(crate) fn registration_url(
     c8y_url: &HostPort<HTTPS_PORT>,
     device_id: &str,
     password: Option<&str>,

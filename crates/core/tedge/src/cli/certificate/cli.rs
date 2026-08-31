@@ -313,6 +313,7 @@ impl BuildCommand for TEdgeCertCli {
                 url,
                 retry_every,
                 max_timeout,
+                show_one_time_password,
             }) => {
                 if prompt && !token.is_empty() {
                     return Err(anyhow!(
@@ -367,6 +368,7 @@ impl BuildCommand for TEdgeCertCli {
                     user: user.clone(),
                     group: group.clone(),
                     cloud: Some(Cloud::c8y(profile.clone())),
+                    show_one_time_password,
                 };
                 cmd.into_boxed()
             }
@@ -607,6 +609,13 @@ pub enum DownloadCertCli {
         #[arg(value_parser = humantime::parse_duration)]
         /// Maximum time waiting for the device to be registered
         max_timeout: Duration,
+
+        /// Treat a supplied one-time password as freshly generated
+        /// (display it and embed it in the registration URL);
+        /// set programmatically by callers that generate it themselves
+        /// (e.g. tedge bootstrap), not exposed as a command-line flag
+        #[clap(skip)]
+        show_one_time_password: bool,
     },
 }
 
