@@ -43,6 +43,23 @@ impl ListenerConfig {
         }
         Ok(())
     }
+
+    async fn maybe_writeln_ca<W: AsyncWriteExt + Unpin + ?Sized>(
+        &self,
+        writer: &mut W,
+        path: Option<&Utf8PathBuf>,
+    ) -> std::io::Result<()> {
+        let Some(path) = path else {
+            return Ok(());
+        };
+        let key = if std::fs::metadata(path).is_ok_and(|m| m.is_dir()) {
+            "capath"
+        } else {
+            "cafile"
+        };
+        self.writeln(writer, key, path).await
+    }
+
     async fn writeln<W: AsyncWriteExt + Unpin + ?Sized, D: std::fmt::Display>(
         &self,
         writer: &mut W,
@@ -68,10 +85,13 @@ impl ListenerConfig {
                     .await?;
                 self.writeln(writer, "require_certificate", self.require_certificate)
                     .await?;
+                if self.require_certificate {
+                    self.writeln(writer, "use_identity_as_username", true)
+                        .await?;
+                }
                 self.maybe_writeln(writer, "bind_interface", self.bind_interface.as_ref())
                     .await?;
-                self.maybe_writeln(writer, "capath", self.capath.as_ref())
-                    .await?;
+                self.maybe_writeln_ca(writer, self.capath.as_ref()).await?;
                 self.maybe_writeln(writer, "certfile", self.certfile.as_ref())
                     .await?;
                 self.maybe_writeln(writer, "keyfile", self.keyfile.as_ref())
@@ -239,6 +259,7 @@ impl CommonMosquittoConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use camino::Utf8Path;
 
     #[tokio::test]
     async fn test_serialize() -> anyhow::Result<()> {
@@ -275,6 +296,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_serialize_with_opts() -> anyhow::Result<()> {
+        let ca_dir = tempfile::TempDir::new()?;
+        let ca_path = Utf8Path::from_path(ca_dir.path()).unwrap();
         let common_mosquitto_config = CommonMosquittoConfig::default();
         let mosquitto_config_with_opts = common_mosquitto_config
             .with_internal_opts(1234, "1.2.3.4".into())
@@ -282,7 +305,7 @@ mod tests {
                 Some(2345),
                 Some("0.0.0.0".to_string()),
                 Some("wlan0".into()),
-                Some("/etc/ssl/certs".into()),
+                Some(ca_path.to_owned()),
                 Some("cert.pem".into()),
                 Some("key.pem".into()),
             );
@@ -296,28 +319,55 @@ mod tests {
         mosquitto_config_with_opts.serialize(&mut buffer).await?;
 
         let contents = String::from_utf8(buffer).unwrap();
-        let expected = concat!(
-            "per_listener_settings true\n",
-            "connection_messages true\n",
-            "log_type error\n",
-            "log_type warning\n",
-            "log_type notice\n",
-            "log_type information\n",
-            "log_type subscribe\n",
-            "log_type unsubscribe\n",
-            "message_size_limit 268435455\n",
-            "listener 1234 1.2.3.4\n",
-            "allow_anonymous true\n",
-            "require_certificate false\n",
-            "listener 2345 0.0.0.0\n",
-            "allow_anonymous false\n",
-            "require_certificate true\n",
-            "bind_interface wlan0\n",
-            "capath /etc/ssl/certs\n",
-            "certfile cert.pem\n",
-            "keyfile key.pem\n"
+        let expected = format!(
+            "\
+per_listener_settings true
+connection_messages true
+log_type error
+log_type warning
+log_type notice
+log_type information
+log_type subscribe
+log_type unsubscribe
+message_size_limit 268435455
+listener 1234 1.2.3.4
+allow_anonymous true
+require_certificate false
+listener 2345 0.0.0.0
+allow_anonymous false
+require_certificate true
+use_identity_as_username true
+bind_interface wlan0
+capath {ca_path}
+certfile cert.pem
+keyfile key.pem
+"
         );
         assert_eq!(contents, expected);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_serialize_external_cafile() -> anyhow::Result<()> {
+        let ca_file = tempfile::NamedTempFile::new()?;
+        let ca_path = Utf8Path::from_path(ca_file.path()).unwrap();
+        let common_mosquitto_config = CommonMosquittoConfig::default().with_external_opts(
+            Some(8883),
+            Some("0.0.0.0".to_string()),
+            None,
+            Some(ca_path.to_owned()),
+            Some("cert.pem".into()),
+            Some("key.pem".into()),
+        );
+
+        let mut buffer = Vec::new();
+        common_mosquitto_config.serialize(&mut buffer).await?;
+        let contents = String::from_utf8(buffer).unwrap();
+
+        assert!(contents.contains("use_identity_as_username true"));
+        assert!(contents.contains(&format!("cafile {ca_path}")));
+        assert!(!contents.contains(&format!("capath {ca_path}")));
 
         Ok(())
     }
