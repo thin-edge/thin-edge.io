@@ -1,0 +1,48 @@
+#!/bin/sh
+set -e
+# tedge bootstrap finalize hook: print a link to the onboarded device
+# in Cumulocity Device Management, so the operator can jump straight
+# to it once bootstrapping completes.
+#
+# Runs after the connect step succeeded, so the device is genuinely
+# there to be found.
+#
+# args: <phase> --cloud <cloud> --config-dir <dir> [--url <url>] [--cloud-type <type>] ...
+
+shift # phase
+CLOUD=""
+CONFIG_DIR="/etc/tedge"
+URL=""
+CLOUD_TYPE=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cloud) CLOUD="$2"; shift ;;
+        --config-dir) CONFIG_DIR="$2"; shift ;;
+        --url) URL="$2"; shift ;;
+        --cloud-type) CLOUD_TYPE="$2"; shift ;;
+    esac
+    shift
+done
+
+# Cumulocity only — including custom-named instances typed c8y
+[ "$CLOUD" = "c8y" ] || [ "$CLOUD_TYPE" = "c8y" ] || exit 2
+
+# The HTTP host: the URL being bootstrapped, or the configured one
+if [ -z "$URL" ]; then
+    URL=$(tedge --config-dir "$CONFIG_DIR" config get c8y.http 2>/dev/null \
+        || tedge --config-dir "$CONFIG_DIR" config get c8y.url 2>/dev/null || true)
+fi
+[ -n "$URL" ] || exit 2
+HOST=$(echo "$URL" | sed 's|^[a-z]*://||; s|/.*||; s|:443$||')
+
+# The device id: exported by bootstrap when given (TEDGE_DEVICE_ID),
+# otherwise from the config — which, after a certificate-based
+# registration, is derived from the device certificate
+DEVICE_ID="${TEDGE_DEVICE_ID:-$(tedge --config-dir "$CONFIG_DIR" config get device.id 2>/dev/null || true)}"
+[ -n "$DEVICE_ID" ] || exit 2
+
+echo ""
+echo "View the onboarded device in Cumulocity:"
+echo ""
+echo "    https://$HOST/apps/devicemanagement/index.html#/assetsearch?filter=*$DEVICE_ID*"
+echo ""

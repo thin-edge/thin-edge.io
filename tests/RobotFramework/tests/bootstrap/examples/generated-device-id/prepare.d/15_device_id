@@ -1,0 +1,56 @@
+#!/bin/sh
+set -e
+# tedge bootstrap prepare hook: generate the device id from the
+# hardware's own identity, so first-boot provisioning needs no
+# --device-id at all — the manufacturer's convention lives in this hook.
+#
+# Source order: DMI product serial, machine id, first MAC address,
+# hostname — prefixed with BOOTSTRAP_DEVICE_ID_PREFIX (default "tedge").
+#
+# An explicitly provided id always wins (--device-id exports
+# TEDGE_DEVICE_ID), and an already-configured device.id is kept,
+# so re-runs never change an established identity.
+# Registration picks the generated id up from the config,
+# and the registration URL exposed to later hooks
+# (C8Y_REGISTRATION_URL: QR codes, device links) includes it.
+#
+# args: <phase> --cloud <cloud> --config-dir <dir> ...
+
+shift # phase
+CLOUD=""
+CONFIG_DIR="/etc/tedge"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cloud) CLOUD="$2"; shift ;;
+        --config-dir) CONFIG_DIR="$2"; shift ;;
+    esac
+    shift
+done
+
+# An explicit --device-id wins
+[ -z "$TEDGE_DEVICE_ID" ] || exit 2
+# An established identity is kept (this also covers devices whose id
+# is already derived from an existing certificate)
+if [ -n "$(tedge --config-dir "$CONFIG_DIR" config get device.id 2>/dev/null || true)" ]; then
+    exit 2
+fi
+
+PREFIX="${BOOTSTRAP_DEVICE_ID_PREFIX:-tedge}"
+
+if [ -r /sys/class/dmi/id/product_serial ] \
+    && SERIAL=$(tr -cd 'A-Za-z0-9_-' < /sys/class/dmi/id/product_serial) \
+    && [ -n "$SERIAL" ]; then
+    SOURCE="DMI serial"
+elif [ -r /etc/machine-id ] && SERIAL=$(cut -c1-12 /etc/machine-id) && [ -n "$SERIAL" ]; then
+    SOURCE="machine id"
+elif SERIAL=$(cat /sys/class/net/*/address 2>/dev/null | grep -v '^00:00' | head -n1 | tr -d ':') \
+    && [ -n "$SERIAL" ]; then
+    SOURCE="MAC address"
+else
+    SERIAL=$(hostname)
+    SOURCE="hostname"
+fi
+
+DEVICE_ID="$PREFIX-$SERIAL"
+tedge --config-dir "$CONFIG_DIR" config set device.id "$DEVICE_ID"
+echo "Generated device id: $DEVICE_ID (from the $SOURCE)"

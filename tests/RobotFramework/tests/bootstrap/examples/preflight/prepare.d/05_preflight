@@ -1,0 +1,52 @@
+#!/bin/sh
+set -e
+# tedge bootstrap prepare hook: verify the target server is reachable
+# before anything is configured — the factory-line QA gate.
+# A bad cable, wrong VLAN or missing proxy fails here in seconds,
+# with an actionable message, instead of after a long connect timeout.
+#
+# args: <phase> --cloud <cloud> --config-dir <dir> [--url <url>] ...
+#
+# BOOTSTRAP_PREFLIGHT_PORTS overrides the checked ports (default: 443 8883)
+
+shift # phase
+CLOUD=""
+CONFIG_DIR="/etc/tedge"
+URL=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cloud) CLOUD="$2"; shift ;;
+        --config-dir) CONFIG_DIR="$2"; shift ;;
+        --url) URL="$2"; shift ;;
+        --offline) OFFLINE=1 ;;
+    esac
+    shift
+done
+
+# an --offline run defers everything that needs the network
+if [ "${OFFLINE:-}" = 1 ]; then
+    echo "offline provisioning: nothing is reachable by design, skipping the preflight" >&2
+    exit 2
+fi
+
+if [ -z "$URL" ]; then
+    URL=$(tedge --config-dir "$CONFIG_DIR" config get c8y.url 2>/dev/null || true)
+fi
+[ -n "$URL" ] || exit 2
+
+HOST=$(echo "$URL" | sed 's|^[a-z]*://||; s|/.*||; s|:.*||')
+
+if ! getent hosts "$HOST" >/dev/null 2>&1; then
+    echo "Preflight failed: cannot resolve $HOST — check the network connection and DNS configuration" >&2
+    exit 1
+fi
+echo "Preflight: DNS resolution of $HOST ok" >&2
+
+for PORT in ${BOOTSTRAP_PREFLIGHT_PORTS:-443 8883}; do
+    if ! timeout 10 openssl s_client -connect "$HOST:$PORT" -servername "$HOST" \
+            </dev/null >/dev/null 2>&1; then
+        echo "Preflight failed: cannot reach $HOST:$PORT — check firewalls and proxy settings (port $PORT must be open for the cloud connection)" >&2
+        exit 1
+    fi
+    echo "Preflight: $HOST:$PORT reachable" >&2
+done

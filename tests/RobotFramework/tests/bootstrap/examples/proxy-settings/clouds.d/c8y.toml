@@ -1,0 +1,106 @@
+# Site override of the Cumulocity descriptor that additionally asks
+# for optional HTTP proxy settings — a device-global question
+# (`global = true`: the key is a tedge config key, not cloud-scoped),
+# asked by the wizard before anything runs.
+#
+# An override replaces the whole descriptor for the cloud, so the
+# compiled-in parts are restated (the built-in method implementations
+# keep working regardless — omitting one only hides it from the wizard,
+# and a restated built-in method with no declared inputs keeps the
+# compiled-in inputs, e.g. basic's bootstrap credentials below).
+cloud = "c8y"
+description = "Cumulocity"
+
+[url]
+description = "Cumulocity URL (the HTTP/S address used to talk to the platform)"
+choices = ["thin-edge-io.eu-latest.cumulocity.com"]
+
+[[register]]
+name = "c8y-ca"
+default = true
+description = "Request a device certificate from the Cumulocity certificate authority"
+
+[[register]]
+name = "self-signed"
+description = "Create a self-signed certificate and upload it using user credentials"
+
+[[register.inputs]]
+name = "Cumulocity username"
+env = "C8Y_USER"
+required = false
+
+[[register.inputs]]
+name = "Cumulocity password"
+env = "C8Y_PASSWORD"
+secret = true
+required = false
+
+[[register]]
+name = "basic"
+description = "Request username/password device credentials via the bootstrap user (device not registered yet)"
+
+[[register.inputs]]
+name = "bootstrap user"
+env = "C8Y_BOOTSTRAP_USER"
+description = "The tenant's device bootstrap user"
+default = "management/devicebootstrap"
+
+[[register.inputs]]
+name = "bootstrap password"
+env = "C8Y_BOOTSTRAP_PASSWORD"
+description = "The tenant's device bootstrap password, issued by the platform operator"
+secret = true
+
+[[register]]
+name = "basic-preregistered"
+description = "The device is already pre-registered: store its issued username/password"
+
+[[register.inputs]]
+name = "device username"
+env = "C8Y_DEVICE_USER"
+description = "The device user, as issued (t<tenant-id>/device_<device-id>)"
+
+[[register.inputs]]
+name = "device password"
+env = "C8Y_DEVICE_PASSWORD"
+description = "The pre-registered device password"
+secret = true
+
+[[settings]]
+key = "mqtt_service.enabled"
+name = "Select the Cumulocity MQTT connection type"
+default = "false"
+
+[[settings.choices]]
+value = "false"
+label = "Core MQTT"
+description = "The standard device endpoint (port 8883)"
+
+[[settings.choices]]
+value = "true"
+label = "MQTT Service"
+description = "Next-gen endpoint with free-form topics (port 9883); requires the mqtt-service.smartrest tenant feature (Public Preview)"
+
+[[settings]]
+key = "mqtt.bind.address"
+name = "mosquitto bind address"
+default = "127.0.0.1"
+global = true
+
+[[settings.choices]]
+value = "127.0.0.1"
+label = "local network only"
+description = "Only expose MQTT broker to local services"
+
+[[settings.choices]]
+value = "0.0.0.0"
+label = "Bind to all network adapters"
+description = "Expose MQTT broker to other devices in the network"
+
+# The site's addition: an optional, device-global proxy question.
+# Applied via the tedge config (proxy.address), so the registration
+# and connection steps go through the proxy
+[[settings]]
+key = "proxy.address"
+global = true
+name = "HTTP proxy for cloud connections (scheme://host:port; leave empty for none)"

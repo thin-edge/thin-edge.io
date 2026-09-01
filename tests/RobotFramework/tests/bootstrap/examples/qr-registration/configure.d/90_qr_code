@@ -1,0 +1,18 @@
+#!/bin/sh
+# tedge bootstrap site hook: render the pending Cumulocity device
+# registration URL as a QR code, so an operator can scan it with a phone.
+#
+# Install to <config-dir>/bootstrap.d/configure.d/ (site)
+# or /usr/share/tedge/bootstrap.d/configure.d/ (package).
+# Requires: qrencode
+#
+# C8Y_REGISTRATION_URL is exported by tedge bootstrap when a c8y-ca
+# registration is about to run (device id and host known, no certificate
+# yet or a --re-register run); the URL is pre-filled with the one-time password
+# bootstrap generated. A user-supplied one-time password is kept secret
+# and never reaches hooks.
+[ -n "$C8Y_REGISTRATION_URL" ] || exit 2
+command -v qrencode >/dev/null 2>&1 || exit 2
+echo ""
+echo "Scan to register the device:"
+qrencode -t ANSIUTF8 --margin=2 "$C8Y_REGISTRATION_URL"
