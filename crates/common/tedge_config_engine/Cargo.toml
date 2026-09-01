@@ -1,0 +1,22 @@
+[package]
+name = "tedge_config_engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+camino = { workspace = true }
+facet = { workspace = true }
+facet-reflect = { workspace = true }
+facet-toml = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tedge_config_engine-macro = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
