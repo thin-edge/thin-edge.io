@@ -92,6 +92,17 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .context("failed to run tedge file config plugin")
         }
+        TEdgeOptMulticall::Component(Component::TedgeShellPlugin(opt)) => {
+            let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
+            let plugin_config = tedge_shell_plugin::bin::TEdgeConfigView {
+                shell: tedge_config.shell.path.to_path_buf(),
+                tmp_dir: tedge_config.tmp.path.to_path_buf(),
+                max_output_size: tedge_config.shell.max_output_size,
+            };
+            tokio::task::spawn_blocking(move || tedge_shell_plugin::bin::run(opt, plugin_config))
+                .await
+                .context("failed to run tedge shell plugin")?
+        }
         TEdgeOptMulticall::Component(Component::TedgeFileLogPlugin(opt)) => {
             let tedge_config = tedge_config::TEdgeConfig::load(&opt.common.config_dir).await?;
             let plugin_config = TEdgeConfigView::new(tedge_config.tmp.path.as_path());

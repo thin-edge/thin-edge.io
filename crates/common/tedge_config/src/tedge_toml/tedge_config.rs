@@ -740,6 +740,12 @@ define_tedge_config! {
             #[tedge_config(example = "true", default(value = true))]
             #[tedge_config(exposable)]
             software_update: bool,
+
+            /// Enable shell_execute feature, which maps the Cumulocity
+            /// `c8y_Command` operation to the `shell_execute` command
+            #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
+            shell_execute: bool,
         },
 
         mapper: {
@@ -1445,6 +1451,20 @@ define_tedge_config! {
         /// The directories where configuration plugins are stored
         #[tedge_config(example = "/usr/share/tedge/config-plugins,/usr/local/share/tedge/config-plugins", default(value = "/usr/share/tedge/config-plugins"))]
         plugin_paths: TemplatesSet,
+    },
+
+    shell: {
+        /// The shell used by the `shell_execute` operation to run the commands
+        /// received from the cloud
+        #[tedge_config(example = "/bin/sh", example = "/bin/bash", default(from_str = "/bin/sh"))]
+        #[tedge_config(exposable)]
+        path: AbsolutePath,
+
+        /// The maximum number of bytes of command output reported by the `shell_execute`
+        /// operation. Any output beyond that limit is truncated
+        #[tedge_config(example = "15000", default(value = 15000u32))]
+        #[tedge_config(exposable)]
+        max_output_size: u32,
     },
 
     flows: {

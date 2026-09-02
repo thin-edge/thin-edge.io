@@ -12,6 +12,7 @@ members = [
     "plugins/tedge_file_config_plugin",
     "plugins/tedge_file_log_plugin",
     "plugins/tedge_flows_plugin",
+    "plugins/tedge_shell_plugin",
 ]
 resolver = "2"
 
@@ -53,6 +54,7 @@ tedge-file-log-plugin = { path = "plugins/tedge_file_log_plugin" }
 tedge-flows-plugin = { path = "plugins/tedge_flows_plugin" }
 tedge-mapper = { path = "crates/core/tedge_mapper", default-features = false }
 tedge-p11 = { path = "crates/common/tedge-p11" }
+tedge-shell-plugin = { path = "plugins/tedge_shell_plugin" }
 tedge-watchdog = { path = "crates/core/tedge_watchdog" }
 tedge-write = { path = "crates/core/tedge_write" }
 tedge_actors = { path = "crates/core/tedge_actors" }
