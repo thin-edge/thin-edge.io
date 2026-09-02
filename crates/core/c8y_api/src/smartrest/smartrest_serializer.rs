@@ -689,22 +689,20 @@ mod tests {
     /// inside a multi-byte character.
     #[test]
     fn succeed_operation_trims_reason_on_a_char_boundary() {
-        // Each 'é' is 2 bytes long, so shifting the start of the reason by one byte
-        // moves the trim point inside a character whatever the parity of the limit.
-        for padding in ["", "a"] {
-            let reason = format!("{padding}{}", "é".repeat(MAX_PAYLOAD_LIMIT_IN_BYTES));
+        // Each 'é' is 2 bytes long and the trim point is at an even offset,
+        // so the leading one byte 'a' is what makes it fall inside a character
+        let reason = format!("a{}", "é".repeat(MAX_PAYLOAD_LIMIT_IN_BYTES));
 
-            let smartrest =
-                succeed_operation(SET_OPERATION_TO_SUCCESSFUL, "c8y_Command", reason).unwrap();
+        let smartrest =
+            succeed_operation(SET_OPERATION_TO_SUCCESSFUL, "c8y_Command", reason).unwrap();
 
-            assert!(
-                smartrest.as_str().len() <= MAX_PAYLOAD_LIMIT_IN_BYTES,
-                "bigger than message size limit: {} > {}",
-                smartrest.as_str().len(),
-                MAX_PAYLOAD_LIMIT_IN_BYTES
-            );
-            assert!(smartrest.as_str().ends_with("...<trimmed>\""));
-        }
+        assert!(
+            smartrest.as_str().len() <= MAX_PAYLOAD_LIMIT_IN_BYTES,
+            "bigger than message size limit: {} > {}",
+            smartrest.as_str().len(),
+            MAX_PAYLOAD_LIMIT_IN_BYTES
+        );
+        assert!(smartrest.as_str().ends_with("...<trimmed>\""));
     }
 
     /// Make sure that a run of double quotes straddling the trim point is not
@@ -734,14 +732,12 @@ mod tests {
     /// falls inside a multi-byte character.
     #[test]
     fn fail_operation_truncates_reason_on_a_char_boundary() {
-        // Each 'é' is 2 bytes long, so shifting the start of the reason by one byte
-        // moves the truncation point inside a character whatever the parity of the limit.
-        for padding in ["", "a"] {
-            let reason = format!("{padding}{}", "é".repeat(500));
+        // Each 'é' is 2 bytes long and the 500 bytes limit is even,
+        // so the leading one byte 'a' is what makes it fall inside a character
+        let reason = format!("a{}", "é".repeat(500));
 
-            let smartrest = fail_operation(SET_OPERATION_TO_FAILED, "c8y_Command", &reason);
+        let smartrest = fail_operation(SET_OPERATION_TO_FAILED, "c8y_Command", &reason);
 
-            assert!(smartrest.as_str().starts_with("502,c8y_Command,"));
-        }
+        assert!(smartrest.as_str().starts_with("502,c8y_Command,"));
     }
 }
