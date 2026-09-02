@@ -25,4 +25,10 @@ It is therefore recommended to set things up step by step.
 - The second step is to enable TLS on the local MQTT and HTTP connections.
 - The final step is to enforce certificate-based client authentication on the local MQTT and HTTP connections.
 
+:::note
+To report a security vulnerability in %%te%% itself,
+or to learn how security advisories are published,
+see [Product Security](../../security/index.md).
+:::
+
 <DocCardList />
