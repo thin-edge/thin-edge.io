@@ -258,6 +258,40 @@ jobs:
           || contains(needs.*.result, 'skipped')
         }}
 
+  # Generate the Software Bill Of Materials (sbom) so that it can be attached
+  # to the github release. It is generated on every run (and not only when tagging)
+  # so that any breakage is detected before a release is made.
+  sbom:
+    name: Generate sbom
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || '' }}
+          # Fetch the tags as just detects the version from git when it is parsed
+          fetch-depth: 0
+          allow-unsafe-pr-checkout: true
+
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: taiki-e/install-action@just
+      - name: Install cargo-cyclonedx
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-cyclonedx@0.5.9
+
+      - name: Generate sbom
+        run: just generate-sbom
+
+      - name: Upload sbom
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: target/sbom/*.cdx.json
+          if-no-files-found: error
+
   approve:
     # Note: Use approval as a job so that the downstream jobs are only prompted once (if more than 1 matrix job is defined)
     name: Approve
@@ -443,6 +477,8 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v8
         with:
+          # Only the packages are needed, in particular not the sbom or the test reports
+          pattern: packages-*
           path: containers/tedge/packages/
 
       - name: Set up QEMU
@@ -521,6 +557,8 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v8
         with:
+          # Only the packages are needed, in particular not the sbom or the test reports
+          pattern: packages-*
           path: containers/tedge-p11-server/packages/
 
       - name: Set up QEMU
@@ -604,13 +642,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    needs: [publish-virtual-packages, publish-containers, publish-p11-server-containers]
+    needs: [publish-virtual-packages, publish-containers, publish-p11-server-containers, sbom]
     if: |
       always() &&
       startsWith(github.ref, 'refs/tags/') &&
       needs.publish-virtual-packages.result == 'success' &&
       needs.publish-containers.result == 'success' &&
-      needs.publish-p11-server-containers.result == 'success'
+      needs.publish-p11-server-containers.result == 'success' &&
+      needs.sbom.result == 'success'
+    # Note: if the sbom job fails on a tag, this job is skipped and neither the cloudsmith
+    # packages are promoted nor the docs snapshot is created. Use "Re-run failed jobs" to
+    # complete the release once the sbom job succeeds.
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -626,12 +668,23 @@ jobs:
           if ! just generate-changelog --from-tags; then
             echo "Warning: Failed to generate changelog, but it should not block a release" > _CHANGELOG.md
           fi
+      # Note: the sbom job is already a pre-condition of this job, so the sbom does exist.
+      # Downloading/attaching it is nevertheless best-effort, as it must not prevent the
+      # cloudsmith packages from being promoted by the last step of this job
+      - name: Download sbom
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: sbom
+          path: target/sbom/
+
       - name: Release
         uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           body_path: _CHANGELOG.md
+          files: target/sbom/*.cdx.json
           generate_release_notes: false
           draft: true
 
