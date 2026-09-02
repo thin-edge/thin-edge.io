@@ -13,7 +13,7 @@ Test Tags           theme:c8y    theme:operation    theme:tedge-agent
 Full supported operations message has no duplicates
     Should Have MQTT Messages
     ...    c8y/s/us
-    ...    message_pattern=114,c8y_DeviceProfile,c8y_DownloadConfigFile,c8y_LogfileRequest,c8y_RemoteAccessConnect,c8y_Restart,c8y_SoftwareUpdate,c8y_UploadConfigFile
+    ...    message_pattern=114,c8y_Command,c8y_DeviceProfile,c8y_DownloadConfigFile,c8y_LogfileRequest,c8y_RemoteAccessConnect,c8y_Restart,c8y_SoftwareUpdate,c8y_UploadConfigFile
     ...    minimum=1
     ...    maximum=1
 
@@ -66,7 +66,7 @@ Re-publish supported operations by signal channel
     Execute Command    tedge mqtt pub te/device/main/service/tedge-mapper-c8y/signal/sync '{}'
     Should Have MQTT Messages
     ...    c8y/s/us
-    ...    message_contains=114,c8y_DeviceProfile,c8y_DownloadConfigFile,c8y_LogfileRequest,c8y_RemoteAccessConnect,c8y_Restart,c8y_SoftwareUpdate,c8y_UploadConfigFile
+    ...    message_contains=114,c8y_Command,c8y_DeviceProfile,c8y_DownloadConfigFile,c8y_LogfileRequest,c8y_RemoteAccessConnect,c8y_Restart,c8y_SoftwareUpdate,c8y_UploadConfigFile
     Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01    message_contains=114,c8y_Restart
     Should Have MQTT Messages    c8y/s/us/${DEVICE_SN}:device:child01:service:foo    message_contains=114,c8y_Restart
 
