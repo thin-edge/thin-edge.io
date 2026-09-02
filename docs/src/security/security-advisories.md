@@ -25,10 +25,13 @@ Each advisory states:
 - credit to the reporter, unless they asked to stay anonymous.
 
 Where appropriate, a CVE identifier is requested through GitHub when the advisory is published.
-Published advisories are added to the
-[GitHub Advisory Database](https://github.com/advisories),
-so that tools such as Dependabot and other vulnerability scanners
-can detect an affected version of %%te%%.
+
+:::note
+%%te%% is distributed as Linux packages and container images,
+and not through a package registry which vulnerability scanners index.
+Do not rely on a tool such as Dependabot to tell you that an advisory applies to your devices:
+subscribe to one of the channels described below instead.
+:::
 
 ## Announcements in the Tech Community
 
@@ -75,7 +78,7 @@ with a description of the problem, the affected versions and the upgrade path.
 You are recommended to use at least one of the following:
 
 - Watch the [tedge-security](https://community.cumulocity.com/tag/tedge-security/1617) tag in the Tech Community.
-- Watch the %%te%% repository on GitHub, selecting **Custom** &rarr; **Security alerts** and **Releases**,
-  to be notified of new advisories and releases.
+- Watch the %%te%% repository on GitHub, selecting **Custom** &rarr; **Releases**,
+  to be notified of every new release, including the ones which contain a security fix.
 - Track the versions of %%te%% which are deployed on your devices,
   so that you can determine quickly whether an advisory applies to your fleet.

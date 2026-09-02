@@ -11,7 +11,7 @@ which is enabled on this repository.
 The report is only visible to you and the thin-edge.io maintainers,
 and the follow-up discussion happens in the comment thread of the resulting draft advisory.
 
-The [Reporting a Vulnerability](https://thin-edge.github.io/thin-edge.io/security/reporting-a-vulnerability/)
+The [Reporting a Vulnerability](docs/src/security/reporting-a-vulnerability.md)
 documentation describes what to include in a report and what happens after you submit one.
 
 ## Security advisories
@@ -23,5 +23,5 @@ of this repository, and announced in the
 [tedge-security](https://community.cumulocity.com/tag/tedge-security/1617) tag,
 together with emergency releases and safety guidance.
 
-See [Security Advisories](https://thin-edge.github.io/thin-edge.io/security/security-advisories/)
+See [Security Advisories](docs/src/security/security-advisories.md)
 for details.
