@@ -689,10 +689,10 @@ mod tests {
     /// inside a multi-byte character.
     #[test]
     fn succeed_operation_trims_reason_on_a_char_boundary() {
-        // Each 'é' is 2 bytes long, so the trim point falls inside a character
-        // for one of these two lengths whatever the exact limit is.
-        for len in [MAX_PAYLOAD_LIMIT_IN_BYTES, MAX_PAYLOAD_LIMIT_IN_BYTES + 1] {
-            let reason = "é".repeat(len);
+        // Each 'é' is 2 bytes long, so shifting the start of the reason by one byte
+        // moves the trim point inside a character whatever the parity of the limit.
+        for padding in ["", "a"] {
+            let reason = format!("{padding}{}", "é".repeat(MAX_PAYLOAD_LIMIT_IN_BYTES));
 
             let smartrest =
                 succeed_operation(SET_OPERATION_TO_SUCCESSFUL, "c8y_Command", reason).unwrap();
@@ -734,10 +734,14 @@ mod tests {
     /// falls inside a multi-byte character.
     #[test]
     fn fail_operation_truncates_reason_on_a_char_boundary() {
-        let reason = "é".repeat(500);
+        // Each 'é' is 2 bytes long, so shifting the start of the reason by one byte
+        // moves the truncation point inside a character whatever the parity of the limit.
+        for padding in ["", "a"] {
+            let reason = format!("{padding}{}", "é".repeat(500));
 
-        let smartrest = fail_operation(SET_OPERATION_TO_FAILED, "c8y_Command", &reason);
+            let smartrest = fail_operation(SET_OPERATION_TO_FAILED, "c8y_Command", &reason);
 
-        assert!(smartrest.as_str().starts_with("502,c8y_Command,"));
+            assert!(smartrest.as_str().starts_with("502,c8y_Command,"));
+        }
     }
 }
