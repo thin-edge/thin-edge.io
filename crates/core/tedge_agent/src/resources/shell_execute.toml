@@ -1,0 +1,26 @@
+operation = "shell_execute"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+action = "proceed"
+on_success = "run"
+
+# The command is run in the background, the workflow moving to the collect state before.
+# So, a command restarting the agent or the device is not run again when the agent resumes.
+[run]
+background_script = "tedge-shell-plugin execute --cmd-id ${.topic.cmd_id} --command ${.payload.command}"
+on_exec = "collect"
+
+[collect]
+script = "tedge-shell-plugin collect --cmd-id ${.topic.cmd_id}"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

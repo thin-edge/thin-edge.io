@@ -424,6 +424,9 @@ pub struct EnableConfig {
 
     /// Enable software_update feature
     pub software_update: bool,
+
+    /// Enable shell_execute feature
+    pub shell_execute: bool,
 }
 
 /// Bridge include configuration
