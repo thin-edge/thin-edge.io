@@ -260,6 +260,31 @@ impl MaybeBorrowedCloud<'_> {
             Self::Custom(_) => None,
         }
     }
+
+    /// The short cloud name: the config key prefix, the cloud descriptor
+    /// key, and the name bootstrap hooks receive
+    /// (`c8y`, `az`, `aws`, or a custom mapper's name)
+    pub fn short_name(&self) -> &str {
+        match self {
+            #[cfg(feature = "c8y")]
+            Self::C8y(_) => "c8y",
+            #[cfg(feature = "azure")]
+            Self::Azure(_) => "az",
+            #[cfg(feature = "aws")]
+            Self::Aws(_) => "aws",
+            Self::Custom(name) => name,
+        }
+    }
+
+    /// The config key prefix of this cloud instance:
+    /// `c8y` for the default instance, `c8y.profiles.<p>` for a profile,
+    /// or a custom mapper's name
+    pub fn config_prefix(&self) -> String {
+        match self.profile_name() {
+            Some(profile) => format!("{}.profiles.{profile}", self.short_name()),
+            None => self.short_name().to_owned(),
+        }
+    }
 }
 
 /// (Best-effort) tab-completion values for profile names

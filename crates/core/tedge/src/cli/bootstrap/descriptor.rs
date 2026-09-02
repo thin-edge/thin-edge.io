@@ -483,36 +483,43 @@ fn resolve_derived_clouds(by_cloud: &mut BTreeMap<String, CloudDescriptor>) {
     }
 }
 
-/// The inputs of a method whose environment variables are not set
-/// and which have no default to fall back to
+/// A non-empty environment variable of the process
+pub fn env_var(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|value| !value.is_empty())
+}
+
+/// The inputs of a method that are neither collected (`extra_envs`),
+/// nor provided by the environment, nor defaulted
 pub fn missing_inputs<'a>(
     method: &'a RegisterMethod,
     extra_envs: &[(String, String)],
+    env: impl Fn(&str) -> Option<String>,
 ) -> Vec<&'a MethodInput> {
     method
         .inputs
         .iter()
         .filter(|input| input.is_required())
         .filter(|input| input.default.is_none())
-        .filter(|input| std::env::var(&input.env).map_or(true, |value| value.is_empty()))
+        .filter(|input| env(&input.env).is_none())
         .filter(|input| !extra_envs.iter().any(|(env, _)| env == &input.env))
         .collect()
 }
 
-/// The default values of a method's inputs whose environment variables
-/// are not otherwise set, to be applied as hook environment variables
+/// The default values of a method's inputs that are neither collected
+/// nor provided by the environment, to be applied as hook environment variables
 pub fn default_input_envs(
     method: &RegisterMethod,
     extra_envs: &[(String, String)],
+    env: impl Fn(&str) -> Option<String>,
 ) -> Vec<(String, String)> {
     method
         .inputs
         .iter()
         .filter_map(|input| {
             let default = input.default.as_ref()?;
-            let env_set = std::env::var(&input.env).is_ok_and(|value| !value.is_empty());
+            let provided = env(&input.env).is_some();
             let collected = extra_envs.iter().any(|(env, _)| env == &input.env);
-            (!env_set && !collected).then(|| (input.env.clone(), default.clone()))
+            (!provided && !collected).then(|| (input.env.clone(), default.clone()))
         })
         .collect()
 }
@@ -630,29 +637,41 @@ name = "provision"
 
 [[inputs]]
 name = "bootstrap user"
-env = "TEST_BOOTSTRAP_USER_UNSET"
+env = "BOOTSTRAP_USER"
 default = "management/devicebootstrap"
 
 [[inputs]]
 name = "token"
-env = "TEST_TOKEN_UNSET"
+env = "TOKEN"
+
+[[inputs]]
+name = "note"
+env = "NOTE"
+required = false
 "#,
         )
         .unwrap();
-        let missing = missing_inputs(&method, &[]);
+        let unset = |_: &str| None;
+        let missing = missing_inputs(&method, &[], unset);
         assert_eq!(missing.len(), 1);
-        assert_eq!(missing[0].env, "TEST_TOKEN_UNSET");
-        let defaults = default_input_envs(&method, &[]);
+        assert_eq!(missing[0].env, "TOKEN");
+        let defaults = default_input_envs(&method, &[], unset);
         assert_eq!(
             defaults,
             vec![(
-                "TEST_BOOTSTRAP_USER_UNSET".to_owned(),
+                "BOOTSTRAP_USER".to_owned(),
                 "management/devicebootstrap".to_owned()
             )]
         );
         // an explicitly collected value suppresses the default
-        let collected = vec![("TEST_BOOTSTRAP_USER_UNSET".to_owned(), "other".to_owned())];
-        assert!(default_input_envs(&method, &collected).is_empty());
+        let collected = vec![("BOOTSTRAP_USER".to_owned(), "other".to_owned())];
+        assert!(default_input_envs(&method, &collected, unset).is_empty());
+        // so does a value from the environment, which also satisfies
+        // a required input
+        let from_env =
+            |name: &str| (name == "TOKEN" || name == "BOOTSTRAP_USER").then(|| "set".to_owned());
+        assert!(missing_inputs(&method, &[], from_env).is_empty());
+        assert!(default_input_envs(&method, &[], from_env).is_empty());
     }
 
     #[test]

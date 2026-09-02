@@ -21,6 +21,9 @@ use tokio::time::Instant;
 
 const CREDENTIALS_CONTENT_TYPE: &str = "application/vnd.com.nsn.cumulocity.devicecredentials+json";
 
+/// The per-request timeout of the registration exchanges
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Length of the generated security token (Cumulocity accepts up to 32)
 const SECURITY_TOKEN_LEN: usize = 8;
 
@@ -35,6 +38,15 @@ pub struct DeviceCredentials {
     pub username: String,
     /// Zeroed on drop, following the mqtt_channel password convention
     pub password: Zeroizing<String>,
+}
+
+impl std::fmt::Debug for DeviceCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DeviceCredentials")
+            .field("username", &self.username)
+            .field("password", &"<redacted>")
+            .finish()
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -58,6 +70,7 @@ struct CredentialsFileC8y<'a> {
 
 /// Poll the device credentials endpoint until the registration is accepted
 ///
+/// `base_url` is the platform's HTTP base (`https://<host>`).
 /// HTTP 404 means "not accepted yet, keep polling";
 /// a success response carries the permanent credentials.
 ///
@@ -65,7 +78,7 @@ struct CredentialsFileC8y<'a> {
 /// (`$C8Y_BOOTSTRAP_USER` / `$C8Y_BOOTSTRAP_PASSWORD`),
 /// resolved by the caller - no defaults live in the code
 pub async fn request_device_credentials(
-    http_host: &str,
+    base_url: &str,
     device_id: &str,
     bootstrap_user: &str,
     bootstrap_password: &str,
@@ -83,7 +96,7 @@ pub async fn request_device_credentials(
     };
 
     let client = http_config.client_builder().build()?;
-    let url = format!("https://{http_host}/devicecontrol/deviceCredentials");
+    let url = format!("{base_url}/devicecontrol/deviceCredentials");
     let body = serde_json::json!({ "id": device_id, "securityToken": security_token });
 
     eprintln!("Waiting for the device registration to be accepted");
@@ -91,7 +104,7 @@ pub async fn request_device_credentials(
     eprintln!("  Open the following URL to register the device (if not already done)");
     eprintln!("  and accept the registration request while this command is polling:");
     eprintln!();
-    eprintln!("  {}", registration_url(http_host, device_id));
+    eprintln!("  {}", registration_url(base_url, device_id));
     eprintln!();
     eprintln!("  Device ID:      {device_id}");
     eprintln!("  Security token: {security_token}");
@@ -107,7 +120,7 @@ pub async fn request_device_credentials(
             .header(CONTENT_TYPE, CREDENTIALS_CONTENT_TYPE)
             .header(ACCEPT, CREDENTIALS_CONTENT_TYPE)
             .json(&body)
-            .timeout(Duration::from_secs(30))
+            .timeout(REQUEST_TIMEOUT)
             .send()
             .await;
 
@@ -134,7 +147,7 @@ pub async fn request_device_credentials(
             }
             Ok(response) if response.status() == StatusCode::UNAUTHORIZED => {
                 bail!(
-                    "The bootstrap credentials were rejected by {http_host}. \
+                    "The bootstrap credentials were rejected by {base_url}. \
                      Dedicated Cumulocity instances use their own bootstrap user: \
                      set the C8Y_BOOTSTRAP_USER and C8Y_BOOTSTRAP_PASSWORD environment variables"
                 );
@@ -157,6 +170,40 @@ pub async fn request_device_credentials(
         }
         tokio::time::sleep(retry_every).await;
     }
+}
+
+/// The outcome of checking issued credentials against the platform
+#[derive(Debug, PartialEq, Eq)]
+pub enum CredentialsCheck {
+    Verified,
+    /// The platform rejected the credentials (HTTP 401)
+    Rejected,
+    /// The platform could not be asked (unreachable, or an unexpected status)
+    Unverifiable(String),
+}
+
+/// Check issued device credentials with an authenticated no-op request
+/// (`GET /user/currentUser`)
+pub async fn verify_device_credentials(
+    base_url: &str,
+    credentials: &DeviceCredentials,
+    http_config: &CloudHttpConfig,
+) -> anyhow::Result<CredentialsCheck> {
+    let client = http_config.client_builder().build()?;
+    let response = client
+        .get(format!("{base_url}/user/currentUser"))
+        .basic_auth(&credentials.username, Some(credentials.password.as_str()))
+        .timeout(REQUEST_TIMEOUT)
+        .send()
+        .await;
+    Ok(match response {
+        Ok(response) if response.status() == StatusCode::UNAUTHORIZED => CredentialsCheck::Rejected,
+        Ok(response) if response.status().is_success() => CredentialsCheck::Verified,
+        Ok(response) => {
+            CredentialsCheck::Unverifiable(format!("HTTP {} from {base_url}", response.status()))
+        }
+        Err(err) => CredentialsCheck::Unverifiable(err.to_string()),
+    })
 }
 
 /// Store the credentials with mode 600, owned by tedge:tedge where possible
@@ -195,17 +242,29 @@ pub async fn store_credentials(
     Ok(())
 }
 
+/// The username stored in a credentials file, if the file is readable
+pub async fn read_stored_username(path: &Utf8Path) -> Option<String> {
+    let content = Zeroizing::new(tokio::fs::read_to_string(path).await.ok()?);
+    let table: toml::Table = content.parse().ok()?;
+    table
+        .get("c8y")?
+        .get("username")?
+        .as_str()
+        .map(str::to_owned)
+}
+
 /// The device registration page, pre-filled with the device id.
 ///
 /// Unlike the c8y-ca variant, no one-time password is included:
 /// the basic handshake has none — the security token, when the tenant
 /// demands one, is entered by the operator, never carried in a URL
-fn registration_url(http_host: &str, device_id: &str) -> String {
-    let authority = http_host.strip_suffix(":443").unwrap_or(http_host);
+fn registration_url(base_url: &str, device_id: &str) -> String {
+    let base_url = base_url.trim_end_matches('/');
+    let base_url = base_url.strip_suffix(":443").unwrap_or(base_url);
     let query = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("externalId", device_id)
         .finish();
-    format!("https://{authority}/apps/devicemanagement/index.html#/deviceregistration?{query}")
+    format!("{base_url}/apps/devicemanagement/index.html#/deviceregistration?{query}")
 }
 
 /// Generate a security token that survives being read aloud and retyped
@@ -252,5 +311,164 @@ mod tests {
             parsed["c8y"]["username"].as_str().unwrap(),
             "t1234/device_test"
         );
+    }
+
+    #[test]
+    fn registration_url_carries_the_device_id_without_the_default_port() {
+        assert_eq!(
+            registration_url("https://example.com:443", "dev 01"),
+            "https://example.com/apps/devicemanagement/index.html#/deviceregistration?externalId=dev+01"
+        );
+    }
+
+    #[tokio::test]
+    async fn credentials_are_polled_until_the_registration_is_accepted() {
+        let mut server = mockito::Server::new_async().await;
+        let pending = server
+            .mock("POST", "/devicecontrol/deviceCredentials")
+            .match_header("authorization", "Basic Ym9vdDpzZWNyZXQ=") // boot:secret
+            .with_status(404)
+            .expect(1)
+            .create_async()
+            .await;
+        let accepted = server
+            .mock("POST", "/devicecontrol/deviceCredentials")
+            .with_status(201)
+            .with_body(
+                r#"{"id":"demo01","tenantId":"t1234","username":"device_demo01","password":"pw"}"#,
+            )
+            .expect(1)
+            .create_async()
+            .await;
+
+        let credentials = request_device_credentials(
+            &server.url(),
+            "demo01",
+            "boot",
+            "secret",
+            &CloudHttpConfig::test_value(),
+            Duration::from_millis(10),
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap();
+        assert_eq!(credentials.username, "t1234/device_demo01");
+        assert_eq!(credentials.password.as_str(), "pw");
+        pending.assert_async().await;
+        accepted.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn rejected_bootstrap_credentials_fail_immediately() {
+        let mut server = mockito::Server::new_async().await;
+        let _mock = server
+            .mock("POST", "/devicecontrol/deviceCredentials")
+            .with_status(401)
+            .create_async()
+            .await;
+        let err = request_device_credentials(
+            &server.url(),
+            "demo01",
+            "boot",
+            "wrong",
+            &CloudHttpConfig::test_value(),
+            Duration::from_millis(10),
+            Duration::from_secs(5),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("rejected"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn pending_registration_times_out() {
+        let mut server = mockito::Server::new_async().await;
+        let _mock = server
+            .mock("POST", "/devicecontrol/deviceCredentials")
+            .with_status(404)
+            .create_async()
+            .await;
+        let err = request_device_credentials(
+            &server.url(),
+            "demo01",
+            "boot",
+            "secret",
+            &CloudHttpConfig::test_value(),
+            Duration::from_millis(10),
+            Duration::from_millis(50),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("Timed out"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn issued_credentials_are_verified_against_the_platform() {
+        let credentials = DeviceCredentials {
+            username: "t1234/device_demo01".into(),
+            password: Zeroizing::new("pw".into()),
+        };
+        let http = CloudHttpConfig::test_value();
+
+        let mut server = mockito::Server::new_async().await;
+        let ok = server
+            .mock("GET", "/user/currentUser")
+            .with_status(200)
+            .create_async()
+            .await;
+        assert_eq!(
+            verify_device_credentials(&server.url(), &credentials, &http)
+                .await
+                .unwrap(),
+            CredentialsCheck::Verified
+        );
+        ok.remove_async().await;
+
+        let rejected = server
+            .mock("GET", "/user/currentUser")
+            .with_status(401)
+            .create_async()
+            .await;
+        assert_eq!(
+            verify_device_credentials(&server.url(), &credentials, &http)
+                .await
+                .unwrap(),
+            CredentialsCheck::Rejected
+        );
+        rejected.remove_async().await;
+
+        let _outage = server
+            .mock("GET", "/user/currentUser")
+            .with_status(503)
+            .create_async()
+            .await;
+        assert!(matches!(
+            verify_device_credentials(&server.url(), &credentials, &http)
+                .await
+                .unwrap(),
+            CredentialsCheck::Unverifiable(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn stored_credentials_are_private_and_readable_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = Utf8Path::from_path(tmp.path())
+            .unwrap()
+            .join("credentials.toml");
+        let credentials = DeviceCredentials {
+            username: "t1234/device_demo01".into(),
+            password: Zeroizing::new("pw".into()),
+        };
+        store_credentials(&path, &credentials).await.unwrap();
+
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(
+            read_stored_username(&path).await.as_deref(),
+            Some("t1234/device_demo01")
+        );
+        assert_eq!(read_stored_username(&path.join("missing")).await, None);
     }
 }

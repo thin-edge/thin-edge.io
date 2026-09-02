@@ -53,11 +53,11 @@ const ASCII: Glyphs = Glyphs {
 };
 
 pub struct Ui {
-    pub verbose: bool,
+    verbose: bool,
     color: bool,
     glyphs: &'static Glyphs,
     log: Option<Mutex<std::fs::File>>,
-    pub log_path: Option<PathBuf>,
+    log_path: Option<PathBuf>,
     state: Mutex<State>,
 }
 
@@ -79,10 +79,22 @@ impl Ui {
             log_dir.map(|dir| dir.join(&name)),
             Some(std::env::temp_dir().join(&name)),
         ];
+        // The log carries hook diagnostics and config values:
+        // private to the user running bootstrap
+        let create = |path: &PathBuf| {
+            use std::os::unix::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(path)
+                .ok()
+        };
         let (log, log_path) = candidates
             .into_iter()
             .flatten()
-            .find_map(|path| std::fs::File::create(&path).ok().map(|file| (file, path)))
+            .find_map(|path| create(&path).map(|file| (file, path)))
             .map(|(file, path)| (Some(file), Some(path)))
             .unwrap_or((None, None));
         let dumb = std::env::var("TERM").is_ok_and(|term| term == "dumb");
@@ -105,6 +117,12 @@ impl Ui {
                 failed: None,
             }),
         }
+    }
+
+    /// Whether the full output was requested (--verbose):
+    /// details are shown, not just logged
+    pub fn is_verbose(&self) -> bool {
+        self.verbose
     }
 
     // ---------------------------------------------------------- styling

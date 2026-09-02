@@ -1,12 +1,16 @@
 use super::command::BootstrapCommand;
 use super::command::BootstrapSequence;
+use super::command::OneTimePassword;
 use super::describe;
 use super::descriptor;
+use super::descriptor::env_var;
 use super::descriptor::CloudDescriptor;
 use super::invocation;
 use super::invocation::Invocation;
+use super::mapper_toml::MapperToml;
 use super::ui::Ui;
 use super::wizard;
+use super::wizard::Prompter;
 use crate::cli::common::resolve_cloud;
 use crate::cli::common::Cloud;
 use crate::command::BuildCommand;
@@ -14,6 +18,7 @@ use crate::command::Command;
 use anyhow::anyhow;
 use anyhow::Context;
 use std::io::IsTerminal;
+use std::sync::Arc;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::TEdgeConfig;
@@ -23,6 +28,10 @@ use tedge_system_services::service_manager;
 /// shared with `tedge cert download c8y`;
 /// declared as an input of the c8y-ca method in the compiled-in descriptor
 const ONE_TIME_PASSWORD_ENV: &str = "DEVICE_ONE_TIME_PASSWORD";
+
+/// The config environment override for `device.id`,
+/// exported to hooks and honoured as a `--device-id` substitute
+const DEVICE_ID_ENV: &str = "TEDGE_DEVICE_ID";
 
 /// Bootstrap the device and onboard it to a cloud (experimental)
 ///
@@ -102,11 +111,14 @@ pub struct TEdgeBootstrapCli {
     #[clap(long)]
     interactive: bool,
 
-    /// Maximum time to wait for the cloud connection to come up.
+    /// Maximum time to wait for a custom cloud mapper to report
+    /// a healthy connection.
     ///
     /// The first connection can be slow (service start, DNS, TLS),
     /// or depend on an operator action (e.g. registering a certificate
-    /// in the cloud's UI), so the connection check is retried until then
+    /// in the cloud's UI), so the connection check is retried until then.
+    /// Built-in clouds use the connect flow's own retries; registration
+    /// waits for an operator for up to 10 minutes
     #[clap(long, default_value = "5m")]
     #[arg(value_parser = humantime::parse_duration)]
     timeout: std::time::Duration,
@@ -116,7 +128,7 @@ pub struct TEdgeBootstrapCli {
     no_wait: bool,
 
     /// Only print what would be done, without changing anything
-    #[clap(long = "dry-run", alias = "dry")]
+    #[clap(long = "dry-run")]
     dry_run: bool,
 
     /// Show the full output: skipped hooks, hook invocations,
@@ -166,10 +178,12 @@ pub struct TEdgeBootstrapCli {
     #[clap(long = "re-register")]
     re_register: bool,
 
-    /// Unwind the instance completely before bootstrapping:
-    /// everything --re-register removes, plus the instance's own
-    /// configuration (the cloud's config section, or the bootstrap-managed
-    /// keys in its mapper.toml); device-global settings are kept.
+    /// Unwind the instance before bootstrapping:
+    /// everything --re-register removes, plus the configuration
+    /// bootstrap manages for the instance (its endpoints, auth method,
+    /// credentials location, per-instance defaults, and the settings
+    /// this run applies); other settings of the cloud's section and
+    /// device-global settings are kept.
     /// The run then needs its inputs supplied afresh.
     /// Hooks receive --clean so they can remove their own state too
     #[clap(long)]
@@ -220,12 +234,25 @@ pub enum RegistrationMethod {
     Hook { method: Option<String> },
 }
 
+impl RegistrationMethod {
+    /// The method's name, as cloud vocabulary
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            Self::C8yCa => Some("c8y-ca"),
+            Self::SelfSigned => Some("self-signed"),
+            Self::Basic => Some("basic"),
+            Self::BasicPreregistered => Some("basic-preregistered"),
+            Self::Hook { method } => method.as_deref(),
+        }
+    }
+}
+
 /// A raw `key=value` pair for `--set`.
 ///
 /// The key is validated at execution time,
 /// against tedge config keys for built-in clouds
 /// and against the mapper config for custom cloud mappers.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeyValue {
     pub key: String,
     pub value: String,
@@ -257,97 +284,136 @@ impl BuildCommand for TEdgeBootstrapCli {
         };
         let descriptors = descriptor::load_descriptors(&plugin_paths).await?;
 
-        // Live documentation: render the resolved descriptors and stop
         if self.describe {
-            let key = match &self.cloud {
-                Some(name) => {
-                    // the same resolution the wizard uses: the cloud's own
-                    // descriptor, else its cloud type's
-                    let cloud = resolve_cloud(name, self.profile.clone())
-                        .unwrap_or_else(|| Cloud::Custom(name.clone()));
-                    let own = descriptor_key(&cloud).to_owned();
-                    match descriptors.iter().any(|d| d.cloud == own) {
-                        true => Some(own),
-                        false => Some(
-                            resolve_cloud_type(config, &cloud, &self.cloud_type, &descriptors)
-                                .await
-                                .unwrap_or(own),
-                        ),
-                    }
-                }
-                None => None,
+            return self.build_describe(config, &descriptors).await;
+        }
+
+        // One console and one log file for the whole run,
+        // however many instances it bootstraps
+        let ui = Arc::new(Ui::new(
+            self.verbose,
+            Some(std::path::PathBuf::from(config.logs.path.to_string())),
+            self.ascii,
+        ));
+
+        match &self.from {
+            Some(from) => {
+                self.build_replay(config, &descriptors, &plugin_paths, from, &ui)
+                    .await
+            }
+            None => {
+                self.build_interactive(config, &descriptors, &plugin_paths, &ui)
+                    .await
+            }
+        }
+    }
+}
+
+/// The resolved per-instance arguments of one bootstrap run,
+/// after flags, wizard answers, or a --from file have been merged
+struct EffectiveArgs {
+    cloud_name: String,
+    profile: Option<ProfileName>,
+    cloud_type_flag: Option<String>,
+    url: Option<String>,
+    register: Option<String>,
+    device_id: Option<String>,
+    settings: Vec<KeyValue>,
+    hook_envs: Vec<(String, String)>,
+    /// The environment variables a replayed invocation was captured with
+    /// (by name): they must be set when the run actually registers
+    replay_env: Vec<String>,
+    re_register: bool,
+    clean: bool,
+    /// The answers were collected by the interactive wizard,
+    /// so the run prints its equivalent non-interactive command
+    from_wizard: bool,
+}
+
+impl TEdgeBootstrapCli {
+    /// Live documentation: render the resolved descriptors and stop
+    async fn build_describe(
+        &self,
+        config: &TEdgeConfig,
+        descriptors: &[CloudDescriptor],
+    ) -> Result<Box<dyn Command>, crate::ConfigError> {
+        let key = match &self.cloud {
+            Some(name) => Some(self.descriptor_key_for(config, name, descriptors).await),
+            None => None,
+        };
+        let output = describe::render(descriptors, key.as_deref()).map_err(|e| anyhow!(e))?;
+        Ok(describe::DescribeCommand { output }.into_boxed())
+    }
+
+    /// Replay previously captured invocations, in file order
+    async fn build_replay(
+        &self,
+        config: &TEdgeConfig,
+        descriptors: &[CloudDescriptor],
+        plugin_paths: &[camino::Utf8PathBuf],
+        from: &camino::Utf8Path,
+        ui: &Arc<Ui>,
+    ) -> Result<Box<dyn Command>, crate::ConfigError> {
+        let content = tokio::fs::read_to_string(from)
+            .await
+            .with_context(|| format!("Failed to read {from}"))
+            .map_err(|e| anyhow!(e))?;
+        let invocations = invocation::parse_invocations(&content)
+            .with_context(|| format!("Invalid invocation file {from}"))
+            .map_err(|e| anyhow!(e))?;
+        let mut commands = Vec::new();
+        for invocation in invocations {
+            let profile = invocation
+                .profile
+                .map(|profile| {
+                    profile
+                        .parse::<ProfileName>()
+                        .map_err(|e| anyhow!("Invalid profile in {from}: {e}"))
+                })
+                .transpose()?;
+            let args = EffectiveArgs {
+                cloud_name: invocation.cloud,
+                profile,
+                cloud_type_flag: invocation.cloud_type,
+                url: invocation.url,
+                register: invocation.register,
+                device_id: invocation.device_id,
+                settings: invocation
+                    .set
+                    .into_iter()
+                    .map(|(key, value)| KeyValue { key, value })
+                    .collect(),
+                hook_envs: Vec::new(),
+                // captured by name only: checked when the run registers
+                replay_env: invocation.env,
+                re_register: invocation.re_register || self.re_register,
+                clean: invocation.clean || self.clean,
+                // a replayed file is already the declarative form
+                from_wizard: false,
             };
-            let output = describe::render(&descriptors, key.as_deref()).map_err(|e| anyhow!(e))?;
-            return Ok(describe::DescribeCommand { output }.into_boxed());
+            commands.push(
+                self.build_one(config, descriptors, plugin_paths, args, None, ui)
+                    .await?,
+            );
         }
-
-        // Replay previously captured invocations, in file order
-        if let Some(from) = &self.from {
-            let content = tokio::fs::read_to_string(from)
-                .await
-                .with_context(|| format!("Failed to read {from}"))
-                .map_err(|e| anyhow!(e))?;
-            let invocations = invocation::parse_invocations(&content)
-                .with_context(|| format!("Invalid invocation file {from}"))
-                .map_err(|e| anyhow!(e))?;
-            // Secrets are captured by name only: fail upfront when the
-            // environment does not provide what the capture relied on
-            let missing: std::collections::BTreeSet<&str> = invocations
-                .iter()
-                .flat_map(|invocation| invocation.env.iter())
-                .map(String::as_str)
-                .filter(|env| std::env::var(env).map_or(true, |value| value.is_empty()))
-                .collect();
-            if !missing.is_empty() {
-                let missing = missing.into_iter().collect::<Vec<_>>().join(", ");
-                return Err(anyhow!(
-                    "The invocations in {from} were captured with environment \
-                     variables that are not set: {missing}. \
-                     Export them before replaying"
-                )
-                .into());
-            }
-            let mut commands = Vec::new();
-            for invocation in invocations {
-                let profile = invocation
-                    .profile
-                    .map(|profile| {
-                        profile
-                            .parse::<ProfileName>()
-                            .map_err(|e| anyhow!("Invalid profile in {from}: {e}"))
-                    })
-                    .transpose()?;
-                let args = EffectiveArgs {
-                    cloud_name: invocation.cloud,
-                    profile,
-                    cloud_type_flag: invocation.cloud_type,
-                    url: invocation.url,
-                    register: invocation.register,
-                    device_id: invocation.device_id,
-                    settings: invocation
-                        .set
-                        .into_iter()
-                        .map(|(key, value)| KeyValue { key, value })
-                        .collect(),
-                    hook_envs: Vec::new(),
-                    re_register: invocation.re_register || self.re_register,
-                    clean: invocation.clean || self.clean,
-                    // a replayed file is already the declarative form
-                    from_wizard: false,
-                };
-                commands.push(
-                    self.build_one(config, &descriptors, &plugin_paths, args, false)
-                        .await?,
-                );
-            }
-            return Ok(BootstrapSequence {
-                commands,
-                save_path: self.save.clone(),
-            }
-            .into_boxed());
+        Ok(BootstrapSequence {
+            commands,
+            save_path: self.save.clone(),
         }
+        .into_boxed())
+    }
 
+    /// A single run from the flags, completed by the wizard where
+    /// required information is genuinely missing on an interactive run
+    async fn build_interactive(
+        &self,
+        config: &TEdgeConfig,
+        descriptors: &[CloudDescriptor],
+        plugin_paths: &[camino::Utf8PathBuf],
+        ui: &Arc<Ui>,
+    ) -> Result<Box<dyn Command>, crate::ConfigError> {
         let interactive = self.interactive || std::io::stdin().is_terminal();
+        let mut prompter = interactive.then(Prompter::stdio);
         let seed_for = |cloud: Option<String>| wizard::WizardSeed {
             cloud,
             url: self.url.clone(),
@@ -356,8 +422,8 @@ impl BuildCommand for TEdgeBootstrapCli {
             set_keys: self.settings.iter().map(|s| s.key.clone()).collect(),
         };
 
-        let (cloud_name, mut answers, wizard_key) = match &self.cloud {
-            Some(name) => {
+        let (cloud_name, mut answers, wizard_key) = match (&self.cloud, prompter.as_mut()) {
+            (Some(name), prompter) => {
                 // The cloud is known: prompt for the remaining answers
                 // only when required information is genuinely missing
                 // (an interactive first-time run with no URL from flag,
@@ -366,17 +432,7 @@ impl BuildCommand for TEdgeBootstrapCli {
                 // stay fully non-interactive
                 let cloud = resolve_cloud(name, self.profile.clone())
                     .unwrap_or_else(|| Cloud::Custom(name.clone()));
-                // The cloud's own descriptor drives its questions;
-                // a custom-named instance without one answers the questions
-                // of its cloud type's descriptor (e.g. --type c8y)
-                let own = descriptor_key(&cloud).to_owned();
-                let key = if descriptors.iter().any(|d| d.cloud == own) {
-                    own
-                } else {
-                    resolve_cloud_type(config, &cloud, &self.cloud_type, &descriptors)
-                        .await
-                        .unwrap_or(own)
-                };
+                let key = self.descriptor_key_for(config, name, descriptors).await;
                 // A --clean run is a fresh device again: the configured URL
                 // is about to be unwound, so it does not count as known
                 let url_known = self.url.is_some()
@@ -387,47 +443,39 @@ impl BuildCommand for TEdgeBootstrapCli {
                         .and_then(|u| u.fixed_value())
                         .is_some()
                     || (!self.clean && configured_url(config, &cloud).await.is_some());
-                if interactive && !url_known {
-                    let answers = wizard::run(&descriptors, &seed_for(Some(key.clone())))?;
-                    (name.clone(), Some(answers), Some(key))
-                } else {
-                    (name.clone(), None, None)
+                match prompter {
+                    Some(prompter) if !url_known => {
+                        let answers =
+                            wizard::run(descriptors, &seed_for(Some(key.clone())), prompter)?;
+                        (name.clone(), Some(answers), Some(key))
+                    }
+                    _ => (name.clone(), None, None),
                 }
             }
-            None => {
-                if !interactive {
-                    return Err(anyhow!(
-                        "No cloud specified. \
-                         Pass a cloud name (e.g. `tedge bootstrap c8y --url ...`), \
-                         or run interactively from a terminal (or with --interactive)"
-                    )
-                    .into());
-                }
-                let answers = wizard::run(&descriptors, &seed_for(None))?;
+            (None, None) => {
+                return Err(anyhow!(
+                    "No cloud specified. \
+                     Pass a cloud name (e.g. `tedge bootstrap c8y --url ...`), \
+                     or run interactively from a terminal (or with --interactive)"
+                )
+                .into());
+            }
+            (None, Some(prompter)) => {
+                let answers = wizard::run(descriptors, &seed_for(None), prompter)?;
                 let key = answers.cloud.clone();
                 (answers.cloud.clone(), Some(answers), Some(key))
             }
         };
 
-        let cloud = match resolve_cloud(&cloud_name, self.profile.clone()) {
-            Some(cloud) => cloud,
-            None => Cloud::Custom(cloud_name.clone()),
-        };
+        let cloud = resolve_cloud(&cloud_name, self.profile.clone())
+            .unwrap_or_else(|| Cloud::Custom(cloud_name.clone()));
 
         // Wizard-collected settings are prefixed with the descriptor key
         // used for the questions; retarget them to the instance's own
         // config prefix (a custom-named instance's mapper config,
         // or a profile's config keys)
         if let (Some(answers), Some(wizard_key)) = (answers.as_mut(), &wizard_key) {
-            let target = settings_prefix(&cloud);
-            if *wizard_key != target {
-                let old_prefix = format!("{wizard_key}.");
-                for setting in &mut answers.settings {
-                    if let Some(rest) = setting.key.strip_prefix(&old_prefix) {
-                        setting.key = format!("{target}.{rest}");
-                    }
-                }
-            }
+            retarget_settings(&mut answers.settings, wizard_key, &cloud.config_prefix());
         }
 
         let from_wizard = answers.is_some();
@@ -457,56 +505,66 @@ impl BuildCommand for TEdgeBootstrapCli {
             device_id,
             settings,
             hook_envs,
+            replay_env: Vec::new(),
             re_register: self.re_register,
             clean: self.clean,
             from_wizard,
         };
         let mut command = self
-            .build_one(config, &descriptors, &plugin_paths, args, interactive)
+            .build_one(
+                config,
+                descriptors,
+                plugin_paths,
+                args,
+                prompter.as_mut(),
+                ui,
+            )
             .await?;
         command.save_path = self.save.clone();
         Ok(command.into_boxed())
     }
-}
 
-/// The resolved per-instance arguments of one bootstrap run,
-/// after flags, wizard answers, or a --from file have been merged
-struct EffectiveArgs {
-    cloud_name: String,
-    profile: Option<ProfileName>,
-    cloud_type_flag: Option<String>,
-    url: Option<String>,
-    register: Option<String>,
-    device_id: Option<String>,
-    settings: Vec<KeyValue>,
-    hook_envs: Vec<(String, String)>,
-    re_register: bool,
-    clean: bool,
-    /// The answers were collected by the interactive wizard,
-    /// so the run prints its equivalent non-interactive command
-    from_wizard: bool,
-}
+    /// The descriptor driving a named cloud's questions and validation:
+    /// the cloud's own, else its cloud type's
+    /// (a custom-named instance, e.g. `--type c8y`)
+    async fn descriptor_key_for(
+        &self,
+        config: &TEdgeConfig,
+        name: &str,
+        descriptors: &[CloudDescriptor],
+    ) -> String {
+        let cloud = resolve_cloud(name, self.profile.clone())
+            .unwrap_or_else(|| Cloud::Custom(name.to_owned()));
+        let own = cloud.short_name().to_owned();
+        if descriptors.iter().any(|d| d.cloud == own) {
+            return own;
+        }
+        resolve_cloud_type(config, &cloud, &self.cloud_type, descriptors)
+            .await
+            .unwrap_or(own)
+    }
 
-impl TEdgeBootstrapCli {
-    /// Resolve one instance's arguments into a runnable bootstrap command
+    /// Resolve one instance's arguments into a runnable bootstrap command.
+    ///
+    /// With a prompter, the registration method's missing inputs are
+    /// asked for interactively (when the run will actually register)
     async fn build_one(
         &self,
         config: &TEdgeConfig,
         descriptors: &[CloudDescriptor],
         plugin_paths: &[camino::Utf8PathBuf],
         args: EffectiveArgs,
-        prompt_missing: bool,
+        prompter: Option<&mut Prompter>,
+        ui: &Arc<Ui>,
     ) -> Result<BootstrapCommand, crate::ConfigError> {
-        let cloud = match resolve_cloud(&args.cloud_name, args.profile.clone()) {
-            Some(cloud) => cloud,
-            None => Cloud::Custom(args.cloud_name.clone()),
-        };
+        let cloud = resolve_cloud(&args.cloud_name, args.profile.clone())
+            .unwrap_or_else(|| Cloud::Custom(args.cloud_name.clone()));
         let cloud_type =
             resolve_cloud_type(config, &cloud, &args.cloud_type_flag, descriptors).await;
 
         // The cloud's own descriptor wins; a custom-named instance
         // without one uses its cloud type's descriptor
-        let own_key = descriptor_key(&cloud).to_owned();
+        let own_key = cloud.short_name();
         let descriptor = descriptors
             .iter()
             .find(|descriptor| descriptor.cloud == own_key)
@@ -531,8 +589,6 @@ impl TEdgeBootstrapCli {
                 .map(str::to_owned)
         });
 
-        // Inputs with declared defaults are filled in when not set otherwise,
-        // and config values implied by the method are collected
         let mut hook_envs = args.hook_envs;
 
         // The c8y-ca one-time password is a method input
@@ -540,49 +596,39 @@ impl TEdgeBootstrapCli {
         // collected by the wizard or supplied via the environment.
         // When absent it is pre-generated, so the registration URL is known
         // before the register step runs and can be exposed to hooks
-        // (QR codes, operator displays);
-        // a supplied password is kept secret (not displayed, not in the URL)
         let supplied_password = hook_envs
             .iter()
             .find(|(env, _)| env == ONE_TIME_PASSWORD_ENV)
             .map(|(_, value)| value.clone())
-            .or_else(|| {
-                std::env::var(ONE_TIME_PASSWORD_ENV)
-                    .ok()
-                    .filter(|value| !value.is_empty())
-            });
-        let (one_time_password, generated_one_time_password) = match (&register, supplied_password)
-        {
-            (RegistrationMethod::C8yCa, Some(password)) => (Some(password), false),
-            // no pre-generation on an offline run: registration is deferred,
-            // and a printed registration URL's password would not survive
-            // to the online run that actually registers
-            (RegistrationMethod::C8yCa, None) if !self.offline => (
-                Some(crate::cli::certificate::c8y::generate_one_time_password()),
-                true,
+            .or_else(|| env_var(ONE_TIME_PASSWORD_ENV));
+        let one_time_password = match (&register, supplied_password) {
+            (RegistrationMethod::C8yCa, Some(password)) => OneTimePassword::Supplied(password),
+            (RegistrationMethod::C8yCa, None) if !self.offline => OneTimePassword::Generated(
+                crate::cli::certificate::c8y::generate_one_time_password(),
             ),
-            _ => (None, false),
+            _ => OneTimePassword::None,
         };
+
         let chosen_method = args
             .register
             .as_deref()
             .or(default_method_name(&cloud, descriptor))
             .and_then(|name| descriptor.and_then(|d| d.method(name)));
-        let mut method_settings = Vec::new();
-        if let Some(descriptor) = descriptor {
-            // Config values implied by the cloud itself
-            // (e.g. a derived cloud pinning its transport),
-            // before the method's own implied values
-            method_settings.extend(
-                descriptor
-                    .set_config
+
+        // Config values implied by the cloud itself (e.g. a derived cloud
+        // pinning its transport), then by the chosen method
+        let mut method_settings: Vec<(String, String)> = descriptor
+            .map(|d| {
+                d.set_config
                     .iter()
-                    .map(|(key, value)| (key.clone(), value.clone())),
-            );
-        }
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
         // Capture the effective invocation before defaults are folded in:
         // environment variables by name only — wizard-collected inputs,
-        // plus the chosen method's inputs provided by the environment
+        // plus the chosen method's inputs provided by the environment.
         // The device id may come from the TEDGE_DEVICE_ID environment
         // override (the variable bootstrap itself exports to hooks).
         // It behaves like --device-id at runtime, but the capture differs:
@@ -590,35 +636,23 @@ impl TEdgeBootstrapCli {
         // while the env variable is captured by *name* -
         // keeping the saved file fleet-generic,
         // with the id supplied per device at replay time
-        let env_device_id = std::env::var("TEDGE_DEVICE_ID")
-            .ok()
-            .filter(|id| !id.is_empty());
+        let env_device_id = env_var(DEVICE_ID_ENV);
         let device_id = args.device_id.clone().or(env_device_id.clone());
 
         let mut env_names: Vec<String> = hook_envs.iter().map(|(env, _)| env.clone()).collect();
         if args.device_id.is_none() && env_device_id.is_some() {
-            env_names.push("TEDGE_DEVICE_ID".to_owned());
+            env_names.push(DEVICE_ID_ENV.to_owned());
         }
         if let Some(method) = chosen_method {
             for input in &method.inputs {
-                if !env_names.contains(&input.env)
-                    && std::env::var(&input.env).is_ok_and(|value| !value.is_empty())
-                {
+                let provided = env_var(&input.env).is_some();
+                // An offline run defers registration, so it collects no
+                // inputs - but its saved invocation is the recipe for the
+                // online completion run: list the method's required inputs
+                // by name, so `--from` checks them upfront before replaying
+                let required_later = self.offline && input.is_required() && input.default.is_none();
+                if (provided || required_later) && !env_names.contains(&input.env) {
                     env_names.push(input.env.clone());
-                }
-            }
-            // An offline run defers registration, so it collects no inputs -
-            // but its saved invocation is the recipe for the online
-            // completion run: list the method's required inputs by name,
-            // so `--from` checks them upfront before replaying
-            if self.offline {
-                for input in &method.inputs {
-                    if input.is_required()
-                        && input.default.is_none()
-                        && !env_names.contains(&input.env)
-                    {
-                        env_names.push(input.env.clone());
-                    }
                 }
             }
         }
@@ -627,7 +661,7 @@ impl TEdgeBootstrapCli {
             profile: args.profile.as_ref().map(|profile| profile.to_string()),
             cloud_type: args.cloud_type_flag.clone(),
             url: url.clone(),
-            register: register_method_name(&register).map(str::to_owned),
+            register: register.name().map(str::to_owned),
             device_id: args.device_id.clone(),
             set: args
                 .settings
@@ -640,7 +674,7 @@ impl TEdgeBootstrapCli {
         };
 
         if let Some(method) = chosen_method {
-            hook_envs.extend(descriptor::default_input_envs(method, &hook_envs));
+            hook_envs.extend(descriptor::default_input_envs(method, &hook_envs, env_var));
             method_settings.extend(
                 method
                     .set_config
@@ -659,7 +693,6 @@ impl TEdgeBootstrapCli {
             register,
             device_id,
             one_time_password,
-            generated_one_time_password,
             settings: args.settings,
             method_settings,
             hook_envs,
@@ -669,56 +702,73 @@ impl TEdgeBootstrapCli {
             offline: self.offline,
             invocation,
             save_path: None,
-            ui: Ui::new(
-                self.verbose,
-                Some(std::path::PathBuf::from(config.logs.path.to_string())),
-                self.ascii,
-            ),
+            ui: ui.clone(),
             dry_run: self.dry_run,
         };
 
-        // Method inputs are *required to register*: they are validated —
+        // Registration inputs are *required to register*: they are validated —
         // and, on an interactive run, prompted for — only when this run
         // will actually register (no artifacts yet, --re-register, or --clean),
-        // so idempotent re-runs never demand secrets they will not use
+        // so idempotent re-runs never demand secrets they will not use.
+        // An offline run defers registration, so its inputs are
+        // neither prompted for nor validated - except for
+        // basic-preregistered, which registers offline (no exchange)
+        // and therefore needs its inputs regardless
+        let registers_offline = matches!(command.register, RegistrationMethod::BasicPreregistered);
+        let registering = (!self.offline || registers_offline)
+            && (command.re_register
+                || command.clean
+                || !command.registration_present(config).await);
+
+        // A replayed invocation was captured with environment variables
+        // by name only: fail upfront when the environment does not
+        // provide what the capture relied on
+        if registering {
+            let unset: Vec<&str> = args
+                .replay_env
+                .iter()
+                .map(String::as_str)
+                .filter(|env| env_var(env).is_none())
+                .collect();
+            if !unset.is_empty() {
+                return Err(anyhow!(
+                    "The invocation for {} was captured with environment \
+                     variables that are not set: {}. \
+                     Export them before replaying",
+                    args.cloud_name,
+                    unset.join(", ")
+                )
+                .into());
+            }
+        }
+
         let mut prompted = false;
-        if let Some(method) = chosen_method {
-            // an offline run defers registration, so its inputs are
-            // neither prompted for nor validated - except for
-            // basic-preregistered, which registers offline (no exchange)
-            // and therefore needs its inputs regardless
-            let registers_offline =
-                matches!(command.register, RegistrationMethod::BasicPreregistered);
-            let registering = (!self.offline || registers_offline)
-                && (command.re_register
-                    || command.clean
-                    || !command.registration_present(config).await);
-            if registering {
-                if prompt_missing {
-                    let collected = wizard::collect_missing_inputs(method, &command.hook_envs)
+        if let (Some(method), true) = (chosen_method, registering) {
+            if let Some(prompter) = prompter {
+                let collected =
+                    wizard::collect_missing_inputs(method, &command.hook_envs, prompter)
                         .map_err(|e| anyhow!(e))?;
-                    prompted = !collected.is_empty();
-                    for (env, _) in &collected {
-                        if !command.invocation.env.contains(env) {
-                            command.invocation.env.push(env.clone());
-                        }
+                prompted = !collected.is_empty();
+                for (env, _) in &collected {
+                    if !command.invocation.env.contains(env) {
+                        command.invocation.env.push(env.clone());
                     }
-                    command.hook_envs.extend(collected);
                 }
-                let missing = descriptor::missing_inputs(method, &command.hook_envs);
-                if !missing.is_empty() {
-                    let missing = missing
-                        .iter()
-                        .map(|input| format!("{} (${})", input.name, input.env))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    return Err(anyhow!(
-                        "The {} registration method requires: {missing}. \
-                         Set them as environment variables",
-                        method.name
-                    )
-                    .into());
-                }
+                command.hook_envs.extend(collected);
+            }
+            let missing = descriptor::missing_inputs(method, &command.hook_envs, env_var);
+            if !missing.is_empty() {
+                let missing = missing
+                    .iter()
+                    .map(|input| format!("{} (${})", input.name, input.env))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(anyhow!(
+                    "The {} registration method requires: {missing}. \
+                     Set them as environment variables",
+                    method.name
+                )
+                .into());
             }
         }
 
@@ -733,14 +783,18 @@ impl TEdgeBootstrapCli {
     }
 }
 
-/// The resolved registration method's name, as cloud vocabulary
-fn register_method_name(method: &RegistrationMethod) -> Option<&str> {
-    match method {
-        RegistrationMethod::C8yCa => Some("c8y-ca"),
-        RegistrationMethod::SelfSigned => Some("self-signed"),
-        RegistrationMethod::Basic => Some("basic"),
-        RegistrationMethod::BasicPreregistered => Some("basic-preregistered"),
-        RegistrationMethod::Hook { method } => method.as_deref(),
+/// Wizard-collected settings are keyed by the descriptor that asked the
+/// questions; move them to the instance's own config prefix
+/// (a custom-named instance's mapper config, or a profile's keys)
+fn retarget_settings(settings: &mut [KeyValue], from_prefix: &str, to_prefix: &str) {
+    if from_prefix == to_prefix {
+        return;
+    }
+    let old_prefix = format!("{from_prefix}.");
+    for setting in settings {
+        if let Some(rest) = setting.key.strip_prefix(&old_prefix) {
+            setting.key = format!("{to_prefix}.{rest}");
+        }
     }
 }
 
@@ -756,33 +810,6 @@ fn bootstrap_plugin_paths(config: &TEdgeConfig) -> Vec<camino::Utf8PathBuf> {
         .collect()
 }
 
-/// The descriptor lookup key for a cloud
-fn descriptor_key(cloud: &Cloud) -> &str {
-    match cloud {
-        #[cfg(feature = "c8y")]
-        Cloud::C8y(_) => "c8y",
-        #[cfg(feature = "azure")]
-        Cloud::Azure(_) => "az",
-        #[cfg(feature = "aws")]
-        Cloud::Aws(_) => "aws",
-        Cloud::Custom(name) => name,
-    }
-}
-
-/// The config key prefix the instance's settings target:
-/// a custom-named instance's mapper name,
-/// a profile's key prefix (e.g. `c8y.profiles.prod`),
-/// or the cloud's own key
-fn settings_prefix(cloud: &Cloud) -> String {
-    match cloud {
-        Cloud::Custom(name) => name.clone(),
-        cloud => match cloud.profile_name() {
-            Some(profile) => format!("{}.profiles.{profile}", descriptor_key(cloud)),
-            None => descriptor_key(cloud).to_owned(),
-        },
-    }
-}
-
 /// The cloud URL already present in the device's configuration, if any
 ///
 /// Used to decide whether an interactive run still needs to ask for it:
@@ -792,36 +819,17 @@ fn settings_prefix(cloud: &Cloud) -> String {
 async fn configured_url(config: &TEdgeConfig, cloud: &Cloud) -> Option<String> {
     match cloud {
         Cloud::Custom(name) => {
-            let mapper_toml = config
-                .root_dir()
-                .join("mappers")
-                .join(name)
-                .join("mapper.toml");
-            let content = tokio::fs::read_to_string(mapper_toml).await.ok()?;
-            let table: toml::Table = content.parse().ok()?;
-            table
-                .get("url")
-                .and_then(|value| value.as_str())
+            MapperToml::load_or_empty(&MapperToml::path_for(config.root_dir(), name))
+                .await
+                .url()
                 .map(str::to_owned)
-                .filter(|url| !url.is_empty())
         }
         _ => {
-            let prefix = descriptor_key(cloud);
-            for setting in ["url", "http"] {
-                let key = match cloud.profile_name() {
-                    None => format!("{prefix}.{setting}"),
-                    Some(profile) => format!("{prefix}.profiles.{profile}.{setting}"),
-                };
-                let Ok(key) = key.parse::<ReadableKey>() else {
-                    continue;
-                };
-                if let Ok(url) = config.read_string(&key) {
-                    if !url.is_empty() {
-                        return Some(url);
-                    }
-                }
-            }
-            None
+            let prefix = cloud.config_prefix();
+            ["url", "http"].iter().find_map(|setting| {
+                let key = format!("{prefix}.{setting}").parse::<ReadableKey>().ok()?;
+                config.read_string(&key).ok().filter(|url| !url.is_empty())
+            })
         }
     }
 }
@@ -855,27 +863,16 @@ async fn resolve_cloud_type(
     if let Some(cloud_type) = flag {
         return Some(cloud_type.clone());
     }
-    let from_mapper_toml = async {
-        let mapper_toml = config
-            .root_dir()
-            .join("mappers")
-            .join(name)
-            .join("mapper.toml");
-        let content = tokio::fs::read_to_string(mapper_toml).await.ok()?;
-        let table: toml::Table = content.parse().ok()?;
-        table
-            .get("cloud_type")
-            .and_then(|value| value.as_str())
-            .map(str::to_owned)
-            .filter(|cloud_type| !cloud_type.is_empty())
-    };
-    if let Some(cloud_type) = from_mapper_toml.await {
-        return Some(cloud_type);
-    }
-    descriptors
-        .iter()
-        .find(|descriptor| descriptor.cloud == *name)
-        .and_then(|descriptor| descriptor.cloud_type.clone())
+    let persisted = MapperToml::load_or_empty(&MapperToml::path_for(config.root_dir(), name))
+        .await
+        .cloud_type()
+        .map(str::to_owned);
+    persisted.or_else(|| {
+        descriptors
+            .iter()
+            .find(|descriptor| descriptor.cloud == *name)
+            .and_then(|descriptor| descriptor.cloud_type.clone())
+    })
 }
 
 fn resolve_register_method(
@@ -1039,5 +1036,137 @@ register = [
         let err =
             resolve_register_method(false, &cloud, Some(&descriptor), Some("nope")).unwrap_err();
         assert!(err.to_string().contains("token, certificate"), "{err}");
+    }
+
+    #[test]
+    fn set_pairs_are_parsed_and_validated() {
+        assert_eq!(
+            parse_key_value("c8y.url=example.com").unwrap(),
+            KeyValue {
+                key: "c8y.url".into(),
+                value: "example.com".into()
+            }
+        );
+        // an empty value is allowed (it unsets nothing, but is a valid pair)
+        assert_eq!(parse_key_value("c8y.url=").unwrap().value, "");
+        assert!(parse_key_value("=value").is_err());
+        assert!(parse_key_value("novalue").is_err());
+    }
+
+    #[test]
+    fn wizard_settings_are_retargeted_to_the_instance_prefix() {
+        let mut settings = vec![
+            KeyValue {
+                key: "c8y.mqtt_service.enabled".into(),
+                value: "true".into(),
+            },
+            KeyValue {
+                key: "proxy.address".into(),
+                value: "proxy:3128".into(),
+            },
+        ];
+        // a profile: the wizard asked c8y's questions, the profile owns the answers
+        retarget_settings(&mut settings, "c8y", "c8y.profiles.prod");
+        assert_eq!(settings[0].key, "c8y.profiles.prod.mqtt_service.enabled");
+        // global keys are left alone
+        assert_eq!(settings[1].key, "proxy.address");
+
+        // a custom-named c8y instance owns its answers in its mapper config
+        let mut settings = vec![KeyValue {
+            key: "c8y.mqtt_service.enabled".into(),
+            value: "true".into(),
+        }];
+        retarget_settings(&mut settings, "c8y", "c8y-second");
+        assert_eq!(settings[0].key, "c8y-second.mqtt_service.enabled");
+    }
+
+    #[tokio::test]
+    async fn cloud_type_comes_from_the_flag_then_mapper_toml_then_descriptor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config_dir = camino::Utf8Path::from_path(tmp.path()).unwrap();
+        let config = TEdgeConfig::load_toml_str_with_root_dir(config_dir, "");
+        let descriptors: Vec<CloudDescriptor> = vec![toml::from_str(
+            r#"
+cloud = "acme"
+type = "c8y"
+"#,
+        )
+        .unwrap()];
+        let acme = Cloud::Custom("acme".into());
+
+        // built-in clouds have no cloud type
+        assert_eq!(
+            resolve_cloud_type(&config, &Cloud::c8y(None), &Some("az".into()), &descriptors).await,
+            None
+        );
+        // the descriptor's declared type
+        assert_eq!(
+            resolve_cloud_type(&config, &acme, &None, &descriptors)
+                .await
+                .as_deref(),
+            Some("c8y")
+        );
+        // the persisted type wins over the descriptor
+        super::super::mapper_toml::write_mapper_config(
+            &MapperToml::path_for(config_dir, "acme"),
+            &[("cloud_type".to_owned(), "az".to_owned())],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            resolve_cloud_type(&config, &acme, &None, &descriptors)
+                .await
+                .as_deref(),
+            Some("az")
+        );
+        // the flag wins over everything
+        assert_eq!(
+            resolve_cloud_type(&config, &acme, &Some("aws".into()), &descriptors)
+                .await
+                .as_deref(),
+            Some("aws")
+        );
+    }
+
+    #[tokio::test]
+    async fn configured_urls_are_found_for_every_kind_of_instance() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config_dir = camino::Utf8Path::from_path(tmp.path()).unwrap();
+        let config = TEdgeConfig::load_toml_str_with_root_dir(
+            config_dir,
+            r#"
+[c8y]
+http = "http.example.com"
+
+[c8y.profiles.prod]
+url = "prod.example.com"
+"#,
+        );
+        // a configured http endpoint counts as a known URL
+        // (rendered as host:port, which is fine for a presence check)
+        assert_eq!(
+            configured_url(&config, &Cloud::c8y(None)).await.as_deref(),
+            Some("http.example.com:443")
+        );
+        assert_eq!(
+            configured_url(&config, &Cloud::c8y(Some("prod".parse().unwrap())))
+                .await
+                .as_deref(),
+            Some("prod.example.com")
+        );
+        assert_eq!(configured_url(&config, &Cloud::az(None)).await, None);
+
+        let acme = Cloud::Custom("acme".into());
+        assert_eq!(configured_url(&config, &acme).await, None);
+        super::super::mapper_toml::write_mapper_config(
+            &MapperToml::path_for(config_dir, "acme"),
+            &[("url".to_owned(), "acme.example.com".to_owned())],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            configured_url(&config, &acme).await.as_deref(),
+            Some("acme.example.com")
+        );
     }
 }

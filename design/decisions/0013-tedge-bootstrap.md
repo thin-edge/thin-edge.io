@@ -587,14 +587,21 @@ since it does not own it.
 
 **`--clean`** unwinds the instance's configuration as well:
 everything `--re-register` removes,
-plus the cloud's config section in `tedge.toml`
-(`c8y.*`, or the profile's `c8y.profiles.<p>.*` section)
-or, for a custom mapper,
-the bootstrap-managed keys in its `mapper.toml`
-(url, device id, auth method, credentials path, `cloud_type`,
-and the conflict-free instance defaults).
+plus the keys bootstrap manages for the instance -
+in the cloud's `tedge.toml` section
+(`c8y.*`, or the profile's `c8y.profiles.<p>.*`)
+or in a custom mapper's `mapper.toml`:
+the endpoints, the auth method and credentials path,
+the device id and `cloud_type` of a custom mapper,
+the conflict-free instance defaults (bridge topic prefix, proxy port,
+per-profile certificate paths),
+and the settings the run itself applies
+(descriptor-implied values and `--set` values scoped to the instance).
+The rest of the cloud's section is the user's
+(software management, SmartREST templates, proxies, feature switches)
+and is never removed: bootstrap unwinds only what it writes.
 Device-global keys (`proxy.address`, the shared `device.id`)
-are never cleaned - they are not the instance's to remove -
+are never cleaned either - they are not the instance's to remove -
 and neither is package-shipped content
 (the rest of `mapper.toml`, bridge rules, flows):
 bootstrap cannot recreate what it did not write,
