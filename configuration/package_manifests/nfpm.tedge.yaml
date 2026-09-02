@@ -58,6 +58,13 @@ overrides:
       postremove: configuration/package_scripts/_generated/tedge/rpm/postrm
     suggests:
       - mosquitto
+    # Declared for deb and rpm only: `replaces` alone lets apt keep the superseded community
+    # package installed, and its own workflow definition would then shadow the built-in one.
+    # Not declared for apk (which drops the field) nor for ipk, as opkg aborts an install on
+    # a conflict instead of resolving it by removing the superseded package.
+    conflicts:
+      - tedge-command-plugin
+      - c8y-command-plugin
 
   deb:
     scripts:
@@ -67,6 +74,10 @@ overrides:
       postremove: configuration/package_scripts/_generated/tedge/deb/postrm
     suggests:
       - mosquitto
+    # See the note on the rpm conflicts above
+    conflicts:
+      - tedge-command-plugin
+      - c8y-command-plugin
 
   ipk:
     scripts:
@@ -85,8 +96,16 @@ deb:
 
 replaces:
   - tedge-flows-plugin
+  # The shell_execute operation is now built-in, it used to be provided by
+  # the tedge-command-plugin (and formerly the c8y-command-plugin) community package
+  - tedge-command-plugin
+  - c8y-command-plugin
 provides:
   - tedge-flows-plugin
+# Note: the superseded community packages are deliberately NOT listed under `provides`.
+# apk refuses to install a package providing the name of an already installed package,
+# so declaring them there breaks `apk add tedge` on any Alpine device which still has
+# the tedge-command-plugin installed.
 
 contents:
   # binary

@@ -46,6 +46,15 @@ type ExternalIdRef = str;
 type OperationName = String;
 type OperationNameRef = str;
 
+/// The thin-edge command behind the Cumulocity `c8y_Command` operation
+pub const SHELL_EXECUTE_OPERATION: &str = "shell_execute";
+
+/// The name of the operation template mapping `c8y_Command` to the `shell_execute` command
+pub const SHELL_EXECUTE_TEMPLATE_NAME: &str = "c8y_Command.template";
+
+/// The built-in operation template mapping `c8y_Command` to the `shell_execute` command
+pub const SHELL_EXECUTE_TEMPLATE: &str = include_str!("../resources/c8y_Command.template");
+
 /// Used to hold and query supported operations for all devices.
 #[derive(Debug)]
 pub struct SupportedOperations {
