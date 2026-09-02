@@ -1,5 +1,4 @@
 *** Settings ***
-
 Resource            ../../resources/common.resource
 Library             Cumulocity
 Library             ThinEdgeIO
@@ -39,11 +38,88 @@ Full Bootstrap Runs The Event And Device Link Finalize Hooks
     # the bootstrap-event hook announces the completed bootstrap locally
     Should Have MQTT Messages    te/device/main///e/device_bootstrap
 
+Bootstrap With The Cumulocity CA Is The Default Method
+    [Documentation]    The plain happy path: a pre-registered one-time password,
+    ...    no --register flag, and the device ends up connected;
+    ...    a re-run asks for nothing and keeps the registration
+    ${domain}=    Cumulocity.Get Domain
+    ${CREDENTIALS}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN}
+    ${output}=    Execute Command
+    ...    cmd=sudo env DEVICE_ONE_TIME_PASSWORD='${CREDENTIALS.one_time_password}' tedge bootstrap c8y --url "${domain}" --device-id "${DEVICE_SN}" 2>&1
+    Should Contain    ${output}    completed successfully
+    # a supplied one-time password is never displayed
+    Should Not Contain    ${output}    ${CREDENTIALS.one_time_password}
+    Device Should Exist    ${DEVICE_SN}
+    Execute Command    cmd=tedge connect c8y --test
+    ${output}=    Execute Command    cmd=tedge bootstrap c8y --verbose 2>&1
+    Should Contain    ${output}    certificate already present
+    Should Contain    ${output}    completed successfully
+
 Bootstrap pre-registered basic auth device
+    [Documentation]    The issued credentials are stored and the instance
+    ...    switched to basic auth; --re-register obtains them again,
+    ...    while a plain re-run never demands the secrets it will not use
     ${domain}=    Cumulocity.Get Domain
     ${CREDENTIALS}=    Cumulocity.Bulk Register Device With Basic Auth    external_id=${DEVICE_SN}
     ${output}=    Execute Command
     ...    cmd=sudo env C8Y_DEVICE_USER='${CREDENTIALS.username}' C8Y_DEVICE_PASSWORD='${CREDENTIALS.password}' tedge bootstrap c8y --url "${domain}" --device-id "${DEVICE_SN}" --register basic-preregistered 2>&1
+    Should Contain    ${output}    completed successfully
+    Device Should Exist    ${DEVICE_SN}
+    ${auth_method}=    Execute Command    cmd=tedge config get c8y.auth_method    strip=${True}
+    Should Be Equal    ${auth_method}    basic
+    ${credentials_path}=    Execute Command    cmd=tedge config get c8y.credentials_path    strip=${True}
+    Execute Command    cmd=test -f "${credentials_path}"
+    Execute Command    cmd=tedge connect c8y --test
+
+    # a plain re-run keeps the credentials and asks for nothing
+    ${output}=    Execute Command    cmd=tedge bootstrap c8y --verbose 2>&1
+    Should Contain    ${output}    credentials already present
+    # a non-interactive re-registration without the inputs fails upfront
+    ${output}=    Execute Command    cmd=tedge bootstrap c8y --re-register 2>&1    exp_exit_code=!0
+    Should Contain    ${output}    C8Y_DEVICE_PASSWORD
+    # with the inputs, --re-register drops the credentials and stores them again
+    ${output}=    Execute Command
+    ...    cmd=sudo env C8Y_DEVICE_USER='${CREDENTIALS.username}' C8Y_DEVICE_PASSWORD='${CREDENTIALS.password}' tedge bootstrap c8y --re-register --verbose 2>&1
+    Should Contain    ${output}    removed ${credentials_path}
+    Should Contain    ${output}    credentials stored at ${credentials_path}
+    Execute Command    cmd=tedge connect c8y --test
+
+Clean Unwinds Only The Bootstrap-Managed Configuration
+    [Documentation]    --clean removes the instance's registration and the
+    ...    keys bootstrap wrote, but never the user's other settings
+    ...    in the cloud's config section
+    ${domain}=    Cumulocity.Get Domain
+    ${CREDENTIALS}=    Cumulocity.Bulk Register Device With Basic Auth    external_id=${DEVICE_SN}
+    Execute Command    cmd=tedge config set c8y.software_management.api advanced
+    Execute Command
+    ...    cmd=sudo env C8Y_DEVICE_USER='${CREDENTIALS.username}' C8Y_DEVICE_PASSWORD='${CREDENTIALS.password}' tedge bootstrap c8y --url "${domain}" --device-id "${DEVICE_SN}" --register basic-preregistered
+    ${credentials_path}=    Execute Command    cmd=tedge config get c8y.credentials_path    strip=${True}
+
+    # unwind, then bootstrap again with the inputs supplied afresh
+    ${output}=    Execute Command
+    ...    cmd=sudo env C8Y_DEVICE_USER='${CREDENTIALS.username}' C8Y_DEVICE_PASSWORD='${CREDENTIALS.password}' tedge bootstrap c8y --clean --url "${domain}" --device-id "${DEVICE_SN}" --register basic-preregistered --verbose 2>&1
+    Should Contain    ${output}    removed ${credentials_path}
+    Should Contain    ${output}    unset the bootstrap-managed c8y.* keys
+    Should Contain    ${output}    completed successfully
+    # the user's own setting in the c8y section survived the unwind
+    ${api}=    Execute Command    cmd=tedge config get c8y.software_management.api    strip=${True}
+    Should Be Equal    ${api}    advanced
+    Execute Command    cmd=tedge connect c8y --test
+
+The Wizard Compiles Its Answers To The Equivalent Command
+    [Documentation]    The wizard driven through a pipe: cloud, method, URL,
+    ...    device id, the MQTT connection type, and the one-time password -
+    ...    then the same pipeline runs as for the printed command
+    ${domain}=    Cumulocity.Get Domain
+    ${CREDENTIALS}=    Cumulocity.Bulk Register Device With Cumulocity CA    external_id=${DEVICE_SN}
+    ${output}=    Execute Command
+    ...    cmd=printf '1\\n1\\n${domain}\\n${DEVICE_SN}\\n1\\n${CREDENTIALS.one_time_password}\\n' | sudo tedge bootstrap --interactive 2>&1
+    Should Contain
+    ...    ${output}
+    ...    Running: tedge bootstrap c8y --url ${domain} --register c8y-ca --device-id ${DEVICE_SN} --set c8y.mqtt_service.enabled=false
+    Should Contain    ${output}    with the environment variables: DEVICE_ONE_TIME_PASSWORD
+    Should Contain    ${output}    completed successfully
+    Device Should Exist    ${DEVICE_SN}
 
 Bootstrap using a non-interactive service
     [Documentation]    The offline-firstboot composition, end to end:
