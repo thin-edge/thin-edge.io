@@ -14,6 +14,14 @@ and the follow-up discussion happens in the comment thread of the resulting draf
 The [Reporting a Vulnerability](docs/src/security/reporting-a-vulnerability.md)
 documentation describes what to include in a report and what happens after you submit one.
 
+## Scope
+
+This policy covers the software published from this repository.
+It does not cover community plugins and other community extensions,
+including those hosted under the [thin-edge organization](https://github.com/thin-edge),
+which are maintained independently.
+Report a vulnerability in a community project to the maintainers of that project.
+
 ## Security advisories
 
 Advisories are published on the
