@@ -21,7 +21,11 @@ CONFIG_DIR="/etc/tedge"
 URL=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --cloud) CLOUD="$2"; shift ;;
+        --cloud)
+            # shellcheck disable=SC2034
+            CLOUD="$2"
+            shift
+            ;;
         --config-dir) CONFIG_DIR="$2"; shift ;;
         --url) URL="$2"; shift ;;
         --offline) OFFLINE=1 ;;
