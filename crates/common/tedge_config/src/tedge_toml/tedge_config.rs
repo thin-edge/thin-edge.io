@@ -81,7 +81,8 @@ pub use mqtt_config::MqttAuthConfigCloudBroker;
 pub use mqtt_config::PrivateKeyType;
 pub use mqtt_config::TEdgeMqttClientAuthConfig;
 
-const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
+/// Where the device looks for the CAs it trusts, unless configured otherwise
+pub const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
 // 200 bytes below Cumulocity's real 16384 limit, as headroom for payload growth
 // between the size check and the wire (e.g. CSV-doubled quotes in SmartREST).

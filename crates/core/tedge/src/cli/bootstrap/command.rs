@@ -21,6 +21,7 @@ use super::hooks::Phase;
 use super::invocation::Invocation;
 use super::mapper_toml::write_mapper_config;
 use super::mapper_toml::MapperToml;
+use super::tls::TrustStore;
 use super::ui::Ui;
 use crate::cli::common::Cloud;
 use crate::command::Command;
@@ -37,6 +38,7 @@ use tedge_config::tedge_toml::mapper_config::C8yMapperSpecificConfig;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::WritableKey;
+use tedge_config::tedge_toml::DEFAULT_ROOT_CERT_PATH;
 use tedge_config::TEdgeConfig;
 use tedge_system_services::SystemService;
 use tedge_system_services::SystemServiceManager;
@@ -812,6 +814,20 @@ impl BootstrapCommand {
         KeyValue {
             key: self.instance_key(setting),
             value,
+        }
+    }
+
+    /// The trust store this cloud instance verifies the platform against:
+    /// the config key and the path in effect
+    ///
+    /// The MQTT bridge and the HTTP proxy use the same store,
+    /// so a failure against it is worth reporting in these terms
+    fn trust_store(&self, config: &TEdgeConfig) -> TrustStore {
+        TrustStore {
+            key: self.instance_key("root_cert_path"),
+            path: self
+                .read_instance_setting(config, "root_cert_path")
+                .unwrap_or_else(|| DEFAULT_ROOT_CERT_PATH.to_owned()),
         }
     }
 

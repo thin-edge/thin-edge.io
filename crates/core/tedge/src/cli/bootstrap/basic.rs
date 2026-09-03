@@ -7,6 +7,8 @@
 //! then stores the returned permanent credentials
 //! at the configured `c8y.credentials_path`.
 
+use super::tls::tls_trust_error;
+use super::tls::TrustStore;
 use anyhow::bail;
 use anyhow::Context;
 use camino::Utf8Path;
@@ -77,12 +79,14 @@ struct CredentialsFileC8y<'a> {
 /// The bootstrap credentials are the `basic` method's declared inputs
 /// (`$C8Y_BOOTSTRAP_USER` / `$C8Y_BOOTSTRAP_PASSWORD`),
 /// resolved by the caller - no defaults live in the code
+#[allow(clippy::too_many_arguments)]
 pub async fn request_device_credentials(
     base_url: &str,
     device_id: &str,
     bootstrap_user: &str,
     bootstrap_password: &str,
     http_config: &CloudHttpConfig,
+    trust_store: &TrustStore,
     retry_every: Duration,
     max_timeout: Duration,
 ) -> anyhow::Result<DeviceCredentials> {
@@ -158,6 +162,11 @@ pub async fn request_device_credentials(
                 bail!("Requesting device credentials failed: HTTP {status}\n{detail}");
             }
             Err(err) => {
+                // A rejected certificate will not start being accepted
+                // by polling: report it instead of retrying to the deadline
+                if let Some(err) = tls_trust_error(&err, host_of(base_url), trust_store) {
+                    return Err(err);
+                }
                 eprintln!("Connection error ({err}), retrying...");
             }
         }
@@ -188,6 +197,7 @@ pub async fn verify_device_credentials(
     base_url: &str,
     credentials: &DeviceCredentials,
     http_config: &CloudHttpConfig,
+    trust_store: &TrustStore,
 ) -> anyhow::Result<CredentialsCheck> {
     let client = http_config.client_builder().build()?;
     let response = client
@@ -202,8 +212,21 @@ pub async fn verify_device_credentials(
         Ok(response) => {
             CredentialsCheck::Unverifiable(format!("HTTP {} from {base_url}", response.status()))
         }
-        Err(err) => CredentialsCheck::Unverifiable(err.to_string()),
+        // an untrusted platform is not an unverifiable one:
+        // every later exchange fails the same way
+        Err(err) => match tls_trust_error(&err, host_of(base_url), trust_store) {
+            Some(err) => return Err(err),
+            None => CredentialsCheck::Unverifiable(err.to_string()),
+        },
     })
+}
+
+/// The host of a `https://<host>` base URL, as used in the error reports
+fn host_of(base_url: &str) -> &str {
+    base_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_end_matches('/')
 }
 
 /// Store the credentials with mode 600, owned by tedge:tedge where possible
@@ -347,6 +370,7 @@ mod tests {
             "boot",
             "secret",
             &CloudHttpConfig::test_value(),
+            &TrustStore::test_value(),
             Duration::from_millis(10),
             Duration::from_secs(5),
         )
@@ -372,6 +396,7 @@ mod tests {
             "boot",
             "wrong",
             &CloudHttpConfig::test_value(),
+            &TrustStore::test_value(),
             Duration::from_millis(10),
             Duration::from_secs(5),
         )
@@ -394,6 +419,7 @@ mod tests {
             "boot",
             "secret",
             &CloudHttpConfig::test_value(),
+            &TrustStore::test_value(),
             Duration::from_millis(10),
             Duration::from_millis(50),
         )
@@ -417,9 +443,14 @@ mod tests {
             .create_async()
             .await;
         assert_eq!(
-            verify_device_credentials(&server.url(), &credentials, &http)
-                .await
-                .unwrap(),
+            verify_device_credentials(
+                &server.url(),
+                &credentials,
+                &http,
+                &TrustStore::test_value(),
+            )
+            .await
+            .unwrap(),
             CredentialsCheck::Verified
         );
         ok.remove_async().await;
@@ -430,9 +461,14 @@ mod tests {
             .create_async()
             .await;
         assert_eq!(
-            verify_device_credentials(&server.url(), &credentials, &http)
-                .await
-                .unwrap(),
+            verify_device_credentials(
+                &server.url(),
+                &credentials,
+                &http,
+                &TrustStore::test_value(),
+            )
+            .await
+            .unwrap(),
             CredentialsCheck::Rejected
         );
         rejected.remove_async().await;
@@ -443,9 +479,14 @@ mod tests {
             .create_async()
             .await;
         assert!(matches!(
-            verify_device_credentials(&server.url(), &credentials, &http)
-                .await
-                .unwrap(),
+            verify_device_credentials(
+                &server.url(),
+                &credentials,
+                &http,
+                &TrustStore::test_value(),
+            )
+            .await
+            .unwrap(),
             CredentialsCheck::Unverifiable(_)
         ));
     }

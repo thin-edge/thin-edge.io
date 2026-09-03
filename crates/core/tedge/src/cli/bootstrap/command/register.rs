@@ -13,6 +13,7 @@ use crate::cli::bootstrap::hooks;
 use crate::cli::bootstrap::hooks::HookContext;
 use crate::cli::bootstrap::hooks::Phase;
 use crate::cli::bootstrap::mapper_toml::MapperToml;
+use crate::cli::bootstrap::tls::TrustStore;
 use crate::cli::certificate::create_csr::Key;
 use crate::cli::certificate::DownloadCertCli;
 use crate::cli::certificate::TEdgeCertCli;
@@ -531,8 +532,13 @@ impl BootstrapCommand {
                         (_, true) => self.detail("offline: skipping the credentials verification"),
                         (Some(host), false) => {
                             let http_config = config.cloud_root_certs().await?;
-                            self.verify_device_credentials(host, &credentials, &http_config)
-                                .await?;
+                            self.verify_device_credentials(
+                                host,
+                                &credentials,
+                                &http_config,
+                                &self.trust_store(config),
+                            )
+                            .await?;
                         }
                         (None, false) => {}
                     }
@@ -553,6 +559,7 @@ impl BootstrapCommand {
                         &bootstrap_user,
                         &bootstrap_password,
                         &config.cloud_root_certs().await?,
+                        &self.trust_store(config),
                         CREDENTIALS_POLL_INTERVAL,
                         REGISTRATION_TIMEOUT,
                     )
@@ -585,11 +592,13 @@ impl BootstrapCommand {
         http_host: &str,
         credentials: &basic::DeviceCredentials,
         http_config: &certificate::CloudHttpConfig,
+        trust_store: &TrustStore,
     ) -> Result<(), MaybeFancy<anyhow::Error>> {
         let check = basic::verify_device_credentials(
             &format!("https://{http_host}"),
             credentials,
             http_config,
+            trust_store,
         )
         .await?;
         match check {
