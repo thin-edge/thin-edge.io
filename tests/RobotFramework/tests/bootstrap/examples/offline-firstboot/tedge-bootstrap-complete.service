@@ -1,0 +1,27 @@
+# /etc/systemd/system/tedge-bootstrap-complete.service
+#
+# Completes an offline-provisioned bootstrap on the first networked boot.
+# The bench run configured the device and staged the services:
+#   tedge bootstrap c8y --url <url> --offline --save /etc/tedge/bootstrap.json
+# and the flashing station wrote the per-device secrets (mode 600) to
+#   /boot/firstboot/tedge-bootstrap.env
+#
+# The invocation file is fleet-wide and carries no secrets
+# (environment variables are captured by name only);
+# the env file is per-device and shredded after success.
+# If the device boots without network the unit fails and retries on the
+# next boot - bootstrap is idempotent, so the retry is safe.
+[Unit]
+Description=thin-edge.io bootstrap completion (offline provisioning)
+ConditionPathExists=/boot/firstboot/tedge-bootstrap.env
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/boot/firstboot/tedge-bootstrap.env
+ExecStart=/usr/bin/tedge bootstrap --from /etc/tedge/bootstrap.json
+ExecStartPost=/usr/bin/shred -u /boot/firstboot/tedge-bootstrap.env || rm /boot/firstboot/tedge-bootstrap.env
+
+[Install]
+WantedBy=multi-user.target

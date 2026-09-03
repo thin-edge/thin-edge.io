@@ -1,0 +1,33 @@
+#!/bin/sh
+set -e
+# tedge bootstrap finalize hook: announce a successful bootstrap as a
+# thin-edge event on the local MQTT bus, naming the mapper it was for.
+# Other services (a vendor UI, a fleet agent, an audit collector)
+# can react to it without polling.
+#
+# Runs after the connect step succeeded, so the event genuinely means
+# "this device is bootstrapped and connected".
+#
+# args: <phase> --cloud <cloud> --config-dir <dir> ...
+
+shift # phase
+CLOUD=""
+CONFIG_DIR="/etc/tedge"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cloud) CLOUD="$2"; shift ;;
+        --config-dir) CONFIG_DIR="$2"; shift ;;
+    esac
+    shift
+done
+[ -n "$CLOUD" ] || exit 2
+
+TOPIC="te/device/main///e/device_bootstrap"
+PAYLOAD=$(printf '{"text": "Device successfully bootstrapped to %s", "cloud": "%s"}' "$CLOUD" "$CLOUD")
+
+# Best-effort: a failed notification must not fail the bootstrap itself
+if tedge --config-dir "$CONFIG_DIR" mqtt pub "$TOPIC" "$PAYLOAD" 2>/dev/null; then
+    echo "Published bootstrap event for $CLOUD to $TOPIC" >&2
+else
+    echo "Warning: could not publish the bootstrap event (is the local MQTT broker running?)" >&2
+fi

@@ -81,7 +81,8 @@ pub use mqtt_config::MqttAuthConfigCloudBroker;
 pub use mqtt_config::PrivateKeyType;
 pub use mqtt_config::TEdgeMqttClientAuthConfig;
 
-const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
+/// Where the device looks for the CAs it trusts, unless configured otherwise
+pub const DEFAULT_ROOT_CERT_PATH: &str = "/etc/ssl/certs";
 
 // 200 bytes below Cumulocity's real 16384 limit, as headroom for payload growth
 // between the size check and the wire (e.g. CSV-doubled quotes in SmartREST).
@@ -1435,6 +1436,12 @@ define_tedge_config! {
         plugin_paths: TemplatesSet,
     },
 
+    bootstrap: {
+        /// The directories where bootstrap hooks (<phase>.d) and cloud descriptors (clouds.d) are stored; earlier directories take precedence per file name
+        #[tedge_config(example = "/etc/tedge/bootstrap.d,/usr/share/tedge/bootstrap.d", default(function = "default_bootstrap_plugin_paths"))]
+        plugin_paths: TemplatesSet,
+    },
+
     log: {
         /// The directories where log plugins are stored
         #[tedge_config(example = "/usr/share/log-plugins,/etc/tedge/log-plugins", default(value = "/usr/share/tedge/log-plugins"))]
@@ -1744,6 +1751,19 @@ fn default_credentials_path(location: &TEdgeConfigLocation) -> AbsolutePath {
         .join("credentials.toml")
         .try_into()
         .unwrap()
+}
+
+fn default_bootstrap_plugin_paths(location: &TEdgeConfigLocation) -> TemplatesSet {
+    // site customization first, packaged hooks second:
+    // earlier directories take precedence,
+    // matching log.plugin_paths and configuration.plugin_paths
+    TemplatesSet(vec![
+        location
+            .tedge_config_root_path()
+            .join("bootstrap.d")
+            .to_string(),
+        "/usr/share/tedge/bootstrap.d".to_owned(),
+    ])
 }
 
 fn default_mqtt_port() -> NonZeroU16 {

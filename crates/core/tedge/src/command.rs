@@ -60,7 +60,7 @@ use tedge_config::TEdgeConfig;
 /// }
 /// ```
 #[async_trait::async_trait]
-pub trait Command {
+pub trait Command: Send + Sync {
     /// Display that command to the user, telling what will be done.
     ///
     /// This description is displayed to the end user in case of an error, to give the context of that error.

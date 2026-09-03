@@ -5069,6 +5069,7 @@ dependencies = [
  "reqwest",
  "rpassword",
  "rumqttc",
+ "rustls",
  "serde",
  "serde_json",
  "strum",

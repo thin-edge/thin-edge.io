@@ -1,0 +1,76 @@
+#!/bin/sh
+set -e
+# tedge bootstrap prepare hook: trust the target server's certificate
+# by adding it to the system CA store (Debian-family:
+# /usr/local/share/ca-certificates + update-ca-certificates).
+#
+# Runs before anything is resolved or written, so the loginOptions
+# discovery, registration APIs and the connection all benefit.
+#
+# This is the trust-on-first-use (TOFU) variant, for labs and
+# registration convenience: a first-boot man-in-the-middle would be
+# trusted permanently. Production deployments should *ship* the CA
+# file in their package and only install it here, or verify a pinned
+# fingerprint before installing.
+#
+# args: <phase> --cloud <cloud> --config-dir <dir> [--url <url>] ...
+
+shift # phase
+CLOUD=""
+CONFIG_DIR="/etc/tedge"
+URL=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cloud)
+            # shellcheck disable=SC2034
+            CLOUD="$2"
+            shift
+            ;;
+        --config-dir) CONFIG_DIR="$2"; shift ;;
+        --url) URL="$2"; shift ;;
+        --offline) OFFLINE=1 ;;
+    esac
+    shift
+done
+
+# an --offline run defers everything that needs the network
+if [ "${OFFLINE:-}" = 1 ]; then
+    echo "offline provisioning: cannot fetch the server certificate, skipping" >&2
+    exit 2
+fi
+
+# The target host: the URL being bootstrapped, or the configured one
+if [ -z "$URL" ]; then
+    URL=$(tedge --config-dir "$CONFIG_DIR" config get c8y.http 2>/dev/null \
+        || tedge --config-dir "$CONFIG_DIR" config get c8y.url 2>/dev/null || true)
+fi
+[ -n "$URL" ] || exit 2
+
+HOST=$(echo "$URL" | sed 's|^[a-z]*://||; s|/.*||; s|:.*||')
+PORT=$(echo "$URL" | sed 's|^[a-z]*://||; s|/.*||' | sed -n 's|.*:||p')
+PORT="${PORT:-443}"
+
+command -v openssl >/dev/null 2>&1 || { echo "openssl is required" >&2; exit 1; }
+command -v update-ca-certificates >/dev/null 2>&1 \
+    || { echo "update-ca-certificates not found (this hook assumes a Debian-family system)" >&2; exit 1; }
+
+# Already trusted: nothing to do (keeps re-runs idempotent)
+if echo | openssl s_client -connect "$HOST:$PORT" -servername "$HOST" \
+        -verify_return_error >/dev/null 2>&1; then
+    echo "$HOST:$PORT is already trusted" >&2
+    exit 2
+fi
+
+echo "Warning: trusting the certificate presented by $HOST:$PORT (trust-on-first-use)"
+
+# Fetch the presented chain and install its topmost certificate
+# (servers are not required to send their root; the topmost is the
+# closest available anchor)
+CHAIN=$(echo | openssl s_client -connect "$HOST:$PORT" -servername "$HOST" -showcerts 2>/dev/null)
+CERT=$(echo "$CHAIN" | awk '/BEGIN CERTIFICATE/{i++} i{block[i] = block[i] $0 "\n"} /END CERTIFICATE/{last=i} END{printf "%s", block[last]}')
+[ -n "$CERT" ] || { echo "Could not fetch a certificate from $HOST:$PORT" >&2; exit 1; }
+
+TARGET="/usr/local/share/ca-certificates/tedge-bootstrap-$HOST.crt"
+printf '%s' "$CERT" > "$TARGET"
+update-ca-certificates >&2
+echo "Installed $TARGET into the system CA store"

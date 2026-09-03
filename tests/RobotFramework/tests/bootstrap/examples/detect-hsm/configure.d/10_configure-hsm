@@ -1,0 +1,51 @@
+#!/bin/sh
+# detect if a HSM is available to be used and configure it
+
+shift # phase
+CONFIG_DIR="/etc/tedge"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --config-dir) CONFIG_DIR="$2"; shift ;;
+    esac
+    shift
+done
+
+export CONFIG_DIR
+
+HSM_TYPE=${HSM_TYPE:-}
+
+# Set module defaults
+detect_hsm() {
+    FOUND_MODULE=$(find /usr/lib -name libtpm2_pkcs11.so | head -n1)
+    if [ -n "$FOUND_MODULE" ]; then
+        HSM_TYPE=tpm2
+        return 0
+    fi
+
+    FOUND_MODULE=$(find /usr/lib -name opensc-pkcs11.so | head -n1)
+    if [ -n "$FOUND_MODULE" ]; then
+        HSM_TYPE=nitrokey
+        return 0
+    fi
+
+    FOUND_MODULE=$(find /usr/lib -name libsofthsm2.so | head -n1)
+    if [ -n "$FOUND_MODULE" ]; then
+        HSM_TYPE=softhsm2
+        return 0
+    fi
+    return 1
+}
+
+# PKCS11_MODULE=$(tedge config get device.cryptoki.module_path 2>/dev/null ||:)
+# if [ -n "$PKCS11_MODULE" ]; then
+#     echo "HSM is already configured to use a module, skipping" >&2
+#     exit 0
+# fi
+
+detect_hsm ||:
+if [ -z "$HSM_TYPE" ]; then
+    echo "Could not find a hsm on the device" >&2
+    exit 2    
+fi
+
+tedge-init-hsm.sh --type "$HSM_TYPE"

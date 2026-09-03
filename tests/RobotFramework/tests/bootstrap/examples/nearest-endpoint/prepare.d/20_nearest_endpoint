@@ -1,0 +1,65 @@
+#!/bin/sh
+set -e
+# tedge bootstrap prepare hook: pick the "nearest" cloud endpoint by
+# probing a list of candidates and selecting the one with the lowest
+# TLS connect time — the user never provides a URL at all.
+#
+# Useful for products sold globally against regional cloud instances:
+# the device finds its region instead of asking the operator.
+# An explicit --url (or an already-configured URL) always wins.
+#
+# args: <phase> --cloud <cloud> --config-dir <dir> [--url <url>] ...
+#
+# BOOTSTRAP_ENDPOINT_CANDIDATES overrides the space-separated
+# candidate list baked into this hook.
+
+shift # phase
+CLOUD=""
+CONFIG_DIR="/etc/tedge"
+URL=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cloud) CLOUD="$2"; shift ;;
+        --config-dir) CONFIG_DIR="$2"; shift ;;
+        --url) URL="$2"; shift ;;
+        --offline) OFFLINE=1 ;;
+    esac
+    shift
+done
+
+# an --offline run defers everything that needs the network
+if [ "${OFFLINE:-}" = 1 ]; then
+    echo "offline provisioning: cannot probe endpoints, skipping the selection" >&2
+    exit 2
+fi
+
+# This example selects Cumulocity endpoints
+[ "$CLOUD" = "c8y" ] || exit 2
+# An explicit choice always wins over the automatic selection
+[ -z "$URL" ] || exit 2
+CONFIGURED=$(tedge --config-dir "$CONFIG_DIR" config get c8y.url 2>/dev/null || true)
+[ -z "$CONFIGURED" ] || exit 2
+
+CANDIDATES="${BOOTSTRAP_ENDPOINT_CANDIDATES:-eu.iot.example.com us.iot.example.com ap.iot.example.com}"
+
+BEST=""
+BEST_TIME=""
+for HOST in $CANDIDATES; do
+    TIME=$(curl -k -sS -o /dev/null --connect-timeout 3 -w '%{time_connect}' "https://$HOST/" 2>/dev/null) || {
+        echo "  $HOST: unreachable" >&2
+        continue
+    }
+    echo "  $HOST: connect time ${TIME}s" >&2
+    if [ -z "$BEST" ] || awk "BEGIN{exit !($TIME < $BEST_TIME)}"; then
+        BEST="$HOST"
+        BEST_TIME="$TIME"
+    fi
+done
+
+if [ -z "$BEST" ]; then
+    echo "None of the candidate endpoints are reachable: $CANDIDATES" >&2
+    exit 1
+fi
+
+echo "Selected nearest endpoint: $BEST (${BEST_TIME}s)"
+tedge --config-dir "$CONFIG_DIR" config set c8y.url "$BEST"

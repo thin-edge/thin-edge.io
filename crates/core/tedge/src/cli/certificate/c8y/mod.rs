@@ -8,6 +8,8 @@ use crate::read_cert_to_string;
 use crate::CertError;
 use camino::Utf8PathBuf;
 use certificate::CsrTemplate;
+pub(crate) use download::generate_one_time_password;
+pub(crate) use download::registration_url;
 pub use download::DownloadCertCmd;
 pub use renew::RenewCertCmd;
 pub use upload::UploadCertCmd;

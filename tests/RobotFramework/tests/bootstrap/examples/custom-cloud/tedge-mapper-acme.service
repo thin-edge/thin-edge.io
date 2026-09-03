@@ -1,0 +1,10 @@
+[Unit]
+Description=thin-edge.io acme mapper (dummy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/tedge-mapper acme
+
+[Install]
+WantedBy=multi-user.target

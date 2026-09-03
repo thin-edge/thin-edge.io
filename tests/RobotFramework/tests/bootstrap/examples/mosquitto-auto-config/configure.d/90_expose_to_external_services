@@ -1,0 +1,44 @@
+#!/bin/sh
+
+shift # phase
+CLOUD=""
+CONFIG_DIR="/etc/tedge"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cloud) CLOUD="$2"; shift ;;
+        --config-dir) CONFIG_DIR="$2"; shift ;;
+    esac
+    shift
+done
+
+export CONFIG_DIR
+
+
+BIND_ENABLED=$(tedge config get mqtt.bind.enabled ||:)
+BIND_ADDRESS=$(tedge config get mqtt.bind.address ||:)
+
+if [ "$BIND_ENABLED" = "false" ]; then
+    exit 2
+fi
+
+DEVICE_HOST=
+if command -V hostname >/dev/null 2>&1; then
+    DEVICE_HOST=$(hostname)
+elif command -V hostnamectl >/dev/null 2>&1; then
+    DEVICE_HOST=$(hostnamectl hostname)
+elif [ -n "$HOSTNAME" ]; then
+    DEVICE_HOST="$HOSTNAME"
+elif [ -n "$HOST" ]; then
+    DEVICE_HOST="$HOST"
+fi
+
+tedge config set http.bind.address "$BIND_ADDRESS"
+if [ "$CLOUD" = c8y ]; then
+    tedge config set c8y.proxy.bind.address "$BIND_ADDRESS"
+fi
+
+if [ -n "$DEVICE_HOST" ]; then
+    tedge config set http.client.host "$DEVICE_HOST"
+    tedge config set mqtt.client.host "$DEVICE_HOST"
+    tedge config set c8y.proxy.client.host "$DEVICE_HOST"
+fi
