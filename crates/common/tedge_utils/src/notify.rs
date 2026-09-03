@@ -230,7 +230,7 @@ mod tests {
             String::from("file_b") => vec![FsEvent::FileCreated, FsEvent::Modified]
         };
 
-        let mut stream = fs_notify_stream(&[ttd.path(), ttd.path()]).unwrap();
+        let mut stream = fs_notify_stream(&[ttd.std_path(), ttd.std_path()]).unwrap();
 
         let fs_notify_handler = tokio::task::spawn(async move {
             assert_rx_stream(expected_events, &mut stream).await;
@@ -251,7 +251,7 @@ mod tests {
         let ttd = Arc::new(TempTedgeDir::new());
         let ttd_clone = ttd.clone();
         let mut fs_notify = NotifyStream::try_default().unwrap();
-        fs_notify.add_watcher(ttd.path()).unwrap();
+        fs_notify.add_watcher(ttd.std_path()).unwrap();
 
         let assert_file_events = tokio::spawn(async move {
             let expected_events = hashmap! {
@@ -292,7 +292,7 @@ mod tests {
             String::from("file_c") => vec![FsEvent::FileCreated, FsEvent::FileDeleted]
         };
 
-        let mut stream = fs_notify_stream(&[ttd.path()]).unwrap();
+        let mut stream = fs_notify_stream(&[ttd.std_path()]).unwrap();
 
         let fs_notify_handler = tokio::task::spawn(async move {
             assert_rx_stream(expected_events, &mut stream).await;
@@ -328,8 +328,13 @@ mod tests {
             String::from("dir_d") => vec![FsEvent::DirectoryCreated],
         };
 
-        let mut stream =
-            fs_notify_stream(&[ttd_a.path(), ttd_b.path(), ttd_c.path(), ttd_d.path()]).unwrap();
+        let mut stream = fs_notify_stream(&[
+            ttd_a.std_path(),
+            ttd_b.std_path(),
+            ttd_c.std_path(),
+            ttd_d.std_path(),
+        ])
+        .unwrap();
 
         let fs_notify_handler = tokio::task::spawn(async move {
             assert_rx_stream(expected_events, &mut stream).await;
@@ -360,13 +365,13 @@ mod tests {
         let dir = TempTedgeDir::new();
         let nested_dir = dir.dir("nested");
 
-        let mut stream = fs_notify_stream(&[nested_dir.path()]).unwrap();
+        let mut stream = fs_notify_stream(&[nested_dir.std_path()]).unwrap();
 
         // Test create
         let file = nested_dir.file("file");
         assert_rx_stream(
             [(
-                file.utf8_path().file_name().unwrap().to_string(),
+                file.path().file_name().unwrap().to_string(),
                 vec![FsEvent::Modified],
             )]
             .into(),
@@ -382,7 +387,7 @@ mod tests {
         .unwrap();
         assert_rx_stream(
             [(
-                file.utf8_path().file_name().unwrap().to_string(),
+                file.path().file_name().unwrap().to_string(),
                 vec![FsEvent::Modified],
             )]
             .into(),
@@ -398,7 +403,7 @@ mod tests {
         .unwrap();
         assert_rx_stream(
             [(
-                file.utf8_path().file_name().unwrap().to_string(),
+                file.path().file_name().unwrap().to_string(),
                 vec![FsEvent::Modified],
             )]
             .into(),
@@ -410,7 +415,7 @@ mod tests {
         std::fs::remove_file(file.path()).unwrap();
         assert_rx_stream(
             [(
-                file.utf8_path().file_name().unwrap().to_string(),
+                file.path().file_name().unwrap().to_string(),
                 vec![FsEvent::Modified],
             )]
             .into(),
@@ -426,7 +431,7 @@ mod tests {
         .unwrap();
         assert_rx_stream(
             [(
-                file.utf8_path().file_name().unwrap().to_string(),
+                file.path().file_name().unwrap().to_string(),
                 vec![FsEvent::Modified],
             )]
             .into(),

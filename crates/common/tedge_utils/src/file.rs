@@ -527,7 +527,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let file_path = ttd.path().join("file");
 
-        TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "")
+        TedgePaths::from_root_with_defaults(ttd.path(), "", "")
             .file("file")
             .unwrap()
             .with_mode(0o644)
@@ -587,7 +587,7 @@ mod tests {
         let src_dir = TempTedgeDir::new();
         let file_path = src_dir.path().join("file");
 
-        TedgePaths::from_root_with_defaults(src_dir.utf8_path(), "", "")
+        TedgePaths::from_root_with_defaults(src_dir.path(), "", "")
             .file("file")
             .unwrap()
             .with_mode(0o775)

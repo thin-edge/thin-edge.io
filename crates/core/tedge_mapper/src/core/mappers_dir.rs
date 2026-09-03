@@ -86,7 +86,7 @@ mod tests {
         #[tokio::test]
         async fn bridge_dir_without_mapper_toml_is_flagged() {
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
+            let mappers_dir = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_dir.join("thingsboard/bridge"))
                 .await
                 .unwrap();
@@ -101,7 +101,7 @@ mod tests {
         #[tokio::test]
         async fn bridge_dir_with_mapper_toml_is_not_flagged() {
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
+            let mappers_dir = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_dir.join("thingsboard/bridge"))
                 .await
                 .unwrap();
@@ -119,7 +119,7 @@ mod tests {
         #[tokio::test]
         async fn dir_without_bridge_subdir_is_not_flagged() {
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
+            let mappers_dir = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_dir.join("thingsboard"))
                 .await
                 .unwrap();
@@ -134,7 +134,7 @@ mod tests {
         #[tokio::test]
         async fn empty_mapper_dir_is_not_flagged() {
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
+            let mappers_dir = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_dir.join("thingsboard"))
                 .await
                 .unwrap();
@@ -149,7 +149,7 @@ mod tests {
         #[tokio::test]
         async fn empty_flows_dir_is_not_flagged() {
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
+            let mappers_dir = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_dir.join("thingsboard/flows"))
                 .await
                 .unwrap();
@@ -164,7 +164,7 @@ mod tests {
         #[tokio::test]
         async fn builtin_mapper_dir_with_bridge_but_no_toml_is_not_flagged() {
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
+            let mappers_dir = ttd.path().join("mappers");
             for name in ["aws", "az", "c8y", "aws.prod", "az.staging"] {
                 tokio::fs::create_dir_all(mappers_dir.join(format!("{name}/bridge")))
                     .await
@@ -180,7 +180,7 @@ mod tests {
         #[tokio::test]
         async fn handles_nonexistent_mappers_dir_gracefully() {
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("nonexistent/mappers");
+            let mappers_dir = ttd.path().join("nonexistent/mappers");
             assert!(collect_bridge_without_mapper_dirs(&mappers_dir)
                 .await
                 .is_empty());
@@ -191,7 +191,7 @@ mod tests {
             let warnings = CapturedWarnings::install();
 
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
+            let mappers_dir = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_dir.join("thingsboard/bridge"))
                 .await
                 .unwrap();
@@ -214,7 +214,7 @@ mod tests {
             let warnings = CapturedWarnings::install();
 
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
+            let mappers_dir = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_dir.join("stale-dir"))
                 .await
                 .unwrap();
@@ -233,7 +233,7 @@ mod tests {
             let warnings = CapturedWarnings::install();
 
             let ttd = TempTedgeDir::new();
-            let mappers_dir = ttd.utf8_path().join("mappers");
+            let mappers_dir = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_dir.join("thingsboard/flows"))
                 .await
                 .unwrap();

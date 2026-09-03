@@ -274,14 +274,14 @@ mod tests {
         let second_plugin_dir = ttd.dir("plugins_2");
         let third_plugin_dir = ttd.dir("plugins_3");
         let mut command = DiagCollectCommand::new(&ttd);
-        command.add_plugin_dir(second_plugin_dir.utf8_path());
-        command.add_plugin_dir(third_plugin_dir.utf8_path());
+        command.add_plugin_dir(second_plugin_dir.path());
+        command.add_plugin_dir(third_plugin_dir.path());
         with_exec_permission(command.first_plugin_dir().join("plugin_1a"), "pwd");
         with_exec_permission(command.first_plugin_dir().join("plugin_1b"), "pwd");
-        with_exec_permission(second_plugin_dir.utf8_path().join("plugin_2a"), "pwd");
-        with_exec_permission(second_plugin_dir.utf8_path().join("plugin_2b"), "pwd");
-        with_exec_permission(third_plugin_dir.utf8_path().join("plugin_3a"), "pwd");
-        with_exec_permission(third_plugin_dir.utf8_path().join("plugin_3b"), "pwd");
+        with_exec_permission(second_plugin_dir.path().join("plugin_2a"), "pwd");
+        with_exec_permission(second_plugin_dir.path().join("plugin_2b"), "pwd");
+        with_exec_permission(third_plugin_dir.path().join("plugin_3a"), "pwd");
+        with_exec_permission(third_plugin_dir.path().join("plugin_3b"), "pwd");
 
         let mut logger = DualLogger::new(command.diag_dir.join("summary.log")).unwrap();
         let plugins = command.read_diag_plugins(&mut logger).await.unwrap();
@@ -291,7 +291,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_diag_plugins_ignores_not_existing_plugin_dirs() {
         let ttd = TempTedgeDir::new();
-        let second_plugin_dir = ttd.utf8_path().join("plugins_2");
+        let second_plugin_dir = ttd.path().join("plugins_2");
         assert!(!second_plugin_dir.exists());
 
         let mut command = DiagCollectCommand::new(&ttd);
@@ -411,11 +411,11 @@ mod tests {
             let diag_dir = ttd.dir("tmp").dir("tarball");
             Self {
                 plugin_dir: BTreeSet::from([
-                    AbsolutePath::from_path(plugin_dir.utf8_path_buf()).unwrap()
+                    AbsolutePath::from_path(plugin_dir.path_buf()).unwrap()
                 ]),
-                config_dir: AbsolutePath::from_path(config_dir.utf8_path_buf()).unwrap(),
-                working_dir: AbsolutePath::from_path(working_dir.utf8_path_buf()).unwrap(),
-                diag_dir: AbsolutePath::from_path(diag_dir.utf8_path_buf()).unwrap(),
+                config_dir: AbsolutePath::from_path(config_dir.path_buf()).unwrap(),
+                working_dir: AbsolutePath::from_path(working_dir.path_buf()).unwrap(),
+                diag_dir: AbsolutePath::from_path(diag_dir.path_buf()).unwrap(),
                 tarball_name: "tarball".to_string(),
                 keep_dir: false,
                 graceful_timeout: Duration::from_secs(60),

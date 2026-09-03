@@ -6,7 +6,6 @@ use crate::operation_workflows::builder::WorkflowActorBuilder;
 use crate::operation_workflows::config::OperationConfig;
 use crate::software_manager::actor::SoftwareCommand;
 use crate::Capabilities;
-use camino::Utf8Path;
 use serde_json::json;
 use std::process::Output;
 use std::sync::Arc;
@@ -93,9 +92,7 @@ async fn convert_incoming_software_list_request() -> Result<(), DynError> {
                 log_path: Some(
                     tmp_dir
                         .path()
-                        .join("workflow-software_list-some-cmd-id.log")
-                        .try_into()
-                        .unwrap(),
+                        .join("workflow-software_list-some-cmd-id.log"),
                 ),
             },
         }])
@@ -143,13 +140,7 @@ async fn convert_incoming_software_update_request() -> Result<(), DynError> {
                 status: CommandStatus::Scheduled,
                 update_list: vec![debian_list],
                 failures: vec![],
-                log_path: Some(
-                    tmp_dir
-                        .path()
-                        .join("workflow-software_update-1234.log")
-                        .try_into()
-                        .unwrap(),
-                ),
+                log_path: Some(tmp_dir.path().join("workflow-software_update-1234.log")),
             },
         }])
         .await;
@@ -183,13 +174,7 @@ async fn convert_incoming_restart_request() -> Result<(), DynError> {
             cmd_id: "random".to_string(),
             payload: RestartCommandPayload {
                 status: CommandStatus::Scheduled,
-                log_path: Some(
-                    tmp_dir
-                        .path()
-                        .join("workflow-restart-random.log")
-                        .try_into()
-                        .unwrap(),
-                ),
+                log_path: Some(tmp_dir.path().join("workflow-restart-random.log")),
             },
         }])
         .await;
@@ -1134,7 +1119,7 @@ async fn spawn_mqtt_operation_converter(
     > = SimpleMessageBoxBuilder::new("Uploader", 5);
 
     let tmp_dir = Arc::new(TempTedgeDir::new());
-    let tmp_path = Utf8Path::from_path(tmp_dir.path()).unwrap();
+    let tmp_path = tmp_dir.path();
     let config_root = TedgePaths::from_root_with_defaults(tmp_path, "", "");
     let operations_dir = tmp_dir.dir("operations");
     for (file_name, content) in workflows {

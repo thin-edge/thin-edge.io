@@ -20,9 +20,7 @@ type = "app-config"
         .with_raw_content(config_content);
 
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
-    cmd.arg("--config-dir")
-        .arg(ttd.path().to_str().unwrap())
-        .arg("list");
+    cmd.arg("--config-dir").arg(ttd.path().as_str()).arg("list");
 
     cmd.assert()
         .success()
@@ -45,7 +43,7 @@ type = "tedge.toml"
 
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
     cmd.arg("--config-dir")
-        .arg(ttd.path().to_str().unwrap())
+        .arg(ttd.path().as_str())
         .arg("get")
         .arg("unknown-type");
 
@@ -68,7 +66,7 @@ fn test_get_command_existing_file() {
 path = "{}"
 type = "test.conf"
 "#,
-        test_config_file.path().display()
+        test_config_file.path()
     );
     ttd.dir("plugins")
         .file("tedge-configuration-plugin.toml")
@@ -76,7 +74,7 @@ type = "test.conf"
 
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
     cmd.arg("--config-dir")
-        .arg(ttd.path().to_str().unwrap())
+        .arg(ttd.path().as_str())
         .arg("get")
         .arg("test.conf");
 
@@ -104,7 +102,7 @@ fn test_set_command() {
 path = "{}"
 type = "dest.conf"
 "#,
-        dest_file.utf8_path()
+        dest_file.path()
     );
     ttd.dir("plugins")
         .file("tedge-configuration-plugin.toml")
@@ -112,12 +110,12 @@ type = "dest.conf"
 
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
     cmd.arg("--config-dir")
-        .arg(ttd.path().to_str().unwrap())
+        .arg(ttd.path().as_str())
         .arg("set")
         .arg("dest.conf")
-        .arg(source_file.path().to_str().unwrap())
+        .arg(source_file.path().as_str())
         .arg("--work-dir")
-        .arg(ttd.path().join("workdir").to_str().unwrap());
+        .arg(ttd.path().join("workdir").as_str());
 
     cmd.assert().success();
 
@@ -145,7 +143,7 @@ enable =  ["true"]
 disable =  ["true"]
 is_active = ["true"]
 "#,
-        witness_file.utf8_path()
+        witness_file.path()
     );
     ttd.file("system.toml")
         .with_raw_content(&system_toml_content);
@@ -160,7 +158,7 @@ path = "{}"
 type = "test.conf"
 service = "dummy-service"
 "###,
-        dest_file.utf8_path()
+        dest_file.path()
     );
     ttd.dir("plugins")
         .file("tedge-configuration-plugin.toml")
@@ -173,12 +171,12 @@ service = "dummy-service"
     // Set the configuration (which also triggers service restart)
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
     cmd.arg("--config-dir")
-        .arg(ttd.path().to_str().unwrap())
+        .arg(ttd.path().as_str())
         .arg("set")
         .arg("test.conf")
-        .arg(target_file.path().to_str().unwrap())
+        .arg(target_file.path().as_str())
         .arg("--work-dir")
-        .arg(ttd.path().join("workdir").to_str().unwrap());
+        .arg(ttd.path().join("workdir").as_str());
 
     cmd.assert().success();
 
@@ -205,7 +203,7 @@ path = "{}"
 type = "tedge.conf"
 service = "tedge-agent"
 "###,
-        dest_file.utf8_path()
+        dest_file.path()
     );
     ttd.dir("plugins")
         .file("tedge-configuration-plugin.toml")
@@ -217,12 +215,12 @@ service = "tedge-agent"
 
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
     cmd.arg("--config-dir")
-        .arg(ttd.path().to_str().unwrap())
+        .arg(ttd.path().as_str())
         .arg("set")
         .arg("tedge.conf")
-        .arg(target_file.path().to_str().unwrap())
+        .arg(target_file.path().as_str())
         .arg("--work-dir")
-        .arg(ttd.path().join("workdir").to_str().unwrap());
+        .arg(ttd.path().join("workdir").as_str());
 
     let output = cmd.output().unwrap();
     assert!(output.status.success());
@@ -263,7 +261,7 @@ path = "{}"
 type = "tedge.conf"
 service = "tedge-agent"
 "###,
-        dest_file.utf8_path()
+        dest_file.path()
     );
     ttd.dir("plugins")
         .file("tedge-configuration-plugin.toml")
@@ -271,11 +269,11 @@ service = "tedge-agent"
 
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
     cmd.arg("--config-dir")
-        .arg(ttd.path().to_str().unwrap())
+        .arg(ttd.path().as_str())
         .arg("verify")
         .arg("tedge.conf")
         .arg("--work-dir")
-        .arg(ttd.path().join("workdir").to_str().unwrap());
+        .arg(ttd.path().join("workdir").as_str());
 
     // The agent spawns this plugin, so it is running by definition; there may not
     // even be a tedge-agent service to probe (e.g. under `tedge run all`).
@@ -291,9 +289,7 @@ fn test_empty_config_file() {
         .with_raw_content("");
 
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
-    cmd.arg("--config-dir")
-        .arg(ttd.path().to_str().unwrap())
-        .arg("list");
+    cmd.arg("--config-dir").arg(ttd.path().as_str()).arg("list");
 
     // The default tedge-configuration-plugin type must still be listed
     cmd.assert()
@@ -310,9 +306,7 @@ fn test_invalid_config_file() {
         .with_raw_content("not#toml");
 
     let mut cmd = Command::cargo_bin("tedge-file-config-plugin").unwrap();
-    cmd.arg("--config-dir")
-        .arg(ttd.path().to_str().unwrap())
-        .arg("list");
+    cmd.arg("--config-dir").arg(ttd.path().as_str()).arg("list");
 
     // The default tedge-configuration-plugin type must still be listed
     cmd.assert()

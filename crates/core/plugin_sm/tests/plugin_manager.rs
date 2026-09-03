@@ -17,7 +17,7 @@ mod tests {
             plugin_dir.path(),
             None,
             SudoCommandBuilder::enabled(false),
-            config_dir.utf8_path_buf(),
+            config_dir.path_buf(),
         )
         .await
         .unwrap();
@@ -42,7 +42,7 @@ mod tests {
             plugin_dir.path(),
             None,
             SudoCommandBuilder::enabled(false),
-            config_dir.utf8_path_buf(),
+            config_dir.path_buf(),
         )
         .await
         .unwrap();
@@ -65,7 +65,7 @@ mod tests {
             plugin_dir.path(),
             Some("dummy".into()),
             SudoCommandBuilder::enabled(false),
-            config_dir.utf8_path_buf(),
+            config_dir.path_buf(),
         )
         .await?;
         assert!(result.empty());

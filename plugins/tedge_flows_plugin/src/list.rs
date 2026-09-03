@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn missing_mappers_dir_returns_empty() {
         let ttd = TempTedgeDir::new();
-        let non_existent = ttd.utf8_path().join("no-such-dir");
+        let non_existent = ttd.path().join("no-such-dir");
         let flows = retrieve_flows(non_existent);
         assert!(flows.is_empty());
     }
@@ -158,7 +158,7 @@ mod tests {
             .file("hello.toml")
             .with_toml_content(toml::toml! { version = "1.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(entries(&flows), [("local", "hello", "1.0")]);
     }
 
@@ -172,7 +172,7 @@ mod tests {
             .file("flow.toml")
             .with_toml_content(toml::toml! { version = "1.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(entries(&flows), [("local", "hello", "1.0")]);
     }
 
@@ -186,7 +186,7 @@ mod tests {
             .file("world.toml")
             .with_toml_content(toml::toml! { version = "1.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(entries(&flows), [("local", "hello/world", "1.0")]);
     }
 
@@ -201,7 +201,7 @@ mod tests {
             .file("flow.toml")
             .with_toml_content(toml::toml! { version = "1.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(entries(&flows), [("local", "hello/world", "1.0")]);
     }
 
@@ -216,7 +216,7 @@ mod tests {
             .file("world.toml")
             .with_toml_content(toml::toml! { version = "1.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(entries(&flows), [("local", "world", "1.0")]);
     }
 
@@ -230,7 +230,7 @@ mod tests {
             .file("world.toml")
             .with_toml_content(toml::toml! { version = "1.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(entries(&flows), [("local", "world", "1.0")]);
     }
 
@@ -246,7 +246,7 @@ mod tests {
             .file("hello.toml")
             .with_toml_content(toml::toml! { version = "2.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(
             entries(&flows),
             [("local", "flow", "1.0"), ("local", "hello", "2.0")]
@@ -263,7 +263,7 @@ mod tests {
             .file(".toml")
             .with_toml_content(toml::toml! { version = "1.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert!(flows.is_empty());
     }
 
@@ -277,7 +277,7 @@ mod tests {
             .file("world.toml")
             .with_toml_content(toml::toml! { version = "1.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(entries(&flows), [("local", "world", "1.0")]);
     }
 
@@ -293,7 +293,7 @@ mod tests {
             .file("hello.toml")
             .with_toml_content(toml::toml! { version = "1.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(entries(&flows), [("local", "hello", "1.0")]);
     }
 
@@ -310,7 +310,7 @@ mod tests {
             .file("flow.toml")
             .with_toml_content(toml::toml! { version = "2.0" });
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         // Sorted by (mapper, name, version): 1.0 < 2.0
         assert_eq!(
             entries(&flows),
@@ -339,7 +339,7 @@ mod tests {
             .with_toml_content(toml::toml! { version = "3.0" });
         local_flows.file("params.toml");
 
-        let flows = retrieve_flows(ttd.utf8_path());
+        let flows = retrieve_flows(ttd.path());
         assert_eq!(
             entries(&flows),
             [

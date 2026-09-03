@@ -112,7 +112,7 @@ mod tests {
     fn new_test_state_repository(temp_dir: &TempTedgeDir) -> AgentStateRepository<State> {
         AgentStateRepository::new(
             TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
-            TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", ""),
+            TedgePaths::from_root_with_defaults(temp_dir.path(), "", ""),
             "current-operation",
         )
     }
@@ -124,7 +124,7 @@ mod tests {
             .file("current-operation")
             .with_raw_content(r#"{"operation_id":"1234","operation":"list"}"#);
         let repo: AgentStateRepository<State> = AgentStateRepository::new(
-            TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", ""),
+            TedgePaths::from_root_with_defaults(temp_dir.path(), "", ""),
             TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
             "current-operation",
         );
@@ -144,7 +144,7 @@ mod tests {
         temp_dir.dir(".agent").file("current-operation");
         let repo: AgentStateRepository<State> = AgentStateRepository::new(
             TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
-            TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", ""),
+            TedgePaths::from_root_with_defaults(temp_dir.path(), "", ""),
             "current-operation",
         );
 
@@ -156,7 +156,7 @@ mod tests {
         let temp_dir = TempTedgeDir::new();
         let repo: AgentStateRepository<State> = AgentStateRepository::new(
             TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
-            TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", ""),
+            TedgePaths::from_root_with_defaults(temp_dir.path(), "", ""),
             "current-operation",
         );
 

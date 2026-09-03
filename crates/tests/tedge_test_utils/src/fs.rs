@@ -7,7 +7,6 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::prelude::OpenOptionsExt;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
 #[derive(Debug, Clone)]
@@ -18,7 +17,7 @@ pub struct TempTedgeDir {
 
 #[derive(Debug, Clone)]
 pub struct TempTedgeFile {
-    pub file_path: PathBuf,
+    pub file_path: Utf8PathBuf,
 }
 
 impl Default for TempTedgeDir {
@@ -56,8 +55,7 @@ impl TempTedgeDir {
     }
 
     pub fn file(&self, file_name: &str) -> TempTedgeFile {
-        let root = self.temp_dir.path().to_path_buf();
-        let path = root.join(&self.current_file_path).join(file_name);
+        let path = self.current_file_path.join(file_name);
 
         if !path.exists() {
             let file = fs::File::create(&path).unwrap();
@@ -82,20 +80,16 @@ impl TempTedgeDir {
         }
     }
 
-    pub fn path(&self) -> &Path {
-        self.current_file_path.as_std_path()
-    }
-
-    pub fn utf8_path(&self) -> &Utf8Path {
+    pub fn path(&self) -> &Utf8Path {
         self.current_file_path.as_path()
     }
 
-    pub fn utf8_path_buf(&self) -> Utf8PathBuf {
+    pub fn path_buf(&self) -> Utf8PathBuf {
         self.current_file_path.clone()
     }
 
-    pub fn to_path_buf(&self) -> PathBuf {
-        self.current_file_path.clone().into_std_path_buf()
+    pub fn std_path(&self) -> &Path {
+        self.current_file_path.as_std_path()
     }
 
     pub fn set_mode(&self, mode: u32) {
@@ -107,8 +101,9 @@ impl TempTedgeFile {
     pub fn with_raw_content(self, content: &str) -> Self {
         let mut file = OpenOptions::new()
             .write(true)
+            .truncate(true)
             .create(false)
-            .open(self.file_path.clone())
+            .open(&self.file_path)
             .unwrap();
         file.write_all(content.as_bytes()).unwrap();
         file.flush().unwrap();
@@ -120,7 +115,7 @@ impl TempTedgeFile {
         let mut file = OpenOptions::new()
             .write(true)
             .create(false)
-            .open(self.file_path)
+            .open(&self.file_path)
             .unwrap();
         let file_content = content.to_string();
         file.write_all(file_content.as_bytes()).unwrap();
@@ -132,20 +127,16 @@ impl TempTedgeFile {
         std::fs::remove_file(self.path()).unwrap();
     }
 
-    pub fn path(&self) -> &Path {
-        Path::new(&self.file_path)
+    pub fn path(&self) -> &Utf8Path {
+        &self.file_path
     }
 
-    pub fn utf8_path(&self) -> &Utf8Path {
-        Utf8Path::from_path(self.path()).unwrap()
+    pub fn path_buf(&self) -> Utf8PathBuf {
+        self.file_path.clone()
     }
 
-    pub fn to_path_buf(&self) -> PathBuf {
-        PathBuf::from(self.path())
-    }
-
-    pub fn utf8_path_buf(&self) -> Utf8PathBuf {
-        Utf8PathBuf::from_path_buf(self.to_path_buf()).unwrap()
+    pub fn std_path(&self) -> &Path {
+        self.file_path.as_std_path()
     }
 }
 

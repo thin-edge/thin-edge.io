@@ -156,7 +156,12 @@ mod tests {
         };
 
         let c8y = mock_auth_proxy("test-device", "event-123", &c8y_event).await;
-        let upload = upload_cmd(&c8y, file.to_path_buf(), "test-device", c8y_event);
+        let upload = upload_cmd(
+            &c8y,
+            file.std_path().to_path_buf(),
+            "test-device",
+            c8y_event,
+        );
 
         // Step by step
         assert_eq!(

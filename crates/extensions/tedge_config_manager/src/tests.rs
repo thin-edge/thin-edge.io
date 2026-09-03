@@ -59,10 +59,7 @@ struct TestHandle {
 
 fn prepare() -> Result<TempTedgeDir, anyhow::Error> {
     let tempdir = TempTedgeDir::new();
-    let tempdir_path = tempdir
-        .path()
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("temp dir not created"))?;
+    let tempdir_path = tempdir.path().as_str();
 
     // Test files
     tempdir.file("file_a");
@@ -110,7 +107,7 @@ async fn new_config_manager_builder(
     DownloaderMessageBox,
     UploaderMessageBox,
 ) {
-    let config_root = TedgePaths::from_root_with_defaults(temp_dir.utf8_path(), "", "");
+    let config_root = TedgePaths::from_root_with_defaults(temp_dir.path(), "", "");
     let tmp_root = TedgePaths::from_root_with_defaults(
         Utf8Path::from_path(&std::env::temp_dir()).unwrap(),
         "",
@@ -118,11 +115,7 @@ async fn new_config_manager_builder(
     );
     let config = ConfigManagerConfig {
         config_dir: config_root.clone(),
-        plugin_dirs: vec![temp_dir
-            .to_path_buf()
-            .join("config-plugins")
-            .try_into()
-            .unwrap()],
+        plugin_dirs: vec![temp_dir.path().join("config-plugins")],
         plugin_config_dir: config_root.root_dir(),
         plugin_config_path: config_root.file("tedge-configuration-plugin.toml").unwrap(),
         config_snapshot_meta_topic: Topic::new_unchecked("te/device/main///cmd/config_snapshot"),
@@ -190,11 +183,8 @@ async fn default_plugin_config() {
         read_to_string(tempdir.path().join("tedge-configuration-plugin.toml")).unwrap();
     let plugin_config_toml: Table = from_str(&plugin_config_content).unwrap();
 
-    let tedge_config_path = format!("{}/tedge.toml", tempdir.path().to_string_lossy());
-    let tedge_log_plugin_config_path = format!(
-        "{}/plugins/tedge-log-plugin.toml",
-        tempdir.path().to_string_lossy()
-    );
+    let tedge_config_path = format!("{}/tedge.toml", tempdir.path());
+    let tedge_log_plugin_config_path = format!("{}/plugins/tedge-log-plugin.toml", tempdir.path());
     let expected_config = toml::toml! {
         [[files]]
         path = tedge_config_path
@@ -794,7 +784,7 @@ async fn execute_config_set_operation_step() -> Result<(), anyhow::Error> {
         json!({
             "type": "type_two",
             "setFrom": downloaded_path.path(),
-            "workDir": work_dir.utf8_path(),
+            "workDir": work_dir.path(),
         }),
     );
 
@@ -916,7 +906,7 @@ async fn execute_config_set_operation_step_file_not_found() -> Result<(), anyhow
         json!({
             "type": "type_two",
             "setFrom": missing_path,
-            "workDir": work_dir.utf8_path(),
+            "workDir": work_dir.path(),
         }),
     );
 
@@ -935,7 +925,7 @@ async fn execute_config_set_operation_step_file_not_found() -> Result<(), anyhow
 }
 
 fn test_config(tempdir: &TempTedgeDir) -> ConfigManagerConfig {
-    let config_root = TedgePaths::from_root_with_defaults(tempdir.utf8_path(), "", "");
+    let config_root = TedgePaths::from_root_with_defaults(tempdir.path(), "", "");
     let tmp_root = TedgePaths::from_root_with_defaults(
         Utf8Path::from_path(&std::env::temp_dir()).unwrap(),
         "",

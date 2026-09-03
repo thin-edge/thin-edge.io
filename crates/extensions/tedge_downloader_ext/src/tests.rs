@@ -23,7 +23,7 @@ async fn download_without_auth() {
 
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();
-    let download_request = DownloadRequest::new(&server_url, &target_path);
+    let download_request = DownloadRequest::new(&server_url, target_path.as_std_path());
 
     let mut requester = spawn_downloader_actor().await;
 
@@ -58,7 +58,8 @@ async fn download_with_auth() {
 
     let mut headers = HeaderMap::new();
     headers.append(AUTHORIZATION, "Bearer token".parse().unwrap());
-    let download_request = DownloadRequest::new(&server_url, &target_path).with_headers(headers);
+    let download_request =
+        DownloadRequest::new(&server_url, target_path.as_std_path()).with_headers(headers);
 
     let mut requester = spawn_downloader_actor().await;
 
@@ -100,7 +101,7 @@ async fn download_if_download_key_is_struct() {
 
     let target_path = ttd.path().join("downloaded_file");
     let server_url = server.url();
-    let download_request = DownloadRequest::new(&server_url, &target_path);
+    let download_request = DownloadRequest::new(&server_url, target_path.as_std_path());
     let request_key = TestDownloadKey {
         text: "I am test".to_string(),
         some: true,

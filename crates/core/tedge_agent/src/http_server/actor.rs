@@ -351,7 +351,7 @@ mod tests {
 
     impl<Cert> TestFileTransferService<Cert> {
         fn temp_path_for(&self, file: &str) -> Utf8PathBuf {
-            self.temp_dir.utf8_path().join("file-transfer").join(file)
+            self.temp_dir.path().join("file-transfer").join(file)
         }
 
         async fn spawn(
@@ -384,7 +384,7 @@ mod tests {
     }
 
     fn http_config(ttd: &TempTedgeDir, bind_port: u16) -> TestConfig {
-        let data_dir: DataDir = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "").into();
+        let data_dir: DataDir = TedgePaths::from_root_with_defaults(ttd.path(), "", "").into();
         TestConfig {
             file_transfer_dir: data_dir.file_transfer_dir(),
             data_dir,
@@ -411,7 +411,7 @@ mod tests {
             None
         };
 
-        let data_dir = DataDir::from(TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", ""));
+        let data_dir = DataDir::from(TedgePaths::from_root_with_defaults(ttd.path(), "", ""));
 
         Ok(TestConfig {
             file_transfer_dir: data_dir.file_transfer_dir(),

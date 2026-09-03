@@ -159,7 +159,7 @@ mod tests {
 
     fn prepare() -> (TempTedgeDir, Vec<FileEntry>) {
         let tempdir = TempTedgeDir::new();
-        let tempdir_path = tempdir.path().to_str().unwrap();
+        let tempdir_path = tempdir.path().as_str();
 
         tempdir.file("file_a_one");
         tempdir.file("file_b_one");
@@ -210,7 +210,7 @@ mod tests {
     /// most recent to oldest
     fn test_filter_logs_path_containing_wildcard_on_type_and_metadata() {
         let (tempdir, files) = prepare();
-        let tempdir_path = tempdir.path().to_str().unwrap();
+        let tempdir_path = tempdir.path().as_str();
 
         let logs = filter_logs(&files, "type_one", datetime!(1970-01-01 00:00:03 +00:00)).unwrap();
 
@@ -239,7 +239,7 @@ mod tests {
     /// most recent to oldest
     fn test_filter_logs_with_static_path_on_type_and_metadata() {
         let (tempdir, _) = prepare();
-        let tempdir_path = tempdir.path().to_str().unwrap();
+        let tempdir_path = tempdir.path().as_str();
 
         // provide vector of files with static paths
         let files: Vec<FileEntry> = vec![
@@ -286,7 +286,7 @@ mod tests {
     /// Now returns all lines since filtering is done by the agent.
     fn test_read_log_content() {
         let (tempdir, _) = prepare();
-        let tempdir_path = tempdir.path().to_str().unwrap();
+        let tempdir_path = tempdir.path().as_str();
         let file_path = &format!("{tempdir_path}/file_a_one");
         let mut log_file = std::fs::OpenOptions::new()
             .append(true)
@@ -321,7 +321,7 @@ mod tests {
     /// Now returns all lines since filtering is done by the agent.
     fn test_read_log_content_multiple_files() {
         let (tempdir, files) = prepare();
-        let tempdir_path = tempdir.path().to_str().unwrap();
+        let tempdir_path = tempdir.path().as_str();
 
         for (file_name, m_time) in [
             ("file_a_one", 2),
@@ -349,7 +349,7 @@ mod tests {
             &files,
             "type_one",
             datetime!(1970-01-01 00:00:03 +00:00),
-            tempdir.utf8_path(),
+            tempdir.path(),
         )
         .unwrap();
 

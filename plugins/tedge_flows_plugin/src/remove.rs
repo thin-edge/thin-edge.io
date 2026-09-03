@@ -86,8 +86,8 @@ mod tests {
         hello.file("main.js");
         let flow_record = FlowRecord::new("local/hello").unwrap();
 
-        remove_flow(mappers_dir.utf8_path(), &flow_record, None, false).unwrap();
-        assert!(!flow_record.flow_dir(mappers_dir.utf8_path()).exists());
+        remove_flow(mappers_dir.path(), &flow_record, None, false).unwrap();
+        assert!(!flow_record.flow_dir(mappers_dir.path()).exists());
     }
 
     #[test]
@@ -103,8 +103,8 @@ mod tests {
         world.file("main.js");
         let flow_record = FlowRecord::new("local/hello/world").unwrap();
 
-        remove_flow(mappers_dir.utf8_path(), &flow_record, None, false).unwrap();
-        assert!(!flow_record.flow_dir(mappers_dir.utf8_path()).exists());
+        remove_flow(mappers_dir.path(), &flow_record, None, false).unwrap();
+        assert!(!flow_record.flow_dir(mappers_dir.path()).exists());
     }
 
     #[test]
@@ -119,8 +119,8 @@ mod tests {
             .with_toml_content(toml::toml! { version = "1.0" });
         let flow_record = FlowRecord::new("local/hello").unwrap();
 
-        remove_flow(mappers_dir.utf8_path(), &flow_record, None, false).unwrap();
-        assert!(!flow_record.flow_toml(mappers_dir.utf8_path()).exists());
+        remove_flow(mappers_dir.path(), &flow_record, None, false).unwrap();
+        assert!(!flow_record.flow_toml(mappers_dir.path()).exists());
     }
 
     #[test]
@@ -138,14 +138,14 @@ mod tests {
             .with_toml_content(toml::toml! { version = "1.0" });
         let flow_record = FlowRecord::new("local/hello").unwrap();
 
-        remove_flow(mappers_dir.utf8_path(), &flow_record, None, false).unwrap();
+        remove_flow(mappers_dir.path(), &flow_record, None, false).unwrap();
 
         assert!(
-            !flow_record.flow_dir(mappers_dir.utf8_path()).exists(),
+            !flow_record.flow_dir(mappers_dir.path()).exists(),
             "directory should be removed"
         );
         assert!(
-            flow_record.flow_toml(mappers_dir.utf8_path()).exists(),
+            flow_record.flow_toml(mappers_dir.path()).exists(),
             "hello.toml should be untouched"
         );
     }
@@ -157,7 +157,7 @@ mod tests {
 
         // Neither a directory nor a .toml file — should succeed silently.
         let flow_record = FlowRecord::new("local/hello").unwrap();
-        remove_flow(mappers_dir.utf8_path(), &flow_record, None, false).unwrap();
+        remove_flow(mappers_dir.path(), &flow_record, None, false).unwrap();
     }
 
     #[test]
@@ -173,9 +173,9 @@ mod tests {
         hello.file("params.toml.template");
         let flow_record = FlowRecord::new("local/hello").unwrap();
 
-        remove_flow(mappers_dir.utf8_path(), &flow_record, None, true).unwrap();
+        remove_flow(mappers_dir.path(), &flow_record, None, true).unwrap();
 
-        let dir = flow_record.flow_dir(mappers_dir.utf8_path());
+        let dir = flow_record.flow_dir(mappers_dir.path());
         assert!(dir.exists(), "directory should be kept");
         assert!(
             dir.join("params.toml").exists(),

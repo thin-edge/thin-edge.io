@@ -186,7 +186,7 @@ mod tests {
                 "user = '{}'\ngroup = '{}'\n",
                 owner.user, owner.group
             ));
-            TEdgeConfig::load(ttd.utf8_path()).await.unwrap()
+            TEdgeConfig::load(ttd.path()).await.unwrap()
         }
 
         async fn load_config(ttd: &TempTedgeDir) -> TEdgeConfig {
@@ -196,7 +196,7 @@ mod tests {
         #[tokio::test]
         async fn creates_both_config_and_template_when_neither_exists() {
             let ttd = TempTedgeDir::new();
-            let dir = ttd.utf8_path().join("bridge");
+            let dir = ttd.path().join("bridge");
             tokio::fs::create_dir_all(&dir).await.unwrap();
             let config = load_config(&ttd).await;
             let content = "test content";
@@ -222,7 +222,7 @@ mod tests {
         #[tokio::test]
         async fn creates_directory_using_the_system_toml_user() {
             let ttd = TempTedgeDir::new();
-            let dir = ttd.utf8_path().join("bridge");
+            let dir = ttd.path().join("bridge");
 
             #[cfg(target_os = "linux")]
             let target_group = "root";
@@ -250,7 +250,7 @@ mod tests {
         #[tokio::test]
         async fn creates_missing_directory_using_the_current_system_toml_user() {
             let ttd = TempTedgeDir::new();
-            let dir = ttd.utf8_path().join("bridge");
+            let dir = ttd.path().join("bridge");
             let config = load_config(&ttd).await;
 
             persist_bridge_config_file(&dir, "test", "test content", &config)
@@ -275,7 +275,7 @@ mod tests {
         #[tokio::test]
         async fn updates_both_when_config_matches_template() {
             let ttd = TempTedgeDir::new();
-            let dir = ttd.utf8_path().join("bridge");
+            let dir = ttd.path().join("bridge");
             tokio::fs::create_dir_all(&dir).await.unwrap();
             let config = load_config(&ttd).await;
 
@@ -310,7 +310,7 @@ mod tests {
         #[tokio::test]
         async fn only_updates_template_when_config_is_overridden() {
             let ttd = TempTedgeDir::new();
-            let dir = ttd.utf8_path().join("bridge");
+            let dir = ttd.path().join("bridge");
             tokio::fs::create_dir_all(&dir).await.unwrap();
             let config = load_config(&ttd).await;
 
@@ -348,7 +348,7 @@ mod tests {
         #[tokio::test]
         async fn only_updates_template_when_disabled_marker_exists() {
             let ttd = TempTedgeDir::new();
-            let dir = ttd.utf8_path().join("bridge");
+            let dir = ttd.path().join("bridge");
             tokio::fs::create_dir_all(&dir).await.unwrap();
             let config = load_config(&ttd).await;
 
@@ -393,7 +393,7 @@ mod tests {
         async fn skips_disabled_config_files() {
             let ttd = TempTedgeDir::new();
             let bridge_dir = ttd.dir("mappers").dir("c8y").dir("bridge");
-            let bridge_dir = bridge_dir.utf8_path();
+            let bridge_dir = bridge_dir.path();
 
             // Create valid bridge configs
             let config_content = r#"
@@ -415,7 +415,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            let tedge_config = TEdgeConfig::load(ttd.utf8_path()).await.unwrap();
+            let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
             let bridge_config = load_bridge_rules_from_directory(
                 bridge_dir,
@@ -435,7 +435,7 @@ mod tests {
         async fn ignores_template_files() {
             let ttd = TempTedgeDir::new();
             let bridge_dir = ttd.dir("mappers").dir("c8y").dir("bridge");
-            let bridge_dir = bridge_dir.utf8_path();
+            let bridge_dir = bridge_dir.path();
 
             // Create a valid bridge config and its template
             let config_content = r#"
@@ -453,7 +453,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            let tedge_config = TEdgeConfig::load(ttd.utf8_path()).await.unwrap();
+            let tedge_config = TEdgeConfig::load(ttd.path()).await.unwrap();
 
             let bridge_config = load_bridge_rules_from_directory(
                 bridge_dir,

@@ -1505,9 +1505,9 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
             let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
-            let mut cert_path = ttd.utf8_path().to_owned();
+            let mut cert_path = ttd.path().to_owned();
             cert_path.push("test.crt");
-            let mut key_path = ttd.utf8_path().to_owned();
+            let mut key_path = ttd.path().to_owned();
             key_path.push("test.key");
             std::fs::write(&cert_path, cert.cert.pem()).unwrap();
             std::fs::write(&key_path, cert.signing_key.serialize_pem()).unwrap();
@@ -1531,9 +1531,9 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
         async fn allows_combination_of_urls_and_device_ids() {
             let cloud = Cloud::c8y(Some("new".parse().unwrap()));
             let ttd = TempTedgeDir::new();
-            let mut cert_path = ttd.utf8_path().to_owned();
+            let mut cert_path = ttd.path().to_owned();
             cert_path.push("test.crt");
-            let mut key_path = ttd.utf8_path().to_owned();
+            let mut key_path = ttd.path().to_owned();
             key_path.push("test.key");
             let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
             std::fs::write(&cert_path, cert.cert.pem()).unwrap();
@@ -1681,7 +1681,7 @@ Each cloud profile requires either a unique URL or unique device ID, so it corre
 
         fn bridge_config_with_cn(cn: &str) -> (TempTedgeDir, BridgeConfig) {
             let ttd = TempTedgeDir::new();
-            let cert_path = ttd.utf8_path().join("device.crt");
+            let cert_path = ttd.path().join("device.crt");
             std::fs::write(&cert_path, self_signed_cert_pem(cn)).unwrap();
             (ttd, bridge_config_with_cert(cert_path))
         }

@@ -254,7 +254,7 @@ type = "nginx.conf"
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         let types = config.get_all_file_types();
 
@@ -272,7 +272,7 @@ type = "nginx.conf"
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         let types = config.get_all_file_types();
 
@@ -291,7 +291,7 @@ type = "single.conf"
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         let types = config.get_all_file_types();
 
@@ -314,7 +314,7 @@ type = "other.conf"
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         let types = config.get_all_file_types();
 
@@ -399,7 +399,7 @@ type = "service.toml"
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         assert!(config.get_file_entry("app.conf").is_some());
         assert!(config.get_file_entry("service.toml").is_some());
@@ -420,7 +420,7 @@ type = "test+config"
 "#;
         let config_file = ttd.file("forbidden.toml").with_raw_content(toml_content);
 
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         // Should only contain the plugin config itself, not the invalid entry
         assert_eq!(config.files.len(), 1);
@@ -441,7 +441,7 @@ type = "test#config"
             .file("forbidden_hash.toml")
             .with_raw_content(toml_content);
 
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         // Should only contain the plugin config itself, not the invalid entry
         assert_eq!(config.files.len(), 1);
@@ -463,7 +463,7 @@ type = "duplicate.conf"
 "#;
         let config_file = ttd.file("duplicate.toml").with_raw_content(toml_content);
 
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         // Should only contain the plugin config itself, duplicates rejected
         assert_eq!(config.files.len(), 1);
@@ -481,7 +481,7 @@ path = "/etc/myapp.conf"
 "#;
         let config_file = ttd.file("no_type.toml").with_raw_content(toml_content);
 
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         // Should use path as config_type when type is not specified
         assert!(config.get_file_entry("/etc/myapp.conf").is_some());
@@ -504,7 +504,7 @@ service_action = "restart"
             .file("valid_action_restart.toml")
             .with_raw_content(toml_content);
 
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         assert_eq!(config.files.len(), 2);
         let entry = config.get_file_entry("test.conf").unwrap();
@@ -527,7 +527,7 @@ service_action = "start"
             .file("invalid_action.toml")
             .with_raw_content(toml_content);
 
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         // Should only contain the plugin config itself, invalid service_action rejected
         assert_eq!(config.files.len(), 1);
@@ -549,7 +549,7 @@ service_action = "restart"
             .file("action_without_service.toml")
             .with_raw_content(toml_content);
 
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         assert_eq!(config.files.len(), 1);
         assert!(config.get_file_entry(DEFAULT_PLUGIN_CONFIG_TYPE).is_some());
@@ -570,7 +570,7 @@ service = "testservice"
             .file("service_without_action.toml")
             .with_raw_content(toml_content);
 
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
         assert_eq!(config.files.len(), 2);
         let entry = config.get_file_entry("test.conf").unwrap();
