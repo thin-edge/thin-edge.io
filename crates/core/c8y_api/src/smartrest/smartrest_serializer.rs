@@ -48,7 +48,10 @@ fn fail_operation(template_id: usize, operation: &str, reason: &str) -> Smartres
             .expect("operation name shouldn't put payload over size limit")
     } else {
         warn!("Failure reason too long, message truncated to 500 bytes");
-        SmartrestPayload::serialize((template_id, operation, &reason[..500]))
+        // Truncating on a character boundary, as slicing a `str` inside a
+        // multi-byte character panics
+        let reason = &reason[..reason.floor_char_boundary(500)];
+        SmartrestPayload::serialize((template_id, operation, reason))
             .expect("operation name shouldn't put payload over size limit")
     }
 }
@@ -154,8 +157,19 @@ pub fn succeed_operation(
         let reason = reason.strip_prefix('"').unwrap_or(reason);
         let reason = reason.strip_suffix('"').unwrap_or(reason);
 
-        // if we'd cut across an escaped " character, move trim point 1 char back to omit it
-        if &reason[max_result_limit - 1..=max_result_limit] == r#""""# {
+        // Truncating on a character boundary, as slicing a `str` inside a
+        // multi-byte character panics
+        max_result_limit = reason.floor_char_boundary(max_result_limit);
+
+        // Every double quote is escaped as a pair in the CSV field. If the trim point falls
+        // in the middle of such a pair, i.e. right after an odd number of consecutive quotes,
+        // move it back by one so the field is not left with a dangling quote.
+        let quote_run = reason.as_bytes()[..max_result_limit]
+            .iter()
+            .rev()
+            .take_while(|byte| **byte == b'"')
+            .count();
+        if quote_run % 2 == 1 {
             max_result_limit -= 1;
         }
         let trimmed_reason = &reason[..max_result_limit];
@@ -669,5 +683,61 @@ mod tests {
         let num_quotes = reason.chars().filter(|c| *c == '"').count();
 
         assert_eq!(num_quotes, expected_num_quotes);
+    }
+
+    /// Trimming an over-sized reason must not panic when the trim point falls
+    /// inside a multi-byte character.
+    #[test]
+    fn succeed_operation_trims_reason_on_a_char_boundary() {
+        // Each 'é' is 2 bytes long and the trim point is at an even offset,
+        // so the leading one byte 'a' is what makes it fall inside a character
+        let reason = format!("a{}", "é".repeat(MAX_PAYLOAD_LIMIT_IN_BYTES));
+
+        let smartrest =
+            succeed_operation(SET_OPERATION_TO_SUCCESSFUL, "c8y_Command", reason).unwrap();
+
+        assert!(
+            smartrest.as_str().len() <= MAX_PAYLOAD_LIMIT_IN_BYTES,
+            "bigger than message size limit: {} > {}",
+            smartrest.as_str().len(),
+            MAX_PAYLOAD_LIMIT_IN_BYTES
+        );
+        assert!(smartrest.as_str().ends_with("...<trimmed>\""));
+    }
+
+    /// Make sure that a run of double quotes straddling the trim point is not
+    /// cut in half, which would leave a dangling quote in the SmartREST field.
+    #[test]
+    fn succeed_operation_never_trims_inside_a_quote_run() {
+        // Two adjacent quotes in the reason are escaped into a run of four in the CSV field.
+        // Sweeping the position of that run makes the trim point fall at every offset within it.
+        for prefix_len in 15960..15985 {
+            let reason = format!("{}\"\"{}", "a".repeat(prefix_len), "b".repeat(200));
+
+            let smartrest =
+                succeed_operation(SET_OPERATION_TO_SUCCESSFUL, "c8y_Command", reason).unwrap();
+
+            let field = smartrest.as_str().splitn(3, ',').nth(2).unwrap();
+            let num_quotes = field.chars().filter(|c| *c == '"').count();
+            assert_eq!(
+                num_quotes % 2,
+                0,
+                "dangling quote for prefix_len {prefix_len}: ...{}",
+                &field[field.len().saturating_sub(30)..]
+            );
+        }
+    }
+
+    /// Truncating an over-long failure reason must not panic when the 500th byte
+    /// falls inside a multi-byte character.
+    #[test]
+    fn fail_operation_truncates_reason_on_a_char_boundary() {
+        // Each 'é' is 2 bytes long and the 500 bytes limit is even,
+        // so the leading one byte 'a' is what makes it fall inside a character
+        let reason = format!("a{}", "é".repeat(500));
+
+        let smartrest = fail_operation(SET_OPERATION_TO_FAILED, "c8y_Command", &reason);
+
+        assert!(smartrest.as_str().starts_with("502,c8y_Command,"));
     }
 }
