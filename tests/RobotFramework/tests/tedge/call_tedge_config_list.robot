@@ -205,7 +205,7 @@ set/unset az.topics
     ${unset}    Execute Command    tedge config list
     Should Contain
     ...    ${unset}
-    ...    az.topics=["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+    ...    az.topics=["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/m/+/meta", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
 
 set/unset aws.topics
     Execute Command    sudo tedge config set aws.topics topic1,topic2    # Changing aws.topics
@@ -217,7 +217,7 @@ set/unset aws.topics
     ${unset}    Execute Command    tedge config list
     Should Contain
     ...    ${unset}
-    ...    aws.topics=["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+    ...    aws.topics=["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/m/+/meta", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
 
 set/unset aws.url
     Execute Command    sudo tedge config set aws.url your-endpoint.amazonaws.com    # Changing aws.url
