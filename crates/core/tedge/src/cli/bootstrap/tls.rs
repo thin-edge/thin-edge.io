@@ -156,11 +156,33 @@ fn chain_message(err: &(dyn Error + 'static)) -> String {
 }
 
 impl TlsTrustFailure {
+    /// What failed, in one line
+    pub fn headline(&self, host: &str) -> String {
+        match self.kind {
+            TlsFailureKind::UnknownIssuer => {
+                format!("The device does not trust the TLS certificate of {host}")
+            }
+            TlsFailureKind::Expired | TlsFailureKind::NotValidYet => {
+                format!("The TLS certificate of {host} is outside its validity period")
+            }
+            TlsFailureKind::NotValidForName => {
+                format!("The TLS certificate of {host} is not valid for that host name")
+            }
+            TlsFailureKind::Other => format!("The TLS certificate of {host} was rejected"),
+        }
+    }
+
+    /// The headline with the TLS error, for contexts that only note the problem
+    pub fn summary(&self, host: &str) -> String {
+        format!("{} ({})", self.headline(host), self.detail)
+    }
+
     /// The operator-facing report: what failed, why bootstrap stops here,
     /// and the commands that fix it
     pub fn explain(&self, host: &str, trust_store: &TrustStore) -> String {
         let TrustStore { key, path } = trust_store;
         let detail = &self.detail;
+        let headline = self.headline(host);
         let same_store =
             "\nThe MQTT bridge and the HTTP proxy verify the platform against the same\n\
              trust store, so `tedge connect` would fail the same way.";
@@ -168,7 +190,7 @@ impl TlsTrustFailure {
              To configure this device without reaching the cloud, re-run with --offline.";
         match self.kind {
             TlsFailureKind::UnknownIssuer => format!(
-                "The device does not trust the TLS certificate of {host}\n\
+                "{headline}\n\
                  \n\
                  Its certificate is signed by an issuer that is not in the device's trust\n\
                  store ({key} = {path}).\n\
@@ -198,7 +220,7 @@ impl TlsTrustFailure {
                      a device without a real-time clock starts up with an unset date."
                 };
                 format!(
-                    "The TLS certificate of {host} is outside its validity period\n\
+                    "{headline}\n\
                      \n\
                      {detail}\n\
                      \n\
@@ -214,7 +236,7 @@ impl TlsTrustFailure {
                 )
             }
             TlsFailureKind::NotValidForName => format!(
-                "The TLS certificate of {host} is not valid for that host name\n\
+                "{headline}\n\
                  \n\
                  {detail}\n\
                  \n\
@@ -227,7 +249,7 @@ impl TlsTrustFailure {
                  {retry}"
             ),
             TlsFailureKind::Other => format!(
-                "The TLS certificate of {host} was rejected\n\
+                "{headline}\n\
                  \n\
                  {detail}\n\
                  \n\
@@ -339,6 +361,19 @@ mod tests {
         assert!(
             report.lines().all(|line| !line.starts_with("   ")),
             "unexpected indentation:\n{report}"
+        );
+    }
+
+    #[test]
+    fn the_one_line_form_keeps_the_host_and_the_cause() {
+        let err = transport_error(CertificateError::UnknownIssuer);
+        let summary = tls_trust_failure(&err)
+            .unwrap()
+            .summary("example.cumulocity.com");
+        assert_eq!(
+            summary,
+            "The device does not trust the TLS certificate of example.cumulocity.com \
+             (invalid peer certificate: UnknownIssuer)"
         );
     }
 

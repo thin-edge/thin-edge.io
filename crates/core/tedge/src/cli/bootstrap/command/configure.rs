@@ -10,7 +10,7 @@ use crate::cli::bootstrap::cli::KeyValue;
 use crate::cli::bootstrap::cli::RegistrationMethod;
 use crate::cli::bootstrap::mapper_toml::write_mapper_config;
 use crate::cli::bootstrap::mapper_toml::MapperToml;
-use crate::cli::bootstrap::tls::tls_trust_error;
+use crate::cli::bootstrap::tls::tls_trust_failure;
 use crate::cli::common::Cloud;
 use anyhow::anyhow;
 use anyhow::Context;
@@ -73,21 +73,34 @@ impl BootstrapCommand {
                             updates.push(self.config_key("mqtt", mqtt_host));
                         }
                         Err(err) => {
-                            // A rejected certificate is not a discovery
-                            // hiccup: the bridge and the proxy verify the
-                            // platform against the same trust store, so
-                            // carrying on would only defer the failure to
-                            // `tedge connect`, in a less legible form
                             let source: &(dyn std::error::Error + 'static) = err.as_ref();
-                            if let Some(err) =
-                                tls_trust_error(source, &http_host, &self.trust_store(&config))
-                            {
-                                return Err(err);
+                            match tls_trust_failure(source) {
+                                // A dry run does not execute the prepare
+                                // hooks, so trust a hook would have
+                                // installed is not there yet: report it,
+                                // but let the rehearsal run to its end
+                                Some(failure) if self.dry_run => self.ui.line(&format!(
+                                    "Warning: {} - a prepare hook installing it \
+                                     has not run in this dry run",
+                                    failure.summary(&http_host)
+                                )),
+                                // A rejected certificate is not a discovery
+                                // hiccup: the bridge and the proxy verify
+                                // the platform against the same trust store,
+                                // so carrying on would only defer the
+                                // failure to `tedge connect`, in a less
+                                // legible form
+                                Some(failure) => {
+                                    return Err(anyhow!(
+                                        "{}",
+                                        failure.explain(&http_host, &self.trust_store(&config))
+                                    ))
+                                }
+                                None => self.ui.line(&format!(
+                                    "Warning: could not query {http_url}/tenant/loginOptions to \
+                                     discover the MQTT endpoint ({err:#}); using the URL as-is"
+                                )),
                             }
-                            self.ui.line(&format!(
-                                "Warning: could not query {http_url}/tenant/loginOptions to discover \
-                                 the MQTT endpoint ({err:#}); using the URL as-is"
-                            ));
                             updates.push(self.config_key("url", http_host));
                         }
                     }
