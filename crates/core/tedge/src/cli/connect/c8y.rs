@@ -197,7 +197,19 @@ pub async fn create_device_with_direct_connection(
                     failure.explain(&connection, validity)
                 ));
             }
-            Err(err) => return Err(anyhow!("{err:#}\n\n{}", error_context(stage))),
+            Err(err) => {
+                let err: anyhow::Error = err.into();
+                if let Some(err2 @ std::io::Error { .. }) = err.root_cause().downcast_ref() {
+                    if let Some(Error::AlertReceived(AlertDescription::HandshakeFailure)) =
+                        err2.get_ref().and_then(|e| e.downcast_ref())
+                    {
+                        let failure = TlsFailure::UnpairedPrivateKey;
+                        return Err(anyhow!("{err:#}\n\n{}", failure.explain(&connection, None)));
+                    }
+                }
+
+                return Err(anyhow!("{err:#}\n\n{}", error_context(stage)));
+            }
             _ => {}
         }
     }
