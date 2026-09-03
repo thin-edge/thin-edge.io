@@ -266,6 +266,29 @@ The version is automatically generated from the source code management tool, git
 |`distance`|Number of commits on the `main` branch since last official release|
 |`git_sha`|Git commit sha which the package was built from. This makes it easier to trace the version back to the exact commit|
 
+## Software Bill of Materials (SBOM) {#sbom}
+
+Every official release publishes [CycloneDX](https://cyclonedx.org) Software Bill of Materials (SBOM) documents
+as assets on the [GitHub release page](https://github.com/thin-edge/thin-edge.io/releases).
+
+%%te%% is distributed as two executables, and each one is described by its own SBOM.
+
+|File|Describes|
+|----|---------|
+|`tedge.cdx.json`|The `tedge` multicall binary, which also provides `tedge-mapper`, `tedge-agent`, `tedge-watchdog`, `tedge-apt-plugin`, `tedge-flows-plugin`, `c8y-firmware-plugin`, `c8y-remote-access-plugin`, `tedge-write`, `tedge-file-config-plugin` and `tedge-file-log-plugin`|
+|`tedge-p11-server.cdx.json`|The `tedge-p11-server` executable|
+
+The SBOMs cover all of the platforms that %%te%% is released for,
+and are generated from the resolved dependency graph rather than from the graph of an individual build.
+They are therefore a superset of what is linked into any single release artifact:
+dependencies which only apply to another platform, optional dependencies, and dev-dependencies are all listed.
+
+The SBOM of any commit can also be generated locally using:
+
+```sh
+just generate-sbom
+```
+
 # How is this made possible?
 
 Package repository hosting is graciously provided by [Cloudsmith](https://cloudsmith.com).
