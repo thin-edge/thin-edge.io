@@ -272,9 +272,17 @@ impl Agent {
         // Runtime
         let mut runtime = Runtime::new();
 
-        // Load device profile manager before the workflow actor
-        // as it will create the device_profile workflow if it does not already exist
+        // Deploy the built-in workflows before the workflow actor,
+        // as the latter loads the workflow definitions found in the operations directory
         DeviceProfileManagerBuilder::try_new(&self.config.operations_dir).await?;
+        self.config
+            .operations_dir
+            .template_file("shell_execute.toml")?
+            // The workflow used to be provided by the tedge-command-plugin package.
+            // Removing that package removes its own copy of the file, which then has to be restored.
+            .recreate_if_missing()
+            .persist(include_str!("resources/shell_execute.toml"))
+            .await?;
 
         // Inotify actor
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();

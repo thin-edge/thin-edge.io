@@ -1,0 +1,28 @@
+[package]
+name = "tedge-shell-plugin"
+description = "Thin-edge.io plugin executing shell commands on behalf of the shell_execute operation"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+camino = { workspace = true }
+clap = { workspace = true }
+serde_json = { workspace = true }
+tedge_config = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+tedge_test_utils = { workspace = true }
+
+[lints]
+workspace = true

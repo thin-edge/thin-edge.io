@@ -122,8 +122,10 @@ impl TedgePaths {
     ///
     /// Call `.persist(content)` on the returned builder to write the file.
     /// If a user has modified the `name` file (making it differ from the `name.template`),
-    /// or if a `.disabled` marker exists, the active file will not be updated.
+    /// removed it, or if a `.disabled` marker exists, the active file will not be updated.
     /// However, the template will always be refreshed with the latest definition.
+    ///
+    /// Use [`ManagedTemplateFile::recreate_if_missing`] to restore a removed active file.
     pub fn template_file(
         &self,
         path: impl AsRef<Utf8Path>,
@@ -148,6 +150,7 @@ impl TedgePaths {
             },
             parent,
             warn_and_ignore_permission_errors: false,
+            recreate_if_missing: false,
         })
     }
 
@@ -485,6 +488,7 @@ pub struct ManagedTemplateFile {
     active: ManagedFile,
     parent: Option<ManagedDir>,
     warn_and_ignore_permission_errors: bool,
+    recreate_if_missing: bool,
 }
 
 impl ManagedTemplateFile {
@@ -506,6 +510,17 @@ impl ManagedTemplateFile {
         self
     }
 
+    /// Restore the active file when it has been removed, unless it has been explicitly disabled.
+    ///
+    /// By default, a missing active file is treated as a deliberate override and is never restored,
+    /// as this is how some files are removed on purpose, e.g. a bridge config on `tedge disconnect`.
+    /// Use this setting for files which can also be removed by a third party,
+    /// e.g. by uninstalling the package which used to provide them.
+    pub fn recreate_if_missing(mut self) -> Self {
+        self.recreate_if_missing = true;
+        self
+    }
+
     pub async fn persist(self, content: impl AsRef<[u8]>) -> Result<(), PathsError> {
         let content = content.as_ref();
         let template = self.template_file();
@@ -515,9 +530,22 @@ impl ManagedTemplateFile {
             parent.clone().respect_existing().ensure().await?;
         }
 
-        let prior_config: Option<Vec<u8>> = tokio::fs::read(self.active.path()).await.ok();
+        let prior_config: Option<Vec<u8>> = match tokio::fs::read(self.active.path()).await {
+            Ok(content) => Some(content),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+            // A file which cannot be read must never be overwritten, as its content is unknown.
+            // Only the template is refreshed, as it is fully owned by thin-edge.
+            Err(err) => {
+                warn!("Cannot read {}: {err}", self.active.path());
+                return self.persist_file(&template, content).await;
+            }
+        };
         let prior_template: Option<Vec<u8>> = tokio::fs::read(template.path()).await.ok();
-        let overridden = prior_config != prior_template;
+        let overridden = match prior_config {
+            // Only an actually missing file is restored
+            None if self.recreate_if_missing => false,
+            _ => prior_config != prior_template,
+        };
         let disabled = tokio::fs::try_exists(&disabled_path).await.unwrap_or(false);
 
         if !overridden && !disabled {
@@ -621,6 +649,182 @@ mod tests {
         {
             "wheel"
         }
+    }
+
+    #[tokio::test]
+    async fn template_persistence_does_not_restore_a_deleted_active_file() {
+        let ttd = TempTedgeDir::new();
+        let root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
+
+        root.template_file("some.toml")
+            .unwrap()
+            .persist("original")
+            .await
+            .unwrap();
+        std::fs::remove_file(ttd.path().join("some.toml")).unwrap();
+
+        root.template_file("some.toml")
+            .unwrap()
+            .persist("updated")
+            .await
+            .unwrap();
+
+        assert!(!ttd.path().join("some.toml").exists());
+        assert_eq!(
+            std::fs::read_to_string(ttd.path().join("some.toml.template")).unwrap(),
+            "updated"
+        );
+    }
+
+    #[tokio::test]
+    async fn template_persistence_restores_a_deleted_active_file_on_demand() {
+        let ttd = TempTedgeDir::new();
+        let root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
+
+        root.template_file("some.toml")
+            .unwrap()
+            .recreate_if_missing()
+            .persist("original")
+            .await
+            .unwrap();
+        std::fs::remove_file(ttd.path().join("some.toml")).unwrap();
+
+        root.template_file("some.toml")
+            .unwrap()
+            .recreate_if_missing()
+            .persist("updated")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(ttd.path().join("some.toml")).unwrap(),
+            "updated"
+        );
+    }
+
+    /// A file which used to be provided by another package has no template sibling.
+    /// It must be preserved while that package is installed, and restored once it is removed.
+    #[tokio::test]
+    async fn template_persistence_adopts_a_file_owned_by_another_package() {
+        let ttd = TempTedgeDir::new();
+        let root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
+        std::fs::write(ttd.path().join("some.toml"), "provided by another package").unwrap();
+
+        root.template_file("some.toml")
+            .unwrap()
+            .recreate_if_missing()
+            .persist("builtin")
+            .await
+            .unwrap();
+
+        // The file of the other package is left untouched
+        assert_eq!(
+            std::fs::read_to_string(ttd.path().join("some.toml")).unwrap(),
+            "provided by another package"
+        );
+
+        // Uninstalling that package removes its file
+        std::fs::remove_file(ttd.path().join("some.toml")).unwrap();
+
+        root.template_file("some.toml")
+            .unwrap()
+            .recreate_if_missing()
+            .persist("builtin")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(ttd.path().join("some.toml")).unwrap(),
+            "builtin"
+        );
+    }
+
+    /// A file which cannot be read must not be overwritten:
+    /// its content is unknown, so it might be a customized version.
+    #[tokio::test]
+    async fn template_persistence_never_overwrites_an_unreadable_active_file() {
+        if Uid::effective().is_root() {
+            // root reads the file whatever its permissions are
+            return;
+        }
+
+        let ttd = TempTedgeDir::new();
+        let root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
+
+        std::fs::write(ttd.path().join("some.toml"), "customized").unwrap();
+        std::fs::set_permissions(
+            ttd.path().join("some.toml"),
+            std::fs::Permissions::from_mode(0o000),
+        )
+        .unwrap();
+
+        root.template_file("some.toml")
+            .unwrap()
+            .recreate_if_missing()
+            .persist("builtin")
+            .await
+            .unwrap();
+
+        // Only the template has been updated
+        assert_eq!(
+            std::fs::read_to_string(ttd.path().join("some.toml.template")).unwrap(),
+            "builtin"
+        );
+        std::fs::set_permissions(
+            ttd.path().join("some.toml"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(ttd.path().join("some.toml")).unwrap(),
+            "customized"
+        );
+    }
+
+    #[tokio::test]
+    async fn template_persistence_never_restores_a_disabled_active_file() {
+        let ttd = TempTedgeDir::new();
+        let root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
+        ttd.file("some.toml.disabled");
+
+        root.template_file("some.toml")
+            .unwrap()
+            .recreate_if_missing()
+            .persist("original")
+            .await
+            .unwrap();
+
+        assert!(!ttd.path().join("some.toml").exists());
+    }
+
+    #[tokio::test]
+    async fn template_persistence_preserves_an_overridden_file_when_restorable() {
+        let ttd = TempTedgeDir::new();
+        let root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
+
+        root.template_file("some.toml")
+            .unwrap()
+            .recreate_if_missing()
+            .persist("original")
+            .await
+            .unwrap();
+        std::fs::write(ttd.path().join("some.toml"), "customized").unwrap();
+
+        root.template_file("some.toml")
+            .unwrap()
+            .recreate_if_missing()
+            .persist("updated")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(ttd.path().join("some.toml")).unwrap(),
+            "customized"
+        );
+        assert_eq!(
+            std::fs::read_to_string(ttd.path().join("some.toml.template")).unwrap(),
+            "updated"
+        );
     }
 
     #[test]

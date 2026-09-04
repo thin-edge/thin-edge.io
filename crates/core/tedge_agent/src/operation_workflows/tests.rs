@@ -49,6 +49,7 @@ use tedge_api::workflow::OperationStep;
 use tedge_api::workflow::OperationStepHandler;
 use tedge_api::workflow::OperationStepRequest;
 use tedge_api::workflow::OperationStepResponse;
+use tedge_api::workflow::OperationWorkflow;
 use tedge_api::workflow::SyncOnCommand;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
@@ -1381,6 +1382,47 @@ impl MessageSink<RequestEnvelope<OperationStepRequest, OperationStepResponse>>
     ) -> DynSender<RequestEnvelope<OperationStepRequest, OperationStepResponse>> {
         self.0.get_sender()
     }
+}
+
+#[test]
+fn builtin_workflows_are_valid_operation_workflows() {
+    for (name, definition) in [
+        (
+            "device_profile.toml",
+            include_str!("../resources/device_profile.toml"),
+        ),
+        (
+            "shell_execute.toml",
+            include_str!("../resources/shell_execute.toml"),
+        ),
+    ] {
+        toml::from_str::<OperationWorkflow>(definition)
+            .unwrap_or_else(|err| panic!("{name} is not a valid workflow definition: {err}"));
+    }
+}
+
+/// The workflow TOML is deserialized leniently: an unknown or misplaced handler key,
+/// e.g. `on_timeout` which is only honoured when awaiting a sub-operation, is silently
+/// ignored. Check the handlers of the `run` state are the ones actually taken into account.
+#[test]
+fn the_shell_execute_run_step_handlers_are_taken_into_account() {
+    let workflow: OperationWorkflow =
+        toml::from_str(include_str!("../resources/shell_execute.toml")).unwrap();
+
+    let run_state = workflow
+        .states
+        .get("run")
+        .expect("the shell_execute workflow to have a `run` state");
+    let handlers = format!("{run_state:?}");
+
+    assert!(
+        handlers.contains("Command timed out"),
+        "the timeout reason is not used by any handler of the `run` state: {handlers}"
+    );
+    assert!(
+        handlers.contains("3600"),
+        "the `run` state has no timeout: {handlers}"
+    );
 }
 
 // A fake actor that listens for sync signals emitted on the completion of `config_update`
