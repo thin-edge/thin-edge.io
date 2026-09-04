@@ -701,7 +701,7 @@ define_tedge_config! {
 
         /// Set of MQTT topics the Cumulocity mapper should subscribe to
         #[tedge_config(example = "te/+/+/+/+/a/+,te/+/+/+/+/m/+,te/+/+/+/+/m/+/meta,te/+/+/+/+/e/+")]
-        #[tedge_config(default(value = "te/+/+/+/+,te/+/+/+/+/twin/+,te/+/+/+/+/m/+,te/+/+/+/+/m/+/meta,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health"))]
+        #[tedge_config(default(function = "default_cloud_mapper_topics"))]
         #[tedge_config(exposable)]
         topics: TemplatesSet,
 
@@ -967,7 +967,7 @@ define_tedge_config! {
 
         /// Set of MQTT topics the Azure IoT mapper should subscribe to
         #[tedge_config(example = "te/+/+/+/+/a/+,te/+/+/+/+/m/+,te/+/+/+/+/e/+")]
-        #[tedge_config(default(value = "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health"))]
+        #[tedge_config(default(function = "default_cloud_mapper_topics"))]
         #[tedge_config(exposable)]
         topics: TemplatesSet,
     },
@@ -1073,7 +1073,7 @@ define_tedge_config! {
 
         /// Set of MQTT topics the AWS IoT mapper should subscribe to
         #[tedge_config(example = "te/+/+/+/+/a/+,te/+/+/+/+/m/+,te/+/+/+/+/e/+")]
-        #[tedge_config(default(value = "te/+/+/+/+/m/+,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health"))]
+        #[tedge_config(default(function = "default_cloud_mapper_topics"))]
         #[tedge_config(exposable)]
         topics: TemplatesSet,
     },
@@ -1616,6 +1616,12 @@ fn aws_mqtt_payload_limit() -> MqttPayloadLimit {
     AWS_MQTT_PAYLOAD_LIMIT.try_into().unwrap()
 }
 
+fn default_cloud_mapper_topics() -> TemplatesSet {
+    TemplatesSet::from(
+        "te/+/+/+/+,te/+/+/+/+/twin/+,te/+/+/+/+/m/+,te/+/+/+/+/m/+/meta,te/+/+/+/+/e/+,te/+/+/+/+/a/+,te/+/+/+/+/status/health",
+    )
+}
+
 fn default_http_bind_address(dto: &TEdgeConfigDto) -> IpAddr {
     let external_address = dto.mqtt.external.bind.address;
     external_address
@@ -1907,6 +1913,23 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
     use super::*;
+
+    #[test]
+    fn default_aws_and_az_topics_match_c8y() {
+        let config = TEdgeConfig::load_toml_str("");
+        let expected = [
+            "te/+/+/+/+",
+            "te/+/+/+/+/twin/+",
+            "te/+/+/+/+/m/+",
+            "te/+/+/+/+/m/+/meta",
+            "te/+/+/+/+/e/+",
+            "te/+/+/+/+/a/+",
+            "te/+/+/+/+/status/health",
+        ];
+        assert_eq!(config.c8y_reader(None).unwrap().topics, expected);
+        assert_eq!(config.az_reader(None).unwrap().topics, expected);
+        assert_eq!(config.aws_reader(None).unwrap().topics, expected);
+    }
 
     #[test_case::test_case("device.id")]
     #[test_case::test_case("device.type")]
