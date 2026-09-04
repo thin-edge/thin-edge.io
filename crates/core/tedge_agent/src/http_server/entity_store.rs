@@ -2019,8 +2019,7 @@ mod tests {
 
     fn setup() -> TestHandle {
         let ttd: TempTedgeDir = TempTedgeDir::new();
-        let data_dir: DataDir =
-            TedgePaths::from_root_with_defaults(ttd.utf8_path_buf(), "", "").into();
+        let data_dir: DataDir = TedgePaths::from_root_with_defaults(ttd.path_buf(), "", "").into();
         let file_transfer_dir = data_dir.file_transfer_dir();
 
         let mut entity_store_box = ServerMessageBoxBuilder::new("EntityStoreBox", 16);

@@ -3118,12 +3118,12 @@ pub(crate) mod tests {
         let mut topics =
             C8yMapperConfig::default_internal_topic_filter(&"c8y".try_into().unwrap()).unwrap();
         let custom_operation_topics =
-            C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.utf8_path(), &bridge_config)
+            C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.path(), &bridge_config)
                 .unwrap();
         topics.add_all(custom_operation_topics);
         topics.remove_overlapping_patterns();
 
-        let root_dir = TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "");
+        let root_dir = TedgePaths::from_root_with_defaults(tmp_dir.path(), "", "");
 
         C8yMapperConfig::new(
             root_dir.clone().into(),

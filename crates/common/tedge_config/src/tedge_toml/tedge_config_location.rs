@@ -918,7 +918,7 @@ type = "a-service-type""#;
         )
         .unwrap();
         let _env_lock = EnvSandbox::new().await;
-        let toml_path = dir.utf8_path().join("tedge.toml");
+        let toml_path = dir.path().join("tedge.toml");
         let (_config, warnings) = t
             .load_dto_with_warnings::<FileAndEnvironment>()
             .await
@@ -935,7 +935,7 @@ type = "a-service-type""#;
     async fn specifies_file_name_and_variable_path_in_relevant_warnings_before_migrations() {
         let (dir, t) = create_temp_tedge_config("c8y.smartrest.unknown = \"test.c8y.io\"").unwrap();
         let _env_lock = EnvSandbox::new().await;
-        let toml_path = dir.utf8_path().join("tedge.toml");
+        let toml_path = dir.path().join("tedge.toml");
         let (_config, warnings) = t
             .load_dto_with_warnings::<FileAndEnvironment>()
             .await

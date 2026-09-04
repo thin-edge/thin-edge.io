@@ -205,7 +205,7 @@ mod tests {
     async fn bridge_rules_load_from_toml_with_correct_topics() {
         let ttd = create_test_dir("aws.url = \"test.test.io\"").await;
         let (certificate, key) = make_self_signed_cert("test-device-id");
-        let mapper_dir: camino::Utf8PathBuf = ttd.path().join("mappers/aws").try_into().unwrap();
+        let mapper_dir = ttd.path().join("mappers/aws");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(mapper_dir.join("cert.pem"), certificate.pem())
             .await
@@ -253,7 +253,7 @@ mod tests {
             create_test_dir("aws.url = \"test.test.io\"\naws.bridge.topic_prefix = \"custom-aws\"")
                 .await;
         let (certificate, key) = make_self_signed_cert("test-device-id");
-        let mapper_dir: camino::Utf8PathBuf = ttd.path().join("mappers/aws").try_into().unwrap();
+        let mapper_dir = ttd.path().join("mappers/aws");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(mapper_dir.join("cert.pem"), certificate.pem())
             .await

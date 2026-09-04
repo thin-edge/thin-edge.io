@@ -411,8 +411,8 @@ mod tests {
         async fn initializes_directories() {
             let ttd = TempTedgeDir::new();
             let tedge_dir = ttd.dir("tedge");
-            let logs_dir = tedge_dir.utf8_path().join("logs");
-            let data_dir = tedge_dir.utf8_path().join("data");
+            let logs_dir = tedge_dir.path().join("logs");
+            let data_dir = tedge_dir.path().join("data");
             tedge_dir.file("tedge.toml").with_raw_content(&format!(
                 "logs.path = \"{logs_dir}\"\ndata.path = \"{data_dir}\"\n",
             ));

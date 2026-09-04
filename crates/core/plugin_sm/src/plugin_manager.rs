@@ -291,14 +291,14 @@ mod tests {
     #[tokio::test]
     async fn test_no_sm_plugin_dir() {
         let config_dir = TempTedgeDir::new();
-        let mut plugin_dir_path = config_dir.utf8_path_buf();
+        let mut plugin_dir_path = config_dir.path_buf();
         plugin_dir_path.push("sm-plugins");
 
         let actual = ExternalPlugins::open(
             plugin_dir_path,
             None,
             SudoCommandBuilder::enabled(false),
-            config_dir.utf8_path_buf(),
+            config_dir.path_buf(),
         )
         .await;
         assert!(actual.is_ok());

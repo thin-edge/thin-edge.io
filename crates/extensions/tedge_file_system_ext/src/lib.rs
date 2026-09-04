@@ -185,12 +185,12 @@ mod tests {
         let temp = TempTedgeDir::new();
         let ttd = temp.dir("watched-dir");
         let ttd_link = temp.link_dir(&ttd, "watched-symlink");
-        let ttd_full = ttd.to_path_buf().canonicalize().unwrap().to_path_buf();
+        let ttd_full = ttd.path().canonicalize().unwrap();
         let mut fs_actor_builder = FsWatchActorBuilder::new();
         let client_builder: SimpleMessageBoxBuilder<FsWatchEvent, NoMessage> =
             SimpleMessageBoxBuilder::new("FS Client", 5);
 
-        fs_actor_builder.connect_sink(ttd_link.to_path_buf(), &client_builder);
+        fs_actor_builder.connect_sink(ttd_link.std_path().to_path_buf(), &client_builder);
 
         let actor = fs_actor_builder.build();
         let client_box = client_builder.build();

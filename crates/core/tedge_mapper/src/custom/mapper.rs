@@ -466,7 +466,7 @@ mod tests {
         #[tokio::test]
         async fn errors_when_directory_missing() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
             let mapper_dir = config_dir.join("mappers/nonexistent");
 
             let err = validate_and_load(&mapper_dir, config_dir)
@@ -483,7 +483,7 @@ mod tests {
         #[tokio::test]
         async fn error_lists_available_mappers() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
 
             for name in ["thingsboard", "mycloud"] {
                 let dir = config_dir.join(format!("mappers/{name}"));
@@ -506,7 +506,7 @@ mod tests {
         #[tokio::test]
         async fn error_lists_flows_only_mappers_without_mapper_toml() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
             // A flows-only mapper: just a directory, no mapper.toml
             tokio::fs::create_dir_all(config_dir.join("mappers/myflows"))
                 .await
@@ -527,7 +527,7 @@ mod tests {
         #[tokio::test]
         async fn error_when_no_mappers_exist() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
             tokio::fs::create_dir_all(config_dir.join("mappers"))
                 .await
                 .unwrap();
@@ -547,7 +547,7 @@ mod tests {
         #[tokio::test]
         async fn starts_in_flows_only_mode_even_if_flows_directory_does_not_exist() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
             let mapper_dir = config_dir.join("mappers/testmapper");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(mapper_dir.join("mapper.toml"), "url = \"host:8883\"\n")
@@ -565,7 +565,7 @@ mod tests {
         #[tokio::test]
         async fn flows_only_when_no_bridge_dir() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
             let mapper_dir = config_dir.join("mappers/myflows");
             tokio::fs::create_dir_all(mapper_dir.join("flows"))
                 .await
@@ -582,7 +582,7 @@ mod tests {
         #[tokio::test]
         async fn errors_when_bridge_without_mapper_toml() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
             let mapper_dir = config_dir.join("mappers/testmapper");
             tokio::fs::create_dir_all(mapper_dir.join("bridge"))
                 .await
@@ -602,7 +602,7 @@ mod tests {
         #[tokio::test]
         async fn with_bridge_only_when_no_flows_dir() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
             let mapper_dir = config_dir.join("mappers/testmapper");
             tokio::fs::create_dir_all(mapper_dir.join("bridge"))
                 .await
@@ -625,7 +625,7 @@ mod tests {
         #[tokio::test]
         async fn with_bridge_and_flows_when_both_present() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
             let mapper_dir = config_dir.join("mappers/testmapper");
             tokio::fs::create_dir_all(mapper_dir.join("bridge"))
                 .await
@@ -651,7 +651,7 @@ mod tests {
         #[tokio::test]
         async fn errors_when_bridge_mapper_toml_is_malformed() {
             let ttd = TempTedgeDir::new();
-            let config_dir = ttd.utf8_path();
+            let config_dir = ttd.path();
             let mapper_dir = config_dir.join("mappers/testmapper");
             tokio::fs::create_dir_all(mapper_dir.join("bridge"))
                 .await
@@ -680,7 +680,7 @@ mod tests {
         #[tokio::test]
         async fn creates_flows_directory_if_absent() {
             let ttd = TempTedgeDir::new();
-            let config_root = TedgePaths::from_root_with_defaults(ttd.utf8_path(), "", "");
+            let config_root = TedgePaths::from_root_with_defaults(ttd.path(), "", "");
             let mapper_dir = config_root.dir("mappers/testmapper").unwrap();
             tokio::fs::create_dir_all(&mapper_dir.path()).await.unwrap();
             let tedge_config = TEdgeConfig::load_toml_str("");
@@ -740,7 +740,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn missing_url_returns_error_with_file_path_hint() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+            let mapper_dir = ttd.path().join("mappers/testmapper");
             let tedge_config = TEdgeConfig::load_toml_str("");
             let config = make_config(None);
             let effective = resolve(&config, &tedge_config).await;
@@ -759,8 +759,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn auto_without_credentials_resolves_to_certificate() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let mapper_dir = ttd.path().join("mappers/testmapper");
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -776,8 +776,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn explicit_certificate_method_resolves_to_certificate() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let mapper_dir = ttd.path().join("mappers/testmapper");
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -794,7 +794,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn password_method_without_credentials_path_errors() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+            let mapper_dir = ttd.path().join("mappers/testmapper");
             let tedge_config = TEdgeConfig::load_toml_str("");
             let mut config = make_config(Some("mqtt.example.com:1883"));
             config.auth_method = AuthMethodConfig::Password;
@@ -813,8 +813,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn auto_with_credentials_path_resolves_to_password() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-            let creds_path = ttd.utf8_path().join("creds.toml");
+            let mapper_dir = ttd.path().join("mappers/testmapper");
+            let creds_path = ttd.path().join("creds.toml");
             tokio::fs::write(
                 &creds_path,
                 "[credentials]\nusername = \"alice\"\npassword = \"secret\"\n",
@@ -835,8 +835,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn explicit_password_method_with_credentials_path_resolves_to_password() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-            let creds_path = ttd.utf8_path().join("creds.toml");
+            let mapper_dir = ttd.path().join("mappers/testmapper");
+            let creds_path = ttd.path().join("creds.toml");
             tokio::fs::write(
                 &creds_path,
                 "[credentials]\nusername = \"bob\"\npassword = \"pass\"\n",
@@ -858,12 +858,12 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn mapper_toml_cert_takes_precedence_over_tedge_config() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
             let tedge_config = TEdgeConfig::load_toml_str(
                 "device.cert_path = \"/nonexistent/tedge-cert.pem\"\n\
                  device.key_path = \"/nonexistent/tedge-key.pem\"\n",
             );
-            let (mapper_cert, mapper_key) = write_cert(ttd.utf8_path()).await;
+            let (mapper_cert, mapper_key) = write_cert(ttd.path()).await;
             let mut config = make_config(Some("mqtt.example.com:8883"));
             config.device = Some(DeviceConfig {
                 id: None,
@@ -881,8 +881,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn absent_mapper_cert_falls_back_to_tedge_config() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -897,8 +897,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn cert_cn_used_as_mqtt_client_id() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -915,8 +915,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn password_auth_uses_device_id_as_client_id() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
-            let creds_path = ttd.utf8_path().join("creds.toml");
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
+            let creds_path = ttd.path().join("creds.toml");
             write_creds(&creds_path).await;
             let tedge_config = TEdgeConfig::load_toml_str("");
             let mut config = make_config(Some("mqtt.example.com:1883"));
@@ -939,8 +939,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn password_auth_without_device_id_returns_error() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
-            let creds_path = ttd.utf8_path().join("creds.toml");
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
+            let creds_path = ttd.path().join("creds.toml");
             write_creds(&creds_path).await;
             let tedge_config = TEdgeConfig::load_toml_str("");
             let mut config = make_config(Some("mqtt.example.com:1883"));
@@ -960,8 +960,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn cert_auth_without_device_id_returns_error() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
-            let (cert, key) = write_cert_no_cn(ttd.utf8_path()).await;
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
+            let (cert, key) = write_cert_no_cn(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -1028,8 +1028,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             #[tokio::test]
             async fn tls_off_with_password_auth_connects_without_tls() {
                 let ttd = TempTedgeDir::new();
-                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-                let creds_path = ttd.utf8_path().join("creds.toml");
+                let mapper_dir = ttd.path().join("mappers/testmapper");
+                let creds_path = ttd.path().join("creds.toml");
                 write_creds(&creds_path).await;
                 let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
                 let mut config = make_config(Some("mqtt.example.com:1883"));
@@ -1054,8 +1054,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             #[tokio::test]
             async fn tls_on_with_cert_auth_connects_with_tls() {
                 let ttd = TempTedgeDir::new();
-                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let mapper_dir = ttd.path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.path()).await;
                 let tedge_config = TEdgeConfig::load_toml_str(&format!(
                     "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
                 ));
@@ -1080,8 +1080,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             #[tokio::test]
             async fn auto_port_8883_infers_tls_on() {
                 let ttd = TempTedgeDir::new();
-                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let mapper_dir = ttd.path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.path()).await;
                 let tedge_config = TEdgeConfig::load_toml_str(&format!(
                     "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
                 ));
@@ -1106,8 +1106,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             #[tokio::test]
             async fn auto_port_1883_infers_tls_off() {
                 let ttd = TempTedgeDir::new();
-                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-                let creds_path = ttd.utf8_path().join("creds.toml");
+                let mapper_dir = ttd.path().join("mappers/testmapper");
+                let creds_path = ttd.path().join("creds.toml");
                 write_creds(&creds_path).await;
                 let tedge_config = TEdgeConfig::load_toml_str("device.id = \"test-device\"");
                 let mut config = make_config(Some("mqtt.example.com:1883"));
@@ -1132,8 +1132,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             #[tokio::test]
             async fn other_port_defaults_to_tls_on() {
                 let ttd = TempTedgeDir::new();
-                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let mapper_dir = ttd.path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.path()).await;
                 let tedge_config = TEdgeConfig::load_toml_str(&format!(
                     "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
                 ));
@@ -1158,8 +1158,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             #[tokio::test]
             async fn tls_off_with_cert_auth_fails() {
                 let ttd = TempTedgeDir::new();
-                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let mapper_dir = ttd.path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.path()).await;
                 let tedge_config = TEdgeConfig::load_toml_str(&format!(
                     "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
                 ));
@@ -1181,8 +1181,8 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             #[tokio::test]
             async fn auto_tls_inferred_off_with_cert_auth_fails() {
                 let ttd = TempTedgeDir::new();
-                let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
-                let (cert, key) = write_cert(ttd.utf8_path()).await;
+                let mapper_dir = ttd.path().join("mappers/testmapper");
+                let (cert, key) = write_cert(ttd.path()).await;
                 let tedge_config = TEdgeConfig::load_toml_str(&format!(
                     "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
                 ));

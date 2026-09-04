@@ -309,7 +309,7 @@ mod tests {
     #[tokio::test]
     async fn cloud_type_parses_known_values() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         for (toml_val, expected) in [
@@ -331,7 +331,7 @@ mod tests {
     #[tokio::test]
     async fn cloud_type_rejects_unknown_value() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(
             mapper_dir.join("mapper.toml"),
@@ -350,7 +350,7 @@ mod tests {
     #[tokio::test]
     async fn cloud_type_absent_gives_none() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         tokio::fs::write(
             mapper_dir.join("mapper.toml"),
@@ -366,7 +366,7 @@ mod tests {
     #[tokio::test]
     async fn returns_none_when_file_not_found() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/testmapper");
+        let mapper_dir = ttd.path().join("mappers/testmapper");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         let result = load_mapper_config(&mapper_dir).await.unwrap();
@@ -376,7 +376,7 @@ mod tests {
     #[tokio::test]
     async fn parses_valid_toml() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+        let mapper_dir = ttd.path().join("mappers/thingsboard");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
@@ -414,7 +414,7 @@ topic_prefix = "tb"
     #[tokio::test]
     async fn returns_error_with_path_for_invalid_toml() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/broken");
+        let mapper_dir = ttd.path().join("mappers/broken");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(mapper_dir.join("mapper.toml"), "this is not = valid [ toml")
@@ -432,7 +432,7 @@ topic_prefix = "tb"
     #[tokio::test]
     async fn default_port_is_8883_when_not_specified() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/noport");
+        let mapper_dir = ttd.path().join("mappers/noport");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
@@ -451,7 +451,7 @@ url = "mqtt.example.com"
     #[tokio::test]
     async fn parses_full_schema() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/full");
+        let mapper_dir = ttd.path().join("mappers/full");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
@@ -490,7 +490,7 @@ keepalive_interval = "60s"
     #[tokio::test]
     async fn parses_configured_max_payload_size() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/limited");
+        let mapper_dir = ttd.path().join("mappers/limited");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
@@ -507,7 +507,7 @@ keepalive_interval = "60s"
     #[tokio::test]
     async fn max_payload_size_defaults_to_mqtt_maximum() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/unlimited");
+        let mapper_dir = ttd.path().join("mappers/unlimited");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
@@ -528,7 +528,7 @@ keepalive_interval = "60s"
     #[tokio::test]
     async fn parses_password_auth_method() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/pw");
+        let mapper_dir = ttd.path().join("mappers/pw");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
 
         tokio::fs::write(
@@ -548,7 +548,7 @@ credentials_path = "/etc/tedge/mappers/pw/creds.toml"
     #[tokio::test]
     async fn reads_credentials_from_toml_file() {
         let ttd = TempTedgeDir::new();
-        let creds_path = ttd.utf8_path().join("credentials.toml");
+        let creds_path = ttd.path().join("credentials.toml");
         tokio::fs::write(
             &creds_path,
             "[credentials]\nusername = \"alice\"\npassword = \"s3cr3t\"\n",
@@ -564,7 +564,7 @@ credentials_path = "/etc/tedge/mappers/pw/creds.toml"
     #[tokio::test]
     async fn credentials_error_on_missing_file() {
         let ttd = TempTedgeDir::new();
-        let creds_path = ttd.utf8_path().join("missing.toml");
+        let creds_path = ttd.path().join("missing.toml");
         let err = read_mapper_credentials(&creds_path).await.unwrap_err();
         assert!(
             format!("{err}").contains("credentials"),
@@ -611,7 +611,7 @@ credentials_path = "/etc/tedge/mappers/pw/creds.toml"
         #[tokio::test]
         async fn relative_cert_path_is_resolved_to_mapper_dir() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
                 mapper_dir.join("mapper.toml"),
@@ -637,7 +637,7 @@ credentials_path = "/etc/tedge/mappers/pw/creds.toml"
         #[tokio::test]
         async fn absolute_cert_path_is_unchanged() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
                 mapper_dir.join("mapper.toml"),
@@ -658,7 +658,7 @@ credentials_path = "/etc/tedge/mappers/pw/creds.toml"
         #[tokio::test]
         async fn nested_relative_path_resolves_correctly() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
                 mapper_dir.join("mapper.toml"),
@@ -678,7 +678,7 @@ credentials_path = "/etc/tedge/mappers/pw/creds.toml"
         #[tokio::test]
         async fn dot_dot_in_relative_path_is_normalized() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
                 mapper_dir.join("mapper.toml"),
@@ -691,7 +691,7 @@ credentials_path = "/etc/tedge/mappers/pw/creds.toml"
             let device = config.device.unwrap();
             assert_eq!(
                 device.cert_path.unwrap(),
-                ttd.utf8_path().join("certs/device.pem"),
+                ttd.path().join("certs/device.pem"),
                 "../../ should be resolved and normalized away"
             );
         }
@@ -699,7 +699,7 @@ credentials_path = "/etc/tedge/mappers/pw/creds.toml"
         #[tokio::test]
         async fn relative_credentials_path_is_resolved() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/thingsboard");
+            let mapper_dir = ttd.path().join("mappers/thingsboard");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
                 mapper_dir.join("mapper.toml"),

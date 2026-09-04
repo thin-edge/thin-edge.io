@@ -2138,7 +2138,7 @@ mod tests {
             format!("{error:#}"),
             format!(
                 "failed to read {}/mappers: Permission denied (os error 13)",
-                ttd.path().display()
+                ttd.path()
             )
         );
     }

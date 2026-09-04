@@ -468,8 +468,6 @@ mod tests {
     }
 
     mod template_rules {
-        use camino::Utf8PathBuf;
-
         use super::*;
 
         fn has_local_subscription(config: &BridgeConfig, topic: &str) -> bool {
@@ -665,7 +663,7 @@ mqtt_service.topics = ["custom/topic"]
         async fn mapper_namespace_can_read_lazy_values() {
             let (ttd, _config) = load_config("").await;
             // Create a mapper.toml with a value ${mapper.*} can reference
-            let mapper_dir: Utf8PathBuf = ttd.path().join("mappers/c8y").try_into().unwrap();
+            let mapper_dir = ttd.path().join("mappers/c8y");
             let certificate = rcgen::generate_simple_self_signed(vec!["my-device".into()]).unwrap();
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(mapper_dir.join("cert.pem"), certificate.cert.pem())

@@ -196,7 +196,7 @@ mod tests {
     async fn file_is_uploaded_to_provided_data_dir() {
         let path = "some/dir/file";
         let (ttd, mut app) = app();
-        let expected_output_file = ttd.utf8_path().join("file-transfer").join(path);
+        let expected_output_file = ttd.path().join("file-transfer").join(path);
 
         upload_file(&mut app, path, "some content").await;
 
@@ -249,7 +249,7 @@ mod tests {
         dir_path.push("test-dir");
         assert!(err_is_is_a_directory(
             &std::fs::read_to_string(&dir_path).unwrap_err(),
-            Utf8Path::from_path(dir_path.as_path()).unwrap()
+            &dir_path
         ))
     }
 
@@ -264,7 +264,7 @@ mod tests {
 
         assert!(!err_is_is_a_directory(
             &std::fs::read_to_string(&unknown_path).unwrap_err(),
-            Utf8Path::from_path(unknown_path.as_path()).unwrap()
+            &unknown_path
         ))
     }
 
@@ -406,8 +406,7 @@ mod tests {
 
     fn app() -> (TempTedgeDir, Router) {
         let ttd = TempTedgeDir::new();
-        let data_dir: DataDir =
-            TedgePaths::from_root_with_defaults(ttd.utf8_path_buf(), "", "").into();
+        let data_dir: DataDir = TedgePaths::from_root_with_defaults(ttd.path_buf(), "", "").into();
         let file_transfer_dir = data_dir.file_transfer_dir();
         let router = file_transfer_router(file_transfer_dir, data_dir);
         (ttd, router)

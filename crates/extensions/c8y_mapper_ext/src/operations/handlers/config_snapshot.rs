@@ -696,7 +696,7 @@ mod tests {
         // Uploader gets the upload request for the log path
         let request = ul.recv().await.expect("timeout");
         assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
-        assert_eq!(request.1.file_path, test_log.utf8_path());
+        assert_eq!(request.1.file_path, test_log.path());
 
         // Simulate Uploader returns a result
         ul.send((
@@ -751,7 +751,7 @@ mod tests {
         // Uploader gets the upload request for the log path
         let request = ul.recv().await.expect("timeout");
         assert_eq!(request.0, "c8y-mapper-1234"); // Command ID
-        assert_eq!(request.1.file_path, test_log.utf8_path());
+        assert_eq!(request.1.file_path, test_log.path());
 
         // Simulate Uploader returns a result
         ul.send((

@@ -314,9 +314,9 @@ type = "service"
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
-        let service_manager = GeneralServiceManager::try_new(ttd.utf8_path()).unwrap();
+        let service_manager = GeneralServiceManager::try_new(ttd.path()).unwrap();
         let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, service_manager);
         let types = plugin.list().unwrap();
 
@@ -330,9 +330,9 @@ type = "service"
     fn test_list_returns_default_type_for_empty_file() {
         let ttd = TempTedgeDir::new();
         let config_file = ttd.file("plugin_config.toml").with_raw_content("");
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
-        let service_manager = GeneralServiceManager::try_new(ttd.utf8_path()).unwrap();
+        let service_manager = GeneralServiceManager::try_new(ttd.path()).unwrap();
         let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, service_manager);
         let types = plugin.list().unwrap();
 
@@ -343,9 +343,9 @@ type = "service"
     #[test]
     fn test_list_returns_default_type_for_non_existent_file() {
         let ttd = TempTedgeDir::new();
-        let config = PluginConfig::new(&ttd.utf8_path().join("no_file.toml"));
+        let config = PluginConfig::new(&ttd.path().join("no_file.toml"));
 
-        let service_manager = GeneralServiceManager::try_new(ttd.utf8_path()).unwrap();
+        let service_manager = GeneralServiceManager::try_new(ttd.path()).unwrap();
         let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, service_manager);
         let types = plugin.list().unwrap();
 
@@ -364,9 +364,9 @@ type = "app.conf"
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
-        let service_manager = GeneralServiceManager::try_new(ttd.utf8_path()).unwrap();
+        let service_manager = GeneralServiceManager::try_new(ttd.path()).unwrap();
         let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, service_manager);
         let result = plugin.get("unknown`");
 
@@ -384,14 +384,14 @@ type = "app.conf"
 path = "{}"
 type = "missing.conf"
 "#,
-            non_existent_path.to_str().unwrap()
+            non_existent_path.as_str()
         );
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(&toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
-        let service_manager = GeneralServiceManager::try_new(ttd.utf8_path()).unwrap();
+        let service_manager = GeneralServiceManager::try_new(ttd.path()).unwrap();
         let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, service_manager);
         let result = plugin.get("missing.conf");
 
@@ -411,13 +411,11 @@ type = "app.conf"
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
-        let service_manager = GeneralServiceManager::try_new(ttd.utf8_path()).unwrap();
+        let service_manager = GeneralServiceManager::try_new(ttd.path()).unwrap();
         let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, service_manager);
-        let result = plugin
-            .set("unknown.conf", source_file.path().try_into().unwrap())
-            .await;
+        let result = plugin.set("unknown.conf", source_file.path()).await;
 
         assert!(matches!(result, Err(PluginError::InvalidConfigType(_))));
     }
@@ -440,18 +438,16 @@ type = "app.conf"
 path = "{}"
 type = "test.conf"
 "#,
-            dest_file_path.to_str().unwrap()
+            dest_file_path.as_str()
         );
         let config_file = ttd
             .file("plugin_config.toml")
             .with_raw_content(&toml_content);
-        let config = PluginConfig::new(config_file.utf8_path());
+        let config = PluginConfig::new(config_file.path());
 
-        let service_manager = GeneralServiceManager::try_new(ttd.utf8_path()).unwrap();
+        let service_manager = GeneralServiceManager::try_new(ttd.path()).unwrap();
         let plugin = FileConfigPlugin::new(config, TedgeWriteStatus::Disabled, service_manager);
-        let result = plugin
-            .set("test.conf", source_file.path().try_into().unwrap())
-            .await;
+        let result = plugin.set("test.conf", source_file.path()).await;
 
         assert!(result.is_ok());
 

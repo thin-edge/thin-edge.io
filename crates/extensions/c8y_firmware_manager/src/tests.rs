@@ -635,9 +635,9 @@ async fn spawn_firmware_manager(
         device_id.to_string(),
         tedge_host,
         TEDGE_HTTP_PORT,
-        tmp_dir.utf8_path_buf(),
+        tmp_dir.path_buf(),
         DataDir::from(TedgePaths::from_root_with_defaults(
-            tmp_dir.utf8_path_buf(),
+            tmp_dir.path_buf(),
             "",
             "",
         )),

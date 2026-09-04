@@ -13,12 +13,12 @@ use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::proxy_url::Protocol;
 use c8y_api::smartrest::topic::C8yTopic;
+use camino::Utf8Path;
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::futures::channel::mpsc;
@@ -1175,6 +1175,7 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
         ttd.dir("operations")
             .dir("c8y")
             .file("c8y_TestOp3")
+            .std_path()
             .to_path_buf(),
     ))
     .await
@@ -1259,6 +1260,7 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
             .dir("c8y")
             .dir("test-device:device:child1")
             .file("c8y_ChildTestOp3")
+            .std_path()
             .to_path_buf(),
     ))
     .await
@@ -1356,6 +1358,7 @@ async fn mapper_dynamically_updates_supported_operations_for_nested_child_device
             .dir("c8y")
             .dir("child11")
             .file("c8y_ChildTestOp3")
+            .std_path()
             .to_path_buf(),
     ))
     .await
@@ -3081,7 +3084,7 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
 }
 
 fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &str) {
-    let paths = fs::read_dir(cfg_dir.to_path_buf().join("agent")).unwrap();
+    let paths = fs::read_dir(cfg_dir.path().join("agent")).unwrap();
     for path in paths {
         let mut file =
             File::open(path.unwrap().path()).expect("Unable to open the command exec log file");
@@ -3097,7 +3100,7 @@ fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &st
 
 fn create_custom_op_file(
     ttd: &TempTedgeDir,
-    cmd_file: &Path,
+    cmd_file: &Utf8Path,
     graceful_timeout: Option<i64>,
     forceful_timeout: Option<i64>,
 ) {
@@ -3112,17 +3115,14 @@ fn create_custom_op_file(
     if let Some(timeout) = forceful_timeout {
         custom_content.insert("forceful_timeout".into(), toml::Value::Integer(timeout));
     }
-    custom_content.insert(
-        "command".into(),
-        toml::Value::String(cmd_file.display().to_string()),
-    );
+    custom_content.insert("command".into(), toml::Value::String(cmd_file.to_string()));
 
     let mut map = toml::map::Map::new();
     map.insert("exec".into(), toml::Value::Table(custom_content));
     custom_op_file.with_toml_content(map);
 }
 
-fn create_custom_cmd(custom_cmd: &Path, content: &str) {
+fn create_custom_cmd(custom_cmd: &Utf8Path, content: &str) {
     with_exec_permission(custom_cmd, content);
 }
 
@@ -3227,7 +3227,7 @@ pub(crate) async fn c8y_mapper_builder(
         .connect_source(AvailabilityBuilder::channels(), &mut c8y_mapper_builder);
     c8y_mapper_builder.connect_source(NoConfig, &mut availability_box_builder);
 
-    let mapper_dir = tmp_dir.utf8_path().join("mappers").join("c8y");
+    let mapper_dir = tmp_dir.path().join("mappers").join("c8y");
     let managed_dir = TedgePaths::from_root_with_defaults(&mapper_dir, "", "").root_dir();
     let flows_dir = tedge_flows::managed_flows_dir(&managed_dir);
     flows_dir.ensure().await.unwrap();
@@ -3283,8 +3283,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
     let mut topics =
         C8yMapperConfig::default_internal_topic_filter(&"c8y".try_into().unwrap()).unwrap();
     let custom_operation_topics =
-        C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.utf8_path(), &bridge_config)
-            .unwrap();
+        C8yMapperConfig::get_topics_from_custom_operations(tmp_dir.path(), &bridge_config).unwrap();
     topics.add_all(custom_operation_topics);
     topics.add_unchecked("te/+/+/+/+/cmd/software_update");
     topics.add_unchecked("te/+/+/+/+/cmd/software_update/+");
@@ -3304,7 +3303,7 @@ pub(crate) fn test_mapper_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
 
     topics.remove_overlapping_patterns();
 
-    let root_dir = TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "");
+    let root_dir = TedgePaths::from_root_with_defaults(tmp_dir.path(), "", "");
     let _agent_log_dir = tmp_dir.dir("agent");
 
     C8yMapperConfig::new(

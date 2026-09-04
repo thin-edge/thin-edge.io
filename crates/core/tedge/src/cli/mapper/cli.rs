@@ -417,7 +417,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn empty_mappers_dir_returns_empty() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(&mappers_root).await.unwrap();
 
             assert!(scan_mappers_shallow(&mappers_root).await.is_empty());
@@ -426,7 +426,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn dir_without_mapper_toml_or_flows_is_included() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("mymapper"))
                 .await
                 .unwrap();
@@ -439,7 +439,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn flows_only_mapper_is_included() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let flows_dir = mappers_root.join("thingsboard/flows");
             tokio::fs::create_dir_all(&flows_dir).await.unwrap();
 
@@ -451,7 +451,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn lists_mapper_with_cloud_type_in_table() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let c8y_dir = mappers_root.join("c8y");
             tokio::fs::create_dir_all(&c8y_dir).await.unwrap();
             tokio::fs::write(c8y_dir.join("mapper.toml"), "cloud_type = \"c8y\"\n")
@@ -471,7 +471,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn lists_mapper_without_cloud_type() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let tb_dir = mappers_root.join("thingsboard");
             tokio::fs::create_dir_all(&tb_dir).await.unwrap();
             tokio::fs::write(
@@ -489,7 +489,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn lists_mixed_mappers_sorted() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             for name in ["zz-mapper", "aa-mapper", "mm-mapper"] {
                 tokio::fs::create_dir_all(mappers_root.join(name))
                     .await
@@ -503,7 +503,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn cert_cn_shown_with_tag_in_device_id_column() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             let cert = mapper_dir.join("cert.pem");
@@ -534,10 +534,10 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn tedge_toml_device_id_shown_with_tag() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-            let creds = ttd.utf8_path().join("creds.toml");
+            let creds = ttd.path().join("creds.toml");
             tokio::fs::write(
                 &creds,
                 "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
@@ -566,7 +566,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn unreadable_cert_leaves_device_id_blank() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
@@ -594,7 +594,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn flows_only_mapper_has_blank_url_and_identity() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("thingsboard/flows"))
                 .await
                 .unwrap();
@@ -622,7 +622,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn cloud_type_shown_for_mappers_that_set_it() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             // c8y and production have cloud_type; thingsboard does not
             for (name, content) in [
                 ("c8y", "cloud_type = \"c8y\"\n"),
@@ -693,7 +693,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn url_prints_value_and_source() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
@@ -713,10 +713,10 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn device_id_inferred_from_cert_cn() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.path()).await;
             tokio::fs::write(
                 mapper_dir.join("mapper.toml"),
                 "url = \"mqtt.example.com:8883\"\n",
@@ -740,10 +740,10 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn device_id_falls_back_to_tedge_toml() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-            let creds = ttd.utf8_path().join("creds.toml");
+            let creds = ttd.path().join("creds.toml");
             tokio::fs::write(
                 &creds,
                 "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
@@ -771,7 +771,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn device_id_errors_when_cert_unreadable() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
@@ -800,7 +800,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn relative_cert_path_resolves_to_absolute_with_source() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(mapper_dir.join("cert.pem"), TEST_CERT_PEM)
@@ -839,7 +839,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn url_not_set_errors() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             // mapper.toml exists but has no url
@@ -862,10 +862,10 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn device_id_not_set_with_password_auth_errors() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-            let creds = ttd.utf8_path().join("creds.toml");
+            let creds = ttd.path().join("creds.toml");
             tokio::fs::write(
                 &creds,
                 "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
@@ -895,7 +895,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn missing_mapper_lists_multiple_available() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             for name in ["alpha", "beta", "gamma"] {
                 tokio::fs::create_dir_all(mappers_root.join(name))
                     .await
@@ -921,7 +921,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn missing_mapper_no_mappers_configured() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(&mappers_root).await.unwrap();
 
             let result = run_get(
@@ -942,7 +942,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn missing_mapper_errors_with_available_list() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("existing"))
                 .await
                 .unwrap();
@@ -963,7 +963,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn custom_key_returns_raw_toml_value() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
@@ -988,7 +988,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn mapper_without_toml_errors() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             // No mapper.toml written
@@ -1004,7 +1004,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn schema_key_not_set_errors() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
@@ -1028,7 +1028,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn unknown_key_errors() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             let mapper_dir = mappers_root.join("tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             tokio::fs::write(
@@ -1051,7 +1051,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn aws_config_get_reads_from_tedge_toml() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("aws"))
                 .await
                 .unwrap();
@@ -1069,7 +1069,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn aws_config_get_without_mapper_toml_succeeds() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("aws"))
                 .await
                 .unwrap();
@@ -1086,7 +1086,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn az_config_get_reads_from_tedge_toml() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("az"))
                 .await
                 .unwrap();
@@ -1104,7 +1104,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn az_config_get_without_mapper_toml_succeeds() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("az"))
                 .await
                 .unwrap();
@@ -1122,7 +1122,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn profiled_c8y_config_get_reads_from_tedge_toml() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("c8y.prod"))
                 .await
                 .unwrap();
@@ -1139,7 +1139,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn profiled_c8y_works_when_default_c8y_also_exists() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             // Both c8y and c8y.new exist — this is the realistic scenario.
             tokio::fs::create_dir_all(mappers_root.join("c8y"))
                 .await
@@ -1162,7 +1162,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn profiled_aws_config_get_reads_from_tedge_toml() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("aws.staging"))
                 .await
                 .unwrap();
@@ -1180,7 +1180,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn profiled_az_config_get_reads_from_tedge_toml() {
             let ttd = TempTedgeDir::new();
-            let mappers_root = ttd.utf8_path().join("mappers");
+            let mappers_root = ttd.path().join("mappers");
             tokio::fs::create_dir_all(mappers_root.join("az.staging"))
                 .await
                 .unwrap();

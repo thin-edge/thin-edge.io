@@ -158,11 +158,11 @@ mod tests {
         mappers_dir.dir("local").dir("flows");
         let tarball_path = create_test_tarball(&ttd, "tar.gz");
         let flow_record = FlowRecord::new("local/hello").unwrap();
-        let flow_dir = flow_record.flow_dir(mappers_dir.utf8_path());
+        let flow_dir = flow_record.flow_dir(mappers_dir.path());
 
         install_flow(
-            ttd.utf8_path(),
-            mappers_dir.utf8_path(),
+            ttd.path(),
+            mappers_dir.path(),
             &flow_record,
             None,
             tarball_path.as_str(),
@@ -182,11 +182,11 @@ mod tests {
         mappers_dir.dir("local").dir("flows");
         let tarball_path = create_test_tarball(&ttd, "tar.gz");
         let flow_record = FlowRecord::new("local/hello/world").unwrap();
-        let flow_dir = flow_record.flow_dir(mappers_dir.utf8_path());
+        let flow_dir = flow_record.flow_dir(mappers_dir.path());
 
         install_flow(
-            ttd.utf8_path(),
-            mappers_dir.utf8_path(),
+            ttd.path(),
+            mappers_dir.path(),
             &flow_record,
             None,
             tarball_path.as_str(),
@@ -205,11 +205,11 @@ mod tests {
         let mappers_dir = ttd.dir("mappers");
         mappers_dir.dir("local").dir("flows");
         let flow_record = FlowRecord::new("local/hello").unwrap();
-        let flow_dir = flow_record.flow_dir(mappers_dir.utf8_path());
+        let flow_dir = flow_record.flow_dir(mappers_dir.path());
 
         install_flow(
-            ttd.utf8_path(),
-            mappers_dir.utf8_path(),
+            ttd.path(),
+            mappers_dir.path(),
             &flow_record,
             None,
             create_test_tarball(&ttd, "tar").as_str(),
@@ -227,7 +227,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let mappers_dir = ttd.dir("mappers");
         let flow_record = FlowRecord::new("local/hello").unwrap();
-        let flow_dir = flow_record.flow_dir(mappers_dir.utf8_path());
+        let flow_dir = flow_record.flow_dir(mappers_dir.path());
         let tarball_path = create_test_tarball(&ttd, "tar.gz");
 
         // Pre-existing flow at version 0.1.0
@@ -240,8 +240,8 @@ mod tests {
         assert_eq!(get_flow_version(flow_dir.join("flow.toml")), "0.1.0");
 
         install_flow(
-            ttd.utf8_path(),
-            mappers_dir.utf8_path(),
+            ttd.path(),
+            mappers_dir.path(),
             &flow_record,
             None,
             tarball_path.as_str(),
@@ -259,7 +259,7 @@ mod tests {
         let ttd = TempTedgeDir::new();
         let mappers_dir = ttd.dir("mappers");
         let flow_record = FlowRecord::new("local/hello").unwrap();
-        let flow_dir = flow_record.flow_dir(mappers_dir.utf8_path());
+        let flow_dir = flow_record.flow_dir(mappers_dir.path());
         let tarball_path = create_test_tarball(&ttd, "tar.gz");
 
         // Pre-existing flow with a custom params.toml
@@ -270,8 +270,8 @@ mod tests {
             .with_toml_content(toml::toml! { param1 = "value1" });
 
         install_flow(
-            ttd.utf8_path(),
-            mappers_dir.utf8_path(),
+            ttd.path(),
+            mappers_dir.path(),
             &flow_record,
             None,
             tarball_path.as_str(),
@@ -301,7 +301,7 @@ mod tests {
             .with_toml_content(toml::toml! { version = "1.0.0" });
         work_dir.file("params.toml.template");
 
-        let tarball_path = ttd.utf8_path().join(format!("hello.{format}"));
+        let tarball_path = ttd.path().join(format!("hello.{format}"));
         let tar_file = fs::File::create(&tarball_path).unwrap();
 
         match format {
@@ -322,7 +322,7 @@ mod tests {
     }
 
     fn append_work_dir<W: std::io::Write>(work_dir: &TempTedgeDir, archive: &mut tar::Builder<W>) {
-        for entry in fs::read_dir(work_dir.utf8_path()).unwrap() {
+        for entry in fs::read_dir(work_dir.path()).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
             if path.is_file() {

@@ -225,11 +225,8 @@ mod tests {
         let tmp_dir = TempTedgeDir::new();
         let workflow_log = tmp_dir.file("workflow.log");
         let log_file_path = workflow_log.path();
-        let mut command_log = CommandLog::from_log_path(
-            workflow_log.utf8_path(),
-            "software_update".into(),
-            "123".into(),
-        );
+        let mut command_log =
+            CommandLog::from_log_path(workflow_log.path(), "software_update".into(), "123".into());
 
         // Prepare a command
         let mut command = LoggedCommand::new("echo", "/tmp").unwrap();
@@ -260,11 +257,8 @@ EOF
         let tmp_dir = TempTedgeDir::new();
         let workflow_log = tmp_dir.file("workflow.log");
         let log_file_path = workflow_log.path();
-        let mut command_log = CommandLog::from_log_path(
-            workflow_log.utf8_path(),
-            "software_update".into(),
-            "123".into(),
-        );
+        let mut command_log =
+            CommandLog::from_log_path(workflow_log.path(), "software_update".into(), "123".into());
 
         // Prepare a command that triggers some content on stderr
         let mut command = LoggedCommand::new("ls", "/tmp").unwrap();
@@ -310,11 +304,8 @@ stdout (EMPTY)
         let tmp_dir = TempTedgeDir::new();
         let workflow_log = tmp_dir.file("workflow.log");
         let log_file_path = workflow_log.path();
-        let mut command_log = CommandLog::from_log_path(
-            workflow_log.utf8_path(),
-            "software_update".into(),
-            "123".into(),
-        );
+        let mut command_log =
+            CommandLog::from_log_path(workflow_log.path(), "software_update".into(), "123".into());
 
         // Prepare a command that cannot be executed
         let command = LoggedCommand::new("dummy-command", "/tmp").unwrap();

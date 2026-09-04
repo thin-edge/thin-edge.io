@@ -181,15 +181,15 @@ async fn spawn_software_manager(
     let mut converter_builder: SimpleMessageBoxBuilder<SoftwareCommand, SoftwareCommand> =
         SimpleMessageBoxBuilder::new("Converter", 5);
 
-    let config_root = TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "");
+    let config_root = TedgePaths::from_root_with_defaults(tmp_dir.path(), "", "");
 
     let config = SoftwareManagerConfig {
         device: EntityTopicId::default_main_device(),
-        tmp_dir: TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", ""),
+        tmp_dir: TedgePaths::from_root_with_defaults(tmp_dir.path(), "", ""),
         config_dir: config_root.clone(),
         state_dir: TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
         sm_plugins_dir: config_root.dir("sm-plugins").unwrap(),
-        log_dir: TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", "").root_dir(),
+        log_dir: TedgePaths::from_root_with_defaults(tmp_dir.path(), "", "").root_dir(),
         default_plugin_type: None,
         sudo: SudoCommandBuilder::with_program(SUDO),
     };

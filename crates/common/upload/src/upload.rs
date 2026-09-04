@@ -350,7 +350,7 @@ mod tests {
             .with_raw_content("Hello, world!");
 
         let mut uploader = Uploader::new(
-            ttd.utf8_path().join("file_upload.txt"),
+            ttd.path().join("file_upload.txt"),
             None,
             CloudHttpConfig::test_value(),
         );
@@ -381,7 +381,7 @@ mod tests {
             .with_raw_content("Hello, world!");
 
         let mut uploader = Uploader::new(
-            ttd.utf8_path().join("file_upload.txt"),
+            ttd.path().join("file_upload.txt"),
             None,
             CloudHttpConfig::test_value(),
         );
@@ -413,7 +413,7 @@ mod tests {
             .with_raw_content("Hello, world!");
 
         let mut uploader = Uploader::new(
-            ttd.utf8_path().join("file_upload.txt"),
+            ttd.path().join("file_upload.txt"),
             None,
             CloudHttpConfig::test_value(),
         );
@@ -447,7 +447,7 @@ mod tests {
             .with_raw_content("Hello, world!");
 
         let mut uploader = Uploader::new(
-            ttd.utf8_path().join("file_upload.txt"),
+            ttd.path().join("file_upload.txt"),
             None,
             CloudHttpConfig::test_value(),
         );
@@ -686,7 +686,7 @@ mod tests {
 
         let url = UploadInfo::new(&target_url).set_method(UploadMethod::PUT);
 
-        let mut uploader = Uploader::new(file.utf8_path_buf(), None, CloudHttpConfig::test_value());
+        let mut uploader = Uploader::new(file.path_buf(), None, CloudHttpConfig::test_value());
         // tweaked to exactly 1 retry
         uploader.set_backoff(ExponentialBackoff {
             initial_interval: Duration::from_millis(5),

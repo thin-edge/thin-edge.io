@@ -915,9 +915,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn cert_cn_used_as_device_id() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        let (cert, key) = write_cert(ttd.utf8_path()).await;
+        let (cert, key) = write_cert(ttd.path()).await;
         let tedge_config = TEdgeConfig::load_toml_str(&format!(
             "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
         ));
@@ -935,7 +935,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn max_payload_size_surfaces_through_effective_config() {
         let ttd = TempTedgeDir::new();
-        let (cert, key) = write_cert(ttd.utf8_path()).await;
+        let (cert, key) = write_cert(ttd.path()).await;
         let tedge_config = TEdgeConfig::load_toml_str(&format!(
             "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
         ));
@@ -953,7 +953,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn max_payload_size_defaults_to_mqtt_maximum() {
         let ttd = TempTedgeDir::new();
-        let (cert, key) = write_cert(ttd.utf8_path()).await;
+        let (cert, key) = write_cert(ttd.path()).await;
         let tedge_config = TEdgeConfig::load_toml_str(&format!(
             "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
         ));
@@ -973,9 +973,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn explicit_device_id_overridden_by_cert_cn() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        let (cert, key) = write_cert(ttd.utf8_path()).await;
+        let (cert, key) = write_cert(ttd.path()).await;
         let tedge_config = TEdgeConfig::load_toml_str(&format!(
             "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
         ));
@@ -998,9 +998,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn cert_with_no_cn_falls_back_to_explicit_device_id() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        let (cert, key) = write_cert_no_cn(ttd.utf8_path()).await;
+        let (cert, key) = write_cert_no_cn(ttd.path()).await;
         let tedge_config = TEdgeConfig::load_toml_str(&format!(
             "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
         ));
@@ -1024,7 +1024,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn unreadable_cert_yields_none_device_id() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         let tedge_config = TEdgeConfig::load_toml_str(
             "device.cert_path = \"/nonexistent/cert.pem\"\n\
@@ -1045,9 +1045,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn password_auth_uses_explicit_device_id() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        let creds_path = ttd.utf8_path().join("creds.toml");
+        let creds_path = ttd.path().join("creds.toml");
         tokio::fs::write(
             &creds_path,
             "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
@@ -1076,9 +1076,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn password_auth_falls_back_to_tedge_device_id() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        let creds_path = ttd.utf8_path().join("creds.toml");
+        let creds_path = ttd.path().join("creds.toml");
         tokio::fs::write(
             &creds_path,
             "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
@@ -1101,9 +1101,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn cert_path_from_mapper_toml_is_sourced_correctly() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        let (cert, key) = write_cert(ttd.utf8_path()).await;
+        let (cert, key) = write_cert(ttd.path()).await;
         let toml = format!("[device]\ncert_path = \"{cert}\"\nkey_path = \"{key}\"\n");
         tokio::fs::write(mapper_dir.join("mapper.toml"), &toml)
             .await
@@ -1124,7 +1124,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn relative_cert_path_annotated_as_resolved() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         // write actual cert files so load_mapper_config doesn't fail on validation
         let (_, _) = write_cert(&mapper_dir).await;
@@ -1155,9 +1155,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn cert_path_falls_back_to_tedge_toml() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-        let (cert, key) = write_cert(ttd.utf8_path()).await;
+        let (cert, key) = write_cert(ttd.path()).await;
         let tedge_config = TEdgeConfig::load_toml_str(&format!(
             "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
         ));
@@ -1177,7 +1177,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     #[tokio::test]
     async fn root_cert_path_defaults_to_etc_ssl_certs() {
         let ttd = TempTedgeDir::new();
-        let mapper_dir = ttd.utf8_path().join("mappers/tb");
+        let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
         let tedge_config = TEdgeConfig::load_toml_str("");
         let config = make_config(None);
@@ -1239,7 +1239,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn schema_key_device_id_from_cert_cn() {
             let ttd = TempTedgeDir::new();
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -1257,7 +1257,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn schema_key_cert_path_from_tedge_toml_fallback() {
             let ttd = TempTedgeDir::new();
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -1358,7 +1358,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn schema_key_shadows_raw_table_value() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/tb");
+            let mapper_dir = ttd.path().join("mappers/tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             write_cert(&mapper_dir).await;
             tokio::fs::write(
@@ -1445,7 +1445,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn absolute_cert_path_in_mapper_toml() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/tb");
+            let mapper_dir = ttd.path().join("mappers/tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             let (cert, key) = write_cert(&mapper_dir).await;
             tokio::fs::write(
@@ -1470,7 +1470,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn relative_cert_path_in_mapper_toml() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/tb");
+            let mapper_dir = ttd.path().join("mappers/tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
             write_cert(&mapper_dir).await;
             tokio::fs::write(
@@ -1495,7 +1495,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn cert_path_inherited_from_tedge_toml() {
             let ttd = TempTedgeDir::new();
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -1514,7 +1514,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn device_id_inferred_from_cert_cn() {
             let ttd = TempTedgeDir::new();
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -1548,7 +1548,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn device_id_falls_back_to_tedge_toml() {
             let ttd = TempTedgeDir::new();
-            let creds = ttd.utf8_path().join("creds.toml");
+            let creds = ttd.path().join("creds.toml");
             tokio::fs::write(
                 &creds,
                 "[credentials]\nusername = \"u\"\npassword = \"p\"\n",
@@ -1572,9 +1572,9 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         #[tokio::test]
         async fn short_tags_match_expected_labels() {
             let ttd = TempTedgeDir::new();
-            let mapper_dir = ttd.utf8_path().join("mappers/tb");
+            let mapper_dir = ttd.path().join("mappers/tb");
             tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));
@@ -1625,7 +1625,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             // The overlay (e.g. from the c8y config) may contain a device.id, but the
             // cert CN — computed during resolve — must take precedence.
             let ttd = TempTedgeDir::new();
-            let (cert, key) = write_cert(ttd.utf8_path()).await;
+            let (cert, key) = write_cert(ttd.path()).await;
             let tedge_config = TEdgeConfig::load_toml_str(&format!(
                 "device.cert_path = \"{cert}\"\ndevice.key_path = \"{key}\"\n"
             ));

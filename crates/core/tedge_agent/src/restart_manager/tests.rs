@@ -115,8 +115,8 @@ async fn spawn_restart_manager(
 
     let config = RestartManagerConfig {
         device_topic_id: EntityTopicId::default_main_device(),
-        tmp_dir: tmp_dir.utf8_path_buf(),
-        config_dir: TedgePaths::from_root_with_defaults(tmp_dir.utf8_path(), "", ""),
+        tmp_dir: tmp_dir.path_buf(),
+        config_dir: TedgePaths::from_root_with_defaults(tmp_dir.path(), "", ""),
         state_dir: TedgePaths::from_root_with_defaults("/some/unknown/dir", "", ""),
         sudo: SudoCommandBuilder::enabled(true),
     };

@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use camino::Utf8Path;
 use certificate::CloudHttpConfig;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::DynError;
@@ -36,9 +35,7 @@ async fn upload_without_auth() -> Result<(), DynError> {
         .create_async()
         .await;
 
-    let target_path = Utf8Path::from_path(ttd.path())
-        .unwrap()
-        .join("file_to_upload.txt");
+    let target_path = ttd.path().join("file_to_upload.txt");
 
     std::fs::write(&target_path, "Hello, world!").unwrap();
 
@@ -73,9 +70,7 @@ async fn upload_with_auth() -> Result<(), DynError> {
         .create_async()
         .await;
 
-    let target_path = Utf8Path::from_path(ttd.path())
-        .unwrap()
-        .join("file_to_upload.txt");
+    let target_path = ttd.path().join("file_to_upload.txt");
 
     std::fs::write(&target_path, "Hello, world!").unwrap();
 

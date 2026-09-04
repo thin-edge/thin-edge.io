@@ -10,7 +10,7 @@ const BINARY_NAME: &str = "tedge-file-log-plugin";
 
 fn setup() -> (TempTedgeDir, String) {
     let temp_dir = TempTedgeDir::new();
-    let temp_path = temp_dir.path().to_str().unwrap().to_string();
+    let temp_path = temp_dir.path().as_str().to_string();
 
     // Create config directory structure
     let config_dir = temp_dir.dir("config");
@@ -57,7 +57,7 @@ type = "service"
     let plugin_config_file = plugins_dir.file("tedge-log-plugin.toml");
     fs::write(plugin_config_file.path(), config_content).unwrap();
 
-    (temp_dir, config_dir.utf8_path().to_string())
+    (temp_dir, config_dir.path().to_string())
 }
 
 #[test]
