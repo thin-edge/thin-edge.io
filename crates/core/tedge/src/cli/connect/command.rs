@@ -196,40 +196,39 @@ impl ConnectCommand {
         tedge_config: &TEdgeConfig,
         bridge_config: &BridgeConfig,
     ) -> Result<(), Fancy<ConnectError>> {
-        // If the bridge is part of the mapper, the bridge config file won't exist
-        // TODO tidy me up once mosquitto is no longer required for bridge
-        if self
-            .check_if_bridge_exists(tedge_config, bridge_config)
-            .await
-        {
-            match self.check_connection(tedge_config).await {
-                Ok(DeviceStatus::AlreadyExists) => {
-                    match self
-                        .tenant_matches_configured_url(tedge_config, bridge_config)
-                        .await?
-                    {
-                        // Check failed, warning has been printed already
-                        // Don't tell them the connection test succeeded because that's not true
-                        Some(false) => {}
-                        // Either the check succeeded or it wasn't relevant (e.g. non-Cumulocity connection)
-                        Some(true) | None => {
-                            eprintln!(
-                                "Connection check to {} cloud is successful.",
-                                bridge_config.cloud_name
-                            )
-                        }
-                    }
-
-                    Ok(())
-                }
-                Ok(DeviceStatus::Unknown) => Err(ConnectError::UnknownDeviceStatus.into()),
-                Err(err) => Err(err),
+        if !tedge_config.mqtt.bridge.built_in {
+            let is_bridge_config_valid = self
+                .check_if_bridge_exists(tedge_config, bridge_config)
+                .await;
+            if !is_bridge_config_valid {
+                warning!(
+                    r#"The bridge is not currently configured; run "tedge reconnect" to establish a new connection"#
+                );
             }
-        } else {
-            Err((ConnectError::DeviceNotConnected {
-                cloud: self.cloud.to_string(),
-            })
-            .into())
+        }
+
+        match self.check_connection(tedge_config).await {
+            Ok(DeviceStatus::AlreadyExists) => {
+                match self
+                    .tenant_matches_configured_url(tedge_config, bridge_config)
+                    .await?
+                {
+                    // Check failed, warning has been printed already
+                    // Don't tell them the connection test succeeded because that's not true
+                    Some(false) => {}
+                    // Either the check succeeded or it wasn't relevant (e.g. non-Cumulocity connection)
+                    Some(true) | None => {
+                        eprintln!(
+                            "Connection check to {} cloud is successful.",
+                            bridge_config.cloud_name
+                        )
+                    }
+                }
+
+                Ok(())
+            }
+            Ok(DeviceStatus::Unknown) => Err(ConnectError::UnknownDeviceStatus.into()),
+            Err(err) => Err(err),
         }
     }
 

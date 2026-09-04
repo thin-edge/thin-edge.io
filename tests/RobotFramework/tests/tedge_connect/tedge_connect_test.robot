@@ -127,6 +127,29 @@ tedge connect does not create tedge-mosquitto.conf when mqtt.bind.enabled is fal
     Execute Command    sudo tedge reconnect c8y
     File Should Not Exist    /etc/tedge/mosquitto-conf/tedge-mosquitto.conf
 
+tedge connect --test keeps working if c8y-bridge.conf is missing and built-in bridge is used
+    [Tags]    \#4309
+    Execute Command    sudo tedge config set mqtt.bridge.built_in true
+    Execute Command    sudo tedge reconnect c8y
+    Execute Command    sudo rm /etc/tedge/mosquitto-conf/c8y-bridge.conf
+    ${output}=    Execute Command    sudo tedge connect c8y --test    stdout=${False}    stderr=${True}
+    Should Contain    ${output}    Connection check to c8y cloud is successful.
+
+tedge connect --test fails if c8y-bridge.conf is missing and mosquitto bridge is used
+    [Tags]    \#4309
+    Execute Command    sudo tedge config set mqtt.bridge.built_in false
+    Execute Command    sudo tedge reconnect c8y
+    Execute Command    sudo rm /etc/tedge/mosquitto-conf/c8y-bridge.conf
+
+    # at this point test should still work because mosquitto is still running and configuration is in memory
+    Execute Command    sudo tedge connect c8y --test
+
+    # but after a restart it should fail
+    Execute Command    sudo systemctl restart mosquitto
+    ${output}=    Execute Command    sudo tedge connect c8y --test    stdout=${False}    stderr=${True}    exp_exit_code=1
+    Should Contain    ${output}    warning: The bridge is not currently configured; run "tedge reconnect" to establish a new connection
+    Should Contain    ${output}    error: Failed to verify device is connected to Cumulocity: Connection to Cumulocity is not healthy
+
 
 *** Keywords ***
 Should Have File Permissions
