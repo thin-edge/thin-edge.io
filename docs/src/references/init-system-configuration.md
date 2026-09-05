@@ -57,6 +57,48 @@ will be interpreted as
 | `disable`      | The command to disable a service by the init system                                                  |
 | `is_active`    | The command to check if the service is running by the init system                                    |
 
+Every key is an **action** of this init system, except `name` and `is_available`,
+which describe the init system rather than a service.
+An action can be run with
+[`tedge service <action> <service-name>`](./cli/tedge-service).
+
+## Custom actions
+
+An init system may support more than the five standard actions
+`restart`, `stop`, `start`, `enable` and `disable`.
+A custom action is added as a plain key of `[init]`,
+with the same form as the others: an argv list with a `{}` placeholder for the service name.
+
+```toml title="file: /etc/tedge/system.toml"
+[init]
+name = "systemd"
+is_available = ["/bin/systemctl", "--version"]
+restart = ["/bin/systemctl", "restart", "{}"]
+stop =  ["/bin/systemctl", "stop", "{}"]
+start =  ["/bin/systemctl", "start", "{}"]
+enable =  ["/bin/systemctl", "enable", "{}"]
+disable =  ["/bin/systemctl", "disable", "{}"]
+is_active = ["/bin/systemctl", "is-active", "{}"]
+
+# A custom action
+reload = ["/bin/systemctl", "reload", "{}"]
+```
+
+`reload` can then be run as any other action:
+
+```sh
+sudo tedge service reload nginx
+```
+
+An action name is a single lowercase token, matching `[a-z][a-z0-9_-]*`:
+lowercase letters, digits, `_` and `-`, starting with a letter.
+
+:::caution
+`[init]` accepts any key, so a misspelled key is read as a custom action rather than rejected.
+For example, writing `restrat` instead of `restart` gives the device a `restrat` action
+that will never be asked for.
+:::
+
 ## Default settings
 
 If the `system.toml` file does not exist, then %%te%% will assume that you are using Systemd, and use `/bin/systemctl` to control the services.
