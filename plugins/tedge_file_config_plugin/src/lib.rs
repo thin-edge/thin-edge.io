@@ -223,7 +223,7 @@ impl FileConfigPlugin {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create parent directories. Path: '{parent}'"))?;
 
-        file_entry.parent_permissions.clone().apply_sync(parent.as_std_path())
+        file_entry.parent_permissions.clone().apply_sync(parent)
             .with_context(|| format!("failed to change permissions or mode of the parent directory. Path: '{parent}'"))?;
 
         Ok(())

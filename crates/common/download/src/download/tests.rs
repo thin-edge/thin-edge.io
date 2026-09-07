@@ -1,5 +1,7 @@
 use super::*;
 use axum::Router;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use http::StatusCode;
 use hyper::header::AUTHORIZATION;
 use rustls::pki_types::pem::PemObject;
@@ -11,6 +13,10 @@ use tempfile::tempdir;
 use tempfile::NamedTempFile;
 use tempfile::TempDir;
 use test_case::test_case;
+
+fn tempdir_utf8_path(dir: &TempDir) -> &Utf8Path {
+    Utf8Path::from_path(dir.path()).expect("tempdir path is valid UTF-8")
+}
 
 mod partial_response;
 
@@ -26,7 +32,7 @@ async fn downloader_has_user_agent() {
         .await;
 
     let target_dir_path = TempDir::new().unwrap();
-    let target_path = target_dir_path.path().join("test_download");
+    let target_path = tempdir_utf8_path(&target_dir_path).join("test_download");
 
     let mut target_url = server.url();
     target_url.push_str("/some_file.txt");
@@ -52,7 +58,7 @@ async fn downloader_download_content_no_auth() {
         .await;
 
     let target_dir_path = TempDir::new().unwrap();
-    let target_path = target_dir_path.path().join("test_download");
+    let target_path = tempdir_utf8_path(&target_dir_path).join("test_download");
 
     let mut target_url = server.url();
     target_url.push_str("/some_file.txt");
@@ -83,7 +89,7 @@ async fn downloader_download_to_target_path() {
         .create_async()
         .await;
 
-    let target_path = temp_dir.path().join("downloaded_file.txt");
+    let target_path = tempdir_utf8_path(&temp_dir).join("downloaded_file.txt");
 
     let mut target_url = server.url();
     target_url.push_str("/some_file.txt");
@@ -93,7 +99,7 @@ async fn downloader_download_to_target_path() {
     let downloader = Downloader::new(target_path.clone(), None, CloudHttpConfig::test_value());
     downloader.download(&url).await.unwrap();
 
-    let file_content = std::fs::read(target_path).unwrap();
+    let file_content = std::fs::read(&target_path).unwrap();
 
     assert_eq!(file_content, "hello".as_bytes());
 }
@@ -114,7 +120,7 @@ async fn downloader_download_with_content_length_larger_than_usable_disk_space()
         .await;
 
     let target_dir_path = TempDir::new().unwrap();
-    let target_path = target_dir_path.path().join("test_download_with_length");
+    let target_path = tempdir_utf8_path(&target_dir_path).join("test_download_with_length");
 
     let mut target_url = server.url();
     target_url.push_str("/some_file.txt");
@@ -145,16 +151,7 @@ async fn returns_proper_errors_for_invalid_filenames() {
     let url = DownloadInfo::new(&target_url);
 
     // empty filename
-    let downloader = Downloader::new("".into(), None, CloudHttpConfig::test_value());
-    let err = downloader.download(&url).await.unwrap_err();
-    assert!(matches!(
-        err,
-        DownloadError::FromFileError(FileError::InvalidFileName { .. })
-    ));
-
-    // invalid unicode filename
-    let path = unsafe { String::from_utf8_unchecked(b"\xff".to_vec()) };
-    let downloader = Downloader::new(path.into(), None, CloudHttpConfig::test_value());
+    let downloader = Downloader::new(Utf8PathBuf::new(), None, CloudHttpConfig::test_value());
     let err = downloader.download(&url).await.unwrap_err();
     assert!(matches!(
         err,
@@ -182,7 +179,7 @@ async fn writing_to_existing_file() {
         .create_async()
         .await;
 
-    let target_file_path = temp_dir.path().join("downloaded_file.txt");
+    let target_file_path = tempdir_utf8_path(&temp_dir).join("downloaded_file.txt");
     std::fs::File::create(&target_file_path).unwrap();
 
     let mut target_url = server.url();
@@ -197,7 +194,7 @@ async fn writing_to_existing_file() {
     );
     downloader.download(&url).await.unwrap();
 
-    let file_content = std::fs::read(target_file_path).unwrap();
+    let file_content = std::fs::read(&target_file_path).unwrap();
 
     assert_eq!(file_content, "hello".as_bytes());
 }
@@ -215,7 +212,7 @@ async fn downloader_download_with_reasonable_content_length() {
         .await;
 
     let target_dir_path = TempDir::new().unwrap();
-    let target_path = target_dir_path.path().join("test_download_with_length");
+    let target_path = tempdir_utf8_path(&target_dir_path).join("test_download_with_length");
 
     let mut target_url = server.url();
     target_url.push_str("/some_file.txt");
@@ -243,7 +240,7 @@ async fn downloader_download_verify_file_content() {
         .await;
 
     let target_dir_path = TempDir::new().unwrap();
-    let target_path = target_dir_path.path().join("test_download_with_length");
+    let target_path = tempdir_utf8_path(&target_dir_path).join("test_download_with_length");
 
     let mut target_url = server.url();
     target_url.push_str("/some_file.txt");
@@ -264,7 +261,7 @@ async fn downloader_download_without_content_length() {
     let _mock1 = server.mock("GET", "/some_file.txt").create_async().await;
 
     let target_dir_path = TempDir::new().unwrap();
-    let target_path = target_dir_path.path().join("test_download_without_length");
+    let target_path = tempdir_utf8_path(&target_dir_path).join("test_download_without_length");
 
     let mut target_url = server.url();
     target_url.push_str("/some_file.txt");
@@ -282,7 +279,7 @@ async fn doesnt_leave_tmpfiles_on_errors() {
     let server = mockito::Server::new_async().await;
 
     let target_dir_path = TempDir::new().unwrap();
-    let target_path = target_dir_path.path().join("test_doesnt_leave_tmpfiles");
+    let target_path = tempdir_utf8_path(&target_dir_path).join("test_doesnt_leave_tmpfiles");
 
     let mut target_url = server.url();
     target_url.push_str("/some_file.txt");
@@ -400,7 +397,7 @@ async fn downloader_download_processing_error(
         }
     };
 
-    let target_path = target_dir_path.path().join("test_download");
+    let target_path = tempdir_utf8_path(&target_dir_path).join("test_download");
     let mut downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
     downloader.set_backoff(ExponentialBackoff {
         max_elapsed_time: Some(Duration::ZERO),
@@ -451,7 +448,7 @@ async fn downloader_error_shows_certificate_required_error_when_appropriate() {
     let url = DownloadInfo::new(&format!("http://localhost:{port}"));
 
     let downloader = Downloader::new(
-        PathBuf::from("/tmp/should-never-exist"),
+        Utf8PathBuf::from("/tmp/should-never-exist"),
         None,
         CloudHttpConfig::new(Arc::from(vec![req_cert]), None),
     );
@@ -536,7 +533,7 @@ async fn attempt_download(
     resource: &str,
 ) -> Result<(), DownloadError> {
     let target_dir_path = TempDir::new().unwrap();
-    let target_path = target_dir_path.path().join("test_download");
+    let target_path = tempdir_utf8_path(&target_dir_path).join("test_download");
 
     let mut target_url = server.url();
     target_url.push_str(resource);

@@ -462,7 +462,7 @@ impl WorkflowActor {
                 let temp_filename = format!("{operation}_{cmd_id}");
                 let temp_path = self.tmp_dir.join(&temp_filename);
 
-                let download_request = DownloadRequest::new(url, temp_path.as_std_path());
+                let download_request = DownloadRequest::new(url, &temp_path);
                 let (_topic, download_result) = self
                     .downloader
                     .await_response((state.topic.name.clone(), download_request))
@@ -472,10 +472,10 @@ impl WorkflowActor {
                     Ok(download_response) => {
                         let downloaded_path = download_response.file_path;
                         log_file
-                            .log_info(&format!("Downloaded to: {}", downloaded_path.display()))
+                            .log_info(&format!("Downloaded to: {downloaded_path}"))
                             .await;
 
-                        Ok(json!({"downloadedPath": downloaded_path}))
+                        Ok(json!({"downloadedPath": downloaded_path.as_str()}))
                     }
                     Err(err) => Err(format!("Download failed: {}", err)),
                 };

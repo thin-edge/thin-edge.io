@@ -1,10 +1,10 @@
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use futures::TryFutureExt;
 use nix::unistd::*;
 use std::io::Error;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
-use std::path::PathBuf;
 use tokio::fs;
 use tokio::io;
 use tokio::io::AsyncWriteExt as _;
@@ -15,10 +15,16 @@ use uzers::get_user_by_name;
 #[derive(thiserror::Error, Debug)]
 pub enum FileError {
     #[error("Creating the directory failed: {dir:?}. Reason: {from}")]
-    DirectoryCreateFailed { dir: String, from: std::io::Error },
+    DirectoryCreateFailed {
+        dir: Utf8PathBuf,
+        from: std::io::Error,
+    },
 
     #[error("Creating the file failed: {file:?}. Reason: {from}")]
-    FileCreateFailed { file: String, from: std::io::Error },
+    FileCreateFailed {
+        file: Utf8PathBuf,
+        from: std::io::Error,
+    },
 
     #[error("Failed to change owner: {name:?}. Reason: {from}")]
     MetaDataError { name: String, from: std::io::Error },
@@ -33,18 +39,23 @@ pub enum FileError {
     GroupNotFound { group: String },
 
     #[error("The path is not accessible. {path:?}")]
-    PathNotAccessible { path: PathBuf },
+    PathNotAccessible { path: Utf8PathBuf },
 
     #[error("Writing the content to the file failed: {file:?}. Reason: {from}")]
-    WriteContentFailed { file: String, from: std::io::Error },
+    WriteContentFailed {
+        file: Utf8PathBuf,
+        from: std::io::Error,
+    },
 
     #[error("Could not save the file {file:?} to disk. Received error: {from:?}.")]
-    FailedToSync { file: PathBuf, from: std::io::Error },
+    FailedToSync {
+        file: Utf8PathBuf,
+        from: std::io::Error,
+    },
 
     #[error("The path {path:?} is invalid")]
     InvalidFileName {
-        path: PathBuf,
-        // Can be io::Error or Utf8Error
+        path: Utf8PathBuf,
         source: anyhow::Error,
     },
 
@@ -56,13 +67,13 @@ pub enum FileError {
 
     #[error("Failed to create a symlink {link:?}: {source:?}.")]
     CreateSymlinkFailed {
-        link: PathBuf,
+        link: Utf8PathBuf,
         source: std::io::Error,
     },
 }
 
-pub async fn path_exists(path: impl AsRef<Path>) -> bool {
-    tokio::fs::try_exists(path).await.unwrap_or(false)
+pub async fn path_exists(path: impl AsRef<Utf8Path>) -> bool {
+    tokio::fs::try_exists(path.as_ref()).await.unwrap_or(false)
 }
 
 /// Moves a file to a destination path.
@@ -81,8 +92,8 @@ pub async fn path_exists(path: impl AsRef<Path>) -> bool {
 /// - `Err(_)` when the source path does not exists or function has no
 ///   permission to move file
 pub async fn move_file(
-    src_path: impl AsRef<Path>,
-    dest_path: impl AsRef<Path>,
+    src_path: impl AsRef<Utf8Path>,
+    dest_path: impl AsRef<Utf8Path>,
     new_file_permissions: PermissionEntry,
 ) -> Result<(), FileMoveError> {
     let src_path = src_path.as_ref();
@@ -142,20 +153,20 @@ pub async fn move_file(
 #[derive(Debug, thiserror::Error)]
 #[error("Could not move file from {src:?} to {dest:?}")]
 pub struct FileMoveError {
-    src: Box<Path>,
-    dest: Box<Path>,
+    src: Utf8PathBuf,
+    dest: Utf8PathBuf,
     source: anyhow::Error,
 }
 
 impl FileMoveError {
     fn new(
-        src_path: &Path,
-        dest_path: &Path,
+        src_path: &Utf8Path,
+        dest_path: &Utf8Path,
         source_err: impl std::error::Error + Send + Sync + 'static,
     ) -> FileMoveError {
         FileMoveError {
-            src: Box::from(src_path),
-            dest: Box::from(dest_path),
+            src: src_path.to_owned(),
+            dest: dest_path.to_owned(),
             source: anyhow::Error::from(source_err),
         }
     }
@@ -184,29 +195,29 @@ impl PermissionEntry {
         self
     }
 
-    pub(crate) async fn apply(&self, path: impl AsRef<Path>) -> Result<(), FileError> {
+    pub(crate) async fn apply(&self, path: impl AsRef<Utf8Path>) -> Result<(), FileError> {
         let path = path.as_ref();
         match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
                 change_user_and_group(path, user, group).await?;
             }
             (Some(user), None) => {
-                change_user(path, user).await?;
+                change_user(path.to_owned(), user.clone()).await?;
             }
             (None, Some(group)) => {
-                change_group(path, group).await?;
+                change_group(path.to_owned(), group.clone()).await?;
             }
             (None, None) => {}
         }
 
         if let Some(mode) = &self.mode {
-            change_mode(path, *mode).await?;
+            change_mode(path.to_owned(), *mode).await?;
         }
 
         Ok(())
     }
 
-    pub fn apply_sync(&self, path: impl AsRef<Path>) -> Result<(), FileError> {
+    pub fn apply_sync(&self, path: impl AsRef<Utf8Path>) -> Result<(), FileError> {
         let path = path.as_ref();
         match (&self.user, &self.group) {
             (Some(user), Some(group)) => {
@@ -230,8 +241,8 @@ impl PermissionEntry {
 
     pub(crate) async fn create_directory_with_root(
         &self,
-        dir: impl AsRef<Path>,
-        root: impl AsRef<Path>,
+        dir: impl AsRef<Utf8Path>,
+        root: impl AsRef<Utf8Path>,
     ) -> Result<(), FileError> {
         self.create_directory_internal(dir.as_ref(), Some(root.as_ref()))
             .await
@@ -239,8 +250,8 @@ impl PermissionEntry {
 
     async fn create_directory_internal(
         &self,
-        dir: &Path,
-        root: Option<&Path>,
+        dir: &Utf8Path,
+        root: Option<&Utf8Path>,
     ) -> Result<(), FileError> {
         if let Some(root_dir) = root {
             ensure_parents_exist(root_dir).await?;
@@ -275,23 +286,20 @@ impl PermissionEntry {
                 }
                 Ok(())
             }
-            Err(e) => Err(FileError::DirectoryCreateFailed {
-                dir: dir.display().to_string(),
-                from: e,
-            }),
+            Err(e) => Err(FileError::DirectoryCreateFailed { dir, from: e }),
         }
     }
 }
 
-async fn ensure_parents_exist(dir: &Path) -> Result<(), FileError> {
+async fn ensure_parents_exist(dir: &Utf8Path) -> Result<(), FileError> {
     if let Some(parent) = dir.parent() {
         if !path_exists(parent).await {
             Box::pin(ensure_parents_exist(parent)).await?;
 
-            if let Err(e) = fs::create_dir(&parent).await {
+            if let Err(e) = fs::create_dir(parent).await {
                 if e.kind() != io::ErrorKind::AlreadyExists {
                     return Err(FileError::DirectoryCreateFailed {
-                        dir: parent.display().to_string(),
+                        dir: parent.to_owned(),
                         from: e,
                     });
                 }
@@ -302,7 +310,7 @@ async fn ensure_parents_exist(dir: &Path) -> Result<(), FileError> {
 }
 
 /// Overwrite the content of existing file. The file permissions will be kept.
-pub async fn overwrite_file(file: impl AsRef<Path>, content: &str) -> Result<(), FileError> {
+pub async fn overwrite_file(file: impl AsRef<Utf8Path>, content: &str) -> Result<(), FileError> {
     let file = file.as_ref();
     match fs::OpenOptions::new()
         .write(true)
@@ -313,28 +321,28 @@ pub async fn overwrite_file(file: impl AsRef<Path>, content: &str) -> Result<(),
         Ok(mut f) => {
             f.write_all(content.as_bytes())
                 .map_err(|e| FileError::WriteContentFailed {
-                    file: file.display().to_string(),
+                    file: file.to_owned(),
                     from: e,
                 })
                 .await?;
             f.flush().await?;
             f.sync_all()
                 .map_err(|from| FileError::FailedToSync {
-                    file: file.to_path_buf(),
+                    file: file.to_owned(),
                     from,
                 })
                 .await?;
             Ok(())
         }
         Err(e) => Err(FileError::FileCreateFailed {
-            file: file.display().to_string(),
+            file: file.to_owned(),
             from: e,
         }),
     }
 }
 
 pub async fn change_user_and_group(
-    file: impl AsRef<Path>,
+    file: impl AsRef<Utf8Path>,
     user: impl Into<String>,
     group: impl Into<String>,
 ) -> Result<(), FileError> {
@@ -346,7 +354,7 @@ pub async fn change_user_and_group(
         .unwrap()
 }
 
-fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<(), FileError> {
+fn change_user_and_group_sync(path: &Utf8Path, user: &str, group: &str) -> Result<(), FileError> {
     match (user, group) {
         ("", "") => return Ok(()),
         ("", group) => return change_group_sync(path, group),
@@ -355,7 +363,7 @@ fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<()
     }
     let metadata = get_metadata_sync(path)?;
     debug!("Changing ownership of path: {path:?} with user: {user} and group: {group}",);
-    let ud = get_user_by_name(&user)
+    let ud = get_user_by_name(user)
         .map(|u| u.uid())
         .ok_or_else(|| FileError::UserNotFound {
             user: user.to_owned(),
@@ -363,20 +371,47 @@ fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<()
 
     let uid = metadata.uid();
 
-    let gd =
-        get_group_by_name(&group)
-            .map(|g| g.gid())
-            .ok_or_else(|| FileError::GroupNotFound {
-                group: group.to_owned(),
-            })?;
+    let gd = get_group_by_name(group)
+        .map(|g| g.gid())
+        .ok_or_else(|| FileError::GroupNotFound {
+            group: group.to_owned(),
+        })?;
 
     let gid = metadata.gid();
 
-    // if user and group are same as existing, then do not change
     if (ud != uid) || (gd != gid) {
-        chown(path, Some(Uid::from_raw(ud)), Some(Gid::from_raw(gd))).map_err(|e| {
+        chown(
+            path.as_std_path(),
+            Some(Uid::from_raw(ud)),
+            Some(Gid::from_raw(gd)),
+        )
+        .map_err(|e| FileError::MetaDataError {
+            name: path.to_string(),
+            from: e.into(),
+        })?;
+    }
+
+    Ok(())
+}
+
+async fn change_user(file: Utf8PathBuf, user: String) -> Result<(), FileError> {
+    tokio::task::spawn_blocking(move || change_user_sync(&file, &user))
+        .await
+        .unwrap()
+}
+
+fn change_user_sync(file: &Utf8Path, user: &str) -> Result<(), FileError> {
+    let metadata = get_metadata_sync(file)?;
+    let ud = get_user_by_name(user)
+        .map(|u| u.uid())
+        .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
+
+    let uid = metadata.uid();
+
+    if ud != uid {
+        chown(file.as_std_path(), Some(Uid::from_raw(ud)), None).map_err(|e| {
             FileError::MetaDataError {
-                name: path.display().to_string(),
+                name: file.to_string(),
                 from: e.into(),
             }
         })?;
@@ -385,44 +420,13 @@ fn change_user_and_group_sync(path: &Path, user: &str, group: &str) -> Result<()
     Ok(())
 }
 
-async fn change_user(file: impl Into<PathBuf>, user: impl Into<String>) -> Result<(), FileError> {
-    let file = file.into();
-    let user = user.into();
-    tokio::task::spawn_blocking(move || change_user_sync(&file, &user))
-        .await
-        .unwrap()
-}
-
-fn change_user_sync(file: impl AsRef<Path>, user: &str) -> Result<(), FileError> {
-    let file = file.as_ref();
-    let metadata = get_metadata_sync(file)?;
-    let ud = get_user_by_name(user)
-        .map(|u| u.uid())
-        .ok_or_else(|| FileError::UserNotFound { user: user.into() })?;
-
-    let uid = metadata.uid();
-
-    // if user is same as existing, then do not change
-    if ud != uid {
-        chown(file, Some(Uid::from_raw(ud)), None).map_err(|e| FileError::MetaDataError {
-            name: file.display().to_string(),
-            from: e.into(),
-        })?;
-    }
-
-    Ok(())
-}
-
-async fn change_group(file: impl Into<PathBuf>, group: impl Into<String>) -> Result<(), FileError> {
-    let file = file.into();
-    let group = group.into();
+async fn change_group(file: Utf8PathBuf, group: String) -> Result<(), FileError> {
     tokio::task::spawn_blocking(move || change_group_sync(&file, &group))
         .await
         .unwrap()
 }
 
-fn change_group_sync(file: impl AsRef<Path>, group: &str) -> Result<(), FileError> {
-    let file = file.as_ref();
+fn change_group_sync(file: &Utf8Path, group: &str) -> Result<(), FileError> {
     let metadata = get_metadata_sync(file)?;
     let gd = get_group_by_name(group)
         .map(|g| g.gid())
@@ -432,76 +436,67 @@ fn change_group_sync(file: impl AsRef<Path>, group: &str) -> Result<(), FileErro
 
     let gid = metadata.gid();
 
-    // if group is same as existing, then do not change
     if gd != gid {
-        chown(file, None, Some(Gid::from_raw(gd))).map_err(|e| FileError::MetaDataError {
-            name: file.display().to_string(),
-            from: e.into(),
+        chown(file.as_std_path(), None, Some(Gid::from_raw(gd))).map_err(|e| {
+            FileError::MetaDataError {
+                name: file.to_string(),
+                from: e.into(),
+            }
         })?;
     }
 
     Ok(())
 }
 
-async fn change_mode(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
-    let file = file.as_ref().to_owned();
+async fn change_mode(file: Utf8PathBuf, mode: u32) -> Result<(), FileError> {
     tokio::task::spawn_blocking(move || change_mode_sync(&file, mode))
         .await
         .unwrap()
 }
 
-fn change_mode_sync(file: impl AsRef<Path>, mode: u32) -> Result<(), FileError> {
-    let file = file.as_ref();
+fn change_mode_sync(file: &Utf8Path, mode: u32) -> Result<(), FileError> {
     let mut permissions = get_metadata_sync(file)?.permissions();
 
     if permissions.mode() & 0o777 != mode {
         permissions.set_mode(mode);
-        debug!("Setting mode of {} to {mode:0o}", file.display());
+        debug!("Setting mode of {file} to {mode:0o}");
         std::fs::set_permissions(file, permissions).map_err(|e| FileError::ChangeModeError {
-            name: file.display().to_string(),
+            name: file.to_string(),
             from: e,
         })
     } else {
-        debug!(
-            "Not changing mode of {} as it is already {mode:0o}",
-            file.display()
-        );
+        debug!("Not changing mode of {file} as it is already {mode:0o}");
         Ok(())
     }
 }
 
-/// Return metadata when the given path exists and accessible by user
-async fn get_metadata(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileError> {
-    let path = path.as_ref();
+async fn get_metadata(path: &Utf8Path) -> Result<std::fs::Metadata, FileError> {
     fs::metadata(path)
         .await
         .map_err(|_| FileError::PathNotAccessible {
-            path: path.to_path_buf(),
+            path: path.to_owned(),
         })
 }
 
-fn get_metadata_sync(path: impl AsRef<Path>) -> Result<std::fs::Metadata, FileError> {
-    let path = path.as_ref();
+fn get_metadata_sync(path: &Utf8Path) -> Result<std::fs::Metadata, FileError> {
     std::fs::metadata(path).map_err(|_| FileError::PathNotAccessible {
-        path: path.to_path_buf(),
+        path: path.to_owned(),
     })
 }
 
 pub async fn create_symlink(
-    original: impl AsRef<Path>,
-    link: impl AsRef<Path>,
+    original: impl AsRef<Utf8Path>,
+    link: impl AsRef<Utf8Path>,
 ) -> Result<(), FileError> {
+    let original = original.as_ref();
     let link = link.as_ref();
-    match fs::symlink(&original, &link).await {
+    match fs::symlink(original, link).await {
         Ok(_) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => match fs::read_link(&link).await {
-            Ok(path) if path == original.as_ref() => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => match fs::read_link(link).await {
+            Ok(path) if path.as_path() == original => Ok(()),
             Ok(_) => Err(FileError::CreateSymlinkFailed {
                 link: link.to_owned(),
-                source: Error::other(format!(
-                    "symlink exists but does not point to {:?}",
-                    original.as_ref()
-                )),
+                source: Error::other(format!("symlink exists but does not point to {original:?}")),
             }),
             Err(e) => Err(FileError::CreateSymlinkFailed {
                 link: link.to_owned(),

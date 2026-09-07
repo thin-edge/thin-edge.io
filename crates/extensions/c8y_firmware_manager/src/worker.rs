@@ -12,6 +12,7 @@ use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
 use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name_no_parameters;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
 use c8y_api::smartrest::topic::C8yTopic;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use sha256::digest;
 use sha256::try_digest;
@@ -200,8 +201,7 @@ impl FirmwareManagerWorker {
 
             // Send a request to the Downloader to download the file asynchronously.
             let firmware_url = self.config.c8y_end_point.local_proxy_url(firmware_url)?;
-            let download_request =
-                DownloadRequest::new(firmware_url.as_str(), cache_file_path.as_std_path());
+            let download_request = DownloadRequest::new(firmware_url.as_str(), &cache_file_path);
 
             let (_, download_result) = self
                 .download_sender
@@ -234,7 +234,7 @@ impl FirmwareManagerWorker {
         &mut self,
         smartrest_request: SmartRestFirmwareRequest,
         operation_id: &str,
-        downloaded_firmware: impl AsRef<Path>,
+        downloaded_firmware: impl AsRef<Utf8Path>,
     ) -> Result<(), FirmwareManagementError> {
         let child_id = smartrest_request.device.as_str();
         let firmware_url = smartrest_request.url.as_str();
@@ -307,8 +307,7 @@ impl FirmwareManagerWorker {
                     .firmware_dir()
                     .path()
                     .join(operation_id);
-                let operation_entry =
-                    FirmwareOperationEntry::read_from_file(status_file_path.as_path())?;
+                let operation_entry = FirmwareOperationEntry::read_from_file(&status_file_path)?;
 
                 self.publish_c8y_installed_firmware_message(&operation_entry)
                     .await?;

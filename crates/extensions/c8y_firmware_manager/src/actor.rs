@@ -13,6 +13,7 @@ use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message_ids::FIRMWARE;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestFirmwareRequest;
 use c8y_api::smartrest::smartrest_deserializer::SmartRestRequestGeneric;
+use camino::Utf8PathBuf;
 use nanoid::nanoid;
 use std::collections::HashMap;
 use std::fs;
@@ -264,7 +265,10 @@ impl FirmwareManagerActor {
 
         for entry in fs::read_dir(firmware_dir_path.clone())? {
             match entry {
-                Ok(file_path) => match FirmwareOperationEntry::read_from_file(file_path.path()) {
+                Ok(entry) => match FirmwareOperationEntry::read_from_file(
+                    Utf8PathBuf::try_from(entry.path())
+                        .expect("child of UTF-8 directory is valid UTF-8"),
+                ) {
                     Ok(recorded_entry) => {
                         if recorded_entry.child_id == smartrest_request.device
                             && recorded_entry.name == smartrest_request.name
@@ -329,7 +333,8 @@ impl FirmwareManagerActor {
         }
 
         for entry in fs::read_dir(firmware_dir_path)? {
-            let file_path = entry?.path();
+            let file_path = Utf8PathBuf::try_from(entry?.path())
+                .expect("child of UTF-8 directory is valid UTF-8");
             if file_path.is_file() {
                 let operation_entry =
                     FirmwareOperationEntry::read_from_file(&file_path)?.increment_attempt();

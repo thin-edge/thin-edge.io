@@ -99,7 +99,7 @@ async fn resume_download_when_disconnected() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     let tmpdir = TempDir::new().unwrap();
-    let target_path = tmpdir.path().join("partial_download");
+    let target_path = tempdir_utf8_path(&tmpdir).join("partial_download");
 
     let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
     let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
@@ -204,7 +204,7 @@ async fn resume_download_with_etag_changed() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     let tmpdir = TempDir::new().unwrap();
-    let target_path = tmpdir.path().join("partial_download_etag");
+    let target_path = tempdir_utf8_path(&tmpdir).join("partial_download_etag");
 
     let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
     let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
@@ -326,7 +326,7 @@ async fn resumed_download_doesnt_leave_leftovers() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     let tmpdir = TempDir::new().unwrap();
-    let target_path = tmpdir.path().join("partial_download_remains");
+    let target_path = tempdir_utf8_path(&tmpdir).join("partial_download_remains");
 
     let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
     let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
@@ -368,7 +368,7 @@ async fn resume_max_5_times() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     let tmpdir = TempDir::new().unwrap();
-    let target_path = tmpdir.path().join("partial_download");
+    let target_path = tempdir_utf8_path(&tmpdir).join("partial_download");
 
     let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
     let url = DownloadInfo::new(&format!("http://localhost:{port}/"));
@@ -420,7 +420,7 @@ async fn only_retry_until_success() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     let tmpdir = TempDir::new().unwrap();
-    let target_path = tmpdir.path().join("partial_download");
+    let target_path = tempdir_utf8_path(&tmpdir).join("partial_download");
 
     let downloader = Downloader::new(target_path, None, CloudHttpConfig::test_value());
     let url = DownloadInfo::new(&format!("http://localhost:{port}/"));

@@ -2,8 +2,8 @@ use crate::command::BuildCommand;
 use crate::command::Command;
 use crate::ConfigError;
 use c8y_api::http_proxy::C8yEndPoint;
+use camino::Utf8PathBuf;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use tedge_config::tedge_toml::ProfileName;
 use tedge_config::TEdgeConfig;
 
@@ -19,7 +19,7 @@ pub enum UploadCmd {
     C8y {
         /// Path to the uploaded file
         #[clap(long)]
-        file: PathBuf,
+        file: Utf8PathBuf,
 
         /// MIME type of the file content
         ///

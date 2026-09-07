@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use certificate::CloudHttpConfig;
 use csv::ReaderBuilder;
 use download::Downloader;
@@ -7,7 +8,6 @@ use regex::Regex;
 use reqwest::Identity;
 use serde::Deserialize;
 use std::error::Error;
-use std::path::Path;
 use std::path::PathBuf;
 use std::process::Output;
 use std::sync::Arc;
@@ -63,7 +63,7 @@ pub trait Plugin {
         &self,
         update: &SoftwareModuleUpdate,
         command_log: Option<&mut CommandLog>,
-        download_path: &Path,
+        download_path: &Utf8Path,
     ) -> Result<(), SoftwareError> {
         match update.clone() {
             SoftwareModuleUpdate::Install { mut module } => {
@@ -96,7 +96,7 @@ pub trait Plugin {
         &self,
         mut updates: Vec<SoftwareModuleUpdate>,
         mut command_log: Option<&mut CommandLog>,
-        download_path: &Path,
+        download_path: &Utf8Path,
     ) -> Vec<SoftwareError> {
         let mut failed_updates = Vec::new();
 
@@ -174,7 +174,7 @@ pub trait Plugin {
         module: &mut SoftwareModule,
         url: &DownloadInfo,
         mut command_log: Option<&mut CommandLog>,
-        download_path: &Path,
+        download_path: &Utf8Path,
         identity: Option<&Identity>,
         cloud_root_certs: CloudHttpConfig,
     ) -> Result<(), SoftwareError> {
@@ -197,7 +197,7 @@ pub trait Plugin {
         module: &mut SoftwareModule,
         url: &DownloadInfo,
         mut command_log: Option<&mut CommandLog>,
-        download_path: &Path,
+        download_path: &Utf8Path,
         identity: Option<&Identity>,
         cloud_root_certs: CloudHttpConfig,
     ) -> Result<Downloader, SoftwareError> {
@@ -211,7 +211,7 @@ pub trait Plugin {
                     format!(
                         "----- $ Downloading: {} to {} \n",
                         url.url(),
-                        downloader.filename().to_string_lossy()
+                        downloader.filename()
                     )
                     .as_bytes(),
                 )
@@ -235,7 +235,7 @@ pub trait Plugin {
             return Err(err);
         }
 
-        module.file_path = Some(downloader.filename().to_owned());
+        module.file_path = Some(downloader.filename().as_std_path().to_owned());
 
         Ok(downloader)
     }
@@ -618,14 +618,14 @@ pub fn deserialize_module_info(
     Ok(software_list)
 }
 
-pub fn sm_path(name: &str, version: &Option<String>, target_dir_path: impl AsRef<Path>) -> PathBuf {
+pub fn sm_path(name: &str, version: &Option<String>, target_dir_path: &Utf8Path) -> Utf8PathBuf {
     let mut filename = name.to_string();
     if let Some(version) = version {
         filename.push('_');
         filename.push_str(version.as_str());
     }
 
-    target_dir_path.as_ref().join(sanitize_filename(&filename))
+    target_dir_path.join(sanitize_filename(&filename))
 }
 
 fn sanitize_filename(filename: &str) -> String {
