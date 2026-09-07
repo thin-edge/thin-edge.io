@@ -66,7 +66,9 @@ tedge-write = { workspace = true }
 tedge_actors = { workspace = true }
 tedge_api = { workspace = true }
 tedge_config = { workspace = true }
+tedge_config_engine = { workspace = true, optional = true }
 tedge_flows = { workspace = true }
+tedge_mapper_config = { workspace = true, optional = true }
 tedge_mqtt_bridge = { workspace = true }
 tedge_supervisor = { workspace = true }
 tedge_system_services = { workspace = true }
@@ -106,6 +108,7 @@ default = ["aws", "azure", "c8y"]
 aws = ["tedge-mapper/aws"]
 azure = ["tedge-mapper/azure"]
 c8y = ["tedge-mapper/c8y"]
+mapper-config = ["dep:tedge_mapper_config", "dep:tedge_config_engine"]
 integration-test = []
 
 

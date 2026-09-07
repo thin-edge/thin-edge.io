@@ -5086,7 +5086,9 @@ dependencies = [
  "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "tedge_config_engine",
  "tedge_flows",
+ "tedge_mapper_config",
  "tedge_mqtt_bridge",
  "tedge_supervisor",
  "tedge_system_services",
@@ -5706,6 +5708,18 @@ dependencies = [
  "tokio",
  "toml 0.9.6",
  "tracing",
+]
+
+[[package]]
+name = "tedge_mapper_config"
+version = "2.0.1"
+dependencies = [
+ "camino",
+ "facet",
+ "facet-toml",
+ "tedge_config_engine",
+ "tedge_config_engine-macro",
+ "tempfile",
 ]
 
 [[package]]

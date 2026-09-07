@@ -684,3 +684,337 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(feature = "mapper-config")]
+#[cfg(test)]
+mod mapper_config_tests {
+    use predicates::prelude::*;
+
+    #[test]
+    fn get_reads_from_mapper_toml() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "url = \"tb.example.com:8883\"\n");
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "mappers.thingsboard.url",
+        ])?
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("tb.example.com:8883"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn set_writes_to_mapper_toml() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "");
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "set",
+            "mappers.thingsboard.url",
+            "tb.example.com:8883",
+        ])?
+        .assert()
+        .success();
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "mappers.thingsboard.url",
+        ])?
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("tb.example.com:8883"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn unset_removes_key_from_mapper_toml() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "url = \"tb.example.com:8883\"\n");
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "unset",
+            "mappers.thingsboard.url",
+        ])?
+        .assert()
+        .success();
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "mappers.thingsboard.url",
+        ])?
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("is not set"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn list_includes_mapper_keys() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "url = \"tb.example.com:8883\"\n");
+
+        tedge_command(["--config-dir", config_dir, "config", "list"])?
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "mappers.thingsboard.url=tb.example.com:8883",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn from_root_fallback_returns_root_default() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "");
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "mappers.thingsboard.device.cert_path",
+        ])?
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "/etc/tedge/device-certs/tedge-certificate.pem",
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn unknown_mapper_reports_error() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "mappers.nonexistent.url",
+        ])?
+        .assert()
+        .failure();
+
+        Ok(())
+    }
+
+    #[test]
+    fn unknown_key_within_mapper_reports_error() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "");
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "mappers.thingsboard.nonexistent",
+        ])?
+        .assert()
+        .failure();
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_replaces_single_value_mapper_key() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "url = \"old.example.com:8883\"\n");
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "add",
+            "mappers.thingsboard.url",
+            "new.example.com:8883",
+        ])?
+        .assert()
+        .success();
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "mappers.thingsboard.url",
+        ])?
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("new.example.com:8883"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_clears_matching_mapper_key() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "url = \"tb.example.com:8883\"\n");
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "remove",
+            "mappers.thingsboard.url",
+            "tb.example.com:8883",
+        ])?
+        .assert()
+        .success();
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "mappers.thingsboard.url",
+        ])?
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("is not set"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn list_doc_includes_mapper_keys() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "");
+
+        tedge_command(["--config-dir", config_dir, "config", "list", "--doc"])?
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("mappers.thingsboard.url"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn list_doc_shows_mapper_key_description() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "");
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "list",
+            "--doc",
+            "mappers.thingsboard.url",
+        ])?
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Cloud broker URL"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn core_keys_still_work_with_mapper_config_enabled() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "device.cert_path",
+        ])?
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("tedge-certificate.pem"));
+
+        Ok(())
+    }
+
+    fn tedge_command<I, S>(args: I) -> Result<assert_cmd::Command, Box<dyn std::error::Error>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        let mut cmd = assert_cmd::Command::cargo_bin("tedge")?;
+        cmd.args(args);
+        Ok(cmd)
+    }
+
+    #[test]
+    fn profile_flag_rejected_for_mapper_keys() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "thingsboard", "url = \"tb.example.com:8883\"\n");
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "get",
+            "mappers.thingsboard.url",
+            "--profile",
+            "foo",
+        ])?
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--profile is not supported for mapper key",
+        ));
+
+        tedge_command([
+            "--config-dir",
+            config_dir,
+            "config",
+            "set",
+            "mappers.thingsboard.url",
+            "new.example.com",
+            "--profile",
+            "foo",
+        ])?
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--profile is not supported for mapper key",
+        ));
+
+        Ok(())
+    }
+
+    fn setup_mapper(temp_dir: &tempfile::TempDir, name: &str, toml_content: &str) {
+        let mapper_dir = temp_dir.path().join("mappers").join(name);
+        std::fs::create_dir_all(&mapper_dir).unwrap();
+        std::fs::write(mapper_dir.join("mapper.toml"), toml_content).unwrap();
+    }
+}
