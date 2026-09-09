@@ -190,6 +190,36 @@ pub struct InvalidServiceType {
     pub reason: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ServiceActions {
+    pub declared: &'static [&'static str],
+    pub withdrawn: &'static [&'static str],
+}
+
+impl ServiceActions {
+    pub const NONE: ServiceActions = ServiceActions {
+        declared: &[],
+        withdrawn: &[],
+    };
+
+    pub const fn declaring(declared: &'static [&'static str]) -> Self {
+        ServiceActions {
+            declared,
+            withdrawn: &[],
+        }
+    }
+
+    pub const fn withdrawing(withdrawn: &'static [&'static str]) -> Self {
+        ServiceActions {
+            declared: &[],
+            withdrawn,
+        }
+    }
+}
+
+// Keep this as array so that we can expand the actions later.
+pub const TEDGE_SERVICE_ACTIONS: &[&str] = &["restart"];
+
 #[cfg(test)]
 mod tests {
     use super::*;

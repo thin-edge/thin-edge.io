@@ -10,6 +10,7 @@ use tedge_config::TEdgeConfig;
 use tedge_mapper::MapperName;
 use tedge_supervisor::RuntimeFactory;
 use tedge_supervisor::Supervisor;
+use tedge_supervisor::SupervisorMode;
 use tedge_supervisor::Unit;
 use tedge_supervisor::UnitKind;
 
@@ -86,7 +87,7 @@ pub async fn run(opt: RunAllOpt) -> anyhow::Result<()> {
             let mapper = mapper.clone();
             async move {
                 let config = TEdgeConfig::load(&config_dir).await?;
-                tedge_mapper::build(mapper, config).await
+                tedge_mapper::build(mapper, config, SupervisorMode::MultiUnit).await
             }
             .boxed()
         });
