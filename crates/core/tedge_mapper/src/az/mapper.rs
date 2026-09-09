@@ -19,6 +19,7 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::AuthMethod;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
+use tedge_supervisor::SupervisorMode;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
 use tedge_watch_ext::WatchActorBuilder;
@@ -42,6 +43,7 @@ impl TEdgeComponent for AzureMapper {
         &self,
         tedge_config: TEdgeConfig,
         config_dir: &TedgePaths,
+        supervisor_mode: SupervisorMode,
     ) -> Result<Runtime, anyhow::Error> {
         let az_config = tedge_config.mapper_config::<AzMapperSpecificConfig>(&self.profile)?;
         let prefix = &az_config.bridge.topic_prefix;
@@ -51,8 +53,13 @@ impl TEdgeComponent for AzureMapper {
             tedge_config::models::CloudType::Az,
             self.profile.as_ref(),
         )?;
-        let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(&az_mapper_name, &tedge_config, exposed_config).await?;
+        let (mut runtime, mut mqtt_actor) = start_basic_actors(
+            &az_mapper_name,
+            &tedge_config,
+            exposed_config,
+            supervisor_mode,
+        )
+        .await?;
         let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
 
         if tedge_config.mqtt.bridge.built_in {

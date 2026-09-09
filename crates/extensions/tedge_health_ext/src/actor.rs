@@ -12,6 +12,8 @@ pub struct HealthMonitorActor {
     service_registration_message: Option<MqttMessage>,
     health_topic: ServiceHealthTopic,
     messages: SimpleMessageBox<MqttMessage, MqttMessage>,
+    // Unrelated to the health of the service, but published here to follow its registration
+    action_capabilities: Vec<MqttMessage>,
 }
 
 impl HealthMonitorActor {
@@ -19,11 +21,13 @@ impl HealthMonitorActor {
         service_registration_message: Option<MqttMessage>,
         health_topic: ServiceHealthTopic,
         messages: SimpleMessageBox<MqttMessage, MqttMessage>,
+        action_capabilities: Vec<MqttMessage>,
     ) -> Self {
         Self {
             service_registration_message,
             health_topic,
             messages,
+            action_capabilities,
         }
     }
 
@@ -45,6 +49,11 @@ impl Actor for HealthMonitorActor {
     async fn run(mut self) -> Result<(), RuntimeError> {
         if let Some(registration_message) = &self.service_registration_message {
             self.messages.send(registration_message.clone()).await?;
+        }
+
+        // Service action capabilities should be sent after the service registration
+        for action_capability in &self.action_capabilities {
+            self.messages.send(action_capability.clone()).await?;
         }
 
         self.messages.send(self.up_health_status()).await?;

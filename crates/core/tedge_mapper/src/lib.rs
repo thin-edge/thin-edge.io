@@ -30,6 +30,7 @@ use tedge_flows::FlowRegistryExt;
 use tedge_flows::FlowsMapperConfig;
 use tedge_flows::UpdateFlowRegistryError;
 use tedge_supervisor::Supervisor;
+use tedge_supervisor::SupervisorMode;
 use tedge_supervisor::UnitKind;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
@@ -340,7 +341,7 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
             let mapper = mapper.clone();
             async move {
                 let config = TEdgeConfig::load(&config_dir).await?;
-                build(mapper, config).await
+                build(mapper, config, SupervisorMode::Standalone).await
             }
             .boxed()
         });
@@ -352,12 +353,16 @@ pub async fn run(mapper_opt: MapperOpt, config: TEdgeConfig) -> anyhow::Result<(
 /// Rebuildable factory the single-process supervisor calls (on each restart) for a
 /// mapper unit. Resolves the named component and assembles it via
 /// `TEdgeComponent::build` — no lock, no signal handling, no run-to-completion.
-pub async fn build(name: MapperName, config: TEdgeConfig) -> anyhow::Result<Runtime> {
+pub async fn build(
+    name: MapperName,
+    config: TEdgeConfig,
+    supervisor_mode: SupervisorMode,
+) -> anyhow::Result<Runtime> {
     let component = lookup_component(name)?;
     let config_root = config.config_root();
     let mappers_dir = config_root.dir("mappers")?;
     core::mappers_dir::warn_misconfigured_mapper_dirs(mappers_dir.path()).await;
-    component.build(config, &config_root).await
+    component.build(config, &config_root, supervisor_mode).await
 }
 
 /// Acquires a mapper's single-instance lock, if locking is enabled.

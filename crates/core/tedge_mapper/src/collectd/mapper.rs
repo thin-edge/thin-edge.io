@@ -10,6 +10,7 @@ use tedge_actors::MessageSink;
 use tedge_actors::NoConfig;
 use tedge_actors::Runtime;
 use tedge_config::TEdgeConfig;
+use tedge_supervisor::SupervisorMode;
 use tedge_utils::paths::TedgePaths;
 
 const COLLECTD_MAPPER_NAME: &str = "tedge-mapper-collectd";
@@ -34,9 +35,15 @@ impl TEdgeComponent for CollectdMapper {
         &self,
         tedge_config: TEdgeConfig,
         _config_dir: &TedgePaths,
+        supervisor_mode: SupervisorMode,
     ) -> Result<Runtime, anyhow::Error> {
-        let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(COLLECTD_MAPPER_NAME, &tedge_config, Vec::new()).await?;
+        let (mut runtime, mut mqtt_actor) = start_basic_actors(
+            COLLECTD_MAPPER_NAME,
+            &tedge_config,
+            Vec::new(),
+            supervisor_mode,
+        )
+        .await?;
 
         let input_topic = CollectdMapper::input_topics();
         let output_topic = CollectdMapper::output_topic();
