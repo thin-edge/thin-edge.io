@@ -1,4 +1,6 @@
+use crate::entity::EntityType;
 use crate::workflow::CommandBoard;
+use crate::workflow::CommandEntry;
 use crate::workflow::GenericCommandState;
 use mqtt_channel::Topic;
 use serde::Deserialize;
@@ -24,6 +26,8 @@ pub(crate) struct OnDiskCommandStateV1 {
     unix_timestamp: i64,
     status: String,
     payload: Value,
+    #[serde(default = "crate::workflow::default_entity_type")]
+    entity_type: EntityType,
 }
 
 impl TryFrom<OnDiskCommandBoard> for CommandBoard {
@@ -58,7 +62,14 @@ impl TryFrom<OnDiskCommandBoardV1> for CommandBoard {
                     }
                 })?;
             let state = GenericCommandState::new(topic, command.status, command.payload);
-            commands.insert(topic_name, (timestamp, state));
+            commands.insert(
+                topic_name,
+                CommandEntry {
+                    timestamp,
+                    state,
+                    entity_type: command.entity_type,
+                },
+            );
         }
         Ok(CommandBoard::new(commands))
     }
@@ -67,14 +78,15 @@ impl TryFrom<OnDiskCommandBoardV1> for CommandBoard {
 impl From<CommandBoard> for OnDiskCommandBoardV1 {
     fn from(board: CommandBoard) -> Self {
         let mut commands = HashMap::new();
-        for (timestamp, state) in board.iter() {
-            let topic_name = state.topic.name.clone();
+        for entry in board.iter() {
+            let topic_name = entry.state.topic.name.clone();
             commands.insert(
                 topic_name,
                 OnDiskCommandStateV1 {
-                    unix_timestamp: timestamp.unix_timestamp(),
-                    status: state.status.clone(),
-                    payload: state.payload.clone(),
+                    unix_timestamp: entry.timestamp.unix_timestamp(),
+                    status: entry.state.status.clone(),
+                    payload: entry.state.payload.clone(),
+                    entity_type: entry.entity_type,
                 },
             );
         }
@@ -90,4 +102,62 @@ pub enum CommandBoardTomlError {
 
     #[error("Invalid topic name: {name}")]
     InvalidTopic { name: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_board_persisted_before_the_entity_type_holds_device_commands() {
+        let file = r#"{
+            "version": "V1",
+            "commands": {
+                "te/device/main///cmd/restart/1": {
+                    "unix_timestamp": 1700000000,
+                    "status": "executing",
+                    "payload": { "status": "executing" }
+                }
+            }
+        }"#;
+
+        let board: CommandBoard = serde_json::from_str(file).unwrap();
+
+        let entry = board.entry("te/device/main///cmd/restart/1").unwrap();
+        assert_eq!(entry.entity_type, EntityType::MainDevice);
+        assert_eq!(entry.state.status, "executing");
+    }
+
+    #[test]
+    fn a_persisted_board_keeps_the_entity_type_of_each_command() {
+        let mut board = CommandBoard::default();
+        let service_cmd = GenericCommandState::new(
+            Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/1"),
+            "executing".to_string(),
+            serde_json::json!({}),
+        );
+        let device_cmd = GenericCommandState::new(
+            Topic::new_unchecked("te/device/main///cmd/restart/2"),
+            "executing".to_string(),
+            serde_json::json!({}),
+        );
+        board.insert(EntityType::Service, service_cmd).unwrap();
+        board.insert(EntityType::MainDevice, device_cmd).unwrap();
+
+        let file = serde_json::to_string(&board).unwrap();
+        let reloaded: CommandBoard = serde_json::from_str(&file).unwrap();
+
+        assert_eq!(
+            reloaded
+                .entry("te/device/main/service/collectd/cmd/restart/1")
+                .map(|entry| entry.entity_type),
+            Some(EntityType::Service)
+        );
+        assert_eq!(
+            reloaded
+                .entry("te/device/main///cmd/restart/2")
+                .map(|entry| entry.entity_type),
+            Some(EntityType::MainDevice)
+        );
+    }
 }
