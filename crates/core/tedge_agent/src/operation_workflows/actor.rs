@@ -18,6 +18,7 @@ use tedge_actors::MessageReceiver;
 use tedge_actors::RuntimeError;
 use tedge_actors::Sender;
 use tedge_actors::UnboundedLoggingReceiver;
+use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicError;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -245,7 +246,7 @@ impl WorkflowActor {
 
         match self
             .workflow_repository
-            .apply_external_update(&operation, state)
+            .apply_external_update(EntityType::MainDevice, &operation, state)
             .await
         {
             Ok(None) => (),
