@@ -5,6 +5,7 @@ use crate::entity_manager::server::EntityStoreServer;
 use crate::entity_manager::server::EntityStoreServerConfig;
 use crate::http_server::actor::HttpServerBuilder;
 use crate::http_server::actor::HttpServerConfig;
+use crate::operation_workflows::install_service_workflows;
 use crate::operation_workflows::OperationConfig;
 use crate::operation_workflows::WorkflowActorBuilder;
 use crate::restart_manager::builder::RestartManagerBuilder;
@@ -51,6 +52,7 @@ use tedge_config_manager::ConfigManagerOptions;
 use tedge_downloader_ext::DownloaderActor;
 use tedge_file_system_ext::FsWatchActorBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
+use tedge_http_ext::HttpActor;
 use tedge_log_manager::LogManagerBuilder;
 use tedge_log_manager::LogManagerConfig;
 use tedge_log_manager::LogManagerOptions;
@@ -84,6 +86,7 @@ pub(crate) struct AgentConfig {
     pub service_topic_id: ServiceTopicId,
     pub mqtt_topic_root: Arc<str>,
     pub file_transfer_urls: FileTransferUrls,
+    pub http_client_tls_config: rustls::ClientConfig,
     pub service: TEdgeConfigReaderService,
     pub identity: Option<Identity>,
     pub cloud_root_certs: CloudHttpConfig,
@@ -138,6 +141,7 @@ impl AgentConfig {
             .with_session_name(mqtt_session_name);
 
         let file_transfer_urls = tedge_config.http.file_transfer_urls();
+        let http_client_tls_config = tedge_config.http.client_tls_config()?;
 
         // HTTP config
         let data_dir = tedge_config.data_root();
@@ -219,6 +223,7 @@ impl AgentConfig {
             mqtt_device_topic_id,
             service_topic_id,
             file_transfer_urls,
+            http_client_tls_config,
             identity,
             cloud_root_certs,
             is_sudo_enabled,
@@ -276,6 +281,8 @@ impl Agent {
         // as it will create the device_profile workflow if it does not already exist
         DeviceProfileManagerBuilder::try_new(&self.config.operations_dir).await?;
 
+        install_service_workflows(&self.config.operations_dir).await?;
+
         // Inotify actor
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();
 
@@ -296,6 +303,9 @@ impl Agent {
         let mut uploader_actor_builder =
             UploaderActor::new(self.config.identity, self.config.cloud_root_certs).builder();
 
+        // HTTP client actor, used by the workflow actor to query the entity store
+        let mut http_actor = HttpActor::new(self.config.http_client_tls_config).builder();
+
         // Software update actor
         let mut software_update_builder = SoftwareManagerBuilder::new(self.config.sw_update_config);
 
@@ -307,6 +317,7 @@ impl Agent {
             &mut fs_watch_actor_builder,
             &mut downloader_actor_builder,
             &mut uploader_actor_builder,
+            &mut http_actor,
         );
         workflow_actor_builder.register_builtin_operation(&mut restart_actor_builder);
         workflow_actor_builder.register_builtin_operation(&mut software_update_builder);
@@ -468,6 +479,7 @@ impl Agent {
         runtime.spawn(twin_manager_builder).await?;
         runtime.spawn(downloader_actor_builder).await?;
         runtime.spawn(uploader_actor_builder).await?;
+        runtime.spawn(http_actor).await?;
         if let Some(config_actor_builder) = config_actor_builder {
             runtime.spawn(config_actor_builder).await?;
         }

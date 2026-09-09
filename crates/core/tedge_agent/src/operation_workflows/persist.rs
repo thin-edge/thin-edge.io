@@ -21,6 +21,7 @@ use tedge_file_system_ext::FsWatchEvent;
 use tedge_mqtt_ext::MqttMessage;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 /// Persist the workflow definitions.
 ///
@@ -133,6 +134,12 @@ impl WorkflowRepository {
     ) -> Result<(EntityType, OperationName), anyhow::Error> {
         let entity_type = workflow.entity_type;
         let operation_name = workflow.operation.to_string();
+        if entity_type == EntityType::ChildDevice {
+            warn!(
+                "The {operation_name} workflow declares type = \"child-device\", \
+                 which is not supported: use type = \"device\""
+            );
+        }
         let version = match source {
             WorkflowSource::UserDefined(definition) => {
                 self.definitions.insert(
@@ -185,11 +192,11 @@ impl WorkflowRepository {
                         // Checking the path exists as FsWatchEvent returns misleading Modified events along FileDeleted events.
                         if path.exists() {
                             return self.reload_operation_workflow(&path).await.and_then(
-                                |(entity_type, updated_operation)| {
+                                |(workflow_type, updated_operation)| {
                                     self.capability_message(
                                         schema,
                                         target,
-                                        entity_type,
+                                        workflow_type,
                                         &updated_operation,
                                     )
                                 },
@@ -203,11 +210,11 @@ impl WorkflowRepository {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
                         return self.remove_operation_workflow(&path).await.and_then(
-                            |(entity_type, deprecated_operation)| {
+                            |(workflow_type, deprecated_operation)| {
                                 self.deregistration_message(
                                     schema,
                                     target,
-                                    entity_type,
+                                    workflow_type,
                                     &deprecated_operation,
                                 )
                             },
@@ -360,8 +367,6 @@ impl WorkflowRepository {
                 .join(operation)
                 .with_extension("toml");
             if let Ok((workflow, new)) = read_operation_workflow(&path).await {
-                // The name of a file tells nothing of the type of the entities its workflow
-                // applies to: a workflow for another type is not the latest version of this one
                 if workflow.entity_type == entity_type {
                     return Some((path, new, workflow));
                 }
@@ -411,35 +416,27 @@ impl WorkflowRepository {
         self.workflows.capability_messages(schema, target)
     }
 
-    /// The message declaring the capability of an updated operation
-    ///
-    /// Only for the workflows of the target itself: the capabilities of a service are
-    /// declared by that service, not by the workflows installed on the device.
     fn capability_message(
         &self,
         schema: &MqttSchema,
         target: &EntityTopicId,
-        entity_type: EntityType,
+        workflow_type: EntityType,
         operation: &OperationName,
     ) -> Option<MqttMessage> {
-        if entity_type != EntityType::MainDevice {
+        if workflow_type != EntityType::MainDevice {
             return None;
         }
         self.workflows.capability_message(schema, target, operation)
     }
 
-    /// The message clearing the capability of a deprecated operation
-    ///
-    /// Only for the workflows of the target itself: the capabilities of a service are
-    /// declared by that service, not by the workflows installed on the device.
     fn deregistration_message(
         &self,
         schema: &MqttSchema,
         target: &EntityTopicId,
-        entity_type: EntityType,
+        workflow_type: EntityType,
         operation: &OperationName,
     ) -> Option<MqttMessage> {
-        if entity_type != EntityType::MainDevice {
+        if workflow_type != EntityType::MainDevice {
             return None;
         }
         Some(
