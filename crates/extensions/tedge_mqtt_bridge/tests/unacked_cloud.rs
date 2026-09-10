@@ -159,14 +159,7 @@ async fn reconnects_and_delivers_the_message_when_the_cloud_stops_acknowledging(
     let _dump_on_panic = start_bridge_with_config(
         &local_broker,
         &cloud_broker,
-        &format!(
-            "
-    mqtt.client.port = {port}
-    mqtt.bridge.reconnect_policy.initial_interval = \"0s\"
-    mqtt.bridge.unacked_message_timeout = \"1s\"
-    ",
-            port = local_broker.port()
-        ),
+        &stalling_cloud_config(&local_broker),
     )
     .await;
 
@@ -183,6 +176,37 @@ async fn reconnects_and_delivers_the_message_when_the_cloud_stops_acknowledging(
 }
 
 #[tokio::test]
+async fn reports_the_bridge_down_and_up_again_when_the_cloud_stops_acknowledging() {
+    init_logging();
+    let local_broker = new_broker().await;
+    let cloud_broker = new_broker().await;
+    let _dump_on_panic = start_bridge_with_config(
+        &local_broker,
+        &cloud_broker,
+        &stalling_cloud_config(&local_broker),
+    )
+    .await;
+
+    cloud_broker.disable_acknowledgements().await;
+    publish_from_local(&local_broker, 0).await;
+    cloud_broker.next_message_matching("s/us").await;
+
+    cloud_broker.enable_acknowledgements().await;
+
+    // Dropping the stalled connection takes the bridge down, and it is only up again once
+    // the replacement connection can relay messages
+    wait_until_health_status_is("down", &local_broker)
+        .await
+        .unwrap();
+    wait_until_health_status_is("up", &local_broker)
+        .await
+        .unwrap();
+
+    cloud_broker.next_message_matching("s/us").await;
+    local_broker.wait_until_all_messages_acked().await;
+}
+
+#[tokio::test]
 async fn recovers_when_qos_1_is_blocked_by_the_inflight_window_but_qos_0_still_flows() {
     init_logging();
     let local_broker = new_broker().await;
@@ -191,14 +215,7 @@ async fn recovers_when_qos_1_is_blocked_by_the_inflight_window_but_qos_0_still_f
     let _dump_on_panic = start_bridge_with_config(
         &local_broker,
         &cloud_broker,
-        &format!(
-            "
-    mqtt.client.port = {port}
-    mqtt.bridge.reconnect_policy.initial_interval = \"0s\"
-    mqtt.bridge.unacked_message_timeout = \"1s\"
-    ",
-            port = local_broker.port()
-        ),
+        &stalling_cloud_config(&local_broker),
     )
     .await;
 
@@ -331,6 +348,18 @@ fn default_config(mqtt_port: u16) -> String {
     mqtt.client.port = {mqtt_port}
     mqtt.bridge.reconnect_policy.initial_interval = \"0s\"
     "
+    )
+}
+
+/// Builds a config whose bridge gives up on a connection that stops acknowledging
+fn stalling_cloud_config(local_broker: &TestMqttBroker) -> String {
+    format!(
+        "
+    mqtt.client.port = {port}
+    mqtt.bridge.reconnect_policy.initial_interval = \"0s\"
+    mqtt.bridge.unacked_message_timeout = \"1s\"
+    ",
+        port = local_broker.port()
     )
 }
 
