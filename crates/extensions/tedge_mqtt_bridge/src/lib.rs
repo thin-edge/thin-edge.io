@@ -947,6 +947,31 @@ async fn half_bridge(
         };
     }
 
+    // Handles the target broker acknowledging the message sent with this packet id, by
+    // acknowledging the source message it was forwarded from
+    macro_rules! acknowledge {
+        ($pkid:expr) => {{
+            let pkid: u16 = $pkid;
+            last_ack_at = tokio::time::Instant::now();
+            match forward_pkid_to_received_msg.remove(&pkid) {
+                Some(PendingAck {
+                    message: Some(msg), ..
+                }) => {
+                    acknowledged += 1;
+                    record_event!("acked-source-message", pkid);
+                    target.ack(msg);
+                }
+                Some(PendingAck { message: None, .. }) => {
+                    // A bridge-generated message was acknowledged, nothing to pass on
+                }
+                None => {
+                    record_event!("ack-for-unknown-pkid", pkid);
+                    log_event!(warn: name, "Received ack for unknown pkid={pkid}");
+                }
+            }
+        }};
+    }
+
     loop {
         // A broker that stops acknowledging without closing the connection would
         // otherwise stall this half indefinitely, so give up on it after a while and
@@ -1024,6 +1049,19 @@ async fn half_bridge(
                 readiness.not_ready().await;
                 record_event!("reported-not-ready", 0);
                 suback_tracker.deadline = None;
+
+                // The event loop may still hold events from the dropped connection, and
+                // rumqttc does not clear them itself. An acknowledgement among them is
+                // honoured now: rumqttc has already dropped that message from its inflight
+                // set, so it will not be sent again and this is the only chance to tell the
+                // source broker. The rest is discarded: an `Outgoing::Publish` among them
+                // reports a packet id that is about to be sent again on the new connection,
+                // so this half would see the same id twice and take a message it was not
+                // meant to take
+                for pkid in recv_event_loop.drain_buffered_events() {
+                    acknowledge!(pkid);
+                }
+
                 let time = backoff.backoff();
                 if !time.is_zero() {
                     log_event!(
@@ -1034,9 +1072,9 @@ async fn half_bridge(
                 tokio::time::sleep(time).await;
 
                 // Take the unacknowledged messages from the event loop so they survive the
-                // reconnection. On a clean session (c8y) rumqttc discards them once the
-                // broker confirms there is no session to resume; taking them here means
-                // the bridge can hand them back on ConnAck regardless of session mode
+                // reconnection. The cloud connection uses a clean session, so rumqttc
+                // discards them once the broker confirms there is no session to resume.
+                // The bridge still has to deliver them, so it hands them back on ConnAck
                 let msgs = recv_event_loop.take_pending();
                 log_event!(debug: name, "Extending pending with: {msgs:?}");
                 pending.extend(msgs);
@@ -1168,25 +1206,7 @@ async fn half_bridge(
             Event::Incoming(
                 Incoming::PubAck(PubAck { pkid: ack_pkid })
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
-            ) => {
-                last_ack_at = tokio::time::Instant::now();
-                match forward_pkid_to_received_msg.remove(&ack_pkid) {
-                    Some(PendingAck {
-                        message: Some(msg), ..
-                    }) => {
-                        acknowledged += 1;
-                        record_event!("acked-source-message", ack_pkid);
-                        target.ack(msg);
-                    }
-                    Some(PendingAck { message: None, .. }) => {
-                        // A health message was acked, nothing to do
-                    }
-                    None => {
-                        record_event!("ack-for-unknown-pkid", ack_pkid);
-                        log_event!(warn: name, "Received ack for unknown pkid={ack_pkid}");
-                    }
-                }
-            }
+            ) => acknowledge!(ack_pkid),
 
             // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => {
@@ -1309,6 +1329,15 @@ trait MqttEvents: Send {
     async fn poll(&mut self) -> Result<Event, ConnectionError>;
     fn take_pending(&mut self) -> VecDeque<Request>;
     fn set_pending(&mut self, requests: Vec<Request>);
+
+    /// Removes every event the dropped connection produced but never delivered, returning
+    /// the packet ids of the acknowledgements among them and discarding the rest
+    ///
+    /// An acknowledgement the event loop received before the connection dropped is final:
+    /// the message is not sent again, so this is the only chance to act on it. Everything
+    /// else describes a connection that no longer exists, and a publish among them is
+    /// about to be sent again, which would report the same packet id a second time
+    fn drain_buffered_events(&mut self) -> Vec<u16>;
 }
 
 #[async_trait::async_trait]
@@ -2930,6 +2959,73 @@ mod tests {
                 drop(bridge);
 
                 assert_eq!(cloud_events.pending_restored().len(), 1);
+            }
+
+            #[tokio::test]
+            async fn ignores_a_publish_the_dropped_connection_had_not_reported_yet() {
+                let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+                let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+                let cloud_events = FixedEventStream::from([
+                    inc!(connack),
+                    out!(publish(1)),
+                    inc!(network_error),
+                    inc!(clean_connack),
+                    // The message is sent again on the new connection
+                    out!(publish(1)),
+                    inc!(puback(1)),
+                    // second_msg is forwarded for the first time
+                    out!(publish(2)),
+                    inc!(puback(2)),
+                ])
+                // The dropped connection had already reported sending the message, but the
+                // event loop never got to hand that over. It is delivered after the next
+                // connection is acknowledged, describing a connection that has since gone.
+                .with_buffered_events([out!(publish(1))])
+                .with_pending_on_error([rumqttc::Request::Publish(already_sent(
+                    "first payload",
+                    1,
+                ))]);
+
+                let bridge = Bridge::default()
+                    .with_local_events([inc!(publish(first_msg)), inc!(publish(second_msg))])
+                    .with_cloud_custom_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                assert_eq!(
+                    drain_actions(&bridge.local_client),
+                    vec![Action::Ack(first_msg), Action::Ack(second_msg)]
+                );
+            }
+
+            #[tokio::test]
+            async fn acknowledges_a_message_whose_acknowledgement_arrived_as_the_connection_dropped(
+            ) {
+                let msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let cloud_events = FixedEventStream::from([
+                    inc!(connack),
+                    out!(publish(1)),
+                    inc!(network_error),
+                    inc!(clean_connack),
+                ])
+                // The broker acknowledged the message just before the connection dropped.
+                // The event loop recorded that and will not send the message again, but
+                // it had not yet handed the acknowledgement over
+                .with_buffered_events([inc!(puback(1))]);
+
+                let bridge = Bridge::default()
+                    .with_local_events([inc!(publish(msg))])
+                    .with_cloud_custom_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                assert_eq!(
+                    drain_actions(&bridge.local_client),
+                    vec![Action::Ack(msg)],
+                    "the message was acknowledged by the cloud, so the local broker must be told"
+                );
             }
 
             #[tokio::test]

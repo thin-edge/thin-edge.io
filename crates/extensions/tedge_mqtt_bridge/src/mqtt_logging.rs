@@ -7,6 +7,7 @@ use rumqttc::ClientError;
 use rumqttc::ConnectionError;
 use rumqttc::Event;
 use rumqttc::EventLoop;
+use rumqttc::Incoming;
 use rumqttc::MqttOptions;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
@@ -187,6 +188,19 @@ impl MqttEvents for LoggingEventLoop {
 
     fn set_pending(&mut self, requests: Vec<Request>) {
         self.inner.pending = requests.into_iter().collect();
+    }
+
+    fn drain_buffered_events(&mut self) -> Vec<u16> {
+        self.inner
+            .state
+            .events
+            .drain(..)
+            .filter_map(|event| match event {
+                Event::Incoming(Incoming::PubAck(ack)) => Some(ack.pkid),
+                Event::Incoming(Incoming::PubRec(rec)) => Some(rec.pkid),
+                _ => None,
+            })
+            .collect()
     }
 }
 

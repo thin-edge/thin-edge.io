@@ -97,6 +97,16 @@ pub struct FixedEventStream {
     pending_on_error: Arc<Mutex<VecDeque<Request>>>,
     /// Requests handed back by [MqttEvents::set_pending], recorded so tests can assert on them
     pending_restored: Arc<Mutex<Vec<Request>>>,
+    /// Events the dropped connection had produced but not yet delivered
+    ///
+    /// The event loop returns the new `ConnAck` first and only then drains what it had
+    /// buffered, so these are delivered after the next `ConnAck` in the script
+    buffered: Arc<Mutex<VecDeque<EventRes>>>,
+    /// Whether the connection has dropped, after which the buffered events become live
+    connection_dropped: Arc<Mutex<bool>>,
+    /// Whether the replacement connection has been acknowledged, after which the event
+    /// loop drains what the dropped connection had buffered
+    delivering_buffered: Arc<Mutex<bool>>,
 }
 
 impl FixedEventStream {
@@ -117,6 +127,15 @@ impl FixedEventStream {
     pub fn pending_restored(&self) -> Vec<Request> {
         self.pending_restored.lock().unwrap().clone()
     }
+
+    /// Seeds the events the dropped connection had produced but not yet delivered
+    ///
+    /// They are delivered after the next `ConnAck`, which is when the event loop drains
+    /// what it buffered, unless the bridge discards them first
+    pub fn with_buffered_events(self, events: impl Into<VecDeque<EventRes>>) -> Self {
+        *self.buffered.lock().unwrap() = events.into();
+        self
+    }
 }
 
 impl<I: Into<VecDeque<EventRes>>> From<I> for FixedEventStream {
@@ -125,6 +144,9 @@ impl<I: Into<VecDeque<EventRes>>> From<I> for FixedEventStream {
             events: Arc::new(Mutex::new(value.into())),
             pending_on_error: <_>::default(),
             pending_restored: <_>::default(),
+            buffered: <_>::default(),
+            connection_dropped: <_>::default(),
+            delivering_buffered: <_>::default(),
         }
     }
 }
@@ -132,11 +154,37 @@ impl<I: Into<VecDeque<EventRes>>> From<I> for FixedEventStream {
 #[async_trait::async_trait]
 impl MqttEvents for FixedEventStream {
     async fn poll(&mut self) -> Result<Event, ConnectionError> {
-        if let Some(event) = self.next_event() {
-            event
-        } else {
-            pending().await
+        if *self.delivering_buffered.lock().unwrap() {
+            if let Some(event) = self.buffered.lock().unwrap().pop_front() {
+                return event;
+            }
         }
+        match self.next_event() {
+            Some(event) => {
+                if event.is_err() {
+                    *self.connection_dropped.lock().unwrap() = true;
+                } else if matches!(event, Ok(Event::Incoming(Incoming::ConnAck(_))))
+                    && *self.connection_dropped.lock().unwrap()
+                {
+                    *self.delivering_buffered.lock().unwrap() = true;
+                }
+                event
+            }
+            None => pending().await,
+        }
+    }
+
+    fn drain_buffered_events(&mut self) -> Vec<u16> {
+        self.buffered
+            .lock()
+            .unwrap()
+            .drain(..)
+            .filter_map(|event| match event {
+                Ok(Event::Incoming(Incoming::PubAck(ack))) => Some(ack.pkid),
+                Ok(Event::Incoming(Incoming::PubRec(rec))) => Some(rec.pkid),
+                _ => None,
+            })
+            .collect()
     }
 
     fn take_pending(&mut self) -> VecDeque<Request> {
@@ -153,7 +201,7 @@ impl AllProcessed for FixedEventStream {
     async fn all_processed(&self) -> anyhow::Result<()> {
         let timeout = Duration::from_secs(5);
         let start = Instant::now();
-        while !self.events.lock().unwrap().is_empty() {
+        while !self.events.lock().unwrap().is_empty() || !self.buffered.lock().unwrap().is_empty() {
             if start.elapsed() > timeout {
                 bail!("Timed out waiting for event emitter to be fully consumed. Unconsumed events were {:?}", self.events.lock().unwrap())
             }
@@ -366,6 +414,10 @@ impl MqttEvents for ChannelEvents {
 
     fn set_pending(&mut self, _requests: Vec<Request>) {
         unimplemented!()
+    }
+
+    fn drain_buffered_events(&mut self) -> Vec<u16> {
+        Vec::new()
     }
 }
 
