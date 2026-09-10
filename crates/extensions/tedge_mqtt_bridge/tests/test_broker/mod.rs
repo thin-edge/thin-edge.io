@@ -340,6 +340,19 @@ impl TestMqttBroker {
             if mqttbytes::matches(sub_filter, topic) {
                 // Iterate through all clients subscribed to this filter.
                 for (client_id, sender) in client_senders.iter() {
+                    // QoS 0 messages are neither acknowledged nor subject to the inflight
+                    // window, so they keep being delivered however many QoS 1 messages are
+                    // outstanding
+                    if qos == QoS::AtMostOnce {
+                        if sender
+                            .send(Packet::Publish(publish_packet.clone()))
+                            .await
+                            .is_err()
+                        {
+                            error!("Failed to send publish to a client, likely disconnected.");
+                        }
+                        continue;
+                    }
                     // Hold the message back if the client's inflight window is full, the way
                     // mosquitto queues QoS 1 messages once `max_inflight_messages` of them are
                     // awaiting acknowledgement

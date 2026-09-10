@@ -182,6 +182,62 @@ async fn reconnects_and_delivers_the_message_when_the_cloud_stops_acknowledging(
     local_broker.wait_until_all_messages_acked().await;
 }
 
+#[tokio::test]
+async fn recovers_when_qos_1_is_blocked_by_the_inflight_window_but_qos_0_still_flows() {
+    init_logging();
+    let local_broker = new_broker().await;
+    let cloud_broker = new_broker().await;
+    local_broker.set_max_outbound_inflight(3).await;
+    let _dump_on_panic = start_bridge_with_config(
+        &local_broker,
+        &cloud_broker,
+        &format!(
+            "
+    mqtt.client.port = {port}
+    mqtt.bridge.reconnect_policy.initial_interval = \"0s\"
+    mqtt.bridge.unacked_message_timeout = \"1s\"
+    ",
+            port = local_broker.port()
+        ),
+    )
+    .await;
+
+    // The cloud goes quiet, and enough QoS 1 messages go unacknowledged to fill the local
+    // broker's inflight window
+    cloud_broker.disable_acknowledgements().await;
+    for i in 0..3 {
+        publish_from_local(&local_broker, i).await;
+        cloud_broker.next_message_matching("s/us").await;
+    }
+    for i in 3..6 {
+        publish_from_local(&local_broker, i).await;
+    }
+    assert_eq!(
+        local_broker.queued_publish_count(SERVICE_NAME).await,
+        3,
+        "the local broker should have stopped delivering QoS 1 once its window filled"
+    );
+
+    // QoS 0 is not subject to the inflight window, so it keeps being forwarded throughout.
+    // This is what made the incident look like a partial failure rather than a lock-up.
+    local_broker
+        .publish_to_clients("c8y/s/us", b"311,at-most-once", QoS::AtMostOnce)
+        .await
+        .unwrap();
+    cloud_broker.next_message_matching("s/us").await;
+
+    // Acknowledgements are working again, but the messages the cloud is already holding
+    // will never be acknowledged, so only the bridge reconnecting can recover them
+    cloud_broker.enable_acknowledgements().await;
+
+    local_broker.wait_until_all_messages_acked().await;
+    assert_eq!(
+        local_broker.queued_publish_count(SERVICE_NAME).await,
+        0,
+        "the local broker should have drained its queue once the window reopened"
+    );
+}
+
 async fn new_broker() -> Arc<TestMqttBroker> {
     let broker = Arc::new(TestMqttBroker::new().await.unwrap());
     {

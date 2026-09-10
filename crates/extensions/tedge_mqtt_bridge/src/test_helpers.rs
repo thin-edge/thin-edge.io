@@ -103,6 +103,20 @@ impl FixedEventStream {
     fn next_event(&self) -> Option<EventRes> {
         self.events.lock().unwrap().pop_front()
     }
+
+    /// Seeds the requests the event loop surrenders when the connection drops
+    ///
+    /// A publish that carries a packet id was already sent on the previous connection; one
+    /// with packet id 0 was still queued and never reached the wire
+    pub fn with_pending_on_error(self, requests: impl Into<VecDeque<Request>>) -> Self {
+        *self.pending_on_error.lock().unwrap() = requests.into();
+        self
+    }
+
+    /// Returns the requests the bridge has handed back to be sent again
+    pub fn pending_restored(&self) -> Vec<Request> {
+        self.pending_restored.lock().unwrap().clone()
+    }
 }
 
 impl<I: Into<VecDeque<EventRes>>> From<I> for FixedEventStream {

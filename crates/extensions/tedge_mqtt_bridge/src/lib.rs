@@ -933,11 +933,8 @@ async fn half_bridge(
     let mut published = 0; // Count of messages published (by the companion)
     let mut acknowledged = 0; // Count of messages acknowledged (by the MQTT end-point of the companion)
 
-    // Keeps track of whether we have a non-clean session with the broker. This
-    // is set based on the value in the `ConnAck` packet to ensure it aligns
-    // with whether a session exists, not just that we requested one. This is
-    // used to republish messages in cases where rumqttc doesn't.
-    let mut session_present: Option<bool> = None;
+    // Messages the dropped connection never got acknowledged, handed back to the event
+    // loop once it reconnects
     let mut pending = Vec::new();
 
     let mut suback_tracker = SubackTracker::new(recv_client.clone(), topics.clone());
@@ -1035,15 +1032,13 @@ async fn half_bridge(
                 }
                 tokio::time::sleep(time).await;
 
-                // If the session is not managed by the current connection,
-                // handle the pending messages ourselves. If this isn't the
-                // case, rumqttc will handle republishing messages as per
-                // the MQTT specification.
-                if session_present != Some(true) {
-                    let msgs = recv_event_loop.take_pending();
-                    log_event!(debug: name, "Extending pending with: {msgs:?}");
-                    pending.extend(msgs);
-                }
+                // Take the unacknowledged messages from the event loop so they survive the
+                // reconnection. On a clean session (c8y) rumqttc discards them once the
+                // broker confirms there is no session to resume; taking them here means
+                // the bridge can hand them back on ConnAck regardless of session mode
+                let msgs = recv_event_loop.take_pending();
+                log_event!(debug: name, "Extending pending with: {msgs:?}");
+                pending.extend(msgs);
                 continue;
             }
         };
@@ -1065,7 +1060,9 @@ async fn half_bridge(
                 }
                 log_event!(name, "Bridge connection subscribing to {topics:?}");
                 // Everything still waiting is about to be sent again on this connection,
-                // so time it from this attempt
+                // so time it from this attempt. Without this the deadline is still the one
+                // the previous attempt missed, and the connection is dropped again before
+                // the messages have had any chance to be acknowledged.
                 connection = ConnectionState::Up;
                 let attempted_at = tokio::time::Instant::now();
                 last_ack_at = attempted_at;
@@ -1104,26 +1101,21 @@ async fn half_bridge(
                     suback_tracker.deadline = Some(tokio::time::Instant::now() + SUBACK_TIMEOUT);
                 }
 
-                session_present = Some(conn_ack.session_present);
+                // Work out which of the messages about to be sent again were already sent
+                // on the previous connection. Those still carry the packet id they were
+                // given, and the companion half bridge already handed their message over,
+                // so there is nothing waiting to be received for them. One with no packet
+                // id never reached the wire, so its message is still waiting and will be
+                // received when the event loop sends it.
+                awaiting_republish = pending
+                    .iter()
+                    .filter_map(|request| match request {
+                        Request::Publish(publish) if publish.pkid != 0 => Some(publish.pkid),
+                        _ => None,
+                    })
+                    .collect();
 
-                // Work out which packet ids this connection will send again. A resent
-                // message is not a new message, so the companion half bridge has nothing
-                // waiting for it. On a resumed session the event loop still holds every
-                // unacknowledged message; otherwise only the messages handed back below
-                // are sent again, and anything else the broker has forgotten is lost.
-                awaiting_republish = if conn_ack.session_present {
-                    forward_pkid_to_received_msg.keys().copied().collect()
-                } else {
-                    pending
-                        .iter()
-                        .filter_map(|request| match request {
-                            Request::Publish(publish) => Some(publish.pkid),
-                            _ => None,
-                        })
-                        .collect()
-                };
-
-                if !conn_ack.session_present && !pending.is_empty() {
+                if !pending.is_empty() {
                     let msgs = std::mem::take(&mut pending);
                     record_event!("restoring-pending", 0);
                     log_event!(
@@ -2057,7 +2049,9 @@ mod tests {
             let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
             let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
             let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
-            let cloud_events = [
+            let mut unacknowledged = Publish::new("s/us", QoS::AtLeastOnce, "first payload");
+            unacknowledged.pkid = 1;
+            let cloud_events = FixedEventStream::from([
                 inc!(connack),
                 out!(publish(1)),
                 // Abruptly disconnect client
@@ -2070,11 +2064,14 @@ mod tests {
                 // Then check we successfully acknowledge a future message with the same pkid
                 out!(publish(1)),
                 inc!(puback(1)),
-            ];
+            ])
+            // The bridge takes charge of the message left unacknowledged by the dropped
+            // connection, so that is where the republish above comes from
+            .with_pending_on_error([rumqttc::Request::Publish(unacknowledged)]);
 
             let bridge = Bridge::default()
                 .with_local_events(local_events)
-                .with_cloud_events(cloud_events)
+                .with_cloud_custom_events(cloud_events)
                 .with_c8y_topics()
                 .process_all_events()
                 .await;
@@ -2883,6 +2880,162 @@ mod tests {
                     forwarded, 1,
                     "the reconnect message after a clean reconnect must stay held until re-subscribed"
                 );
+            }
+        }
+
+        mod resending_messages_after_a_reconnection {
+            use super::*;
+
+            #[tokio::test]
+            async fn hands_messages_back_when_the_broker_resumes_the_session() {
+                let cloud_events = FixedEventStream::from([
+                    inc!(clean_connack),
+                    inc!(network_error),
+                    // The broker now has a session for us, which is a different answer
+                    // from the one the previous connection got
+                    inc!(connack),
+                ])
+                .with_pending_on_error([rumqttc::Request::Publish(already_sent("payload", 1))]);
+
+                let bridge = Bridge::default()
+                    .with_cloud_custom_events(cloud_events.clone())
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+                drop(bridge);
+
+                assert_eq!(
+                    cloud_events.pending_restored().len(),
+                    1,
+                    "the message taken from the event loop was never handed back, so it can \
+                     never be delivered or acknowledged"
+                );
+            }
+
+            #[tokio::test]
+            async fn hands_messages_back_when_the_broker_discards_the_session() {
+                let cloud_events = FixedEventStream::from([
+                    inc!(connack),
+                    inc!(network_error),
+                    inc!(clean_connack),
+                ])
+                .with_pending_on_error([rumqttc::Request::Publish(already_sent("payload", 1))]);
+
+                let bridge = Bridge::default()
+                    .with_cloud_custom_events(cloud_events.clone())
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+                drop(bridge);
+
+                assert_eq!(cloud_events.pending_restored().len(), 1);
+            }
+
+            #[tokio::test]
+            async fn does_not_take_a_new_message_when_an_already_sent_message_is_sent_again() {
+                let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+                let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+                let cloud_events = FixedEventStream::from([
+                    inc!(connack),
+                    // first_msg is forwarded, taking it from the companion half bridge
+                    out!(publish(1)),
+                    inc!(network_error),
+                    inc!(clean_connack),
+                    // The same message goes out again, so nothing new is waiting for it
+                    out!(publish(1)),
+                    // second_msg is forwarded for the first time
+                    out!(publish(2)),
+                    inc!(puback(1)),
+                    inc!(puback(2)),
+                ])
+                .with_pending_on_error([rumqttc::Request::Publish(already_sent(
+                    "first payload",
+                    1,
+                ))]);
+
+                let bridge = Bridge::default()
+                    .with_local_events([inc!(publish(first_msg)), inc!(publish(second_msg))])
+                    .with_cloud_custom_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                assert_eq!(
+                    drain_actions(&bridge.local_client),
+                    vec![Action::Ack(first_msg), Action::Ack(second_msg)]
+                );
+            }
+
+            #[tokio::test]
+            async fn takes_the_message_when_a_queued_publish_is_sent_for_the_first_time() {
+                let msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let cloud_events = FixedEventStream::from([
+                    inc!(connack),
+                    inc!(network_error),
+                    inc!(clean_connack),
+                    // Sent for the first time, so its message is still waiting to be taken
+                    out!(publish(1)),
+                    inc!(puback(1)),
+                ])
+                .with_pending_on_error([rumqttc::Request::Publish(never_sent(
+                    "payload",
+                    QoS::AtLeastOnce,
+                ))]);
+
+                let bridge = Bridge::default()
+                    .with_local_events([inc!(publish(msg))])
+                    .with_cloud_custom_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                assert_eq!(drain_actions(&bridge.local_client), vec![Action::Ack(msg)]);
+            }
+
+            #[tokio::test]
+            async fn takes_the_message_when_a_queued_qos_0_publish_is_sent_for_the_first_time() {
+                let unacknowledged = Publish::new("c8y/s/us", QoS::AtMostOnce, "fire and forget");
+                let acknowledged = Publish::new("c8y/s/us", QoS::AtLeastOnce, "tracked");
+                let cloud_events = FixedEventStream::from([
+                    inc!(connack),
+                    inc!(network_error),
+                    inc!(clean_connack),
+                    // A QoS 0 message reports packet id 0, which is never tracked, so it
+                    // can only be told apart from a resend by what is waiting for it
+                    out!(publish(0)),
+                    out!(publish(1)),
+                    inc!(puback(1)),
+                ])
+                .with_pending_on_error([rumqttc::Request::Publish(never_sent(
+                    "fire and forget",
+                    QoS::AtMostOnce,
+                ))]);
+
+                let bridge = Bridge::default()
+                    .with_local_events([inc!(publish(unacknowledged)), inc!(publish(acknowledged))])
+                    .with_cloud_custom_events(cloud_events)
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                assert_eq!(
+                    drain_actions(&bridge.local_client),
+                    vec![Action::Ack(acknowledged)]
+                );
+            }
+
+            /// Builds a publish the event loop already sent, which keeps the packet id it
+            /// was given
+            fn already_sent(payload: &str, pkid: u16) -> Publish {
+                let mut publish = Publish::new("s/us", QoS::AtLeastOnce, payload);
+                publish.pkid = pkid;
+                publish
+            }
+
+            /// Builds a publish that was still queued when the connection dropped, which
+            /// has not been given a packet id
+            fn never_sent(payload: &str, qos: QoS) -> Publish {
+                Publish::new("s/us", qos, payload)
             }
         }
 
