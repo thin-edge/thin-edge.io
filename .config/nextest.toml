@@ -14,3 +14,9 @@ retries = 4
 filter = 'package(c8y_firmware_manager)'
 test-group = 'serial'
 
+
+[[profile.default.overrides]]
+# The bridge tests bound their own waits and dump the recorded events on panic.
+# This is only a backstop so a stuck test fails instead of hanging.
+filter = 'package(tedge_mqtt_bridge)'
+slow-timeout = { period = "30s", terminate-after = 2 }

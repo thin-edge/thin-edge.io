@@ -12,6 +12,8 @@ use rumqttc::MqttOptions;
 use std::str::from_utf8;
 use std::sync::Arc;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::event_trace::DumpOnPanic;
+use tedge_mqtt_bridge::event_trace::EventTrace;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use test_broker::TestMqttBroker;
@@ -29,7 +31,7 @@ async fn forwards_and_acknowledges_every_message_after_the_cloud_resumes_acknowl
     init_logging();
     let local_broker = new_broker().await;
     let cloud_broker = new_broker().await;
-    start_bridge(&local_broker, &cloud_broker).await;
+    let _dump_on_panic = start_bridge(&local_broker, &cloud_broker).await;
 
     // The cloud goes quiet: the messages still arrive, but nothing is acknowledged
     cloud_broker.disable_acknowledgements().await;
@@ -62,7 +64,7 @@ async fn acknowledges_messages_in_order_when_the_cloud_acknowledges_a_backlog_at
     init_logging();
     let local_broker = new_broker().await;
     let cloud_broker = new_broker().await;
-    start_bridge(&local_broker, &cloud_broker).await;
+    let _dump_on_panic = start_bridge(&local_broker, &cloud_broker).await;
 
     // Build up a backlog large enough that the packet ids are no longer trivially ordered
     cloud_broker.disable_acknowledgements().await;
@@ -84,7 +86,7 @@ async fn keeps_delivering_while_the_backlog_stays_within_the_inflight_window() {
     let local_broker = new_broker().await;
     let cloud_broker = new_broker().await;
     local_broker.set_max_outbound_inflight(10).await;
-    start_bridge(&local_broker, &cloud_broker).await;
+    let _dump_on_panic = start_bridge(&local_broker, &cloud_broker).await;
 
     cloud_broker.disable_acknowledgements().await;
     for i in 0..5 {
@@ -111,7 +113,7 @@ async fn resumes_delivering_after_the_inflight_window_fills_and_the_cloud_acknow
     let local_broker = new_broker().await;
     let cloud_broker = new_broker().await;
     local_broker.set_max_outbound_inflight(3).await;
-    start_bridge(&local_broker, &cloud_broker).await;
+    let _dump_on_panic = start_bridge(&local_broker, &cloud_broker).await;
 
     cloud_broker.disable_acknowledgements().await;
 
@@ -154,7 +156,7 @@ async fn reconnects_and_delivers_the_message_when_the_cloud_stops_acknowledging(
     init_logging();
     let local_broker = new_broker().await;
     let cloud_broker = new_broker().await;
-    start_bridge_with_config(
+    let _dump_on_panic = start_bridge_with_config(
         &local_broker,
         &cloud_broker,
         &format!(
@@ -195,7 +197,7 @@ fn init_logging() {
 }
 
 /// Starts a bridge forwarding `c8y/s/us` upwards and `s/ds` downwards, and waits until it is up
-async fn start_bridge(local_broker: &TestMqttBroker, cloud_broker: &TestMqttBroker) {
+async fn start_bridge(local_broker: &TestMqttBroker, cloud_broker: &TestMqttBroker) -> DumpOnPanic {
     let config = default_config(local_broker.port());
     start_bridge_with_config(local_broker, cloud_broker, &config).await
 }
@@ -204,11 +206,12 @@ async fn start_bridge_with_config(
     local_broker: &TestMqttBroker,
     cloud_broker: &TestMqttBroker,
     config: &str,
-) {
+) -> DumpOnPanic {
     let mut rules = BridgeConfig::new();
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
+    let event_trace = EventTrace::with_capacity(8192);
     let cloud_config = MqttOptions::new("cloud-device", "127.0.0.1", cloud_broker.port());
     let service_name = SERVICE_NAME;
     let health_topic = format!("te/device/main/service/{service_name}/status/health")
@@ -224,13 +227,14 @@ async fn start_bridge_with_config(
         None,
         // No effective limit: exercise the bridge's existing forwarding behaviour.
         268_435_455,
-        <_>::default(),
+        event_trace.clone(),
     )
     .await;
 
     wait_until_health_status_is("up", local_broker)
         .await
         .unwrap();
+    DumpOnPanic(event_trace)
 }
 
 async fn publish_from_local(broker: &TestMqttBroker, index: usize) {

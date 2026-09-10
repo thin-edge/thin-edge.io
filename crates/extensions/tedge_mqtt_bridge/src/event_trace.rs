@@ -119,3 +119,19 @@ fn write_record(out: &mut String, record: &Record, count: usize, started_at: Ins
         waiting = record.waiting,
     );
 }
+
+/// Prints a bridge's recorded events if the current test is failing
+///
+/// Hold one for the lifetime of a test: the events are only useful once something has gone
+/// wrong, so they stay out of the way until then rather than being printed as they happen.
+/// A test that hangs still reaches this, as long as it fails by panicking on its own
+/// deadline rather than being killed from outside.
+pub struct DumpOnPanic(pub EventTrace);
+
+impl Drop for DumpOnPanic {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            eprintln!("{}", self.0.dump());
+        }
+    }
+}

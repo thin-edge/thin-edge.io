@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::str::from_utf8;
 use std::time::Duration;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::event_trace::DumpOnPanic;
 use tedge_mqtt_bridge::event_trace::EventTrace;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
@@ -91,7 +92,8 @@ async fn bridge_many_messages() {
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
-    start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await;
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
 
@@ -141,7 +143,8 @@ async fn bridge_forwards_large_messages() {
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
-    start_mqtt_bridge(local_broker_port, cloud_broker_port, rules).await;
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_broker_port, cloud_broker_port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
 
@@ -183,8 +186,8 @@ async fn bridge_disconnect_while_sending() {
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
-    let event_trace = start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await;
-    let _dump_on_panic = DumpOnPanic(event_trace);
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
 
@@ -251,7 +254,8 @@ async fn bridge_reconnects_successfully_after_cloud_connection_interrupted() {
     let mut rules = BridgeConfig::new();
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
-    start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await;
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
     cloud.subscribe("s/us", QoS::AtLeastOnce).await.unwrap();
@@ -315,7 +319,8 @@ async fn bridge_reconnects_successfully_after_local_connection_interrupted() {
     let mut rules = BridgeConfig::new();
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
-    start_mqtt_bridge(local_proxy.port, cloud_broker_port, rules).await;
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_proxy.port, cloud_broker_port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
     cloud.subscribe("s/us", QoS::AtLeastOnce).await.unwrap();
@@ -380,7 +385,7 @@ async fn bidirectional_forwarding_avoids_infinite_loop() {
         .forward_bidirectionally("shadow/#", "aws/", "aws/things/my-device/")
         .unwrap();
 
-    start_mqtt_bridge(local_port, cloud_port, rules).await;
+    let _dump_on_panic = DumpOnPanic(start_mqtt_bridge(local_port, cloud_port, rules).await);
 
     local_client
         .subscribe(HEALTH, QoS::AtLeastOnce)
@@ -491,13 +496,15 @@ async fn bridge_publishes_reconnect_message_on_cloud_reconnection() {
         .unwrap();
     await_subscription(&mut ev_cloud).await;
 
-    start_mqtt_bridge_with_reconnect_message(
-        local_broker_port,
-        cloud_proxy.port,
-        rules,
-        Some(reconnect_msg.clone()),
-    )
-    .await;
+    let _dump_on_panic = DumpOnPanic(
+        start_mqtt_bridge_with_reconnect_message(
+            local_broker_port,
+            cloud_proxy.port,
+            rules,
+            Some(reconnect_msg.clone()),
+        )
+        .await,
+    );
 
     wait_until_health_status_is("up", &mut ev_local)
         .await
@@ -784,19 +791,5 @@ fn get_rumqttd_config(port: u16) -> Config {
         bridge: None,
         prometheus: None,
         metrics: None,
-    }
-}
-
-/// Prints the bridge's recorded events if the test is failing
-///
-/// The events are only useful when something has gone wrong, so they are kept out of the
-/// way until then rather than streamed out while the test runs
-struct DumpOnPanic(EventTrace);
-
-impl Drop for DumpOnPanic {
-    fn drop(&mut self) {
-        if std::thread::panicking() {
-            eprintln!("{}", self.0.dump());
-        }
     }
 }

@@ -5,6 +5,8 @@ use rumqttc::MqttOptions;
 use std::str::from_utf8;
 use std::sync::Arc;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::event_trace::DumpOnPanic;
+use tedge_mqtt_bridge::event_trace::EventTrace;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use test_broker::TestMqttBroker;
@@ -26,7 +28,8 @@ async fn start_mqtt_bridge(
     cloud_port: u16,
     rules: BridgeConfig,
     tedge_config: Option<TEdgeConfig>,
-) {
+) -> DumpOnPanic {
+    let event_trace = EventTrace::with_capacity(8192);
     let cloud_config = MqttOptions::new("cloud-device", "127.0.0.1", cloud_port);
     let service_name = "tedge-mapper-test";
     let health_topic = format!("te/device/main/service/{service_name}/status/health")
@@ -42,9 +45,10 @@ async fn start_mqtt_bridge(
         None,
         // No effective limit: exercise the bridge's existing forwarding behaviour.
         268_435_455,
-        <_>::default(),
+        event_trace.clone(),
     )
     .await;
+    DumpOnPanic(event_trace)
 }
 
 const HEALTH: &str = "te/device/main/#";
@@ -63,7 +67,8 @@ async fn bridge_republishes_messages_to_cloud_on_error() {
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
-    start_mqtt_bridge(local_broker.port(), cloud_broker.port(), rules, None).await;
+    let _dump_on_panic =
+        start_mqtt_bridge(local_broker.port(), cloud_broker.port(), rules, None).await;
 
     wait_until_health_status_is("up", &local_broker)
         .await
@@ -113,7 +118,8 @@ async fn bridge_republishes_messages_to_local_on_error() {
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
-    start_mqtt_bridge(local_broker.port(), cloud_broker.port(), rules, None).await;
+    let _dump_on_panic =
+        start_mqtt_bridge(local_broker.port(), cloud_broker.port(), rules, None).await;
 
     wait_until_health_status_is("up", &local_broker)
         .await
@@ -167,7 +173,7 @@ async fn bridge_delivers_republishes_to_cloud_before_novel_publishes() {
     ",
         local_broker.port()
     ));
-    start_mqtt_bridge(
+    let _dump_on_panic = start_mqtt_bridge(
         local_broker.port(),
         cloud_broker.port(),
         rules,
