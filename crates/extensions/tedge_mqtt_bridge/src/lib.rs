@@ -1013,6 +1013,7 @@ async fn half_bridge(
                 );
                 record_event!("stalled-acks-disconnect", 0);
                 connection = ConnectionState::Down;
+                connection_log.closing_connection();
                 if let Err(err) = recv_client.disconnect().await {
                     log_event!(warn: name, "Failed to close the stalled connection: {err}");
                 }
