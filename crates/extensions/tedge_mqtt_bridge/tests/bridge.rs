@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::str::from_utf8;
 use std::time::Duration;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::event_trace::EventTrace;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tokio::io::AsyncWriteExt;
@@ -39,8 +40,8 @@ fn new_broker_and_client(name: &str, port: u16) -> (AsyncClient, EventLoop) {
     AsyncClient::new(client_opts, 10)
 }
 
-async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig) {
-    start_mqtt_bridge_with_reconnect_message(local_port, cloud_port, rules, None).await;
+async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig) -> EventTrace {
+    start_mqtt_bridge_with_reconnect_message(local_port, cloud_port, rules, None).await
 }
 
 async fn start_mqtt_bridge_with_reconnect_message(
@@ -48,7 +49,8 @@ async fn start_mqtt_bridge_with_reconnect_message(
     cloud_port: u16,
     rules: BridgeConfig,
     reconnect_message: Option<Publish>,
-) {
+) -> EventTrace {
+    let event_trace = EventTrace::with_capacity(8192);
     let cloud_config = MqttOptions::new("a-device-id", "127.0.0.1", cloud_port);
     let service_name = "tedge-mapper-test";
     let health_topic = format!("te/device/main/service/{service_name}/status/health")
@@ -64,8 +66,10 @@ async fn start_mqtt_bridge_with_reconnect_message(
         reconnect_message,
         // No effective limit: exercise the bridge's existing forwarding behaviour.
         268_435_455,
+        event_trace.clone(),
     )
     .await;
+    event_trace
 }
 
 const HEALTH: &str = "te/device/main/#";
@@ -179,7 +183,8 @@ async fn bridge_disconnect_while_sending() {
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
-    start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await;
+    let event_trace = start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await;
+    let _dump_on_panic = DumpOnPanic(event_trace);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
 
@@ -779,5 +784,19 @@ fn get_rumqttd_config(port: u16) -> Config {
         bridge: None,
         prometheus: None,
         metrics: None,
+    }
+}
+
+/// Prints the bridge's recorded events if the test is failing
+///
+/// The events are only useful when something has gone wrong, so they are kept out of the
+/// way until then rather than streamed out while the test runs
+struct DumpOnPanic(EventTrace);
+
+impl Drop for DumpOnPanic {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            eprintln!("{}", self.0.dump());
+        }
     }
 }

@@ -1206,6 +1206,12 @@ define_tedge_config! {
             /// Enables the built-in bridge when running tedge-mapper
             built_in: bool,
 
+            /// How long the built-in bridge waits for a message to be acknowledged before
+            /// reconnecting so that it is sent again (in seconds if no unit is provided)
+            #[tedge_config(note = "A broker that stops acknowledging messages without closing the connection will otherwise stall the bridge until it is restarted. Set to 0 to disable.")]
+            #[tedge_config(example = "10m", default(from_str = "5m"))]
+            unacked_message_timeout: SecondsOrHumanTime,
+
             reconnect_policy: {
                 /// The minimum time the built-in bridge will wait before reconnecting
                 #[tedge_config(example = "30s", default(from_str = "5s"))]
@@ -1924,6 +1930,18 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
     use super::*;
+
+    #[test]
+    fn mqtt_bridge_unacked_message_timeout_accepts_zero() {
+        let config = TEdgeConfig::load_toml_str("mqtt.bridge.unacked_message_timeout = 0");
+
+        assert!(config
+            .mqtt
+            .bridge
+            .unacked_message_timeout
+            .duration()
+            .is_zero());
+    }
 
     #[test_case::test_case("device.id")]
     #[test_case::test_case("device.type")]

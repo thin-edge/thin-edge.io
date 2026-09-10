@@ -369,6 +369,7 @@ impl TEdgeComponent for CustomMapper {
                 cloud_config,
                 None,
                 effective.bridge.max_payload_size.0 as usize,
+                <_>::default(),
             )
             .await;
             runtime.spawn(bridge_actor).await?;

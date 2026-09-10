@@ -114,6 +114,7 @@ async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig
         None,
         // No effective limit: exercise the bridge's existing forwarding behaviour.
         268_435_455,
+        <_>::default(),
     )
     .await;
 }

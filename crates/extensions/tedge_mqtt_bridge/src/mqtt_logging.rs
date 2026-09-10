@@ -83,6 +83,10 @@ impl LoggingAsyncClient {
     pub async fn ack(&self, publish: &Publish) -> Result<(), ClientError> {
         self.inner.ack(publish).await
     }
+
+    pub async fn disconnect(&self) -> Result<(), ClientError> {
+        self.inner.disconnect().await
+    }
 }
 
 /// A wrapper around [rumqttc::EventLoop] that logs key MQTT events with a

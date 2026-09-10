@@ -93,6 +93,10 @@ pub trait AllProcessed {
 /// A fixed stream of events
 pub struct FixedEventStream {
     events: Arc<Mutex<VecDeque<EventRes>>>,
+    /// Requests the event loop holds for republishing, handed over by [MqttEvents::take_pending]
+    pending_on_error: Arc<Mutex<VecDeque<Request>>>,
+    /// Requests handed back by [MqttEvents::set_pending], recorded so tests can assert on them
+    pending_restored: Arc<Mutex<Vec<Request>>>,
 }
 
 impl FixedEventStream {
@@ -105,6 +109,8 @@ impl<I: Into<VecDeque<EventRes>>> From<I> for FixedEventStream {
     fn from(value: I) -> Self {
         Self {
             events: Arc::new(Mutex::new(value.into())),
+            pending_on_error: <_>::default(),
+            pending_restored: <_>::default(),
         }
     }
 }
@@ -120,10 +126,12 @@ impl MqttEvents for FixedEventStream {
     }
 
     fn take_pending(&mut self) -> VecDeque<Request> {
-        <_>::default()
+        std::mem::take(&mut *self.pending_on_error.lock().unwrap())
     }
 
-    fn set_pending(&mut self, _requests: Vec<Request>) {}
+    fn set_pending(&mut self, requests: Vec<Request>) {
+        self.pending_restored.lock().unwrap().extend(requests);
+    }
 }
 
 #[async_trait::async_trait]
@@ -165,6 +173,10 @@ impl MqttClient for BlockingSubscribeClient {
     async fn publish(&self, _: String, _: QoS, _: bool, _: Bytes) -> Result<(), ClientError> {
         unimplemented!()
     }
+
+    async fn disconnect(&self) -> Result<(), ClientError> {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -172,6 +184,7 @@ pub enum Action {
     SubscribeMany(Vec<SubscribeFilter>),
     Ack(Publish),
     Publish(Publish),
+    Disconnect,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -221,6 +234,11 @@ impl MqttClient for ActionLogger {
         let mut publish = Publish::new(topic, qos, payload);
         publish.retain = retain;
         self.log(Action::Publish(publish));
+        Ok(())
+    }
+
+    async fn disconnect(&self) -> Result<(), ClientError> {
+        self.log(Action::Disconnect);
         Ok(())
     }
 }
@@ -378,6 +396,10 @@ impl MqttClient for ChannelClient {
             .await
             .unwrap();
         self.count_in_progress.fetch_sub(1, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn disconnect(&self) -> Result<(), ClientError> {
         Ok(())
     }
 }

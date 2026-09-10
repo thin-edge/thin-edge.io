@@ -1,6 +1,7 @@
 mod backoff;
 pub mod config;
 pub mod config_toml;
+pub mod event_trace;
 pub mod persist;
 #[cfg(test)]
 mod test_helpers;
@@ -26,7 +27,6 @@ use rumqttc::Request;
 use rumqttc::SubscribeFilter;
 use rumqttc::Transport;
 use std::borrow::Cow;
-use std::collections::hash_map;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -61,6 +61,7 @@ use tedge_config::tedge_toml::TEdgeConfigReaderMqttBridgeReconnectPolicy;
 use tedge_config::TEdgeConfig;
 
 use crate::backoff::CustomBackoff;
+use crate::event_trace::EventTrace;
 use crate::topics::matches_ignore_dollar_prefix;
 use crate::topics::TopicConverter;
 pub use config::*;
@@ -73,6 +74,19 @@ pub use persist::BridgeConfigVisitor;
 const MAX_PACKET_SIZE: usize = 268435455; // maximum allowed MQTT payload size
 const SUBACK_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_SUBSCRIBE_ROUNDS: u32 = 3;
+/// The number of unacknowledged messages at which the backlog is first logged
+///
+/// This only controls logging; recovery from a stalled connection is driven by
+/// `unacked_message_timeout`. Healthy operation keeps only a handful of messages in
+/// flight, so this is high enough to stay quiet normally but well below the inflight
+/// window of a typical broker
+const ACK_BACKLOG_REPORT_THRESHOLD: usize = 8;
+/// How long a backlog must persist before it is first logged
+///
+/// A bridge can briefly have many messages in flight when it starts and forwards the
+/// cloud's startup messages. Requiring the oldest message to remain unacknowledged avoids
+/// reporting that healthy burst as a backlog.
+const ACK_BACKLOG_REPORT_DELAY: Duration = Duration::from_secs(10);
 
 /// Connection timeout for the cloud bridge connection.
 ///
@@ -188,6 +202,7 @@ impl MqttBridgeActorBuilder {
         mut cloud_config: MqttOptions,
         on_cloud_reconnect: Option<Publish>,
         max_payload_size: usize,
+        event_trace: EventTrace,
     ) -> Self {
         let mut local_config = MqttOptions::new(
             service_name,
@@ -220,6 +235,7 @@ impl MqttBridgeActorBuilder {
         local_config.set_clean_session(false);
 
         let reconnect_policy = tedge_config.mqtt.bridge.reconnect_policy.clone();
+        let unacked_message_timeout = tedge_config.mqtt.bridge.unacked_message_timeout.duration();
 
         cloud_config.set_manual_acks(true);
         cloud_config.set_max_packet_size(MAX_PACKET_SIZE, MAX_PACKET_SIZE);
@@ -288,6 +304,8 @@ impl MqttBridgeActorBuilder {
                     // The local→cloud direction enforces the cloud broker's limit
                     Some(max_payload_size),
                     local_gate_controller,
+                    unacked_message_timeout,
+                    event_trace.clone(),
                 )
                 .instrument(tracing::Span::current()),
             ),
@@ -308,6 +326,8 @@ impl MqttBridgeActorBuilder {
                     // accepts large messages and cloud messages already met the cloud's limit
                     None,
                     cloud_gate_controller,
+                    unacked_message_timeout,
+                    event_trace,
                 )
                 .instrument(tracing::Span::current()),
             ),
@@ -677,6 +697,92 @@ impl BridgeMessageSender {
     }
 }
 
+/// A forwarded message waiting for the target broker to acknowledge it
+struct PendingAck {
+    /// The source message to acknowledge, or `None` for a message the bridge generated itself
+    message: Option<Publish>,
+    /// When the message was handed to the target connection
+    forwarded_at: tokio::time::Instant,
+}
+
+/// Records a forwarded message as waiting for the target broker to acknowledge it
+fn track_pending_ack(
+    pending: &mut HashMap<u16, PendingAck>,
+    order: &mut VecDeque<(tokio::time::Instant, u16)>,
+    pkid: u16,
+    message: Option<Publish>,
+) {
+    let forwarded_at = tokio::time::Instant::now();
+    pending.insert(
+        pkid,
+        PendingAck {
+            message,
+            forwarded_at,
+        },
+    );
+    order.push_back((forwarded_at, pkid));
+}
+
+/// Sleeps until the deadline, or forever if there is no deadline
+async fn sleep_until_maybe(deadline: Option<tokio::time::Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline).await,
+        None => std::future::pending().await,
+    }
+}
+
+/// Returns when the longest-waiting message was forwarded, if anything is still waiting
+///
+/// `order` may contain entries for messages that `pending` no longer tracks; they are
+/// removed as a side effect
+fn oldest_unacked(
+    pending: &HashMap<u16, PendingAck>,
+    order: &mut VecDeque<(tokio::time::Instant, u16)>,
+) -> Option<tokio::time::Instant> {
+    // An entry is stale if its message was acknowledged, or its packet id was reused for
+    // a later message, in which case the tracked forwarding time no longer matches
+    while let Some(&(forwarded_at, pkid)) = order.front() {
+        match pending.get(&pkid) {
+            Some(entry) if entry.forwarded_at == forwarded_at => return Some(forwarded_at),
+            _ => {
+                order.pop_front();
+            }
+        }
+    }
+    None
+}
+
+/// Whether a bridge half's connection can currently deliver acknowledgements
+///
+/// The stall watchdog only runs while the connection is [Up]: a connection that is down
+/// cannot acknowledge anything, and dropping it again would only tear down its replacement
+///
+/// [Up]: ConnectionState::Up
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum ConnectionState {
+    /// Connected and able to receive acknowledgements
+    Up,
+    /// Not connected, or being dropped so that it reconnects
+    Down,
+}
+
+/// Decides whether the acknowledgement backlog has grown enough to report again
+///
+/// Reports start at [ACK_BACKLOG_REPORT_THRESHOLD] and repeat each time the backlog has
+/// doubled since the last report. `reported` is the size at the last report, or 0 if the
+/// backlog has since fallen below the threshold.
+fn backlog_worth_reporting(waiting: usize, reported: usize) -> bool {
+    waiting >= ACK_BACKLOG_REPORT_THRESHOLD && waiting >= reported * 2
+}
+
+/// Returns when to report a backlog that is making no acknowledgement progress
+fn next_backlog_report_at(
+    threshold_reached_at: tokio::time::Instant,
+    last_ack_at: tokio::time::Instant,
+) -> tokio::time::Instant {
+    std::cmp::max(threshold_reached_at, last_ack_at) + ACK_BACKLOG_REPORT_DELAY
+}
+
 /// Forward messages received from `recv_event_loop` to `target`
 ///
 /// The result of running this function constitutes half the MQTT bridge, hence the name.
@@ -792,6 +898,8 @@ async fn half_bridge(
     mut self_tx: BridgeMessageSender,
     max_payload_size: Option<usize>,
     gate: SubscriptionGateController,
+    unacked_message_timeout: Duration,
+    event_trace: EventTrace,
 ) {
     let mut backoff = CustomBackoff::new(
         ::backoff::SystemClock {},
@@ -799,7 +907,23 @@ async fn half_bridge(
         reconnect_policy.maximum_interval.duration(),
         reconnect_policy.reset_window.duration(),
     );
-    let mut forward_pkid_to_received_msg = HashMap::<u16, Option<Publish>>::new();
+    let mut forward_pkid_to_received_msg = HashMap::<u16, PendingAck>::new();
+    // The packet ids above in the order they were forwarded, so the longest-waiting
+    // message can be found without scanning
+    let mut forwarded_order = VecDeque::<(tokio::time::Instant, u16)>::new();
+    let mut connection = ConnectionState::Down;
+    let mut last_ack_at = tokio::time::Instant::now();
+    // When the backlog most recently crossed the reporting threshold
+    let mut backlog_threshold_reached_at = None;
+    // The backlog size at the last report, so a steady backlog is not logged repeatedly
+    let mut ack_backlog_reported = 0;
+    // Packet ids the connection will send again now that it has dropped
+    //
+    // A resent message is not a new message: the companion half bridge has already handed
+    // it to the publisher, so nothing new is waiting to be received for it. Recording the
+    // ids is what distinguishes a resend from a fresh message that happens to reuse a
+    // packet id we are still tracking
+    let mut awaiting_republish = HashSet::<u16>::new();
     let mut readiness = BridgeHalfReadiness::new(name, gate, tx_health);
     let mut connection_log = BridgeConnectionLog::new(name);
     let mut loop_breaker =
@@ -818,18 +942,74 @@ async fn half_bridge(
 
     let mut suback_tracker = SubackTracker::new(recv_client.clone(), topics.clone());
 
+    // Records what this half is doing, for inspection when a test fails
+    macro_rules! record_event {
+        ($what:literal, $pkid:expr) => {
+            event_trace.record(name, $what, $pkid, forward_pkid_to_received_msg.len())
+        };
+    }
+
     loop {
-        let res = if let Some(deadline) = suback_tracker.deadline {
-            tokio::select! {
-                biased;
-                res = recv_event_loop.poll() => res,
-                _ = tokio::time::sleep_until(deadline) => {
-                    suback_tracker.handle_timeout(&mut readiness).await;
-                    continue;
-                }
+        // A broker that stops acknowledging without closing the connection would
+        // otherwise stall this half indefinitely, so give up on it after a while and
+        // reconnect, which sends the unacknowledged messages again. Only armed while
+        // connected: a connection that is already down needs no help dropping
+        let oldest_unacked_at = oldest_unacked(&forward_pkid_to_received_msg, &mut forwarded_order);
+        let stall_deadline = match (connection, unacked_message_timeout.is_zero()) {
+            (ConnectionState::Up, false) => {
+                oldest_unacked_at.map(|forwarded_at| forwarded_at + unacked_message_timeout)
             }
-        } else {
-            recv_event_loop.poll().await
+            (ConnectionState::Down, _) | (_, true) => None,
+        };
+        let waiting = forward_pkid_to_received_msg.len();
+        let backlog_has_grown_enough = backlog_worth_reporting(waiting, ack_backlog_reported);
+        let backlog_report_deadline =
+            if connection == ConnectionState::Up && backlog_has_grown_enough {
+                backlog_threshold_reached_at.map(|threshold_reached_at| {
+                    next_backlog_report_at(threshold_reached_at, last_ack_at)
+                })
+            } else {
+                None
+            };
+
+        let res = tokio::select! {
+            biased;
+            res = recv_event_loop.poll() => res,
+            _ = sleep_until_maybe(suback_tracker.deadline) => {
+                suback_tracker.handle_timeout(&mut readiness).await;
+                continue;
+            }
+            _ = sleep_until_maybe(stall_deadline) => {
+                log_event!(
+                    warn: name,
+                    "No acknowledgement from the broker for {timeout:?} ({waiting} message(s) waiting, \
+                     last acknowledgement {since_ack:?} ago); reconnecting so they are sent again",
+                    timeout = unacked_message_timeout,
+                    waiting = forward_pkid_to_received_msg.len(),
+                    since_ack = last_ack_at.elapsed(),
+                );
+                record_event!("stalled-acks-disconnect", 0);
+                connection = ConnectionState::Down;
+                if let Err(err) = recv_client.disconnect().await {
+                    log_event!(warn: name, "Failed to close the stalled connection: {err}");
+                }
+                continue;
+            }
+            _ = sleep_until_maybe(backlog_report_deadline) => {
+                let waiting = forward_pkid_to_received_msg.len();
+                ack_backlog_reported = waiting;
+                let oldest_age = oldest_unacked_at
+                    .map(|forwarded_at| forwarded_at.elapsed())
+                    .unwrap_or_default();
+                log_event!(
+                    name,
+                    "Acknowledgement backlog stalled: {waiting} message(s) waiting; \
+                     no acknowledgement received for {without_progress:?}; \
+                     oldest message waiting for {oldest_age:?}",
+                    without_progress = last_ack_at.elapsed(),
+                );
+                continue;
+            }
         };
         connection_log.update(&res);
 
@@ -841,7 +1021,10 @@ async fn half_bridge(
             Err(_) => {
                 // The connection is gone: hold outbound publishes until it is re-established
                 // and its subscriptions are acknowledged again
+                connection = ConnectionState::Down;
+                record_event!("connection-error", 0);
                 readiness.not_ready().await;
+                record_event!("reported-not-ready", 0);
                 suback_tracker.deadline = None;
                 let time = backoff.backoff();
                 if !time.is_zero() {
@@ -875,7 +1058,22 @@ async fn half_bridge(
 
         match notification {
             Event::Incoming(Incoming::ConnAck(conn_ack)) => {
+                if conn_ack.session_present {
+                    record_event!("connack-session-resumed", 0);
+                } else {
+                    record_event!("connack-new-session", 0);
+                }
                 log_event!(name, "Bridge connection subscribing to {topics:?}");
+                // Everything still waiting is about to be sent again on this connection,
+                // so time it from this attempt
+                connection = ConnectionState::Up;
+                let attempted_at = tokio::time::Instant::now();
+                last_ack_at = attempted_at;
+                forwarded_order.clear();
+                for (pkid, pending_ack) in forward_pkid_to_received_msg.iter_mut() {
+                    pending_ack.forwarded_at = attempted_at;
+                    forwarded_order.push_back((attempted_at, *pkid));
+                }
 
                 // Publish reconnect message if provided
                 if let Some(msg) = &reconnect_message {
@@ -897,6 +1095,7 @@ async fn half_bridge(
                 // by the gate opening cannot overtake them onto the wire.
                 if conn_ack.session_present || suback_tracker.subacks_needed == 0 {
                     readiness.ready().await;
+                    record_event!("reported-ready", 0);
                     suback_tracker.deadline = None;
                 } else {
                     // Not reported as down: this half has either never been up, or the failure
@@ -907,9 +1106,31 @@ async fn half_bridge(
 
                 session_present = Some(conn_ack.session_present);
 
-                if !conn_ack.session_present {
-                    // Republish any outstanding messages
+                // Work out which packet ids this connection will send again. A resent
+                // message is not a new message, so the companion half bridge has nothing
+                // waiting for it. On a resumed session the event loop still holds every
+                // unacknowledged message; otherwise only the messages handed back below
+                // are sent again, and anything else the broker has forgotten is lost.
+                awaiting_republish = if conn_ack.session_present {
+                    forward_pkid_to_received_msg.keys().copied().collect()
+                } else {
+                    pending
+                        .iter()
+                        .filter_map(|request| match request {
+                            Request::Publish(publish) => Some(publish.pkid),
+                            _ => None,
+                        })
+                        .collect()
+                };
+
+                if !conn_ack.session_present && !pending.is_empty() {
                     let msgs = std::mem::take(&mut pending);
+                    record_event!("restoring-pending", 0);
+                    log_event!(
+                        name,
+                        "Republishing {count} unacknowledged messages",
+                        count = msgs.len()
+                    );
                     log_event!(debug: name, "Setting pending messages to {msgs:?}");
                     recv_event_loop.set_pending(msgs);
                 }
@@ -917,6 +1138,7 @@ async fn half_bridge(
 
             // Forward messages from event loop to target
             Event::Incoming(Incoming::Publish(publish)) => {
+                record_event!("checking-for-loop", publish.pkid);
                 if let Some(publish) = loop_breaker.ensure_not_looped(publish).await {
                     if let Some(topic) = transformer.convert_topic(&publish.topic) {
                         let wire_size = mqtt_channel::publish_packet_size(
@@ -932,7 +1154,9 @@ async fn half_bridge(
                                 warn: name,
                                 "Dropping cloud-bound message on topic {topic}: packet size {wire_size} B exceeds the configured limit of {limit} B"
                             );
-                            recv_client.ack(&publish).await.unwrap()
+                            record_event!("acking-oversized-message", publish.pkid);
+                            recv_client.ack(&publish).await.unwrap();
+                            record_event!("acked-oversized-message", publish.pkid);
                         } else {
                             received += 1;
                             target.publish(topic.to_string(), publish);
@@ -940,7 +1164,9 @@ async fn half_bridge(
                     } else {
                         // Being not forwarded to this bridge target
                         // The message has to be acknowledged
-                        recv_client.ack(&publish).await.unwrap()
+                        record_event!("acking-unconverted-message", publish.pkid);
+                        recv_client.ack(&publish).await.unwrap();
+                        record_event!("acked-unconverted-message", publish.pkid);
                     }
                 }
             }
@@ -950,15 +1176,20 @@ async fn half_bridge(
                 Incoming::PubAck(PubAck { pkid: ack_pkid })
                 | Incoming::PubRec(PubRec { pkid: ack_pkid }),
             ) => {
+                last_ack_at = tokio::time::Instant::now();
                 match forward_pkid_to_received_msg.remove(&ack_pkid) {
-                    Some(Some(msg)) => {
+                    Some(PendingAck {
+                        message: Some(msg), ..
+                    }) => {
                         acknowledged += 1;
+                        record_event!("acked-source-message", ack_pkid);
                         target.ack(msg);
                     }
-                    Some(None) => {
+                    Some(PendingAck { message: None, .. }) => {
                         // A health message was acked, nothing to do
                     }
                     None => {
+                        record_event!("ack-for-unknown-pkid", ack_pkid);
                         log_event!(warn: name, "Received ack for unknown pkid={ack_pkid}");
                     }
                 }
@@ -966,29 +1197,63 @@ async fn half_bridge(
 
             // Keep track of packet IDs so we can acknowledge messages
             Event::Outgoing(Outgoing::Publish(pkid)) => {
-                if let hash_map::Entry::Vacant(e) = forward_pkid_to_received_msg.entry(pkid) {
+                if awaiting_republish.remove(&pkid)
+                    && forward_pkid_to_received_msg.contains_key(&pkid)
+                {
+                    // The event loop is sending a message it already sent on a previous
+                    // connection. It keeps its packet id, so the message it maps to is
+                    // still correct, and nothing new was handed over for it.
+                    record_event!("resent", pkid);
+                    log_event!(debug: name, "Resent pkid={pkid}, keeping the original message");
+                } else {
+                    // A fresh message has reused a packet id whose previous message is still
+                    // unacknowledged, which means that message will never be acknowledged.
+                    // Drop it so this packet id maps to the message that is actually on the
+                    // wire
+                    if forward_pkid_to_received_msg.remove(&pkid).is_some() {
+                        log_event!(
+                            error: name,
+                            "Reused pkid={pkid} while its previous message was still unacknowledged; \
+                             that message will not be acknowledged to the source broker"
+                        );
+                    }
+                    record_event!("awaiting-forwarded-message", pkid);
                     match target.recv().await {
                         // A message was forwarded by the other bridge half, note the packet id
                         Some(Some((topic, msg))) => {
                             published += 1;
+                            record_event!("forwarded", pkid);
                             loop_breaker.forward_on_topic(topic, &msg);
                             if pkid != 0 {
                                 // Messages with pkid 0 (meaning QoS=0) should not be added to the hashmap
                                 // as multiple messages with the pkid=0 can be received
-                                e.insert(Some(msg));
+                                track_pending_ack(
+                                    &mut forward_pkid_to_received_msg,
+                                    &mut forwarded_order,
+                                    pkid,
+                                    Some(msg),
+                                );
                             }
                         }
 
                         // A healthcheck message was published, ack should ignore this packet id
                         Some(None) => {
-                            e.insert(None);
+                            record_event!("forwarded-internal-message", pkid);
+                            // A bridge-generated message published at QoS 0 also has no
+                            // packet id, so it must not claim the entry for pkid 0 either
+                            if pkid != 0 {
+                                track_pending_ack(
+                                    &mut forward_pkid_to_received_msg,
+                                    &mut forwarded_order,
+                                    pkid,
+                                    None,
+                                );
+                            }
                         }
 
                         // The other bridge half has disconnected, break the loop and shut down the bridge
                         None => break,
                     }
-                } else {
-                    log_event!(warn: name, "Ignoring already known pkid={pkid}");
                 }
             }
 
@@ -1032,6 +1297,17 @@ async fn half_bridge(
 
             _ => {}
         }
+
+        // A brief burst can cross the threshold while still making progress. Start a
+        // reporting grace period at that crossing, reset it whenever an acknowledgement
+        // arrives, and forget the episode once the backlog falls below the threshold.
+        let waiting = forward_pkid_to_received_msg.len();
+        if waiting < ACK_BACKLOG_REPORT_THRESHOLD {
+            backlog_threshold_reached_at = None;
+            ack_backlog_reported = 0;
+        } else {
+            backlog_threshold_reached_at.get_or_insert_with(tokio::time::Instant::now);
+        }
     }
 }
 
@@ -1052,12 +1328,19 @@ trait MqttClient: MqttAck + Clone + Send + Sync {
         retain: bool,
         payload: Bytes,
     ) -> Result<(), ClientError>;
+
+    /// Closes the connection so the event loop reconnects and resends unacknowledged messages
+    async fn disconnect(&self) -> Result<(), ClientError>;
 }
 
 #[async_trait::async_trait]
 impl MqttClient for LoggingAsyncClient {
     async fn subscribe(&self, topic: SubscribeFilter) -> Result<(), ClientError> {
         LoggingAsyncClient::subscribe(self, topic.path, topic.qos).await
+    }
+
+    async fn disconnect(&self) -> Result<(), ClientError> {
+        LoggingAsyncClient::disconnect(self).await
     }
 
     async fn publish(
@@ -1256,6 +1539,61 @@ impl Drop for MqttBridgeActor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod reporting_the_acknowledgement_backlog {
+        use super::*;
+
+        #[test]
+        fn stays_quiet_below_the_threshold() {
+            for waiting in 0..ACK_BACKLOG_REPORT_THRESHOLD {
+                assert!(!backlog_worth_reporting(waiting, 0), "waiting={waiting}");
+            }
+        }
+
+        #[test]
+        fn reports_when_the_threshold_is_reached() {
+            assert!(backlog_worth_reporting(ACK_BACKLOG_REPORT_THRESHOLD, 0));
+        }
+
+        #[test]
+        fn does_not_report_every_message_above_the_threshold() {
+            let reported = ACK_BACKLOG_REPORT_THRESHOLD;
+            for waiting in reported + 1..reported * 2 {
+                assert!(
+                    !backlog_worth_reporting(waiting, reported),
+                    "waiting={waiting}"
+                );
+            }
+        }
+
+        #[test]
+        fn reports_again_once_the_backlog_has_doubled() {
+            let reported = ACK_BACKLOG_REPORT_THRESHOLD;
+            assert!(backlog_worth_reporting(reported * 2, reported));
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn grace_period_starts_when_the_backlog_reaches_the_threshold() {
+            let threshold_reached_at = tokio::time::Instant::now();
+            let earlier_ack = threshold_reached_at - Duration::from_secs(5);
+
+            assert_eq!(
+                next_backlog_report_at(threshold_reached_at, earlier_ack),
+                threshold_reached_at + ACK_BACKLOG_REPORT_DELAY,
+            );
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn an_acknowledgement_restarts_the_grace_period() {
+            let threshold_reached_at = tokio::time::Instant::now();
+            let later_ack = threshold_reached_at + Duration::from_secs(5);
+
+            assert_eq!(
+                next_backlog_report_at(threshold_reached_at, later_ack),
+                later_ack + ACK_BACKLOG_REPORT_DELAY,
+            );
+        }
+    }
 
     #[tokio::test]
     async fn bridge_actor_runs_until_shutdown_and_aborts_tasks() {
@@ -1748,6 +2086,68 @@ mod tests {
             assert_eq!(
                 bridge.local_client.next_action().unwrap(),
                 Action::Ack(second_msg)
+            );
+        }
+
+        #[tokio::test]
+        async fn drops_a_stale_entry_when_a_packet_id_is_reused() {
+            let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+            let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+            let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
+            // rumqttc normally collision-blocks rather than reusing a pkid that is
+            // still unacknowledged, so this scenario should not arise in practice.
+            // The test verifies the bridge handles it safely if it ever does: the
+            // stale entry is dropped and only the new message is acknowledged.
+            let cloud_events = [
+                inc!(connack),
+                out!(publish(1)),
+                out!(publish(1)),
+                inc!(puback(1)),
+                inc!(puback(1)),
+            ];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                drain_actions(&bridge.local_client),
+                vec![Action::Ack(second_msg)]
+            );
+        }
+
+        #[tokio::test]
+        async fn acknowledges_a_new_message_reusing_a_packet_id_that_was_never_republished() {
+            let first_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "first payload");
+            let second_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "second payload");
+            let local_events = [inc!(publish(first_msg)), inc!(publish(second_msg))];
+            let cloud_events = [
+                inc!(connack),
+                out!(publish(1)),
+                // The connection drops with pkid 1 still unacknowledged
+                inc!(network_error),
+                // The broker has discarded the session, so the message with pkid 1 is
+                // gone and will never be sent again
+                inc!(clean_connack),
+                // The packet id is handed to a new message instead
+                out!(publish(1)),
+                inc!(puback(1)),
+            ];
+
+            let bridge = Bridge::default()
+                .with_local_events(local_events)
+                .with_cloud_events(cloud_events)
+                .with_c8y_topics()
+                .process_all_events()
+                .await;
+
+            assert_eq!(
+                drain_actions(&bridge.local_client),
+                vec![Action::Ack(second_msg)],
+                "the acknowledgement belongs to the message that was actually published"
             );
         }
 
@@ -2486,6 +2886,128 @@ mod tests {
             }
         }
 
+        mod recovering_from_stalled_acknowledgements {
+            use super::*;
+
+            const TIMEOUT: Duration = Duration::from_secs(60);
+
+            #[tokio::test(start_paused = true)]
+            async fn disconnects_when_a_message_is_never_acknowledged() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let bridge = Bridge::default()
+                    .with_unacked_message_timeout(TIMEOUT)
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    // The message is forwarded, but the cloud never acknowledges it
+                    .with_cloud_events([inc!(connack), out!(publish(1))])
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                let before = drain_actions(&bridge.cloud_client);
+                assert!(
+                    !before.contains(&Action::Disconnect),
+                    "the connection must be left alone before the timeout, got {before:?}"
+                );
+
+                tokio::time::advance(TIMEOUT + Duration::from_millis(1)).await;
+
+                assert!(
+                    wait_for_action(&bridge.cloud_client, &Action::Disconnect).await,
+                    "expected the stalled connection to be dropped so the message is sent again"
+                );
+            }
+
+            #[tokio::test(start_paused = true)]
+            async fn stays_connected_when_messages_are_acknowledged() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let bridge = Bridge::default()
+                    .with_unacked_message_timeout(TIMEOUT)
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    .with_cloud_events([inc!(connack), out!(publish(1)), inc!(puback(1))])
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                tokio::time::advance(TIMEOUT * 3).await;
+                settle().await;
+
+                let actions = drain_actions(&bridge.cloud_client);
+                assert!(
+                    !actions.contains(&Action::Disconnect),
+                    "a connection that acknowledges messages must not be dropped, got {actions:?}"
+                );
+            }
+
+            #[tokio::test(start_paused = true)]
+            async fn does_not_disconnect_while_the_connection_is_already_down() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let bridge = Bridge::default()
+                    .with_unacked_message_timeout(TIMEOUT)
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    // The message is forwarded, then the connection drops and stays down
+                    .with_cloud_events([inc!(connack), out!(publish(1)), inc!(network_error)])
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                tokio::time::advance(TIMEOUT * 2).await;
+                settle().await;
+
+                let actions = drain_actions(&bridge.cloud_client);
+                assert!(
+                    !actions.contains(&Action::Disconnect),
+                    "a connection that is already down must not be disconnected again, got {actions:?}"
+                );
+            }
+
+            #[tokio::test(start_paused = true)]
+            async fn zero_timeout_disables_stalled_acknowledgement_recovery() {
+                let incoming_msg = Publish::new("c8y/s/us", QoS::AtLeastOnce, "payload");
+                let bridge = Bridge::default()
+                    .with_unacked_message_timeout(Duration::ZERO)
+                    .with_local_events([inc!(publish(incoming_msg))])
+                    // The message is forwarded, but the cloud never acknowledges it
+                    .with_cloud_events([inc!(connack), out!(publish(1))])
+                    .with_c8y_topics()
+                    .process_all_events()
+                    .await;
+
+                tokio::time::advance(TIMEOUT * 3).await;
+                settle().await;
+
+                let actions = drain_actions(&bridge.cloud_client);
+                assert!(
+                    !actions.contains(&Action::Disconnect),
+                    "a zero timeout must disable stalled acknowledgement recovery, got {actions:?}"
+                );
+            }
+
+            /// Yields until the client has performed `expected`, or gives up after
+            /// [SETTLE_YIELDS] yields and returns false
+            async fn wait_for_action(client: &ActionLogger, expected: &Action) -> bool {
+                for _ in 0..SETTLE_YIELDS {
+                    if drain_actions(client).contains(expected) {
+                        return true;
+                    }
+                    tokio::task::yield_now().await;
+                }
+                false
+            }
+
+            /// Gives the bridge time to react, for tests asserting that nothing happens
+            ///
+            /// There is no event to wait for when the expected outcome is inaction, so these
+            /// tests yield as many times as [wait_for_action] would before giving up
+            async fn settle() {
+                for _ in 0..SETTLE_YIELDS {
+                    tokio::task::yield_now().await;
+                }
+            }
+
+            /// Far more scheduler hops than the bridge needs to react to a timer firing
+            const SETTLE_YIELDS: usize = 100;
+        }
+
         mod recovering_from_missing_subacks {
             use super::*;
 
@@ -2716,6 +3238,7 @@ mod tests {
             cloud_topic_converter: TopicConverter,
             cloud_reconnect_message: Option<Publish>,
             max_payload_size: Option<usize>,
+            unacked_message_timeout: Duration,
         }
 
         struct CompletedBridge<Local, Cloud> {
@@ -2744,6 +3267,7 @@ mod tests {
                     cloud_topic_converter: <_>::default(),
                     cloud_reconnect_message: None,
                     max_payload_size: None,
+                    unacked_message_timeout: Duration::from_secs(300),
                 }
             }
         }
@@ -2780,6 +3304,13 @@ mod tests {
                 }
             }
 
+            fn with_unacked_message_timeout(self, timeout: Duration) -> Self {
+                Self {
+                    unacked_message_timeout: timeout,
+                    ..self
+                }
+            }
+
             fn with_max_payload_size(self, max_payload_size: usize) -> Self {
                 Self {
                     max_payload_size: Some(max_payload_size),
@@ -2798,6 +3329,7 @@ mod tests {
                     cloud_topic_converter: self.cloud_topic_converter,
                     cloud_reconnect_message: self.cloud_reconnect_message,
                     max_payload_size: self.max_payload_size,
+                    unacked_message_timeout: self.unacked_message_timeout,
                 }
             }
 
@@ -2812,6 +3344,7 @@ mod tests {
                     cloud_topic_converter: self.cloud_topic_converter,
                     cloud_reconnect_message: self.cloud_reconnect_message,
                     max_payload_size: self.max_payload_size,
+                    unacked_message_timeout: self.unacked_message_timeout,
                 }
             }
 
@@ -2829,6 +3362,7 @@ mod tests {
                     cloud_topic_converter: self.cloud_topic_converter,
                     cloud_reconnect_message: self.cloud_reconnect_message,
                     max_payload_size: self.max_payload_size,
+                    unacked_message_timeout: self.unacked_message_timeout,
                 }
             }
 
@@ -2863,6 +3397,8 @@ mod tests {
                     local_sender,
                     self.max_payload_size,
                     local_gate_controller,
+                    self.unacked_message_timeout,
+                    <_>::default(),
                 ));
                 let cloud_task = tokio::spawn(half_bridge(
                     self.cloud_events.clone(),
@@ -2878,6 +3414,8 @@ mod tests {
                     cloud_sender,
                     None,
                     cloud_gate_controller,
+                    self.unacked_message_timeout,
+                    <_>::default(),
                 ));
 
                 tokio::time::timeout(Duration::from_secs(5), self.local_events.all_processed())
