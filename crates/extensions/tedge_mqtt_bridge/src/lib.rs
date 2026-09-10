@@ -194,6 +194,7 @@ pub struct MqttBridgeActorBuilder {
 
 impl MqttBridgeActorBuilder {
     // XXX(marcel): this function loads certs, which can fail, so it should probably be fallible
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         tedge_config: &TEdgeConfig,
         service_name: &str,

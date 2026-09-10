@@ -1,3 +1,6 @@
+// Shared by several integration test binaries, each of which uses only part of it
+#![allow(dead_code)]
+
 use bytes::BytesMut;
 use futures::stream::StreamExt;
 use futures::SinkExt;
