@@ -165,7 +165,7 @@ If the template file is removed, it will be recreated by the mapper on the next 
 The Azure mapper behavior is defined by a builtin flow located at `/etc/tedge/mappers/az/flows/mea.toml`:
 
 ```toml
-input.mqtt.topics = ["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+input.mqtt.topics = ["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/m/+/meta", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
 
 steps = [
     { builtin = "skip-mosquitto-health-status" },
@@ -222,7 +222,7 @@ and keeping the associated `.toml.template` file as a witness.
 The AWS mapper behavior is defined by a builtin flow located at `/etc/tedge/mappers/aws/flows/mea.toml`:
 
 ```toml
-input.mqtt.topics = ["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+input.mqtt.topics = ["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/m/+/meta", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
 
 steps = [
   { builtin = "skip-mosquitto-health-status" },

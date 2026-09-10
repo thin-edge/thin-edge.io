@@ -73,18 +73,18 @@ tedge config append/remove default value
     ${initial}    Execute Command    tedge config list
     Should Contain
     ...    ${initial}
-    ...    az.topics=["te/+/+/+/+/m/+", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
+    ...    az.topics=["te/+/+/+/+", "te/+/+/+/+/twin/+", "te/+/+/+/+/m/+", "te/+/+/+/+/m/+/meta", "te/+/+/+/+/e/+", "te/+/+/+/+/a/+", "te/+/+/+/+/status/health"]
 
     # Add value to array with default values
     Execute Command    sudo tedge config add az.topics azure1,azure2
     ${add}    Execute Command    tedge config list
     Should Contain
     ...    ${add}
-    ...    az.topics=["azure1", "azure2", "te/+/+/+/+/a/+", "te/+/+/+/+/e/+", "te/+/+/+/+/m/+", "te/+/+/+/+/status/health"]
+    ...    az.topics=["azure1", "azure2", "te/+/+/+/+", "te/+/+/+/+/a/+", "te/+/+/+/+/e/+", "te/+/+/+/+/m/+", "te/+/+/+/+/m/+/meta", "te/+/+/+/+/status/health", "te/+/+/+/+/twin/+"]
 
     # Remove one of the default values and new value
     Execute Command    sudo tedge config remove az.topics azure2,te/+/+/+/+/status/health
     ${remove}    Execute Command    tedge config list
     Should Contain
     ...    ${remove}
-    ...    az.topics=["azure1", "te/+/+/+/+/a/+", "te/+/+/+/+/e/+", "te/+/+/+/+/m/+"]
+    ...    az.topics=["azure1", "te/+/+/+/+", "te/+/+/+/+/a/+", "te/+/+/+/+/e/+", "te/+/+/+/+/m/+", "te/+/+/+/+/m/+/meta", "te/+/+/+/+/twin/+"]
