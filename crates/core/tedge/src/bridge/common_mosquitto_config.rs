@@ -244,10 +244,18 @@ impl CommonMosquittoConfig {
 
     /// Write the configuration file in a mosquitto configuration directory relative to the main
     /// tedge config location.
+    ///
+    /// This is a no-op when `mqtt.bind.enabled` is set to `false`,
+    /// as thin-edge.io then does not manage the local MQTT broker,
+    /// and the user is responsible for configuring it themselves.
     pub async fn save(
         &self,
         tedge_config: &TEdgeConfig,
     ) -> Result<(), tedge_utils::paths::PathsError> {
+        if !tedge_config.mqtt.bind.enabled {
+            return Ok(());
+        }
+
         let mut contents = Vec::new();
         self.serialize(&mut contents).await?;
         super::write_mosquitto_config(tedge_config, &self.config_file, &contents).await?;
@@ -260,6 +268,7 @@ impl CommonMosquittoConfig {
 mod tests {
     use super::*;
     use camino::Utf8Path;
+    use tedge_test_utils::fs::TempTedgeDir;
 
     #[tokio::test]
     async fn test_serialize() -> anyhow::Result<()> {
@@ -370,5 +379,48 @@ keyfile key.pem
         assert!(!contents.contains(&format!("capath {ca_path}")));
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn save_writes_the_config_file_when_the_broker_is_managed() {
+        let ttd = temp_tedge_dir_with_bind_enabled(true);
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+        CommonMosquittoConfig::from_tedge_config(&config)
+            .save(&config)
+            .await
+            .unwrap();
+
+        assert!(common_mosquitto_config_path(&ttd).exists());
+    }
+
+    #[tokio::test]
+    async fn save_is_a_no_op_when_the_broker_is_not_managed() {
+        let ttd = temp_tedge_dir_with_bind_enabled(false);
+        let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+        CommonMosquittoConfig::from_tedge_config(&config)
+            .save(&config)
+            .await
+            .unwrap();
+
+        assert!(!common_mosquitto_config_path(&ttd).exists());
+    }
+
+    /// A tedge dir with the given `mqtt.bind.enabled` value, owned by the current user
+    /// so that writing the mosquitto config only ever fails on its own merits.
+    fn temp_tedge_dir_with_bind_enabled(bind_enabled: bool) -> TempTedgeDir {
+        let ttd = TempTedgeDir::new();
+        ttd.file("system.toml")
+            .with_raw_content("user = ''\ngroup = ''\n");
+        ttd.file("tedge.toml")
+            .with_raw_content(&format!("[mqtt.bind]\nenabled = {bind_enabled}\n"));
+        ttd
+    }
+
+    fn common_mosquitto_config_path(ttd: &TempTedgeDir) -> Utf8PathBuf {
+        ttd.path()
+            .join(crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH)
+            .join(COMMON_MOSQUITTO_CONFIG_FILENAME)
     }
 }

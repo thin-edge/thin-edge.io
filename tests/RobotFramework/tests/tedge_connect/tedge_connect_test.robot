@@ -127,6 +127,18 @@ tedge connect does not create tedge-mosquitto.conf when mqtt.bind.enabled is fal
     Execute Command    sudo tedge reconnect c8y
     File Should Not Exist    /etc/tedge/mosquitto-conf/tedge-mosquitto.conf
 
+tedge refresh-bridges does not create tedge-mosquitto.conf when mqtt.bind.enabled is false
+    [Tags]    \#4336
+    Execute Command    mv /etc/tedge/mosquitto-conf/tedge-mosquitto.conf /etc/tedge/mosquitto-conf/custom.conf
+    Execute Command    sudo tedge config set mqtt.bind.enabled false
+    Execute Command    sudo tedge refresh-bridges
+    File Should Not Exist    /etc/tedge/mosquitto-conf/tedge-mosquitto.conf
+    [Teardown]    Run Keywords
+    ...    Execute Command    sudo tedge config unset mqtt.bind.enabled
+    ...    AND    Execute Command
+    ...    mv /etc/tedge/mosquitto-conf/custom.conf /etc/tedge/mosquitto-conf/tedge-mosquitto.conf
+    ...    AND    Execute Command    sudo tedge refresh-bridges
+
 tedge connect --test keeps working if c8y-bridge.conf is missing and built-in bridge is used
     [Tags]    \#4309
     Execute Command    sudo tedge config set mqtt.bridge.built_in true
