@@ -7,6 +7,7 @@ use rumqttc::ClientError;
 use rumqttc::ConnectionError;
 use rumqttc::Event;
 use rumqttc::EventLoop;
+use rumqttc::Incoming;
 use rumqttc::MqttOptions;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
@@ -82,6 +83,10 @@ impl LoggingAsyncClient {
 
     pub async fn ack(&self, publish: &Publish) -> Result<(), ClientError> {
         self.inner.ack(publish).await
+    }
+
+    pub async fn disconnect(&self) -> Result<(), ClientError> {
+        self.inner.disconnect().await
     }
 }
 
@@ -183,6 +188,19 @@ impl MqttEvents for LoggingEventLoop {
 
     fn set_pending(&mut self, requests: Vec<Request>) {
         self.inner.pending = requests.into_iter().collect();
+    }
+
+    fn drain_buffered_events(&mut self) -> Vec<u16> {
+        self.inner
+            .state
+            .events
+            .drain(..)
+            .filter_map(|event| match event {
+                Event::Incoming(Incoming::PubAck(ack)) => Some(ack.pkid),
+                Event::Incoming(Incoming::PubRec(rec)) => Some(rec.pkid),
+                _ => None,
+            })
+            .collect()
     }
 }
 

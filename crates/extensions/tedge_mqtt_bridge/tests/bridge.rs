@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::str::from_utf8;
 use std::time::Duration;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::event_trace::DumpOnPanic;
+use tedge_mqtt_bridge::event_trace::EventTrace;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tokio::io::AsyncWriteExt;
@@ -28,7 +30,55 @@ use tracing::warn;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
-fn new_broker_and_client(name: &str, port: u16) -> (AsyncClient, EventLoop) {
+/// Fails the test if an operation has not finished within [DEFAULT_TIMEOUT]
+///
+/// Every wait in these tests goes through this, so a bridge that stops making progress
+/// fails with the events it recorded rather than hanging with no output at all
+async fn within_timeout<T>(what: &str, operation: impl std::future::Future<Output = T>) -> T {
+    match timeout(DEFAULT_TIMEOUT, operation).await {
+        Ok(value) => value,
+        Err(_) => panic!("timed out after {DEFAULT_TIMEOUT:?} waiting for {what}"),
+    }
+}
+
+/// An MQTT client whose operations cannot block the test indefinitely
+///
+/// The underlying client queues requests for its event loop, so anything it is asked to do
+/// blocks for as long as that event loop is not polled
+#[derive(Clone)]
+struct TestClient(AsyncClient);
+
+impl TestClient {
+    async fn publish<S: Into<String>, V: Into<Vec<u8>>>(
+        &self,
+        topic: S,
+        qos: QoS,
+        retain: bool,
+        payload: V,
+    ) -> Result<(), rumqttc::ClientError> {
+        let topic = topic.into();
+        let what = format!("a publish to {topic} to be queued");
+        within_timeout(&what, self.0.publish(topic, qos, retain, payload)).await
+    }
+
+    async fn subscribe<S: Into<String>>(
+        &self,
+        topic: S,
+        qos: QoS,
+    ) -> Result<(), rumqttc::ClientError> {
+        let topic = topic.into();
+        let what = format!("a subscription to {topic} to be queued");
+        within_timeout(&what, self.0.subscribe(topic, qos)).await
+    }
+
+    async fn unsubscribe<S: Into<String>>(&self, topic: S) -> Result<(), rumqttc::ClientError> {
+        let topic = topic.into();
+        let what = format!("an unsubscription from {topic} to be queued");
+        within_timeout(&what, self.0.unsubscribe(topic)).await
+    }
+}
+
+fn new_broker_and_client(name: &str, port: u16) -> (TestClient, EventLoop) {
     let mut broker = Broker::new(get_rumqttd_config(port));
     std::thread::Builder::new()
         .name(format!("{name} broker"))
@@ -36,11 +86,12 @@ fn new_broker_and_client(name: &str, port: u16) -> (AsyncClient, EventLoop) {
         .unwrap();
     let mut client_opts = MqttOptions::new(format!("{name}-test-client"), "127.0.0.1", port);
     client_opts.set_max_packet_size(268435455, 268435455);
-    AsyncClient::new(client_opts, 10)
+    let (client, event_loop) = AsyncClient::new(client_opts, 10);
+    (TestClient(client), event_loop)
 }
 
-async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig) {
-    start_mqtt_bridge_with_reconnect_message(local_port, cloud_port, rules, None).await;
+async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig) -> EventTrace {
+    start_mqtt_bridge_with_reconnect_message(local_port, cloud_port, rules, None).await
 }
 
 async fn start_mqtt_bridge_with_reconnect_message(
@@ -48,7 +99,8 @@ async fn start_mqtt_bridge_with_reconnect_message(
     cloud_port: u16,
     rules: BridgeConfig,
     reconnect_message: Option<Publish>,
-) {
+) -> EventTrace {
+    let event_trace = EventTrace::with_capacity(8192);
     let cloud_config = MqttOptions::new("a-device-id", "127.0.0.1", cloud_port);
     let service_name = "tedge-mapper-test";
     let health_topic = format!("te/device/main/service/{service_name}/status/health")
@@ -64,8 +116,10 @@ async fn start_mqtt_bridge_with_reconnect_message(
         reconnect_message,
         // No effective limit: exercise the bridge's existing forwarding behaviour.
         268_435_455,
+        event_trace.clone(),
     )
     .await;
+    event_trace
 }
 
 const HEALTH: &str = "te/device/main/#";
@@ -87,7 +141,8 @@ async fn bridge_many_messages() {
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
-    start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await;
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
 
@@ -137,7 +192,8 @@ async fn bridge_forwards_large_messages() {
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
-    start_mqtt_bridge(local_broker_port, cloud_broker_port, rules).await;
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_broker_port, cloud_broker_port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
 
@@ -179,7 +235,8 @@ async fn bridge_disconnect_while_sending() {
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
 
-    start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await;
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
 
@@ -246,7 +303,8 @@ async fn bridge_reconnects_successfully_after_cloud_connection_interrupted() {
     let mut rules = BridgeConfig::new();
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
-    start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await;
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_broker_port, cloud_proxy.port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
     cloud.subscribe("s/us", QoS::AtLeastOnce).await.unwrap();
@@ -310,7 +368,8 @@ async fn bridge_reconnects_successfully_after_local_connection_interrupted() {
     let mut rules = BridgeConfig::new();
     rules.forward_from_local("s/us", "c8y/", "").unwrap();
     rules.forward_from_remote("s/ds", "c8y/", "").unwrap();
-    start_mqtt_bridge(local_proxy.port, cloud_broker_port, rules).await;
+    let _dump_on_panic =
+        DumpOnPanic(start_mqtt_bridge(local_proxy.port, cloud_broker_port, rules).await);
 
     local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
     cloud.subscribe("s/us", QoS::AtLeastOnce).await.unwrap();
@@ -375,7 +434,7 @@ async fn bidirectional_forwarding_avoids_infinite_loop() {
         .forward_bidirectionally("shadow/#", "aws/", "aws/things/my-device/")
         .unwrap();
 
-    start_mqtt_bridge(local_port, cloud_port, rules).await;
+    let _dump_on_panic = DumpOnPanic(start_mqtt_bridge(local_port, cloud_port, rules).await);
 
     local_client
         .subscribe(HEALTH, QoS::AtLeastOnce)
@@ -486,13 +545,15 @@ async fn bridge_publishes_reconnect_message_on_cloud_reconnection() {
         .unwrap();
     await_subscription(&mut ev_cloud).await;
 
-    start_mqtt_bridge_with_reconnect_message(
-        local_broker_port,
-        cloud_proxy.port,
-        rules,
-        Some(reconnect_msg.clone()),
-    )
-    .await;
+    let _dump_on_panic = DumpOnPanic(
+        start_mqtt_bridge_with_reconnect_message(
+            local_broker_port,
+            cloud_proxy.port,
+            rules,
+            Some(reconnect_msg.clone()),
+        )
+        .await,
+    );
 
     wait_until_health_status_is("up", &mut ev_local)
         .await
@@ -525,31 +586,35 @@ async fn wait_until_health_status_is(
     status: &str,
     event_loop: &mut EventLoop,
 ) -> anyhow::Result<()> {
-    loop {
-        let health = next_received_message(event_loop).await.with_context(|| {
-            format!("expecting health message waiting for status to be {status:?}")
-        })?;
-        if !(health.topic.starts_with("te/device/main/service")
-            && health.topic.ends_with("status/health"))
-        {
-            warn!(
-                "Unexpected message on topic {} when looking for health status messages",
-                health.topic
-            );
-        }
-        let payload = from_utf8(&health.payload).context("decoding health payload")?;
-        let json: serde_json::Value = serde_json::from_str(payload)?;
-        match (status, json["status"].as_str()) {
-            ("up", Some("up")) | ("down", Some("down")) => break Ok(()),
-            (_, Some("up" | "down")) => continue,
-            (_, Some(status)) => {
-                break Err(anyhow!(
-                    "Unknown health status {status:?} in tedge-json: {payload}"
-                ))
+    let what = format!("the bridge health status to become {status:?}");
+    within_timeout(&what, async {
+        loop {
+            let health = next_received_message(event_loop).await.with_context(|| {
+                format!("expecting health message waiting for status to be {status:?}")
+            })?;
+            if !(health.topic.starts_with("te/device/main/service")
+                && health.topic.ends_with("status/health"))
+            {
+                warn!(
+                    "Unexpected message on topic {} when looking for health status messages",
+                    health.topic
+                );
             }
-            (_, None) => break Err(anyhow!("Health status missing from payload: {payload}")),
+            let payload = from_utf8(&health.payload).context("decoding health payload")?;
+            let json: serde_json::Value = serde_json::from_str(payload)?;
+            match (status, json["status"].as_str()) {
+                ("up", Some("up")) | ("down", Some("down")) => break Ok(()),
+                (_, Some("up" | "down")) => continue,
+                (_, Some(status)) => {
+                    break Err(anyhow!(
+                        "Unknown health status {status:?} in tedge-json: {payload}"
+                    ))
+                }
+                (_, None) => break Err(anyhow!("Health status missing from payload: {payload}")),
+            }
         }
-    }
+    })
+    .await
 }
 
 /// A TCP proxy that allows the connection to be dropped upon request
@@ -654,80 +719,91 @@ impl EventPoller {
     /// Stops the spawned task from polling the loop, and returns the loop for re-use
     pub async fn stop_polling(self) -> EventLoop {
         self.tx.send(()).unwrap();
-        self.rx.await.unwrap()
+        within_timeout("the event loop to stop being polled", self.rx)
+            .await
+            .unwrap()
     }
 }
 
 async fn await_subscription(event_loop: &mut EventLoop) {
-    loop {
-        if let Ok(Event::Incoming(Incoming::SubAck(_))) =
-            timeout(DEFAULT_TIMEOUT, event_loop.poll())
-                .await
-                .context("timed-out waiting for subscription")
-                .unwrap()
-        {
-            break;
+    within_timeout("a subscription to be acknowledged", async {
+        loop {
+            if let Ok(Event::Incoming(Incoming::SubAck(_))) = event_loop.poll().await {
+                break;
+            }
         }
-    }
+    })
+    .await
 }
 
 async fn next_received_message(event_loop: &mut EventLoop) -> anyhow::Result<Publish> {
-    loop {
-        let response = timeout(DEFAULT_TIMEOUT, event_loop.poll())
-            .await
-            .context("timed-out waiting for received message")?;
+    within_timeout("a received message", async {
+        loop {
+            let response = event_loop.poll().await;
 
-        match response {
-            // Incoming messages
-            Ok(Event::Incoming(Incoming::Publish(publish))) => break Ok(publish),
-            Ok(Event::Incoming(Incoming::ConnAck(v))) => {
-                info!("Incoming::ConnAck: ({:?}, {})", v.code, v.session_present)
-            }
-            Ok(Event::Incoming(Incoming::Connect(v))) => info!(
-                "Incoming::Connect: client_id={}, clean_session={}",
-                v.client_id, v.clean_session
-            ),
-            Ok(Event::Incoming(Incoming::Disconnect)) => info!("Incoming::Disconnect"),
-            Ok(Event::Incoming(Incoming::PingReq)) => info!("Incoming::PingReq"),
-            Ok(Event::Incoming(Incoming::PingResp)) => info!("Incoming::PingResp"),
-            Ok(Event::Incoming(Incoming::PubAck(v))) => info!("Incoming::PubAck: pkid={}", v.pkid),
-            Ok(Event::Incoming(Incoming::PubComp(v))) => {
-                info!("Incoming::PubComp: pkid={}", v.pkid)
-            }
-            Ok(Event::Incoming(Incoming::PubRec(v))) => info!("Incoming::PubRec: pkid={}", v.pkid),
-            Ok(Event::Incoming(Incoming::PubRel(v))) => info!("Incoming::PubRel: pkid={}", v.pkid),
-            Ok(Event::Incoming(Incoming::SubAck(v))) => info!("Incoming::SubAck: pkid={}", v.pkid),
-            Ok(Event::Incoming(Incoming::Subscribe(v))) => {
-                info!("Incoming::Subscribe: pkid={}", v.pkid)
-            }
-            Ok(Event::Incoming(Incoming::UnsubAck(v))) => {
-                info!("Incoming::UnsubAck: pkid={}", v.pkid)
-            }
-            Ok(Event::Incoming(Incoming::Unsubscribe(v))) => {
-                info!("Incoming::Unsubscribe: pkid={}", v.pkid)
-            }
+            match response {
+                // Incoming messages
+                Ok(Event::Incoming(Incoming::Publish(publish))) => break Ok(publish),
+                Ok(Event::Incoming(Incoming::ConnAck(v))) => {
+                    info!("Incoming::ConnAck: ({:?}, {})", v.code, v.session_present)
+                }
+                Ok(Event::Incoming(Incoming::Connect(v))) => info!(
+                    "Incoming::Connect: client_id={}, clean_session={}",
+                    v.client_id, v.clean_session
+                ),
+                Ok(Event::Incoming(Incoming::Disconnect)) => info!("Incoming::Disconnect"),
+                Ok(Event::Incoming(Incoming::PingReq)) => info!("Incoming::PingReq"),
+                Ok(Event::Incoming(Incoming::PingResp)) => info!("Incoming::PingResp"),
+                Ok(Event::Incoming(Incoming::PubAck(v))) => {
+                    info!("Incoming::PubAck: pkid={}", v.pkid)
+                }
+                Ok(Event::Incoming(Incoming::PubComp(v))) => {
+                    info!("Incoming::PubComp: pkid={}", v.pkid)
+                }
+                Ok(Event::Incoming(Incoming::PubRec(v))) => {
+                    info!("Incoming::PubRec: pkid={}", v.pkid)
+                }
+                Ok(Event::Incoming(Incoming::PubRel(v))) => {
+                    info!("Incoming::PubRel: pkid={}", v.pkid)
+                }
+                Ok(Event::Incoming(Incoming::SubAck(v))) => {
+                    info!("Incoming::SubAck: pkid={}", v.pkid)
+                }
+                Ok(Event::Incoming(Incoming::Subscribe(v))) => {
+                    info!("Incoming::Subscribe: pkid={}", v.pkid)
+                }
+                Ok(Event::Incoming(Incoming::UnsubAck(v))) => {
+                    info!("Incoming::UnsubAck: pkid={}", v.pkid)
+                }
+                Ok(Event::Incoming(Incoming::Unsubscribe(v))) => {
+                    info!("Incoming::Unsubscribe: pkid={}", v.pkid)
+                }
 
-            // Outgoing messages
-            Ok(Event::Outgoing(Outgoing::PingReq)) => info!("Outgoing::PingReq"),
-            Ok(Event::Outgoing(Outgoing::PingResp)) => info!("Outgoing::PingResp"),
-            Ok(Event::Outgoing(Outgoing::Publish(v))) => info!("Outgoing::Publish: pkid={v}"),
-            Ok(Event::Outgoing(Outgoing::Subscribe(v))) => info!("Outgoing::Subscribe: pkid={v}"),
-            Ok(Event::Outgoing(Outgoing::Unsubscribe(v))) => {
-                info!("outgoing Unsubscribe: pkid={v}")
-            }
-            Ok(Event::Outgoing(Outgoing::PubAck(v))) => {
-                info!("Outgoing::PubAck: pkid={v}")
-            }
-            Ok(Event::Outgoing(Outgoing::PubRec(v))) => info!("Outgoing::PubRec: pkid={v}"),
-            Ok(Event::Outgoing(Outgoing::PubRel(v))) => info!("Outgoing::PubRel: pkid={v}"),
-            Ok(Event::Outgoing(Outgoing::PubComp(v))) => info!("Outgoing::PubComp: pkid={v}"),
-            Ok(Event::Outgoing(Outgoing::Disconnect)) => info!("Outgoing::Disconnect"),
-            Ok(Event::Outgoing(Outgoing::AwaitAck(v))) => info!("Outgoing::AwaitAck: pkid={v}"),
-            Err(err) => {
-                info!("Connection error (ignoring). {err}");
+                // Outgoing messages
+                Ok(Event::Outgoing(Outgoing::PingReq)) => info!("Outgoing::PingReq"),
+                Ok(Event::Outgoing(Outgoing::PingResp)) => info!("Outgoing::PingResp"),
+                Ok(Event::Outgoing(Outgoing::Publish(v))) => info!("Outgoing::Publish: pkid={v}"),
+                Ok(Event::Outgoing(Outgoing::Subscribe(v))) => {
+                    info!("Outgoing::Subscribe: pkid={v}")
+                }
+                Ok(Event::Outgoing(Outgoing::Unsubscribe(v))) => {
+                    info!("outgoing Unsubscribe: pkid={v}")
+                }
+                Ok(Event::Outgoing(Outgoing::PubAck(v))) => {
+                    info!("Outgoing::PubAck: pkid={v}")
+                }
+                Ok(Event::Outgoing(Outgoing::PubRec(v))) => info!("Outgoing::PubRec: pkid={v}"),
+                Ok(Event::Outgoing(Outgoing::PubRel(v))) => info!("Outgoing::PubRel: pkid={v}"),
+                Ok(Event::Outgoing(Outgoing::PubComp(v))) => info!("Outgoing::PubComp: pkid={v}"),
+                Ok(Event::Outgoing(Outgoing::Disconnect)) => info!("Outgoing::Disconnect"),
+                Ok(Event::Outgoing(Outgoing::AwaitAck(v))) => info!("Outgoing::AwaitAck: pkid={v}"),
+                Err(err) => {
+                    info!("Connection error (ignoring). {err}");
+                }
             }
         }
-    }
+    })
+    .await
 }
 
 fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {

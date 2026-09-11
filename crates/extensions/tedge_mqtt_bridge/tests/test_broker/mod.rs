@@ -1,3 +1,6 @@
+// Shared by several integration test binaries, each of which uses only part of it
+#![allow(dead_code)]
+
 use bytes::BytesMut;
 use futures::stream::StreamExt;
 use futures::SinkExt;
@@ -127,6 +130,26 @@ pub struct TestMqttBroker {
     disconnect_handles: Arc<Mutex<Vec<mpsc::Sender<TriggerDisconnect>>>>,
     /// A map to keep track of which messages are acknowledged, indexed by client id and pkid
     inflight: Arc<Mutex<HashMap<(String, u16), bool>>>,
+    /// Publishes received while acknowledgements were disabled, in arrival order
+    ///
+    /// Re-enabling acknowledgements only affects publishes that arrive afterwards, so these
+    /// are held here until [TestMqttBroker::release_withheld_acknowledgements] sends them
+    withheld_acknowledgements: Arc<Mutex<Vec<WithheldAck>>>,
+    /// How many unacknowledged messages the broker will deliver to a client at once
+    ///
+    /// Mosquitto stops delivering QoS 1 messages to a client once `max_inflight_messages`
+    /// of them are awaiting acknowledgement, queueing the rest. `None` delivers everything
+    max_outbound_inflight: Arc<Mutex<Option<usize>>>,
+    /// Messages held back because a client's inflight window is full, indexed by client id
+    outbound_backlog: Arc<Mutex<HashMap<String, VecDeque<Publish>>>>,
+}
+
+/// A publish the broker received but deliberately did not acknowledge
+#[derive(Clone, Debug)]
+struct WithheldAck {
+    client_id: String,
+    pkid: u16,
+    qos: QoS,
 }
 
 impl TestMqttBroker {
@@ -150,6 +173,9 @@ impl TestMqttBroker {
             pkid: AtomicU16::new(1),
             disconnect_handles: <_>::default(),
             inflight: <_>::default(),
+            withheld_acknowledgements: <_>::default(),
+            max_outbound_inflight: <_>::default(),
+            outbound_backlog: <_>::default(),
         })
     }
 
@@ -222,24 +248,65 @@ impl TestMqttBroker {
         }
     }
 
-    /// Disables acknowledgements for incoming `Publish` messages.
+    /// Disables acknowledgements for incoming `Publish` messages
+    ///
+    /// Publishes that arrive while acknowledgements are disabled are recorded, so they can
+    /// be acknowledged later with [Self::release_withheld_acknowledgements]
     pub async fn disable_acknowledgements(&self) {
-        let mut should_ack = self.should_acknowledge_publishes.lock().await;
+        let mut should_acknowledge = self.should_acknowledge_publishes.lock().await;
         assert!(
-            *should_ack,
+            *should_acknowledge,
             "Cannot disable acknowledgements as they are already disabled"
         );
-        *should_ack = false;
+        *should_acknowledge = false;
     }
 
-    /// (Re-)enables acknowledgements for incoming `Publish` messages.
+    /// (Re-)enables acknowledgements for incoming `Publish` messages
+    ///
+    /// This only affects publishes arriving from now on. Use
+    /// [Self::release_withheld_acknowledgements] to also acknowledge the ones already held back
     pub async fn enable_acknowledgements(&self) {
-        let mut should_ack = self.should_acknowledge_publishes.lock().await;
+        let mut should_acknowledge = self.should_acknowledge_publishes.lock().await;
         assert!(
-            !*should_ack,
+            !*should_acknowledge,
             "Cannot enable acknowledgements as they are already enabled"
         );
-        *should_ack = true;
+        *should_acknowledge = true;
+    }
+
+    /// Acknowledges every publish that arrived while acknowledgements were disabled
+    ///
+    /// The acknowledgements are sent in the order the publishes arrived
+    pub async fn release_withheld_acknowledgements(&self) {
+        let withheld = std::mem::take(&mut *self.withheld_acknowledgements.lock().await);
+        let senders = self.client_senders.lock().await.clone();
+        for ack in withheld {
+            let Some(sender) = senders.get(&ack.client_id) else {
+                info!(
+                    "Not releasing acknowledgement for pkid={pkid}: client {client} has gone away",
+                    pkid = ack.pkid,
+                    client = ack.client_id
+                );
+                continue;
+            };
+            let packet = match ack.qos {
+                QoS::AtMostOnce => continue,
+                QoS::AtLeastOnce => Packet::PubAck(PubAck::new(ack.pkid)),
+                QoS::ExactlyOnce => Packet::PubRec(PubRec::new(ack.pkid)),
+            };
+            info!(
+                "Releasing withheld acknowledgement for pkid={pkid}",
+                pkid = ack.pkid
+            );
+            if sender.send(packet).await.is_err() {
+                error!("Failed to release an acknowledgement, the client is likely disconnected");
+            }
+        }
+    }
+
+    /// Returns the number of publishes received but deliberately not acknowledged
+    pub async fn withheld_acknowledgement_count(&self) -> usize {
+        self.withheld_acknowledgements.lock().await.len()
     }
 
     /// Returns a clone of the list of `Publish` packets sent by the broker.
@@ -276,6 +343,39 @@ impl TestMqttBroker {
             if mqttbytes::matches(sub_filter, topic) {
                 // Iterate through all clients subscribed to this filter.
                 for (client_id, sender) in client_senders.iter() {
+                    // QoS 0 messages are neither acknowledged nor subject to the inflight
+                    // window, so they keep being delivered however many QoS 1 messages are
+                    // outstanding
+                    if qos == QoS::AtMostOnce {
+                        if sender
+                            .send(Packet::Publish(publish_packet.clone()))
+                            .await
+                            .is_err()
+                        {
+                            error!("Failed to send publish to a client, likely disconnected.");
+                        }
+                        continue;
+                    }
+                    // Hold the message back if the client's inflight window is full, the way
+                    // mosquitto queues QoS 1 messages once `max_inflight_messages` of them are
+                    // awaiting acknowledgement
+                    if self.inflight_window_is_full(client_id).await {
+                        info!(
+                            "Client {client_id}: inflight window full, queueing pkid={pkid}",
+                            pkid = publish_packet.pkid
+                        );
+                        self.outbound_backlog
+                            .lock()
+                            .await
+                            .entry(client_id.clone())
+                            .or_default()
+                            .push_back(publish_packet.clone());
+                        self.inflight
+                            .lock()
+                            .await
+                            .insert((client_id.clone(), publish_packet.pkid), false);
+                        continue;
+                    }
                     // Attempt to send the publish packet to the client.
                     // If sending fails, it means the client's receiver is dropped,
                     // indicating a disconnected client. Mark the sender for removal.
@@ -301,6 +401,39 @@ impl TestMqttBroker {
         Ok(())
     }
 
+    /// Limits how many unacknowledged messages the broker will deliver to a client at once
+    ///
+    /// This emulates mosquitto's `max_inflight_messages`: once the window is full, further
+    /// QoS 1 messages are queued rather than delivered, and delivery resumes as they are
+    /// acknowledged
+    pub async fn set_max_outbound_inflight(&self, max_inflight: usize) {
+        *self.max_outbound_inflight.lock().await = Some(max_inflight);
+    }
+
+    /// Returns how many messages are queued for a client because its inflight window is full
+    pub async fn queued_publish_count(&self, client_id: &str) -> usize {
+        self.outbound_backlog
+            .lock()
+            .await
+            .get(client_id)
+            .map_or(0, VecDeque::len)
+    }
+
+    /// Returns whether the client already has as many unacknowledged messages as it is allowed
+    async fn inflight_window_is_full(&self, client_id: &str) -> bool {
+        let Some(max_inflight) = *self.max_outbound_inflight.lock().await else {
+            return false;
+        };
+        let unacked = self
+            .inflight
+            .lock()
+            .await
+            .iter()
+            .filter(|((id, _), acked)| id == client_id && !**acked)
+            .count();
+        unacked >= max_inflight
+    }
+
     /// Starts the MQTT broker, listening for and handling incoming client connections.
     /// This method will loop indefinitely, accepting new connections.
     pub async fn start(&self) -> Result<(), std::io::Error> {
@@ -318,6 +451,8 @@ impl TestMqttBroker {
             let (disconnect_tx, disconnect_rx) = mpsc::channel(10);
             self.disconnect_handles.lock().await.push(disconnect_tx);
             let inflight_clone = Arc::clone(&self.inflight);
+            let withheld_acknowledgements_clone = Arc::clone(&self.withheld_acknowledgements);
+            let outbound_backlog_clone = Arc::clone(&self.outbound_backlog);
 
             // Spawn a new asynchronous task to handle this client connection independently.
             tokio::spawn(async move {
@@ -331,6 +466,8 @@ impl TestMqttBroker {
                     client_senders_clone,
                     disconnect_rx,
                     inflight_clone,
+                    withheld_acknowledgements_clone,
+                    outbound_backlog_clone,
                 )
                 .await
                 {
@@ -353,6 +490,8 @@ impl TestMqttBroker {
         client_senders: Arc<Mutex<HashMap<String, mpsc::Sender<Packet>>>>,
         mut disconnect: mpsc::Receiver<TriggerDisconnect>,
         inflight: Arc<Mutex<HashMap<(String, u16), bool>>>,
+        withheld_acknowledgements: Arc<Mutex<Vec<WithheldAck>>>,
+        outbound_backlog: Arc<Mutex<HashMap<String, VecDeque<Publish>>>>,
     ) -> Result<(), std::io::Error> {
         // Create a `Framed` instance to handle MQTT packet framing over the TCP stream.
         let mut framed = Framed::new(stream, MqttCodec);
@@ -422,6 +561,13 @@ impl TestMqttBroker {
                                             info!("Client {client_id}: Acknowledging: {resp:?}");
                                             framed.send(resp.clone()).await?;
                                         }
+                                    } else if publish.qos != QoS::AtMostOnce {
+                                        info!("Client {client_id}: Withholding acknowledgement for pkid={pkid}", pkid = publish.pkid);
+                                        withheld_acknowledgements.lock().await.push(WithheldAck {
+                                            client_id: client_id.clone(),
+                                            pkid: publish.pkid,
+                                            qos: publish.qos,
+                                        });
                                     }
                                 }
                                 Packet::PubAck(ack) => {
@@ -435,6 +581,17 @@ impl TestMqttBroker {
                                         }
                                     } else                                    {
                                         panic!("Broker received PubAck for unknown message {pkid} from {client_id}")
+                                    }
+                                    // A slot in the inflight window has freed up, so deliver
+                                    // the next message queued for this client
+                                    let next = outbound_backlog
+                                        .lock()
+                                        .await
+                                        .get_mut(&client_id)
+                                        .and_then(VecDeque::pop_front);
+                                    if let Some(publish) = next {
+                                        info!("Client {client_id}: delivering queued pkid={pkid}", pkid = publish.pkid);
+                                        framed.send(Packet::Publish(publish)).await?;
                                     }
                                 }
                                 Packet::Subscribe(subscribe) => {

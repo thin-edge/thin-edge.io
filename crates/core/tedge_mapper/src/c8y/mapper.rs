@@ -117,6 +117,7 @@ impl TEdgeComponent for CumulocityMapper {
                 cloud_config,
                 Some(reconnect_message_mapper),
                 c8y_config.mapper.mqtt.max_payload_size.0 as usize,
+                <_>::default(),
             )
             .await;
             bridge_subscribed = Some(bridge_builder.local_subscriptions_ready());

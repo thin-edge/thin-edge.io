@@ -13,6 +13,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use tedge_config::TEdgeConfig;
+use tedge_mqtt_bridge::event_trace::DumpOnPanic;
+use tedge_mqtt_bridge::event_trace::EventTrace;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tokio::net::TcpListener;
@@ -45,21 +47,30 @@ async fn bridge_should_not_log_warnings_during_normal_operation() {
     wait_until_port_listening(local_broker_port).await;
     wait_until_port_listening(cloud_broker_port).await;
 
-    start_mqtt_bridge(local_broker_port, cloud_broker_port, rules).await;
+    let _dump_on_panic = start_mqtt_bridge(local_broker_port, cloud_broker_port, rules).await;
 
-    local.subscribe(HEALTH, QoS::AtLeastOnce).await.unwrap();
+    within_timeout(
+        "a subscription to be queued",
+        local.subscribe(HEALTH, QoS::AtLeastOnce),
+    )
+    .await
+    .unwrap();
 
     wait_until_health_status_is("up", &mut ev_local)
         .await
         .unwrap();
 
-    local.unsubscribe(HEALTH).await.unwrap();
-
-    // Send a few messages to ensure the bridge is working
-    local
-        .publish("c8y/s/us", QoS::AtLeastOnce, false, "test message")
+    within_timeout("an unsubscription to be queued", local.unsubscribe(HEALTH))
         .await
         .unwrap();
+
+    // Send a few messages to ensure the bridge is working
+    within_timeout(
+        "a publish to be queued",
+        local.publish("c8y/s/us", QoS::AtLeastOnce, false, "test message"),
+    )
+    .await
+    .unwrap();
 
     // Give some time for messages to be processed and healthcheck to complete
     sleep(Duration::from_millis(500)).await;
@@ -98,7 +109,21 @@ fn new_broker_and_client(name: &str, port: u16) -> (AsyncClient, EventLoop) {
     AsyncClient::new(client_opts, 10)
 }
 
-async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig) {
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Fails the test if an operation has not finished within [DEFAULT_TIMEOUT]
+///
+/// Every wait here goes through this, so a bridge that stops making progress fails with
+/// the events it recorded rather than hanging with no output at all
+async fn within_timeout<T>(what: &str, operation: impl std::future::Future<Output = T>) -> T {
+    match tokio::time::timeout(DEFAULT_TIMEOUT, operation).await {
+        Ok(value) => value,
+        Err(_) => panic!("timed out after {DEFAULT_TIMEOUT:?} waiting for {what}"),
+    }
+}
+
+async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig) -> DumpOnPanic {
+    let event_trace = EventTrace::with_capacity(8192);
     let cloud_config = MqttOptions::new("a-device-id", "127.0.0.1", cloud_port);
     let service_name = "tedge-mapper-test";
     let health_topic = format!("te/device/main/service/{service_name}/status/health")
@@ -114,28 +139,23 @@ async fn start_mqtt_bridge(local_port: u16, cloud_port: u16, rules: BridgeConfig
         None,
         // No effective limit: exercise the bridge's existing forwarding behaviour.
         268_435_455,
+        event_trace.clone(),
     )
     .await;
+    DumpOnPanic(event_trace)
 }
 
 async fn wait_until_port_listening(port: u16) {
-    let mut attempts = 0;
-    let max_attempts = 1000;
-    let delay = Duration::from_millis(10);
-
-    while attempts < max_attempts {
-        match tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port)).await {
-            Ok(_) => return,
-            Err(_) => {
-                attempts += 1;
-                tokio::time::sleep(delay).await;
-            }
+    let what = format!("port {port} to start listening");
+    within_timeout(&what, async {
+        while tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
+            .await
+            .is_err()
+        {
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
-    }
-    panic!(
-        "Failed to connect to port {} after {} attempts",
-        port, max_attempts
-    );
+    })
+    .await
 }
 
 async fn wait_until_health_status_is(
@@ -145,29 +165,27 @@ async fn wait_until_health_status_is(
     use rumqttc::Event;
     use rumqttc::Incoming;
     use std::str::from_utf8;
-    use tokio::time::timeout;
 
-    const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+    let what = format!("the bridge health status to become {status:?}");
+    within_timeout(&what, async {
+        loop {
+            let response = event_loop.poll().await;
 
-    loop {
-        let response = timeout(DEFAULT_TIMEOUT, event_loop.poll())
-            .await
-            .context("timed-out waiting for health message")?;
-
-        if let Ok(Event::Incoming(Incoming::Publish(publish))) = response {
-            if publish.topic.starts_with("te/device/main/service")
-                && publish.topic.ends_with("status/health")
-            {
-                let payload = from_utf8(&publish.payload).context("decoding health payload")?;
-                let json: serde_json::Value = serde_json::from_str(payload)?;
-                match (status, json["status"].as_str()) {
-                    ("up", Some("up")) | ("down", Some("down")) => break Ok(()),
-                    (_, Some("up" | "down")) => continue,
-                    _ => continue,
+            if let Ok(Event::Incoming(Incoming::Publish(publish))) = response {
+                if publish.topic.starts_with("te/device/main/service")
+                    && publish.topic.ends_with("status/health")
+                {
+                    let payload = from_utf8(&publish.payload).context("decoding health payload")?;
+                    let json: serde_json::Value = serde_json::from_str(payload)?;
+                    match (status, json["status"].as_str()) {
+                        ("up", Some("up")) | ("down", Some("down")) => break Ok(()),
+                        _ => continue,
+                    }
                 }
             }
         }
-    }
+    })
+    .await
 }
 
 async fn free_port() -> u16 {

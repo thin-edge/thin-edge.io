@@ -87,6 +87,7 @@ impl TEdgeComponent for AwsMapper {
                 cloud_config,
                 None,
                 aws_config.mapper.mqtt.max_payload_size.0 as usize,
+                <_>::default(),
             )
             .await;
             runtime.spawn(bridge_actor).await?;
