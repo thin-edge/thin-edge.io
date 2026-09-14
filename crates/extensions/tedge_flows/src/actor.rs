@@ -1,5 +1,6 @@
 use crate::connected_flow::watch_request_topic;
 use crate::connected_flow::ConnectedFlowRegistry;
+use crate::flow::FileOutputFormat;
 use crate::flow::FlowError;
 use crate::flow::FlowOutput;
 use crate::flow::FlowResult;
@@ -31,6 +32,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_utils::fs::atomically_write_file_async;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
@@ -450,7 +452,10 @@ impl FlowsMapper {
                     }
                 }
             }
-            FlowOutput::File { path } => {
+            FlowOutput::File {
+                path,
+                format: FileOutputFormat::Lines,
+            } => {
                 let Ok(file) = tokio::fs::File::options()
                     .create(true)
                     .append(true)
@@ -470,6 +475,17 @@ impl FlowsMapper {
                 }
                 if let Err(err) = file.flush().await {
                     error!(target: "flows", "{flow}: cannot flush {path}: {err}");
+                }
+            }
+            FlowOutput::File {
+                path,
+                format: FileOutputFormat::Raw,
+            } => {
+                // Each message replaces the file content, so only the last message of a batch is written
+                if let Some(message) = messages.last() {
+                    if let Err(err) = atomically_write_file_async(path, &message.payload).await {
+                        error!(target: "flows", "{flow}: cannot write to {path}: {err}");
+                    }
                 }
             }
         }
