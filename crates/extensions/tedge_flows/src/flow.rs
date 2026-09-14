@@ -104,6 +104,11 @@ pub enum FlowOutput {
         path: Utf8PathBuf,
         format: FileOutputFormat,
     },
+    /// Messages are written to the file of the directory named by each message
+    Directory {
+        path: Utf8PathBuf,
+        format: FileOutputFormat,
+    },
 }
 
 /// How messages are written to an output file
@@ -147,6 +152,16 @@ pub struct Message {
     pub payload: Vec<u8>,
     pub timestamp: Option<SystemTime>,
     pub transport: Option<Transport>,
+    /// The file where the message is written, when the flow output is a directory
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<MessageFile>,
+}
+
+/// File properties of a message
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
+pub struct MessageFile {
+    /// Path of the file, relative to the directory of the file output
+    pub name: String,
 }
 
 #[derive(Clone, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -593,6 +608,7 @@ impl Message {
             payload: payload.into(),
             timestamp: None,
             transport: None,
+            file: None,
         }
     }
 
@@ -606,6 +622,7 @@ impl Message {
             payload: payload.into(),
             timestamp: Some(timestamp),
             transport: None,
+            file: None,
         }
     }
 
@@ -676,6 +693,7 @@ impl From<MqttMessage> for Message {
             payload,
             timestamp: None,
             transport: Some(transport),
+            file: None,
         }
     }
 }

@@ -129,7 +129,10 @@ pub enum OutputConfig {
 
     #[serde(rename = "file")]
     File {
-        path: Utf8PathBuf,
+        /// Write all the messages to this file
+        path: Option<Utf8PathBuf>,
+        /// Write each message to the file of this directory named by the message
+        dir: Option<Utf8PathBuf>,
         #[serde(default)]
         format: FileOutputFormat,
     },
@@ -174,6 +177,9 @@ pub enum ConfigError {
 
     #[error("Flow '{name}' must define at least one input")]
     NoInput { name: String },
+
+    #[error("Not a valid file output: {0}")]
+    IncorrectFileOutput(String),
 }
 
 /// ```
@@ -337,6 +343,12 @@ impl FlowConfig {
         let input = self.input.into_flow_inputs(source_dir)?;
         let output = self.output.try_into()?;
         let errors = self.errors.try_into()?;
+        if let FlowOutput::Directory { .. } = errors {
+            return Err(ConfigError::IncorrectFileOutput(
+                "errors cannot be written to a directory, as error messages have no file name"
+                    .to_string(),
+            ));
+        }
         let mut steps = vec![];
         for (i, step) in self.steps.into_iter().enumerate() {
             let step = step
@@ -622,8 +634,9 @@ impl OutputConfig {
             OutputConfig::Mqtt { topic } => Ok(OutputConfig::Mqtt {
                 topic: topic.map(|t| params.substitute_inner_paths(&t)),
             }),
-            OutputConfig::File { path, format } => Ok(OutputConfig::File {
-                path: params.substitute_inner_paths(path.as_str()).into(),
+            OutputConfig::File { path, dir, format } => Ok(OutputConfig::File {
+                path: path.map(|path| params.substitute_inner_paths(path.as_str()).into()),
+                dir: dir.map(|dir| params.substitute_inner_paths(dir.as_str()).into()),
                 format,
             }),
         }
@@ -638,7 +651,21 @@ impl TryFrom<OutputConfig> for FlowOutput {
             OutputConfig::Mqtt { topic } => FlowOutput::Mqtt {
                 topic: topic.map(into_topic).transpose()?,
             },
-            OutputConfig::File { path, format } => FlowOutput::File { path, format },
+            OutputConfig::File {
+                path: Some(path),
+                dir: None,
+                format,
+            } => FlowOutput::File { path, format },
+            OutputConfig::File {
+                path: None,
+                dir: Some(path),
+                format,
+            } => FlowOutput::Directory { path, format },
+            OutputConfig::File { .. } => {
+                return Err(ConfigError::IncorrectFileOutput(
+                    "exactly one of `path` or `dir` must be set".to_string(),
+                ))
+            }
         })
     }
 }
@@ -1006,7 +1033,8 @@ topic = "te/device/main///e/"
         assert_eq!(
             flow.output,
             OutputConfig::File {
-                path: "/tmp/events.log".into(),
+                path: Some("/tmp/events.log".into()),
+                dir: None,
                 format: FileOutputFormat::Lines,
             }
         );
@@ -1025,10 +1053,69 @@ topic = "te/device/main///e/"
         assert_eq!(
             flow.output,
             OutputConfig::File {
-                path: "/tmp/export.parquet".into(),
+                path: Some("/tmp/export.parquet".into()),
+                dir: None,
                 format: FileOutputFormat::Raw,
             }
         );
+    }
+
+    #[test]
+    fn file_output_can_write_to_a_directory() {
+        let flow: FlowConfig = toml::from_str(
+            r#"
+            [output.file]
+            dir = "/var/tedge/export"
+            format = "raw"
+            "#,
+        )
+        .unwrap();
+        assert!(matches!(
+            FlowOutput::try_from(flow.output),
+            Ok(FlowOutput::Directory {
+                path,
+                format: FileOutputFormat::Raw,
+            }) if path.as_str() == "/var/tedge/export"
+        ));
+    }
+
+    #[tokio::test]
+    async fn errors_cannot_be_written_to_a_directory() {
+        let flow: FlowConfig = toml::from_str(
+            r#"
+            input.mqtt.topics = ["test/input"]
+            errors.file.dir = "/tmp/errors"
+            "#,
+        )
+        .unwrap();
+        let rs_transformers = BuiltinTransformers::default();
+        let mut js_runtime = JsRuntime::with_default().await.unwrap();
+        let result = flow
+            .compile(
+                &rs_transformers,
+                &mut js_runtime,
+                Utf8Path::new("/flows"),
+                Utf8PathBuf::from("/flows/my_flow.toml"),
+            )
+            .await;
+        assert!(matches!(result, Err(ConfigError::IncorrectFileOutput(_))));
+    }
+
+    #[test]
+    fn file_output_requires_either_a_path_or_a_directory() {
+        for flow_toml in [
+            r#"output.file.format = "raw""#,
+            r#"output.file = { path = "/tmp/export.parquet", dir = "/tmp" }"#,
+        ] {
+            let flow: FlowConfig = toml::from_str(flow_toml).unwrap();
+            assert!(
+                matches!(
+                    FlowOutput::try_from(flow.output),
+                    Err(ConfigError::IncorrectFileOutput(_))
+                ),
+                "{flow_toml} should be rejected"
+            );
+        }
     }
 
     #[test]
