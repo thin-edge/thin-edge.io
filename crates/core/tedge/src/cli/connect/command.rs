@@ -1107,14 +1107,10 @@ impl ConnectCommand {
             Cloud::Custom(_) => unreachable!("custom mappers are handled before new_bridge"),
         }
 
-        if tedge_config.mqtt.bind.enabled {
-            if let Err(err) =
-                write_generic_mosquitto_config_to_file(tedge_config, common_mosquitto_config).await
-            {
-                // We want to preserve previous errors and therefore discard result of this function.
-                let _ = clean_up(tedge_config, bridge_config);
-                return Err(err.into());
-            }
+        if let Err(err) = common_mosquitto_config.save(tedge_config).await {
+            // We want to preserve previous errors and therefore discard result of this function.
+            let _ = clean_up(tedge_config, bridge_config);
+            return Err(ConnectError::from(err).into());
         }
 
         if bridge_config.bridge_location == BridgeLocation::Mosquitto {
@@ -1295,18 +1291,6 @@ fn fail_if_already_connected(
             cloud: bridge_config.cloud_name.to_string(),
         });
     }
-    Ok(())
-}
-
-async fn write_generic_mosquitto_config_to_file(
-    tedge_config: &TEdgeConfig,
-    common_mosquitto_config: &CommonMosquittoConfig,
-) -> Result<(), ConnectError> {
-    let config_file = common_mosquitto_config.config_file.as_str();
-    let mut contents = Vec::new();
-    common_mosquitto_config.serialize(&mut contents).await?;
-    crate::bridge::write_mosquitto_config(tedge_config, config_file, &contents).await?;
-
     Ok(())
 }
 
