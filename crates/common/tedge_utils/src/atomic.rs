@@ -18,7 +18,8 @@ use std::io::Read;
 use std::os::unix::fs::fchown;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+
+use camino::Utf8Path;
 
 use crate::file::PermissionEntry;
 use anyhow::Context;
@@ -32,7 +33,7 @@ use anyhow::Context;
 /// unchanged.
 pub fn write_file_atomic_set_permissions_if_doesnt_exist(
     mut src: impl Read,
-    dest: impl AsRef<Path>,
+    dest: impl AsRef<Utf8Path>,
     permissions: &MaybePermissions,
 ) -> anyhow::Result<()> {
     let dest = dest.as_ref();
@@ -44,12 +45,7 @@ pub fn write_file_atomic_set_permissions_if_doesnt_exist(
     let mut tempfile = tempfile::Builder::new()
         .permissions(std::fs::Permissions::from_mode(0o600))
         .tempfile_in(dest.parent().context("invalid path")?)
-        .with_context(|| {
-            format!(
-                "could not create temporary file at '{}'",
-                dest.to_string_lossy()
-            )
-        })?;
+        .with_context(|| format!("could not create temporary file at '{dest}'"))?;
 
     std::io::copy(&mut src, &mut tempfile).context("failed to copy")?;
 
@@ -83,7 +79,10 @@ pub fn write_file_atomic_set_permissions_if_doesnt_exist(
 /// # Errors
 /// - if desired user/group doesn't exist on the system
 /// - no permission to read destination file
-fn target_permissions(dest: &Path, permissions: &MaybePermissions) -> anyhow::Result<Permissions> {
+fn target_permissions(
+    dest: &Utf8Path,
+    permissions: &MaybePermissions,
+) -> anyhow::Result<Permissions> {
     let current_file_permissions = match std::fs::metadata(dest) {
         Err(err) => match err.kind() {
             ErrorKind::NotFound => None,

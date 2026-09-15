@@ -8,11 +8,11 @@ use c8y_api::json_c8y::C8yEventResponse;
 use c8y_api::json_c8y::C8yManagedObject;
 use c8y_api::json_c8y::InternalIdResponse;
 use c8y_api::OffsetDateTime;
+use camino::Utf8PathBuf;
 use certificate::CloudHttpConfig;
 use reqwest::multipart;
 use reqwest::Identity;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use tedge_config::TEdgeConfig;
 use tedge_utils::file::path_exists;
 
@@ -38,7 +38,7 @@ pub struct C8yUpload {
     pub json: HashMap<String, serde_json::Value>,
 
     /// Path to the uploaded file
-    pub file: PathBuf,
+    pub file: Utf8PathBuf,
 
     /// MIME type of the file content. Defaults to `application/octet-stream`
     pub mime_type: String,
@@ -156,12 +156,7 @@ mod tests {
         };
 
         let c8y = mock_auth_proxy("test-device", "event-123", &c8y_event).await;
-        let upload = upload_cmd(
-            &c8y,
-            file.std_path().to_path_buf(),
-            "test-device",
-            c8y_event,
-        );
+        let upload = upload_cmd(&c8y, file.path_buf(), "test-device", c8y_event);
 
         // Step by step
         assert_eq!(
@@ -180,7 +175,7 @@ mod tests {
 
     fn upload_cmd(
         c8y: &ServerGuard,
-        file: PathBuf,
+        file: Utf8PathBuf,
         device_id: &str,
         c8y_event: C8yCreateEvent,
     ) -> C8yUpload {

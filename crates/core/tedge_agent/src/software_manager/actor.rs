@@ -263,11 +263,7 @@ impl SoftwareManagerActor {
             )
         });
         let response = plugins
-            .process(
-                request,
-                command_log,
-                self.config.tmp_dir.root().as_std_path(),
-            )
+            .process(request, command_log, self.config.tmp_dir.root())
             .await;
         self.output_sender.send(response.into()).await?;
 

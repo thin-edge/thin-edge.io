@@ -104,7 +104,8 @@ impl OperationContext {
 
         let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
             .context("Failed to create a temporary directory")?;
-        let destination_path = destination_dir.path().join(config_filename);
+        let destination_path = Utf8PathBuf::try_from(destination_dir.path().join(config_filename))
+            .expect("tempdir path is valid UTF-8");
 
         let download_request = DownloadRequest::new(&tedge_file_url, &destination_path);
 
@@ -119,9 +120,7 @@ impl OperationContext {
             "tedge-mapper-c8y failed to download configuration snapshot from file-transfer service",
         )?;
 
-        let file_path = Utf8PathBuf::try_from(destination_path)
-            .map_err(|e| e.into_io_error())
-            .context("Could not parse destination path as utf-8")?;
+        let file_path = destination_path;
         let event_type = command.payload.config_type.clone();
 
         // Upload the file to C8y

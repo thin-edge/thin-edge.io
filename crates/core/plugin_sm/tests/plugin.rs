@@ -176,14 +176,14 @@ mod tests {
         assert_eq!(res, Ok(()));
     }
 
-    #[test_case("abc", &Some("1:2.3.4567-8~1234".to_string()), "/tmp", PathBuf::from("/tmp/abc_1%3a2.3.4567-8~1234") ; "with special character")]
+    #[test_case("abc", &Some("1:2.3.4567-8~1234".to_string()), "/tmp", "/tmp/abc_1%3a2.3.4567-8~1234".into() ; "with special character")]
     fn handle_special_characters_in_module_version(
         name: &str,
         version: &Option<String>,
-        target_dir_path: impl AsRef<Path>,
-        expected_path: PathBuf,
+        target_dir_path: &str,
+        expected_path: Utf8PathBuf,
     ) {
-        let res = sm_path(name, version, target_dir_path);
+        let res = sm_path(name, version, target_dir_path.into());
 
         assert_eq!(res, expected_path);
     }

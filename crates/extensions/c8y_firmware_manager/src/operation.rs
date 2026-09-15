@@ -1,7 +1,7 @@
 use crate::error::FirmwareManagementError;
 
+use camino::Utf8Path;
 use std::fs;
-use std::path::Path;
 use tedge_utils::file::overwrite_file;
 use tedge_utils::paths::ManagedDir;
 
@@ -34,7 +34,7 @@ impl FirmwareOperationEntry {
 
     pub async fn overwrite_file(
         &self,
-        firmware_dir: impl AsRef<Path>,
+        firmware_dir: impl AsRef<Utf8Path>,
     ) -> Result<(), FirmwareManagementError> {
         let path = firmware_dir.as_ref().join(&self.operation_id);
         let content = serde_json::to_string(self)?;
@@ -50,8 +50,8 @@ impl FirmwareOperationEntry {
         }
     }
 
-    pub fn read_from_file(path: impl AsRef<Path>) -> Result<Self, FirmwareManagementError> {
-        let bytes = fs::read(path)?;
+    pub fn read_from_file(path: impl AsRef<Utf8Path>) -> Result<Self, FirmwareManagementError> {
+        let bytes = fs::read(path.as_ref())?;
         serde_json::from_slice(&bytes).map_err(FirmwareManagementError::FromSerdeJsonError)
     }
 }

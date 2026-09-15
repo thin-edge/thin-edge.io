@@ -11,6 +11,7 @@ repository = { workspace = true }
 
 [dependencies]
 async-trait = { workspace = true }
+camino = { workspace = true }
 certificate = { workspace = true, features = ["reqwest"] }
 download = { workspace = true }
 reqwest = { workspace = true }

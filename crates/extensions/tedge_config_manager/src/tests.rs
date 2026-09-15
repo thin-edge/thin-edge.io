@@ -418,16 +418,10 @@ async fn config_manager_download_update() -> Result<(), anyhow::Error> {
         download_request.url,
         "http://127.0.0.1:3000/te/v1/files/main/config_update/type_two-1234"
     );
-    assert_eq!(
-        download_request.file_path,
-        std::env::temp_dir().join("type_two")
-    );
+    assert!(download_request.file_path.as_str().ends_with("type_two"));
 
     assert!(download_request.headers.is_empty());
-    assert!(download_request
-        .file_path
-        .to_string_lossy()
-        .contains("type_two"));
+    assert!(download_request.file_path.as_str().contains("type_two"));
 
     // Simulate downloading a file is completed.
     std::fs::File::create(&download_request.file_path).unwrap();

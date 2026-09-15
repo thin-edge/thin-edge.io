@@ -280,7 +280,7 @@ impl ManagedDir {
             permissions = permissions.force_dir_ownership();
         }
         let result = permissions
-            .create_directory_with_root(self.path().as_std_path(), self.root.as_std_path())
+            .create_directory_with_root(self.path(), &self.root)
             .await
             .map_err(Into::into);
         self.handle_permission_errors(result)
@@ -295,7 +295,7 @@ impl ManagedDir {
         }
         let result = self
             .permission_entry()
-            .apply(self.path().as_std_path())
+            .apply(self.path())
             .await
             .map_err(Into::into);
         self.handle_permission_errors(result)
@@ -316,7 +316,7 @@ impl ManagedDir {
             Ok(_) => Ok(()),
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
             Err(err) => Err(FileError::DirectoryCreateFailed {
-                dir: dir.to_string(),
+                dir: dir.to_owned(),
                 from: err,
             }),
         }
@@ -419,9 +419,7 @@ impl ManagedFile {
     pub async fn replace_atomic(&self, content: impl AsRef<[u8]>) -> Result<(), PathsError> {
         let result = async {
             atomically_write_file_async(self.path(), content.as_ref()).await?;
-            self.permission_entry()
-                .apply(self.path().as_std_path())
-                .await?;
+            self.permission_entry().apply(self.path()).await?;
             Ok(())
         }
         .await;
@@ -437,7 +435,7 @@ impl ManagedFile {
                 file.sync_all().await?;
                 let result = self
                     .permission_entry()
-                    .apply(self.path().as_std_path())
+                    .apply(self.path())
                     .await
                     .map_err(Into::into);
                 self.handle_permission_errors(result)

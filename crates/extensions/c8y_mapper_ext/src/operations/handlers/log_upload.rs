@@ -77,7 +77,8 @@ impl OperationContext {
 
         let destination_dir = tempfile::tempdir_in(self.tmp_dir.as_std_path())
             .context("Failed to create a temporary directory")?;
-        let destination_path = destination_dir.path().join(log_filename);
+        let destination_path = Utf8PathBuf::try_from(destination_dir.path().join(log_filename))
+            .expect("tempdir path is valid UTF-8");
 
         let download_request = DownloadRequest::new(tedge_file_url, &destination_path);
         let (_, download_result) = self
@@ -90,16 +91,12 @@ impl OperationContext {
         let download_response = download_result
             .context("tedge-mapper-c8y failed to download log from file transfer service")?;
 
-        let file_path = Utf8PathBuf::try_from(download_response.file_path)
-            .map_err(|e| e.into_io_error())
-            .context("Could not parse file path as Utf-8")?;
-
         let event_type = &command.payload.log_type;
 
         let (binary_upload_event_url, upload_result) = self
             .upload_file(
                 &target.external_id,
-                &file_path,
+                &download_response.file_path,
                 None,
                 Some(mime::TEXT_PLAIN),
                 cmd_id,

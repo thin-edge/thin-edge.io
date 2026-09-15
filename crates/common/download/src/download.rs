@@ -5,6 +5,8 @@ use crate::error::ErrContext;
 use anyhow::anyhow;
 use backoff::future::retry_notify;
 use backoff::ExponentialBackoff;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use certificate::http_client;
 use certificate::CloudHttpConfig;
 use http::StatusCode;
@@ -21,8 +23,6 @@ use std::fs::File;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::Write;
-use std::path::Path;
-use std::path::PathBuf;
 use std::time::Duration;
 use tedge_utils::file::FileError;
 use tracing::debug;
@@ -90,7 +90,7 @@ impl DownloadInfo {
 /// A struct which manages file downloads.
 #[derive(Debug)]
 pub struct Downloader {
-    target_filename: PathBuf,
+    target_filename: Utf8PathBuf,
     backoff: ExponentialBackoff,
     client: Client,
 }
@@ -99,7 +99,7 @@ impl Downloader {
     /// Creates a new downloader which downloads to a target directory and uses
     /// default permissions.
     pub fn new(
-        target_path: PathBuf,
+        target_path: Utf8PathBuf,
         identity: Option<Identity>,
         cloud_http_config: CloudHttpConfig,
     ) -> Self {
@@ -135,7 +135,7 @@ impl Downloader {
     /// and the server response included `Accept-Ranges` header.
     pub async fn download(&self, url: &DownloadInfo) -> Result<(), DownloadError> {
         let tmp_target_path = self.temp_filename().await?;
-        let target_file_path = self.target_filename.as_path();
+        let target_file_path = self.filename();
 
         let temp_dir = self
             .target_filename
@@ -244,13 +244,13 @@ impl Downloader {
     }
 
     /// Returns the filename.
-    pub fn filename(&self) -> &Path {
-        self.target_filename.as_path()
+    pub fn filename(&self) -> &Utf8Path {
+        &self.target_filename
     }
 
     /// Builds a temporary filename the file will be downloaded into.
-    async fn temp_filename(&self) -> Result<PathBuf, DownloadError> {
-        if self.target_filename.is_relative() {
+    async fn temp_filename(&self) -> Result<Utf8PathBuf, DownloadError> {
+        if self.target_filename.as_str().is_empty() || !self.target_filename.is_absolute() {
             Err(FileError::InvalidFileName {
                 path: self.target_filename.clone(),
                 source: anyhow!("Path can't be relative"),
@@ -277,11 +277,6 @@ impl Downloader {
             .ok_or_else(|| FileError::InvalidFileName {
                 path: target_file_path.clone(),
                 source: anyhow!("Does not name a valid file"),
-            })?
-            .to_str()
-            .ok_or_else(|| FileError::InvalidFileName {
-                path: target_file_path.clone(),
-                source: anyhow!("Path is not valid unicode"),
             })?;
         let parent_dir = target_file_path
             .parent()
@@ -420,7 +415,7 @@ enum SaveChunksError {
 #[allow(clippy::unnecessary_cast)]
 pub fn try_pre_allocate_space(
     file: &File,
-    path: &Path,
+    path: &Utf8Path,
     file_len: u64,
 ) -> Result<(), DownloadError> {
     if file_len == 0 {

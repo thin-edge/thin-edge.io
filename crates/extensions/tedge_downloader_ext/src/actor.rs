@@ -1,4 +1,6 @@
 use async_trait::async_trait;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use certificate::CloudHttpConfig;
 use download::DownloadError;
 use download::DownloadInfo;
@@ -6,8 +8,6 @@ use download::Downloader;
 use reqwest::header::HeaderMap;
 use reqwest::Identity;
 use std::marker::PhantomData;
-use std::path::Path;
-use std::path::PathBuf;
 use tedge_actors::Message;
 use tedge_actors::Sequential;
 use tedge_actors::Server;
@@ -19,13 +19,13 @@ use tracing::info;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DownloadRequest {
     pub url: String,
-    pub file_path: PathBuf,
+    pub file_path: Utf8PathBuf,
     pub headers: HeaderMap,
     pub permission: Option<PermissionEntry>,
 }
 
 impl DownloadRequest {
-    pub fn new(url: &str, file_path: &Path) -> Self {
+    pub fn new(url: &str, file_path: &Utf8Path) -> Self {
         Self {
             url: url.into(),
             file_path: file_path.into(),
@@ -47,11 +47,11 @@ pub type DownloadResult = Result<DownloadResponse, DownloadError>;
 #[derive(Debug)]
 pub struct DownloadResponse {
     pub url: String,
-    pub file_path: PathBuf,
+    pub file_path: Utf8PathBuf,
 }
 
 impl DownloadResponse {
-    pub fn new(url: &str, file_path: &Path) -> Self {
+    pub fn new(url: &str, file_path: &Utf8Path) -> Self {
         Self {
             url: url.into(),
             file_path: file_path.into(),
@@ -122,8 +122,7 @@ impl<T: Message> Server for DownloaderActor<T> {
 
         info!(
             "Downloading from url {} to location {}",
-            request.url,
-            request.file_path.display()
+            request.url, request.file_path
         );
 
         let result = match downloader.download(&download_info).await {

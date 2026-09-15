@@ -128,7 +128,7 @@ fn create_parent_dirs(args: &Args, dir_path: &Utf8Path) -> anyhow::Result<()> {
 
     match std::fs::create_dir_all(dir_path) {
         Ok(_) => {
-            parent_permissions.apply_sync(dir_path.as_std_path())?;
+            parent_permissions.apply_sync(dir_path)?;
         }
         Err(err) => {
             bail!("failed to create parent directories. path: '{dir_path}', error: '{err}'");

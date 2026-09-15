@@ -1,6 +1,6 @@
 use super::download::InvalidResponseError;
+use camino::Utf8PathBuf;
 use std::io;
-use std::path::PathBuf;
 
 /// An error that can be returned as a result of
 /// [`Downloader::download`](super::download::Downloader::download) operation.
@@ -16,7 +16,7 @@ pub enum DownloadError {
     InsufficientSpace,
 
     #[error("No write access to {path:?}")]
-    NoWriteAccess { path: PathBuf },
+    NoWriteAccess { path: Utf8PathBuf },
 
     #[error(transparent)]
     Request(#[from] reqwest::Error),

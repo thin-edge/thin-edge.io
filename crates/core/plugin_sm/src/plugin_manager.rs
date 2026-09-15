@@ -1,12 +1,12 @@
 use crate::plugin::ExternalPluginCommand;
 use crate::plugin::Plugin;
 use crate::plugin::LIST;
+use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self};
-use std::path::Path;
 use std::path::PathBuf;
 use tedge_api::commands::CommandStatus;
 use tedge_api::commands::SoftwareListCommand;
@@ -227,7 +227,7 @@ impl ExternalPlugins {
         &self,
         request: SoftwareUpdateCommand,
         mut command_log: Option<CommandLog>,
-        download_path: &Path,
+        download_path: &Utf8Path,
     ) -> SoftwareUpdateCommand {
         let mut response = request.clone().with_status(CommandStatus::Executing);
         let mut error_messages = Vec::new();
