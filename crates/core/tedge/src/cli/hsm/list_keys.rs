@@ -9,6 +9,7 @@ use tedge_p11::SecretString;
 use super::create_key::parse_id;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use crate::warning;
 use crate::ConfigError;
 
 /// Arguments of the key-listing command.
@@ -122,7 +123,19 @@ impl Command for ListKeysCmd {
             .filter(|key| id_filter.as_deref().is_none_or(|id| key.id == id))
             .collect();
 
-        if keys.is_empty() {
+        let filter = Pkcs11Uri::parse(self.uri.as_deref().unwrap_or("pkcs11:")).unwrap();
+        let matching_keys: Vec<_> = keys
+            .iter()
+            .filter(|k| Pkcs11Uri::parse(&k.uri).is_ok_and(|u| filter.matches(&u)))
+            .collect();
+
+        let keys_not_shown = keys.len() - matching_keys.len();
+        if keys_not_shown > 0 {
+            warning!("{keys_not_shown} results were not shown because tedge-p11-server filters objects using `device.cryptoki.uri` option.
+    If you want `tedge hsm` command to access all the keys, unset `device.cryptoki.uri` for tedge-p11-server and restart it.\n");
+        }
+
+        if matching_keys.is_empty() {
             if label_filter.is_some() || id_filter.is_some() {
                 eprintln!("No keys matching the given filters were found on the token.");
             } else {
@@ -131,7 +144,7 @@ impl Command for ListKeysCmd {
             return Ok(());
         }
 
-        for (i, key) in keys.iter().enumerate() {
+        for (i, key) in matching_keys.iter().enumerate() {
             if i > 0 {
                 println!();
             }

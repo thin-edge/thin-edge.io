@@ -21,6 +21,9 @@ Can create a private key on the PKCS11 token
 Shows connected initialized tokens when token argument is not provided
     Show connected initialized tokens when token argument is not provided
 
+Does not list keys from a token excluded by the configured URI
+    List keys from a token excluded by the configured URI
+
 Can set key ID using --id flag
     Set key ID using --id flag
 
