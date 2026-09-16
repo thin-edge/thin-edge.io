@@ -8,7 +8,6 @@ use crate::cli::is_bridge_health_up_message;
 use crate::DeviceStatus;
 use anyhow::anyhow;
 use anyhow::bail;
-use anyhow::Context as _;
 use base64::prelude::*;
 use c8y_api::smartrest::message::get_smartrest_template_id;
 use c8y_api::smartrest::message_ids::GET_DEVICE_MANAGED_OBJECT_ID;
@@ -183,7 +182,7 @@ pub async fn create_device_with_direct_connection(
             }
             Err(ConnectionError::Io(err) | ConnectionError::Tls(TlsError::Io(err))) => {
                 let Some(failure) = classify_tls_error(&err, &connection, stage) else {
-                    return Err(err).context(error_context(stage));
+                    return Err(anyhow!("{err:#}\n\n{}", error_context(stage)));
                 };
 
                 let validity = match (failure, connection.certificate()) {
@@ -193,9 +192,24 @@ pub async fn create_device_with_direct_connection(
                     _ => None,
                 };
 
-                return Err(err).context(failure.explain(&connection, validity));
+                return Err(anyhow!(
+                    "{err:#}\n\n{}",
+                    failure.explain(&connection, validity)
+                ));
             }
-            Err(err) => return Err(err).context(error_context(stage)),
+            Err(err) => {
+                let err: anyhow::Error = err.into();
+                if let Some(err2 @ std::io::Error { .. }) = err.root_cause().downcast_ref() {
+                    if let Some(Error::AlertReceived(AlertDescription::HandshakeFailure)) =
+                        err2.get_ref().and_then(|e| e.downcast_ref())
+                    {
+                        let failure = TlsFailure::UnpairedPrivateKey;
+                        return Err(anyhow!("{err:#}\n\n{}", failure.explain(&connection, None)));
+                    }
+                }
+
+                return Err(anyhow!("{err:#}\n\n{}", error_context(stage)));
+            }
             _ => {}
         }
     }
