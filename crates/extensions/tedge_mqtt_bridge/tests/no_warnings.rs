@@ -8,15 +8,13 @@ use rumqttd::Config;
 use rumqttd::ConnectionSettings;
 use rumqttd::ServerSettings;
 use std::collections::HashMap;
-use std::io::Write;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 use tedge_config::TEdgeConfig;
 use tedge_mqtt_bridge::event_trace::DumpOnPanic;
 use tedge_mqtt_bridge::event_trace::EventTrace;
 use tedge_mqtt_bridge::BridgeConfig;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
+use tedge_test_utils::tracing::TracingCapture;
 use tokio::net::TcpListener;
 use tokio::time::sleep;
 
@@ -24,14 +22,7 @@ const HEALTH: &str = "te/device/main/#";
 
 #[tokio::test]
 async fn bridge_should_not_log_warnings_during_normal_operation() {
-    let log_capture = TestLogCapture::new();
-
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .with_writer(log_capture.clone())
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to set subscriber");
+    let capture = TracingCapture::default().start_global();
 
     let local_broker_port = free_port().await;
     let cloud_broker_port = free_port().await;
@@ -75,27 +66,25 @@ async fn bridge_should_not_log_warnings_during_normal_operation() {
     // Give some time for messages to be processed and healthcheck to complete
     sleep(Duration::from_millis(500)).await;
 
-    // Verify that log capture is working by checking for INFO logs
-    // This ensures the relevant subscriber has been set up correctly
     assert!(
-        log_capture.has_info_logs(),
-        "Log capture is not working! This test must run in its own test file/process. \
-         If this test was moved to bridge.rs or another shared test file, it will produce \
-         false negatives because env_logger from other tests takes precedence if registered \
-         first."
+        !capture.events().is_empty(),
+        "Log capture is not working! This test must run in its own test file/process."
     );
 
-    // Check that no warnings were logged
-    if log_capture.has_warnings() {
-        panic!(
-            "Bridge logged warnings during normal operation:\n{}",
-            log_capture
-                .get_logs()
-                .into_iter()
-                .filter(|log| log.contains("WARN"))
-                .collect::<String>()
-        );
-    }
+    let bridge_problems: Vec<_> = capture
+        .at_or_above(tracing::Level::WARN)
+        .into_iter()
+        .filter(|e| !e.target.starts_with("rumqttd"))
+        .collect();
+    assert!(
+        bridge_problems.is_empty(),
+        "Bridge logged errors or warnings during normal operation:\n{}",
+        bridge_problems
+            .iter()
+            .map(|e| format!("  {}: {}", e.level, e.message))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 }
 
 fn new_broker_and_client(name: &str, port: u16) -> (AsyncClient, EventLoop) {
@@ -204,78 +193,6 @@ fn tedge_mqtt_config(mqtt_port: u16) -> TEdgeConfig {
     mqtt.bridge.reconnect_policy.initial_interval = \"0s\"
     "
     ))
-}
-
-#[derive(Clone)]
-struct TestLogCapture {
-    logs: Arc<Mutex<Vec<String>>>,
-}
-
-impl TestLogCapture {
-    fn new() -> Self {
-        Self {
-            logs: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    fn has_warnings(&self) -> bool {
-        self.logs
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|log| log.contains("WARN"))
-    }
-
-    fn has_info_logs(&self) -> bool {
-        self.logs
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|log| log.contains("INFO"))
-    }
-
-    fn get_logs(&self) -> Vec<String> {
-        self.logs.lock().unwrap().clone()
-    }
-}
-
-impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TestLogCapture {
-    type Writer = TestWriter;
-
-    fn make_writer(&'a self) -> Self::Writer {
-        TestWriter {
-            logs: self.logs.clone(),
-            buf: Vec::new(),
-        }
-    }
-}
-
-struct TestWriter {
-    logs: Arc<Mutex<Vec<String>>>,
-    buf: Vec<u8>,
-}
-
-impl std::io::Write for TestWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.buf.extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        if !self.buf.is_empty() {
-            if let Ok(s) = String::from_utf8(self.buf.clone()) {
-                self.logs.lock().unwrap().push(s);
-            }
-            self.buf.clear()
-        }
-        Ok(())
-    }
-}
-
-impl Drop for TestWriter {
-    fn drop(&mut self) {
-        let _ = self.flush();
-    }
 }
 
 fn get_rumqttd_config(port: u16) -> Config {

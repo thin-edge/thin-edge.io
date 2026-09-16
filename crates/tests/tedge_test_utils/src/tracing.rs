@@ -1,4 +1,4 @@
-/// Captures tracing events in-process for test assertions on log level and message content
+//! Captures tracing events in-process for test assertions on log level and message content
 use std::sync::Arc;
 use std::sync::Mutex;
 use tracing::Level;
@@ -10,6 +10,7 @@ use tracing_subscriber::Layer;
 #[derive(Clone, Debug)]
 pub struct CapturedEvent {
     pub level: Level,
+    pub target: String,
     pub message: String,
 }
 
@@ -27,10 +28,18 @@ impl TracingCapture {
         self.events().into_iter().map(|e| e.message).collect()
     }
 
-    pub fn filter(&self, max_level: Level) -> Vec<CapturedEvent> {
+    pub fn at_or_above(&self, max_level: Level) -> Vec<CapturedEvent> {
         self.events()
             .into_iter()
             .filter(|e| e.level <= max_level)
+            .collect()
+    }
+
+    pub fn at(&self, level: Level) -> Vec<String> {
+        self.events()
+            .into_iter()
+            .filter(|e| e.level == level)
+            .map(|e| e.message)
             .collect()
     }
 
@@ -47,11 +56,11 @@ impl TracingCapture {
     }
 
     pub fn assert_no_errors(&self) {
-        Self::assert_none_at(&self.filter(Level::ERROR), "errors");
+        Self::assert_none_at(&self.at_or_above(Level::ERROR), "errors");
     }
 
     pub fn assert_no_errors_or_warnings(&self) {
-        Self::assert_none_at(&self.filter(Level::WARN), "errors or warnings");
+        Self::assert_none_at(&self.at_or_above(Level::WARN), "errors or warnings");
     }
 
     /// Installs this capture as the thread-local tracing subscriber.
@@ -63,6 +72,16 @@ impl TracingCapture {
             })
             .set_default();
         (self, guard)
+    }
+
+    /// Installs this capture as the process-wide subscriber (once per process)
+    pub fn start_global(self) -> Self {
+        let subscriber = tracing_subscriber::registry().with(CaptureLayer {
+            events: self.events.clone(),
+        });
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("set_global_default can only be called once per process");
+        self
     }
 }
 
@@ -80,6 +99,7 @@ impl<S: Subscriber> Layer<S> for CaptureLayer {
         event.record(&mut visitor);
         self.events.lock().unwrap().push(CapturedEvent {
             level: *event.metadata().level(),
+            target: event.metadata().target().to_string(),
             message: visitor.0,
         });
     }
