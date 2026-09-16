@@ -205,6 +205,7 @@ Query with parent and type
 Custom Setup
     ${DEVICE_SN}=    Setup
     Set Suite Variable    $DEVICE_SN
+    Service Health Status Should Be Up    tedge-agent
 
     # Build the entity tree:
     # main
