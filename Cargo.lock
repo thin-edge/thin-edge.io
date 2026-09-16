@@ -5642,6 +5642,7 @@ dependencies = [
  "tedge_actors",
  "tedge_file_system_ext",
  "tedge_mqtt_ext",
+ "tedge_test_utils",
  "tedge_utils",
  "tedge_watch_ext",
  "tempfile",
@@ -5651,7 +5652,6 @@ dependencies = [
  "tokio",
  "toml 0.9.6",
  "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 

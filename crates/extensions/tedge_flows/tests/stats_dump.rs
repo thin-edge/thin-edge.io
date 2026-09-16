@@ -21,62 +21,13 @@ use tedge_flows::FlowsMapperConfig;
 use tedge_mqtt_ext::DynSubscriptions;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
+use tedge_test_utils::tracing::TracingCapture;
 use tedge_utils::paths::TedgePaths;
 use tempfile::TempDir;
-use tracing::Subscriber;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::Layer;
-
-struct TestCaptureLayer {
-    captured: Arc<StdMutex<Vec<String>>>,
-}
-
-impl TestCaptureLayer {
-    fn new(captured: Arc<StdMutex<Vec<String>>>) -> Self {
-        Self { captured }
-    }
-}
-
-impl<S> Layer<S> for TestCaptureLayer
-where
-    S: Subscriber,
-{
-    fn on_event(
-        &self,
-        event: &tracing::Event<'_>,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        let mut visitor = MessageVisitor::default();
-        event.record(&mut visitor);
-        if let Some(message) = visitor.message {
-            self.captured.lock().unwrap().push(message);
-        }
-    }
-}
-
-#[derive(Default)]
-struct MessageVisitor {
-    message: Option<String>,
-}
-
-impl tracing::field::Visit for MessageVisitor {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        if field.name() == "message" {
-            self.message = Some(format!("{:?}", value));
-        }
-    }
-}
 
 #[tokio::test(start_paused = true)]
 async fn stats_are_dumped_when_no_interval_handlers_registered() {
-    let captured_logs = Arc::new(StdMutex::new(Vec::new()));
-    let captured_logs_clone = captured_logs.clone();
-
-    let _guard = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_test_writer())
-        .with(TestCaptureLayer::new(captured_logs_clone))
-        .set_default();
+    let (capture, _guard) = TracingCapture::default().start();
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let config_dir = temp_dir.path();
@@ -110,8 +61,7 @@ async fn stats_are_dumped_when_no_interval_handlers_registered() {
     actor_handle.abort();
     let _ = actor_handle.await;
 
-    let logs = captured_logs.lock().unwrap();
-    let log_text = logs.join("\n");
+    let log_text = capture.messages().join("\n");
 
     assert!(
         log_text.contains("Collect memory usage and processing statistics"),
@@ -122,13 +72,7 @@ async fn stats_are_dumped_when_no_interval_handlers_registered() {
 
 #[tokio::test(start_paused = true)]
 async fn stats_dumped_when_interval_handlers_present() {
-    let captured_logs = Arc::new(StdMutex::new(Vec::new()));
-    let captured_logs_clone = captured_logs.clone();
-
-    let _guard = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_test_writer())
-        .with(TestCaptureLayer::new(captured_logs_clone))
-        .set_default();
+    let (capture, _guard) = TracingCapture::default().start();
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let config_dir = temp_dir.path();
@@ -167,8 +111,7 @@ async fn stats_dumped_when_interval_handlers_present() {
     actor_handle.abort();
     let _ = actor_handle.await;
 
-    let logs = captured_logs.lock().unwrap();
-    let log_text = logs.join("\n");
+    let log_text = capture.messages().join("\n");
 
     assert!(
         log_text.contains("Collect memory usage and processing statistics"),
@@ -179,13 +122,7 @@ async fn stats_dumped_when_interval_handlers_present() {
 
 #[tokio::test(start_paused = true)]
 async fn stats_not_dumped_before_300_seconds() {
-    let captured_logs = Arc::new(StdMutex::new(Vec::new()));
-    let captured_logs_clone = captured_logs.clone();
-
-    let _guard = tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_test_writer())
-        .with(TestCaptureLayer::new(captured_logs_clone))
-        .set_default();
+    let (capture, _guard) = TracingCapture::default().start();
 
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let config_dir = temp_dir.path();
@@ -219,8 +156,7 @@ async fn stats_not_dumped_before_300_seconds() {
     actor_handle.abort();
     let _ = actor_handle.await;
 
-    let logs = captured_logs.lock().unwrap();
-    let log_text = logs.join("\n");
+    let log_text = capture.messages().join("\n");
 
     assert!(
         !log_text.contains("Collect memory usage and processing statistics"),
