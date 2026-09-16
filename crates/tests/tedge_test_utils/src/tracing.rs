@@ -23,6 +23,10 @@ impl TracingCapture {
         self.events.lock().unwrap().clone()
     }
 
+    pub fn messages(&self) -> Vec<String> {
+        self.events().into_iter().map(|e| e.message).collect()
+    }
+
     pub fn filter(&self, max_level: Level) -> Vec<CapturedEvent> {
         self.events()
             .into_iter()
