@@ -415,23 +415,38 @@ where
 /// (`..%2Fapps/x` decodes to `../apps/x`). Normalizing only once would leave exactly
 /// the bypass this function exists to prevent.
 ///
+/// Only one round of decoding is applied, which is what a server that decodes before
+/// routing performs. A doubly encoded path (`%252Fapps/x`) is therefore out of scope.
+///
 /// Matching is case-insensitive as a further precaution. No Cumulocity REST endpoint
 /// the proxy is expected to carry begins with `apps/` or ends in `.js` in any casing.
+/// A path whose *encoded* form does not match but whose decoded form does — an external
+/// id of `dev%2Ejs`, say — is denied as well. That is the intended direction: the guard
+/// protects the device token, and the shapes it rejects are not ones the REST API uses.
 fn targets_frontend_ui(destination: &reqwest::Url) -> bool {
     let decoded = percent_encoding::percent_decode_str(destination.path()).decode_utf8_lossy();
 
     // A reference beginning with `//` is protocol-relative, so `join` would read
-    // `//apps/x` as the host `apps` rather than as a path. Collapse the leading
-    // separators so the decoded path is always resolved as an absolute path.
-    let absolute = format!("/{}", decoded.trim_start_matches('/'));
+    // `//apps/x` as the host `apps` rather than as a path. For a special scheme the
+    // URL standard treats `\` as a path separator too, so `/\apps/x` is read the same
+    // way. Collapse both leading separators so the decoded path is always resolved as
+    // an absolute path.
+    let absolute = format!("/{}", decoded.trim_start_matches(['/', '\\']));
 
-    // Resolving against `destination` keeps the origin and applies the same dot-segment
-    // rules as the first parse. A decoded path that cannot be resolved is denied rather
-    // than proxied: this guard exists to protect the device token, so the safe failure
-    // is to refuse.
+    // Resolving against `destination` applies the same dot-segment rules as the first
+    // parse. A decoded path that cannot be resolved is denied rather than proxied: this
+    // guard exists to protect the device token, so the safe failure is to refuse.
     let Ok(normalized) = destination.join(&absolute) else {
         return true;
     };
+
+    // The reference above is always absolute, so it cannot carry an origin of its own
+    // and this should hold. Assert it rather than assume it: if it ever did not, the
+    // path checked below would belong to some other host and would say nothing about
+    // the request being proxied.
+    if normalized.origin() != destination.origin() {
+        return true;
+    }
 
     let path = normalized
         .path()
@@ -911,6 +926,14 @@ mod tests {
     #[test_case("a/..%2f..%2fapps/foo" ; "frontend app behind lower case encoded parent segments")]
     #[test_case("a%2F..%2F..%2Fapps%2Ffoo" ; "frontend app behind a fully encoded path")]
     #[test_case("..%2Ffoo.js" ; "script behind an encoded parent segment")]
+    // The URL standard treats `\` as a path separator for a special scheme, so a decoded
+    // path starting with one is protocol-relative just like `//`. Left uncollapsed, the
+    // second resolution would read `apps` as the host and check the path `/foo`.
+    #[test_case("%5Capps/foo" ; "frontend app behind an encoded backslash")]
+    #[test_case("%5C%5Capps/foo" ; "frontend app behind encoded backslashes")]
+    #[test_case("%2F%5Capps/foo" ; "frontend app behind mixed encoded separators")]
+    #[test_case("..%2F%5Capps/foo" ; "frontend app behind an encoded parent segment and backslash")]
+    #[test_case("%5Cfoo.js" ; "script behind an encoded backslash")]
     // Casing
     #[test_case("APPS/foo" ; "frontend app in upper case")]
     #[test_case("foo.JS" ; "script in upper case")]
@@ -932,6 +955,7 @@ mod tests {
     #[test_case("foo.json" ; "a json document")]
     #[test_case("foo.js.txt" ; "a path containing but not ending in .js")]
     #[test_case("identity/externalIds/c8y_Serial%2F123" ; "an encoded slash inside an identifier")]
+    #[test_case("%5Cinventory/managedObjects" ; "an encoded backslash before an API path")]
     fn ordinary_api_requests_are_not_denied(raw_path: &str) {
         assert!(
             !targets_frontend_ui(&proxied_url(raw_path)),
@@ -1003,6 +1027,7 @@ mod tests {
     #[test_case("/c8y/foo%2Ejs" ; "script with an encoded dot")]
     #[test_case("/c8y/..%2Fapps/foo" ; "frontend app behind an encoded parent segment")]
     #[test_case("/c8y/a/..%2f..%2fapps/foo" ; "frontend app behind lower case encoded parent segments")]
+    #[test_case("/c8y/%5Capps/foo" ; "frontend app behind an encoded backslash")]
     #[tokio::test]
     async fn frontend_ui_requests_do_not_reach_cumulocity(request_target: &str) {
         let (response, forwarded) = raw_request(request_target).await;
