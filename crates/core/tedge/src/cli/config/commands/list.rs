@@ -21,7 +21,7 @@ impl Command for ListConfigCommand {
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         if self.is_doc {
-            print_config_doc(self.filter.as_deref());
+            print_config_doc(&tedge_config, self.filter.as_deref());
         } else {
             print_config_list(&tedge_config, self.is_all, self.filter.as_deref())?;
         }
@@ -42,55 +42,139 @@ fn print_config_list(
         }
         match config.read_string(&config_key).ok() {
             Some(value) => {
-                println!("{}={}", config_key, value);
+                println!("{config_key}={value}");
             }
             None => {
-                keys_without_values.push(config_key);
+                keys_without_values.push(config_key.to_string());
             }
         }
     }
+    #[cfg(feature = "mapper-config")]
+    match tedge_mapper_config::load_federated_config(config.root_dir()) {
+        Ok(fed) => {
+            for entry in fed.all_entries() {
+                if !entry.key.starts_with("mappers.") {
+                    continue;
+                }
+                if !key_matches_filter(&entry.key, filter) {
+                    continue;
+                }
+                match fed.read(&entry.key).ok().flatten() {
+                    Some(value) => println!("{key}={value}", key = entry.key),
+                    None => keys_without_values.push(entry.key),
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to load mapper configuration: {e}");
+        }
+    }
+
     if all && !keys_without_values.is_empty() {
         println!();
         for key in keys_without_values {
-            println!("{}=", key);
+            println!("{key}=");
         }
     }
     Ok(())
 }
 
-fn print_config_doc(filter: Option<&str>) {
-    let max_length = READABLE_KEYS
+struct DocEntry {
+    key: String,
+    doc: String,
+    note: Option<String>,
+    examples: Vec<String>,
+}
+
+fn normalise_doc_comment(comment: &str) -> String {
+    let mut normalised = comment.replace('\n', " ");
+    if !normalised.ends_with('.') {
+        normalised.push('.');
+    }
+    normalised.push(' ');
+    normalised
+}
+
+fn print_config_doc(config: &TEdgeConfig, filter: Option<&str>) {
+    #[cfg_attr(not(feature = "mapper-config"), expect(unused_mut))]
+    let mut entries: Vec<DocEntry> = READABLE_KEYS
         .iter()
         .filter(|(key, _)| key_matches_filter(key, filter))
-        .map(|(key, _)| key.len())
+        .map(|(key, ty)| {
+            let doc = ty.comment.map(normalise_doc_comment).unwrap_or_default();
+
+            let note = ty.metas.get("note").map(|s| s.to_string());
+
+            let examples = match ty.example {
+                Some(doku::Example::Simple(val)) | Some(doku::Example::Literal(val)) => {
+                    vec![val.to_string()]
+                }
+                Some(doku::Example::Compound(vals)) => vals.iter().map(|s| s.to_string()).collect(),
+                None => vec![],
+            };
+
+            DocEntry {
+                key: key.to_string(),
+                doc,
+                note,
+                examples,
+            }
+        })
+        .collect();
+
+    #[cfg(feature = "mapper-config")]
+    match tedge_mapper_config::load_federated_config(config.root_dir()) {
+        Ok(fed) => {
+            for entry in fed.all_entries() {
+                if !entry.key.starts_with("mappers.") {
+                    continue;
+                }
+                if !key_matches_filter(&entry.key, filter) {
+                    continue;
+                }
+                let doc = if entry.doc.is_empty() {
+                    String::new()
+                } else {
+                    normalise_doc_comment(&entry.doc.join(" "))
+                };
+                let examples = entry.examples.into_iter().map(String::from).collect();
+                entries.push(DocEntry {
+                    key: entry.key,
+                    doc,
+                    note: None,
+                    examples,
+                });
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to load mapper configuration: {e}");
+        }
+    }
+
+    // Silence the unused-variable warning when the feature is off
+    let _ = config;
+
+    print_doc_entries(&entries);
+}
+
+fn print_doc_entries(entries: &[DocEntry]) {
+    let max_length = entries
+        .iter()
+        .map(|e| e.key.len())
         .max()
         .unwrap_or_default();
 
-    for (key, ty) in READABLE_KEYS.iter() {
-        if !key_matches_filter(key, filter) {
-            continue;
-        }
-        let docs = ty
-            .comment
-            .map(|c| {
-                let mut comment = c.replace('\n', " ");
-                if !comment.ends_with('.') {
-                    comment.push('.');
-                };
-                comment.push(' ');
-                comment
-            })
-            .unwrap_or_default();
-
+    for entry in entries {
         println!(
             "{}  {}",
-            key.pad_to_width_with_alignment(max_length, pad::Alignment::Right)
+            entry
+                .key
+                .pad_to_width_with_alignment(max_length, pad::Alignment::Right)
                 .yellow(),
-            docs.italic()
+            entry.doc.as_str().italic()
         );
 
-        // TODO add a test to make sure people don't accidentally set the wrong meta name
-        if let Some(note) = ty.metas.get("note") {
+        if let Some(note) = &entry.note {
             println!(
                 "{}  {} {note}",
                 "".pad_to_width(max_length),
@@ -98,30 +182,19 @@ fn print_config_doc(filter: Option<&str>) {
             );
         }
 
-        match ty.example {
-            Some(doku::Example::Simple(val)) | Some(doku::Example::Literal(val)) => {
-                println!(
-                    "{}  {} {}",
-                    "".pad_to_width(max_length),
-                    yansi::Paint::green("Example:"),
-                    val
-                );
-            }
-            Some(doku::Example::Compound(val)) => {
-                let vals = val
-                    .iter()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                println!(
-                    "{}  {} {}",
-                    "".pad_to_width(max_length),
-                    yansi::Paint::green("Examples:"),
-                    vals
-                );
-            }
-            None => (),
-        };
+        if !entry.examples.is_empty() {
+            let label = if entry.examples.len() == 1 {
+                "Example:"
+            } else {
+                "Examples:"
+            };
+            println!(
+                "{}  {} {}",
+                "".pad_to_width(max_length),
+                yansi::Paint::green(label),
+                entry.examples.join(", ")
+            );
+        }
 
         if !stdout().is_terminal() {
             println!();
@@ -133,5 +206,17 @@ fn key_matches_filter(key: &str, filter: Option<&str>) -> bool {
     match filter {
         Some(filter) => key.contains(filter),
         None => true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalise_doc_comment_appends_period_and_space() {
+        assert_eq!(normalise_doc_comment("hello"), "hello. ");
+        assert_eq!(normalise_doc_comment("hello."), "hello. ");
+        assert_eq!(normalise_doc_comment("line1\nline2"), "line1 line2. ");
     }
 }

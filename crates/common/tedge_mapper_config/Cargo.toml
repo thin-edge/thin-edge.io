@@ -1,0 +1,21 @@
+[package]
+name = "tedge_mapper_config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+camino = { workspace = true }
+facet = { workspace = true }
+facet-toml = { workspace = true }
+tedge_config_engine = { workspace = true }
+tedge_config_engine-macro = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
