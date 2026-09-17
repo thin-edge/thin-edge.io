@@ -32,6 +32,19 @@ All uploaded files are preserved until they are explicitly deleted with the DELE
 To avoid exhaustion of storage space on the %%te%% device,
 users must be diligent to delete any stored files as soon as their purpose is served.
 
+## Symlinks
+
+A request is rejected with `404 Not Found` if its path resolves outside `/var/tedge/file-transfer`,
+whether through `..` components or through a symlink inside that directory.
+A dangling symlink, or a symlink loop, is rejected in the same way.
+
+The only exception is the agent's file cache (`/var/tedge/cache`).
+The agent serves some files, such as the configuration file of a `config_update` operation,
+through a symlink from `/var/tedge/file-transfer` into its cache.
+Those files can be downloaded with GET, but not replaced with PUT.
+
+A DELETE request removes a symlink itself, and never the file or directory it points to.
+
 ## HTTPS and authenticated access
 By default, the service is unauthenticated and does not support HTTPS connections.
 HTTPS can be enabled by setting `http.cert_path` and `http.key_path`.
