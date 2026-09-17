@@ -8,7 +8,7 @@ StandardError=journal
 # Use the kernel TPM resource manager to managed access
 Environment=TPM2_PKCS11_TCTI=device:/dev/tpmrm0
 Environment=TPM2TOOLS_TCTI=device:/dev/tpmrm0
-; Read environment variables from file as some PKCS11 modules require additional environment variables to function
+# Read environment variables from file as some PKCS11 modules require additional environment variables to function
 EnvironmentFile=-/etc/tedge/plugins/tedge-p11-server.conf
 ExecStart=/usr/bin/tedge-p11-server --socket-path "%t/tedge-p11-server/tedge-p11-server.sock"
 Restart=on-failure
