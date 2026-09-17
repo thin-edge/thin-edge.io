@@ -245,7 +245,7 @@ impl LoggedCommand {
     }
 
     pub fn spawn(&mut self) -> Result<LoggingChild, std::io::Error> {
-        let child = self.command.spawn()?;
+        let child = self.command.process_group(0).spawn()?;
         Ok(LoggingChild {
             command_line: self.to_string(),
             inner_child: child,
@@ -327,5 +327,59 @@ impl<'a> From<&'a std::process::Output> for CommandOutput<'a> {
             stdout: Box::new(Cursor::new(&output.stdout[..])),
             stderr: Box::new(Cursor::new(&output.stderr[..])),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    #[tokio::test]
+    async fn on_timeout_the_processes_started_by_the_command_are_killed_too() {
+        let tmp_dir = TempTedgeDir::new();
+        let workflow_log = tmp_dir.file("workflow.log");
+        let mut command_log =
+            CommandLog::from_log_path(workflow_log.path(), "test".into(), "123".into());
+
+        // The shell prints the pid of a background process, then blocks on a foreground one
+        let mut command =
+            LoggedCommand::new("sh -c 'sleep 60 & echo $!; sleep 60'", "/tmp").unwrap();
+        let child = command.spawn().unwrap();
+        let output = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_for_output_with_timeout(
+                &mut command_log,
+                Duration::from_millis(500),
+                Duration::from_secs(5),
+            ),
+        )
+        .await
+        .expect("the command to be killed within the timeout")
+        .unwrap();
+
+        assert_eq!(output.status.signal(), Some(15));
+        let background_pid = String::from_utf8(output.stdout).unwrap();
+        assert_killed(background_pid.trim()).await;
+    }
+
+    async fn is_running(pid: &str) -> bool {
+        let output = Command::new("ps")
+            .args(["-o", "stat=", "-p", pid])
+            .output()
+            .await
+            .expect("ps to be available");
+        let stat = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        !stat.is_empty() && !stat.starts_with('Z')
+    }
+
+    async fn assert_killed(pid: &str) {
+        for _ in 0..50 {
+            if !is_running(pid).await {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        panic!("process {pid} is still running");
     }
 }

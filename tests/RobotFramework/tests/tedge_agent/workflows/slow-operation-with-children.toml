@@ -1,0 +1,13 @@
+operation = "slow_operation_with_children"
+
+[init]
+script = "sh -c 'sleep 121 & sleep 122'"
+timeout_second = 2
+on_success = "successful"
+on_kill = { status = "failed", reason = "timeout" }
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

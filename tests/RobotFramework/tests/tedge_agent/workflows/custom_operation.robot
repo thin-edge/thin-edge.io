@@ -66,6 +66,21 @@ Timeout An Action
     ...    message_pattern=.*timeout.*
     ...    maximum=1
 
+Timeout An Action Kills The Processes Started By The Script
+    [Documentation]    The script starts a background process and blocks on a foreground one,
+    ...    both must be gone once the operation has timed out
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/slow_operation_with_children/robot-1 '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/slow_operation_with_children/robot-1
+    ...    message_pattern=.*timeout.*
+    ...    maximum=1
+    Process Should Not Be Running    sleep 121
+    Process Should Not Be Running    sleep 122
+    [Teardown]    Run Keywords
+    ...    Execute Command    tedge mqtt pub --retain te/device/main///cmd/slow_operation_with_children/robot-1 ''
+    ...    AND    Get Logs
+
 Trigger Agent Restart
     ${pid_before}    Get Service PID    tedge-agent
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/restart-tedge-agent/robot-1 '{"status":"init"}'
@@ -290,6 +305,7 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/launch-download.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/check-download.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/slow-operation.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/slow-operation-with-children.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/restart-tedge-agent.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/tedge-agent-pid.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/native-reboot.toml    /etc/tedge/operations/

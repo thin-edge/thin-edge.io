@@ -78,6 +78,7 @@ impl Server for ScriptActor {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .process_group(0)
             .spawn()?;
 
         match (child.id(), message.timeouts) {
@@ -97,13 +98,13 @@ async fn kill_on_timeout(
     graceful_timeout: Duration,
     forceful_timeout: Duration,
 ) -> std::io::Error {
-    let pid = nix::unistd::Pid::from_raw(pid as nix::libc::pid_t);
+    let process_group = nix::unistd::Pid::from_raw(pid as nix::libc::pid_t);
 
     tokio::time::sleep(graceful_timeout).await;
-    let _ = nix::sys::signal::kill(pid, nix::sys::signal::SIGTERM);
+    let _ = nix::sys::signal::killpg(process_group, nix::sys::signal::SIGTERM);
 
     tokio::time::sleep(forceful_timeout).await;
-    let _ = nix::sys::signal::kill(pid, nix::sys::signal::SIGKILL);
+    let _ = nix::sys::signal::killpg(process_group, nix::sys::signal::SIGKILL);
 
     tokio::time::sleep(Duration::from_secs(1)).await;
     std::io::Error::other("failed to kill the process after timeout")
@@ -220,6 +221,44 @@ mod tests {
         assert!(!output.status.success());
         assert!(output.status.code().is_none());
         assert_eq!(output.status.signal(), Some(9));
+    }
+
+    #[tokio::test]
+    async fn processes_started_by_the_script_are_killed_on_timeout() {
+        let mut actor = spawn_script_actor();
+        // The shell prints the pid of a background process, then blocks on a foreground one
+        let command = Execute::try_new("sh -c 'sleep 60 & echo $!; sleep 60'")
+            .unwrap()
+            .with_graceful_timeout(Duration::from_millis(500));
+        let output = tokio::time::timeout(Duration::from_secs(5), actor.await_response(command))
+            .await
+            .expect("execution timeout")
+            .expect("result send error")
+            .expect("execution error");
+
+        assert_eq!(output.status.signal(), Some(15));
+        let background_pid = String::from_utf8(output.stdout).unwrap();
+        assert_killed(background_pid.trim()).await;
+    }
+
+    async fn is_running(pid: &str) -> bool {
+        let output = tokio::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", pid])
+            .output()
+            .await
+            .expect("ps to be available");
+        let stat = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        !stat.is_empty() && !stat.starts_with('Z')
+    }
+
+    async fn assert_killed(pid: &str) {
+        for _ in 0..50 {
+            if !is_running(pid).await {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        panic!("process {pid} is still running");
     }
 
     fn spawn_script_actor() -> ClientMessageBox<Execute, std::io::Result<Output>> {
