@@ -25,7 +25,7 @@ which rule how to consume, transform and produce MQTT messages.
   - The focus is on message transformation, format conversion, content extraction and completion as well as filtering and redacting.
 - A *connector* is used by the mapper to consume messages from a source and produce messages to a sink.
   - Messages can be consumed from MQTT, files and background processes.
-  - Transformed messages can be published over MQTT or appended to files.
+  - Transformed messages can be published over MQTT or written to files.
 - A *flow* applies a chain of transformation *steps* to input messages producing fully processed output messages.
   - The *flows* put things in motion, actually interacting with the system, consuming and producing messages.
   - Messages received on a flow are passed to the first step; and the transformed messages, if any,
@@ -114,6 +114,23 @@ type Message = {
 type MqttInfo = {
   qos?: 0 | 1 | 2,  // default is 1
   retain?: boolean  // default is false
+}
+```
+
+A message can also define the file where it is written, when the flow output is a directory (see [output connectors](#output-connectors)).
+When set, the `file` property of a message must have the following shape.
+
+```ts
+type Message = {
+  topic: string,
+  payload: Uint8Array,
+  time: Date,
+  mqtt?: MqttInfo,
+  file?: FileInfo
+}
+
+type FileInfo = {
+  name: string  // path of the file, relative to the directory of the file output
 }
 ```
 
@@ -299,6 +316,7 @@ Parameter values can be used to parameterize the following parts of a flow:
 - Flow output
   - `output.mqtt.topic` 
   - `output.file.path` 
+  - `output.file.dir`
 
 :::note
 Substitution rules differ slightly when applied to `config` objects compared to topics, commands, paths and intervals.
@@ -455,7 +473,7 @@ path = "/var/log/some-app.log"
 
 ### Output connectors
 
-Transformed messages and errors can be published over MQTT or appended to files.
+Transformed messages and errors can be published over MQTT or written to files.
 
 The default is to publish the transformed messages over MQTT on the topics specified by each message.
 And to direct all the errors to a specific topic, the `te/error` topic.
@@ -479,6 +497,62 @@ accept_topics = "c8y/#"
 [errors.file]
 path = "/var/run/tedge/flows.log"
 ```
+
+By default, messages are appended to the output file as lines of text, using the format `[topic] payload`.
+The `format` of a file output can be set to `raw` to write the message payload as-is, without the topic or a trailing newline.
+This is useful to produce binary files, such as images or parquet files, from the output of a flow.
+In that case, each message replaces the content of the file. The file is written atomically,
+so other processes never read a partially written file.
+
+```toml
+[output.file]
+path = "/var/tedge/export/measurements.parquet"
+format = "raw"
+```
+
+As the file is replaced by writing a temporary file in the same directory and renaming it:
+- the directory containing the file must already exist, and the mapper user (e.g. `tedge`) requires write permission on that directory, and not only on the file itself
+- the file is re-created on each write, so any custom ownership or permissions applied to an existing file are not preserved
+- processes which keep the file open (e.g. `tail -F`) continue to read the previous version of the file
+- only the last message of a batch of transformed messages is written
+
+The `raw` format is intended for outputs which are written occasionally, such as periodic exports,
+rather than for high-rate message outputs.
+
+Instead of a single file, a file output can be configured with a directory (`dir`).
+The flow steps then decide in which file of that directory each message is written, using the `file.name` property of the message.
+The name is a path relative to the directory, which can include sub-directories (created as needed),
+for example to partition the output of a flow by date.
+Only one of `path` and `dir` can be set, and the `format` applies to each file.
+
+```toml
+[output.file]
+dir = "/var/tedge/export"
+format = "raw"
+```
+
+```js
+export function onInterval(time, context) {
+  const date = time.toISOString().slice(0, 10)
+  return [{
+    topic: "export",
+    payload: exportedData,
+    file: { name: `date=${date}/measurements.parquet` },
+  }]
+}
+```
+
+The file name is checked, so a flow cannot write files outside of the directory:
+- the name must be a relative path, without empty, `.` or `..` path segments, and without backslash or control characters
+- symbolic links below the directory are rejected, for the sub-directories as well as for the file itself
+- an existing file can only be written if it is a regular file
+
+Messages without a valid file name are not written, and an error is logged by the mapper.
+As sub-directories are created as needed, avoid deriving file names directly from untrusted message content,
+which could create an unbounded number of files and directories.
+The directory itself must already exist, and should not be writable by other users than the mapper user,
+as the checks cannot prevent a concurrent process from replacing a sub-directory with a symbolic link.
+Errors cannot be written to a directory, as error messages have no file name.
 
 ## %%te%% flow mapper
 

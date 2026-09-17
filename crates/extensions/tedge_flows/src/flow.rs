@@ -97,8 +97,30 @@ pub enum FlowInput {
 
 #[derive(Clone)]
 pub enum FlowOutput {
-    Mqtt { topic: Option<Topic> },
-    File { path: Utf8PathBuf },
+    Mqtt {
+        topic: Option<Topic>,
+    },
+    File {
+        path: Utf8PathBuf,
+        format: FileOutputFormat,
+    },
+    /// Messages are written to the file of the directory named by each message
+    Directory {
+        path: Utf8PathBuf,
+        format: FileOutputFormat,
+    },
+}
+
+/// How messages are written to an output file
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum FileOutputFormat {
+    /// Append each message to the file as a line of text: `[topic] payload`
+    #[default]
+    Lines,
+
+    /// Replace the content of the file with the raw message payload
+    Raw,
 }
 
 /// The final outcome of a sequence of transformations applied by a flow to a message
@@ -130,6 +152,16 @@ pub struct Message {
     pub payload: Vec<u8>,
     pub timestamp: Option<SystemTime>,
     pub transport: Option<Transport>,
+    /// The file where the message is written, when the flow output is a directory
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<MessageFile>,
+}
+
+/// File properties of a message
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
+pub struct MessageFile {
+    /// Path of the file, relative to the directory of the file output
+    pub name: String,
 }
 
 #[derive(Clone, serde::Deserialize, serde::Serialize, Eq, PartialEq)]
@@ -576,6 +608,7 @@ impl Message {
             payload: payload.into(),
             timestamp: None,
             transport: None,
+            file: None,
         }
     }
 
@@ -589,6 +622,7 @@ impl Message {
             payload: payload.into(),
             timestamp: Some(timestamp),
             transport: None,
+            file: None,
         }
     }
 
@@ -659,6 +693,7 @@ impl From<MqttMessage> for Message {
             payload,
             timestamp: None,
             transport: Some(transport),
+            file: None,
         }
     }
 }

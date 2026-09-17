@@ -287,6 +287,17 @@ Appending messages to a file
     Execute Command    grep '\\[seq/events\\] 3' /tmp/events.log
     [Teardown]    Run Keywords    Uninstall Flow    append-to-file.toml    AND    Execute Command    cmd=rm -f /tmp/events.log
 
+Writing raw message payloads to a file
+    Execute Command    cmd=rm -f /tmp/raw.out
+    Install Flow    input-flows    write-raw-file.toml
+    Execute Command    tedge mqtt pub seq/raw first
+    # Binary payload which isn't valid UTF-8: 0x00 0xff 0x0a 0xc3
+    Execute Command    tedge mqtt pub --base64 seq/raw AP8Kww==
+    # The file only contains the raw payload of the last message, without the topic or a trailing newline
+    Execute Command
+    ...    for i in $(seq 10); do printf '\\000\\377\\n\\303' | cmp -s - /tmp/raw.out && exit 0; sleep 1; done; exit 1
+    [Teardown]    Run Keywords    Uninstall Flow    write-raw-file.toml    AND    Execute Command    cmd=rm -f /tmp/raw.out
+
 Reloading a broken script when its permission is fixed
     # Break the script and make sure tedge-mapper-local can no more handle measurements
     Execute Command    chmod a-r /etc/tedge/mappers/local/flows/te_to_c8y.js
