@@ -121,7 +121,7 @@ clap = { version = "4.5", features = [
     "unstable-styles",
 ] }
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
-cryptoki = "0.12.0"
+cryptoki = "0.12.1"
 csv = "1.1"
 darling = "0.21"
 doku = "0.21"
