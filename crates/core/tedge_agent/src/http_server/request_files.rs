@@ -81,7 +81,8 @@ impl FromRequestParts<FileTransferDir> for FileTransferPath {
 /// Return the path of the file associated to the given `uri`
 ///
 /// This cleans up the path using [path_clean::clean] and then verifies that this
-/// path is actually under `file_transfer_dir`
+/// path is actually under `file_transfer_dir`, both lexically and once symlinks
+/// have been resolved.
 fn local_path_for_file(
     request_path: RequestPath,
     file_transfer_dir: Arc<ManagedDir>,
@@ -91,14 +92,71 @@ fn local_path_for_file(
 
     let clean_path = clean_utf8_path(&full_path);
 
-    if clean_path.starts_with(file_transfer_dir.path()) {
-        Ok(FileTransferPath {
-            full: clean_path,
-            request: request_path,
-            data_dir,
-        })
-    } else {
-        Err(HttpRequestError::InvalidPath { path: request_path })
+    if !clean_path.starts_with(file_transfer_dir.path()) {
+        return Err(HttpRequestError::InvalidPath { path: request_path });
+    }
+
+    // `path_clean` is purely lexical, so the check above is blind to symlinks:
+    // a symlink inside the file transfer directory would otherwise let a request
+    // read, overwrite or delete a file outside of it.
+    if !is_within_permitted_roots(&clean_path, &file_transfer_dir, &data_dir) {
+        return Err(HttpRequestError::InvalidPath { path: request_path });
+    }
+
+    Ok(FileTransferPath {
+        full: clean_path,
+        request: request_path,
+        data_dir,
+    })
+}
+
+/// Check that `path`, once symlinks are resolved, stays inside a directory the
+/// File Transfer Service is allowed to serve
+///
+/// Two roots are permitted:
+///
+/// - the file transfer directory itself, and
+/// - the file cache directory, because the agent deliberately symlinks from the
+///   former into the latter so that a downloaded config file can be served over
+///   this API (see `create_symlink_for_config_update`).
+fn is_within_permitted_roots(
+    path: &Utf8Path,
+    file_transfer_dir: &ManagedDir,
+    data_dir: &DataDir,
+) -> bool {
+    let Some(resolved) = resolve_symlinks(path) else {
+        return false;
+    };
+
+    // The roots are resolved the same way as the path itself: canonicalising only one
+    // side would make every comparison fail wherever the data directory sits behind a
+    // symlink, or has yet to be created.
+    [file_transfer_dir.path(), data_dir.cache_dir().path()]
+        .into_iter()
+        .filter_map(resolve_symlinks)
+        .any(|root| resolved.starts_with(root))
+}
+
+/// Resolve `path` against the filesystem, tolerating components that don't exist yet
+///
+/// An upload creates the file, and any missing parent directories, so the path
+/// being checked is frequently not present on disk. The deepest existing ancestor
+/// is resolved with [Utf8Path::canonicalize_utf8] and the remaining components are
+/// appended unchanged — they are safe to append lexically because `path` has
+/// already been through [path_clean::clean] and so holds no `.` or `..` component.
+///
+/// Returns [None] if no ancestor can be resolved at all.
+fn resolve_symlinks(path: &Utf8Path) -> Option<Utf8PathBuf> {
+    let mut not_yet_created = Vec::new();
+    let mut ancestor = path;
+
+    loop {
+        if let Ok(mut resolved) = ancestor.canonicalize_utf8() {
+            resolved.extend(not_yet_created.iter().rev());
+            return Some(resolved);
+        }
+        not_yet_created.push(ancestor.file_name()?);
+        ancestor = ancestor.parent()?;
     }
 }
 
