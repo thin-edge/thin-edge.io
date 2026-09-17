@@ -1248,7 +1248,10 @@ impl CumulocityConverter {
                     == C8yTopic::SmartRestRequest
                         .with_prefix(&self.config.bridge_config.c8y_prefix) =>
             {
-                self.parse_c8y_smartrest_topics(message).await
+                // We receive SmartREST operation notifications regardless of whether any custom
+                // operations are configured to use it. This branch exists to prevent us logging
+                // an error for this message we expect
+                Ok(vec![])
             }
             topic if self.mapper_config.http_event_topic.accept_topic(topic) => {
                 self.post_event_over_http(message).await?;
