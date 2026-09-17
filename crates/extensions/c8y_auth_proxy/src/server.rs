@@ -440,10 +440,12 @@ fn targets_frontend_ui(destination: &reqwest::Url) -> bool {
         return true;
     };
 
-    // The reference above is always absolute, so it cannot carry an origin of its own
-    // and this should hold. Assert it rather than assume it: if it ever did not, the
-    // path checked below would belong to some other host and would say nothing about
-    // the request being proxied.
+    // The collapse above is not on its own enough to keep the reference path-only: tab,
+    // CR and LF are stripped from a reference *after* it is applied, which can re-expose
+    // the protocol-relative form it just removed. `/%09%5Capps/x` decodes to `/\t\apps/x`,
+    // survives the collapse because it begins with a tab, and then resolves against the
+    // host `apps` with the path `/x`. Denying on a changed origin is what catches that,
+    // so this is load-bearing rather than defence in depth.
     if normalized.origin() != destination.origin() {
         return true;
     }
@@ -934,6 +936,13 @@ mod tests {
     #[test_case("%2F%5Capps/foo" ; "frontend app behind mixed encoded separators")]
     #[test_case("..%2F%5Capps/foo" ; "frontend app behind an encoded parent segment and backslash")]
     #[test_case("%5Cfoo.js" ; "script behind an encoded backslash")]
+    // Tab, CR and LF are stripped from the reference after the leading separators have
+    // been collapsed, which puts the protocol-relative form back. Only the origin check
+    // denies these.
+    #[test_case("%09%5Capps/foo" ; "frontend app behind a tab and an encoded backslash")]
+    #[test_case("%09/apps/foo" ; "frontend app behind a tab and a separator")]
+    #[test_case("%0A%5Capps/foo" ; "frontend app behind a newline and an encoded backslash")]
+    #[test_case("%0D%5Capps/foo" ; "frontend app behind a carriage return and an encoded backslash")]
     // Casing
     #[test_case("APPS/foo" ; "frontend app in upper case")]
     #[test_case("foo.JS" ; "script in upper case")]
@@ -1028,6 +1037,7 @@ mod tests {
     #[test_case("/c8y/..%2Fapps/foo" ; "frontend app behind an encoded parent segment")]
     #[test_case("/c8y/a/..%2f..%2fapps/foo" ; "frontend app behind lower case encoded parent segments")]
     #[test_case("/c8y/%5Capps/foo" ; "frontend app behind an encoded backslash")]
+    #[test_case("/c8y/%09%5Capps/foo" ; "frontend app behind a tab and an encoded backslash")]
     #[tokio::test]
     async fn frontend_ui_requests_do_not_reach_cumulocity(request_target: &str) {
         let (response, forwarded) = raw_request(request_target).await;
