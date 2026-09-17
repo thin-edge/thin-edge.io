@@ -145,7 +145,8 @@ fn is_within_permitted_roots(
 /// appended unchanged — they are safe to append lexically because `path` has
 /// already been through [path_clean::clean] and so holds no `.` or `..` component.
 ///
-/// Returns [None] if no ancestor can be resolved at all.
+/// Returns [None] if no ancestor can be resolved at all, or if a component exists
+/// but cannot be resolved.
 fn resolve_symlinks(path: &Utf8Path) -> Option<Utf8PathBuf> {
     let mut not_yet_created = Vec::new();
     let mut ancestor = path;
@@ -155,6 +156,16 @@ fn resolve_symlinks(path: &Utf8Path) -> Option<Utf8PathBuf> {
             resolved.extend(not_yet_created.iter().rev());
             return Some(resolved);
         }
+
+        // A component that exists on disk yet cannot be canonicalised is a symlink
+        // that doesn't resolve: dangling, or a loop. It must not be mistaken for a
+        // component waiting to be created, because appending it lexically would hide
+        // where it actually points while `File::create` would still follow it and
+        // write outside the directory.
+        if ancestor.symlink_metadata().is_ok() {
+            return None;
+        }
+
         not_yet_created.push(ancestor.file_name()?);
         ancestor = ancestor.parent()?;
     }
