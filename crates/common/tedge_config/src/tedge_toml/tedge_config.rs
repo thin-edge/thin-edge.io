@@ -67,6 +67,7 @@ use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tedge_api::file_transfer_url::EntityStoreUrls;
 use tedge_api::file_transfer_url::FileTransferUrls;
 use tedge_api::file_transfer_url::Protocol;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -1887,13 +1888,23 @@ impl TEdgeConfigReaderHttp {
     /// Builds the URLs at which the File Transfer Service HTTP server exposes files,
     /// as seen by a client connecting to `http.client.host:http.client.port`.
     pub fn file_transfer_urls(&self) -> FileTransferUrls {
-        let authority: Arc<str> = format!("{}:{}", self.client.host, self.client.port).into();
+        let (authority, protocol) = self.client_authority();
+        FileTransferUrls::new(authority, protocol)
+    }
+
+    pub fn entity_store_urls(&self) -> EntityStoreUrls {
+        let (authority, protocol) = self.client_authority();
+        EntityStoreUrls::new(authority, protocol)
+    }
+
+    fn client_authority(&self) -> (Arc<str>, Protocol) {
+        let authority = format!("{}:{}", self.client.host, self.client.port).into();
         let protocol = if self.is_secure() {
             Protocol::Https
         } else {
             Protocol::Http
         };
-        FileTransferUrls::new(authority, protocol)
+        (authority, protocol)
     }
 }
 

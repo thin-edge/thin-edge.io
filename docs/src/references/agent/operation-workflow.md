@@ -149,6 +149,7 @@ and combined them with the builtin workflows implemented by the agent itself.
 Each workflow is defined using a TOML file stored in `/etc/tedge/operations`. Each specifies:
 - the command name that it should trigger on
   such as `firmware_update` or `restart`
+- optionally, the [type of entity](#workflow-entity-type) the workflow applies to
 - the list of states
 - for each state:
   - the state name as defined by the operation API
@@ -209,11 +210,39 @@ on_error = "failed"
 %%te%% combines all these workflows to determine what has to be done
 when a state message is published for a command on a topic matching the global topic filter for commands,
 i.e. `te/+/+/+/+/cmd/+/+`.
-- Each running instance of the __tedge_agent__ reacts only on commands targeting its own device.
-- If a user-defined workflow has been defined for this operation, then this workflow is used to determine the required action.
+- Each running instance of the __tedge_agent__ reacts only on commands targeting its own device
+  or a service of that device.
+- If a user-defined workflow has been defined for this operation and this entity type,
+  then this workflow is used to determine the required action.
 - If no workflow has been defined by the user for this operation, then the builtin workflow is used.
 - If there is no workflow or no defined action for the current state,
   then the __tedge_agent__ simply waits for another component to take over the command.
+
+### Scoping a workflow to an entity type {#workflow-entity-type}
+
+The same operation name can need two different workflows depending on what it is addressed to.
+Restarting a device is not restarting one of its services.
+
+A workflow therefore declares the type of entity it applies to, with a `type` field:
+
+```toml title="file: service_restart.toml"
+operation = "restart"
+type = "service"
+
+[init]
+  action = "proceed"
+  on_success = "executing"
+```
+
+`type` takes one of the entity `@type` values: `device` or `service`.
+It defaults to `device`.
+
+A workflow applies to a command only if the target entity has the declared type.
+`restart` can therefore have two workflows:
+one with `type = "service"` for the service entity, and one without `type` for the device entity.
+
+An operation name comes from the `operation` field inside the file, never from the file name,
+so two workflows for the same operation only have to be in two files with different names.
 
 ### Script Execution
 

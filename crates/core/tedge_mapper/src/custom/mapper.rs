@@ -35,6 +35,7 @@ use tedge_mqtt_bridge::rumqttc::Transport;
 use tedge_mqtt_bridge::use_credentials;
 use tedge_mqtt_bridge::MqttBridgeActorBuilder;
 use tedge_mqtt_bridge::MqttOptions;
+use tedge_supervisor::SupervisorMode;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
 use tedge_watch_ext::WatchActorBuilder;
@@ -326,6 +327,7 @@ impl TEdgeComponent for CustomMapper {
         &self,
         tedge_config: TEdgeConfig,
         config_dir: &TedgePaths,
+        supervisor_mode: SupervisorMode,
     ) -> anyhow::Result<Runtime> {
         let mapper_dir = self.mapper_dir(config_dir);
         let service_name = self.service_name();
@@ -333,7 +335,7 @@ impl TEdgeComponent for CustomMapper {
         let startup = validate_and_load(mapper_dir.path(), config_dir.root()).await?;
 
         let (mut runtime, mut mqtt_actor) =
-            start_basic_actors(&service_name, &tedge_config, Vec::new()).await?;
+            start_basic_actors(&service_name, &tedge_config, Vec::new(), supervisor_mode).await?;
 
         if let MapperStartup::WithBridge { ref config, .. } = startup {
             let bridge_dir = mapper_dir.dir("bridge")?;

@@ -1135,6 +1135,9 @@ impl CumulocityConverter {
                     warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing capabilities is not currently supported");
                     return Ok(vec![]);
                 }
+                if entity_type == EntityType::Service {
+                    return Ok(vec![]);
+                }
                 match operation {
                     OperationType::Restart => self.register_restart_operation(&source).await,
                     OperationType::SoftwareList => {
@@ -3045,8 +3048,14 @@ pub(crate) mod tests {
 
         let msgs = converter.convert(&operation_msg).await;
         assert_messages_matching(&msgs, [("c8y/s/us/child0", "114,c8y_Operation".into())]);
+    }
 
-        // service command
+    #[tokio::test]
+    async fn a_service_capability_registers_no_supported_operation() {
+        let tmp_dir = TempTedgeDir::new();
+        let config = c8y_converter_config(&tmp_dir);
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+
         let reg_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/service0"),
             json!({
@@ -3063,17 +3072,17 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        let service = main_device.default_service_for_device("service0").unwrap();
+        let service = EntityTopicId::default_main_service("service0").unwrap();
         let operation_topic = converter.mqtt_schema.topic_for(
             &service,
             &Channel::CommandMetadata {
-                operation: OperationType::Custom("my_operation".to_string()),
+                operation: OperationType::Restart,
             },
         );
         let operation_msg = MqttMessage::new(&operation_topic, "{}");
 
         let msgs = converter.convert(&operation_msg).await;
-        assert_messages_matching(&msgs, [("c8y/s/us/service0", "114,c8y_Operation".into())]);
+        assert!(msgs.is_empty());
     }
 
     fn registered_entities_into_mqtt_messages(

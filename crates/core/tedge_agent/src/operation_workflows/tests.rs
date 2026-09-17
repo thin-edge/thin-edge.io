@@ -10,6 +10,7 @@ use serde_json::json;
 use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
+use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
@@ -37,6 +38,10 @@ use tedge_api::commands::SoftwareModuleAction;
 use tedge_api::commands::SoftwareModuleItem;
 use tedge_api::commands::SoftwareRequestResponseSoftwareList;
 use tedge_api::commands::SoftwareUpdateCommandPayload;
+use tedge_api::entity::EntityMetadata;
+use tedge_api::entity::EntityType;
+use tedge_api::file_transfer_url::EntityStoreUrls;
+use tedge_api::file_transfer_url::Protocol;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
@@ -53,6 +58,9 @@ use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
+use tedge_http_ext::test_helpers::HttpResponseBuilder;
+use tedge_http_ext::HttpRequest;
+use tedge_http_ext::HttpResult;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
@@ -60,6 +68,7 @@ use tedge_script_ext::Execute;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
 use tedge_utils::paths::TedgePaths;
+use test_case::test_case;
 use tokio::task::JoinHandle;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(3000);
@@ -1072,6 +1081,203 @@ action = "cleanup"
     Ok(())
 }
 
+#[tokio::test]
+async fn a_command_for_a_service_of_this_device_moves_to_executing() -> Result<(), DynError> {
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![(
+            "service-restart.toml".to_string(),
+            SERVICE_RESTART_HELD_IN_EXECUTING.to_string(),
+        )],
+        FakeEntityStore::Entities(vec![EntityMetadata::new(
+            "device/main/service/collectd".parse().unwrap(),
+            EntityType::Service,
+        )
+        .with_parent("device/main//".parse().unwrap())]),
+    )
+    .await?;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/1"),
+            r#"{"status":"init","serviceName":"collectd","serviceType":"service"}"#,
+        ))
+        .await?;
+
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main/service/collectd/cmd/restart/1",
+        "executing",
+    )
+    .await;
+
+    Ok(())
+}
+
+#[test_case(
+    FakeEntityStore::Entities(vec![EntityMetadata::new(
+        "device/child01/service/nginx".parse().unwrap(),
+        EntityType::Service,
+    )
+    .with_parent("device/child01//".parse().unwrap())]),
+    "te/device/child01/service/nginx/cmd/restart/1";
+    "a service of another device"
+)]
+#[test_case(
+    FakeEntityStore::Entities(vec![]),
+    "te/device/main/service/collectd/cmd/restart/1";
+    "an entity that is not registered"
+)]
+#[test_case(
+    FakeEntityStore::Failing,
+    "te/device/main/service/collectd/cmd/restart/1";
+    "an entity store that cannot be read"
+)]
+#[tokio::test]
+async fn a_command_is_ignored_if_its_target_is_not_registered_as_a_service_of_this_device(
+    entity_store: FakeEntityStore,
+    command_topic: &str,
+) -> Result<(), DynError> {
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![(
+            "service-restart.toml".to_string(),
+            SERVICE_RESTART_HELD_IN_EXECUTING.to_string(),
+        )],
+        entity_store,
+    )
+    .await?;
+
+    // Consume the builtin restart capability of the device, published on start
+    assert_received_contains_str(&mut mqtt_box, [("te/device/main///cmd/restart", "{}")]).await;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked(command_topic),
+            r#"{"status":"init"}"#,
+        ))
+        .await?;
+
+    assert_no_message_or_actor_exit(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "the command is not confirmed to be a service of this device",
+    )
+    .await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_service_workflow_declares_no_capability_of_the_device() -> Result<(), DynError> {
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![(
+            "service-restart.toml".to_string(),
+            SERVICE_RESTART_HELD_IN_EXECUTING.to_string(),
+        )],
+        FakeEntityStore::Entities(vec![]),
+    )
+    .await?;
+
+    // The builtin restart of the device is the only capability published on start
+    assert_received_contains_str(&mut mqtt_box, [("te/device/main///cmd/restart", "{}")]).await;
+    assert_no_message_or_actor_exit(&mut mqtt_box, &mut actor_handle, "the agent has started")
+        .await;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn restarting_the_agent_restarts_the_process_once() -> Result<(), DynError> {
+    let TestHandler {
+        tmp_dir,
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![(
+            "agent-restart.toml".to_string(),
+            AGENT_SELF_RESTART_WORKFLOW.to_string(),
+        )],
+        FakeEntityStore::Entities(vec![EntityMetadata::new(
+            "device/main/service/tedge-agent".parse().unwrap(),
+            EntityType::Service,
+        )
+        .with_parent("device/main//".parse().unwrap())]),
+    )
+    .await?;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/tedge-agent/cmd/restart/1"),
+            json!({"status": "init", "serviceName": "tedge-agent", "serviceType": "service"})
+                .to_string(),
+        ))
+        .await?;
+
+    // The state awaiting the restart is persisted before the process stops
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main/service/tedge-agent/cmd/restart/1",
+        "await-agent-restart",
+    )
+    .await;
+    assert!(
+        matches!(actor_handle.await, Ok(Err(RuntimeError::RestartRequired))),
+        "the agent is expected to ask for a process restart"
+    );
+
+    // On restart, the awaited restart is over: the command completes without being run again
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        tmp_dir,
+        "device/main//",
+        vec![(
+            "agent-restart.toml".to_string(),
+            AGENT_SELF_RESTART_WORKFLOW.to_string(),
+        )],
+        FakeEntityStore::Entities(vec![EntityMetadata::new(
+            "device/main/service/tedge-agent".parse().unwrap(),
+            EntityType::Service,
+        )
+        .with_parent("device/main//".parse().unwrap())]),
+    )
+    .await?;
+
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main/service/tedge-agent/cmd/restart/1",
+        "successful",
+    )
+    .await;
+
+    Ok(())
+}
+
 struct TestHandler {
     tmp_dir: Arc<TempTedgeDir>,
     actor_handle: JoinHandle<Result<(), RuntimeError>>,
@@ -1091,9 +1297,59 @@ struct TestHandler {
     sync_signal_box: TimedMessageBox<SimpleMessageBox<CmdMetaSyncSignal, NoMessage>>,
 }
 
+/// A fake entity store, answering the entity lookups of the workflow actor over HTTP
+enum FakeEntityStore {
+    /// Serve the given entities, answering `404` for any other
+    Entities(Vec<EntityMetadata>),
+    /// Answer `500` to every request, as an entity store that cannot be queried
+    Failing,
+}
+
+impl FakeEntityStore {
+    async fn serve(self, mut http: FakeServerBox<HttpRequest, HttpResult>) {
+        while let Some(request) = http.recv().await {
+            let response = match &self {
+                FakeEntityStore::Failing => HttpResponseBuilder::new().status(500).build(),
+                FakeEntityStore::Entities(entities) => {
+                    let target = request
+                        .uri()
+                        .path()
+                        .strip_prefix("/te/v1/entities/")
+                        .and_then(|path| path.parse::<EntityTopicId>().ok());
+                    match entities
+                        .iter()
+                        .find(|entity| Some(&entity.topic_id) == target.as_ref())
+                    {
+                        Some(entity) => HttpResponseBuilder::new().status(200).json(entity).build(),
+                        None => HttpResponseBuilder::new().status(404).build(),
+                    }
+                }
+            };
+            if http.send(response).await.is_err() {
+                break;
+            }
+        }
+    }
+}
+
 async fn spawn_mqtt_operation_converter(
     device_topic_id: &str,
     workflows: Vec<(String, String)>,
+) -> Result<TestHandler, DynError> {
+    spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        device_topic_id,
+        workflows,
+        FakeEntityStore::Entities(vec![]),
+    )
+    .await
+}
+
+async fn spawn_workflow_actor(
+    tmp_dir: Arc<TempTedgeDir>,
+    device_topic_id: &str,
+    workflows: Vec<(String, String)>,
+    entity_store: FakeEntityStore,
 ) -> Result<TestHandler, DynError> {
     let mut software_builder = SoftwareActor(SimpleMessageBoxBuilder::new("Software", 5));
     let mut restart_builder = RestartActor(SimpleMessageBoxBuilder::new("Restart", 5));
@@ -1102,7 +1358,7 @@ async fn spawn_mqtt_operation_converter(
         SyncListenerActorBuilder(SimpleMessageBoxBuilder::new("SyncListener", 5));
 
     let mut mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =
-        SimpleMessageBoxBuilder::new("MQTT", 5);
+        SimpleMessageBoxBuilder::new("MQTT", 32);
     let mut script_builder: SimpleMessageBoxBuilder<
         RequestEnvelope<Execute, std::io::Result<Output>>,
         NoMessage,
@@ -1117,17 +1373,20 @@ async fn spawn_mqtt_operation_converter(
         RequestEnvelope<UploaderRequest, UploaderResult>,
         NoMessage,
     > = SimpleMessageBoxBuilder::new("Uploader", 5);
+    let mut http_builder = FakeServerBox::<HttpRequest, HttpResult>::builder();
 
-    let tmp_dir = Arc::new(TempTedgeDir::new());
     let tmp_path = tmp_dir.path();
     let config_root = TedgePaths::from_root_with_defaults(tmp_path, "", "");
     let operations_dir = tmp_dir.dir("operations");
+
+    tmp_dir.dir("running-operations");
     for (file_name, content) in workflows {
         operations_dir.file(&file_name).with_raw_content(&content);
     }
     let device_topic_id = device_topic_id
         .parse::<EntityTopicId>()
         .expect("Invalid topic id");
+
     let service_topic_id = device_topic_id
         .default_service_for_device("tedge-agent")
         .expect("Invalid service topic id");
@@ -1143,6 +1402,7 @@ async fn spawn_mqtt_operation_converter(
         operations_dir: config_root.dir("operations").unwrap(),
         tmp_dir: TedgePaths::from_root_with_defaults(tmp_path.join(tmp_path), "", ""),
         capabilities: Capabilities::default(),
+        entity_store_urls: EntityStoreUrls::new("127.0.0.1:8000".into(), Protocol::Http),
     };
     let mut workflow_actor_builder = WorkflowActorBuilder::new(
         config,
@@ -1151,6 +1411,7 @@ async fn spawn_mqtt_operation_converter(
         &mut inotify_builder,
         &mut downloade_builder,
         &mut uploader_builder,
+        &mut http_builder,
     );
     workflow_actor_builder.register_builtin_operation(&mut restart_builder);
     workflow_actor_builder.register_builtin_operation(&mut software_builder);
@@ -1169,6 +1430,8 @@ async fn spawn_mqtt_operation_converter(
     let downloader_box = downloade_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let uploader_box = uploader_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let _inotify_box = inotify_builder.build().with_timeout(TEST_TIMEOUT_MS);
+
+    tokio::spawn(entity_store.serve(http_builder.build()));
 
     let workflow_actor = workflow_actor_builder.build();
     let tmp_dir_guard = Arc::clone(&tmp_dir);
@@ -1384,3 +1647,34 @@ impl SyncOnCommand for SyncListenerActorBuilder {
         vec![OperationType::ConfigUpdate]
     }
 }
+
+const SERVICE_RESTART_HELD_IN_EXECUTING: &str = r#"
+operation = "restart"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+"#;
+
+const AGENT_SELF_RESTART_WORKFLOW: &str = r#"
+operation = "restart"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "restart-agent"
+
+[restart-agent]
+action = "restart-agent"
+on_exec = "await-agent-restart"
+
+[await-agent-restart]
+action = "await-agent-restart"
+timeout_second = 90
+on_success = "successful"
+on_timeout = { status = "failed", reason = "tedge-agent did not restart in time" }
+
+[successful]
+action = "cleanup"
+"#;

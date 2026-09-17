@@ -5,15 +5,19 @@ use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::mqtt_topics::ServiceTopicId;
+use tedge_api::service_command::ServiceActions;
+use tedge_api::service_command::TEDGE_SERVICE_ACTIONS;
 use tedge_config::TEdgeConfig;
 use tedge_config_ext::ConfigPublisherBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
 use tedge_mqtt_ext::MqttActorBuilder;
+use tedge_supervisor::SupervisorMode;
 
 pub async fn start_basic_actors(
     mapper_name: &str,
     config: &TEdgeConfig,
     exposed_config: Vec<(String, Option<serde_json::Value>)>,
+    supervisor_mode: SupervisorMode,
 ) -> Result<(Runtime, MqttActorBuilder), anyhow::Error> {
     let mut runtime = Runtime::new();
 
@@ -41,7 +45,8 @@ pub async fn start_basic_actors(
         &mut mqtt_actor,
         &mqtt_schema,
         &config.service,
-    );
+    )
+    .with_service_actions(mapper_actions(supervisor_mode));
 
     let config_publisher = ConfigPublisherBuilder::new(
         mqtt_schema,
@@ -55,6 +60,14 @@ pub async fn start_basic_actors(
     runtime.spawn(health_actor).await?;
     runtime.spawn(config_publisher).await?;
     Ok((runtime, mqtt_actor))
+}
+
+/// A mapper in a single process has no init unit of its own, so no actions using init system should be declared.
+fn mapper_actions(supervisor_mode: SupervisorMode) -> ServiceActions {
+    match supervisor_mode {
+        SupervisorMode::Standalone => ServiceActions::declaring(TEDGE_SERVICE_ACTIONS),
+        SupervisorMode::MultiUnit => ServiceActions::withdrawing(TEDGE_SERVICE_ACTIONS),
+    }
 }
 
 async fn get_mqtt_actor(

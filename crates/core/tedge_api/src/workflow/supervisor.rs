@@ -6,11 +6,14 @@ use std::string::ToString;
 use tracing::error;
 use tracing::info;
 
+// Key should include EntityType because the same operation name can be used for a device and for a service
+pub type WorkflowKey = (EntityType, OperationType);
+
 /// Dispatch actions to operation participants
 #[derive(Default)]
 pub struct WorkflowSupervisor {
     /// The user-defined operation workflow definitions
-    workflows: HashMap<OperationType, WorkflowVersions>,
+    workflows: HashMap<WorkflowKey, WorkflowVersions>,
 
     /// Operation instances under execution
     commands: CommandBoard,
@@ -34,12 +37,12 @@ impl WorkflowSupervisor {
         version: WorkflowSource<WorkflowVersion>,
         workflow: OperationWorkflow,
     ) -> Result<(), WorkflowRegistrationError> {
-        let operation = workflow.operation.clone();
-        if let Some(versions) = self.workflows.get_mut(&operation) {
+        let key = (workflow.entity_type, workflow.operation.clone());
+        if let Some(versions) = self.workflows.get_mut(&key) {
             versions.add(version, workflow);
         } else {
             let versions = WorkflowVersions::new(version, workflow);
-            self.workflows.insert(operation, versions);
+            self.workflows.insert(key, versions);
         }
         Ok(())
     }
@@ -49,15 +52,16 @@ impl WorkflowSupervisor {
     /// Return true if a builtin version has been restored
     pub fn unregister_custom_workflow(
         &mut self,
+        entity_type: EntityType,
         operation: &OperationName,
         version: &WorkflowVersion,
     ) -> bool {
-        let operation = OperationType::from(operation.as_str());
-        if let Some(versions) = self.workflows.get_mut(&operation) {
+        let key = (entity_type, OperationType::from(operation.as_str()));
+        if let Some(versions) = self.workflows.get_mut(&key) {
             versions.remove(version);
         }
 
-        let (empty, builtin_restored) = match self.workflows.get(&operation) {
+        let (empty, builtin_restored) = match self.workflows.get(&key) {
             None => (true, false),
             Some(version) if version.is_empty() => (true, false),
             Some(version) if version.is_builtin() => (false, true),
@@ -65,7 +69,7 @@ impl WorkflowSupervisor {
         };
 
         if empty {
-            self.workflows.remove(&operation);
+            self.workflows.remove(&key);
         }
 
         builtin_restored
@@ -82,7 +86,7 @@ impl WorkflowSupervisor {
         let resumed_commands: Vec<GenericCommandState> = self
             .commands
             .iter()
-            .filter_map(|(t, s)| self.resume_command(t, s.clone()))
+            .filter_map(|entry| self.resume_command(&entry.timestamp, entry.state.clone()))
             .collect();
 
         // The commands should be updated with the resumed states,
@@ -109,8 +113,9 @@ impl WorkflowSupervisor {
         // To ease testing the capability messages are emitted in a deterministic order
         let mut operations = self
             .workflows
-            .values()
-            .filter_map(|versions| versions.current_workflow())
+            .iter()
+            .filter(|((workflow_type, _), _)| workflow_type == &EntityType::MainDevice)
+            .filter_map(|(_, versions)| versions.current_workflow())
             .collect::<Vec<_>>();
         operations.sort_by_key(|&a| a.operation.to_string());
         operations
@@ -127,7 +132,7 @@ impl WorkflowSupervisor {
     ) -> Option<MqttMessage> {
         let operation = OperationType::from(operation.as_str());
         self.workflows
-            .get(&operation)
+            .get(&(EntityType::MainDevice, operation))
             .and_then(|versions| versions.current_workflow())
             .and_then(|workflow| workflow.capability_message(schema, target))
     }
@@ -151,9 +156,13 @@ impl WorkflowSupervisor {
     /// Mark the current version of an operation workflow as being in use.
     ///
     /// Return the current version if any.
-    pub fn use_current_version(&mut self, operation: &OperationName) -> Option<WorkflowVersion> {
+    pub fn use_current_version(
+        &mut self,
+        entity_type: EntityType,
+        operation: &OperationName,
+    ) -> Option<WorkflowVersion> {
         self.workflows
-            .get_mut(&operation.as_str().into())?
+            .get_mut(&(entity_type, operation.as_str().into()))?
             .use_current_version()
             .cloned()
     }
@@ -163,10 +172,12 @@ impl WorkflowSupervisor {
     /// Return the new CommandRequest state if any.
     pub fn apply_external_update(
         &mut self,
+        entity_type: EntityType,
         operation: &OperationType,
         command_state: GenericCommandState,
     ) -> Result<Option<GenericCommandState>, WorkflowExecutionError> {
-        let Some(workflow_versions) = self.workflows.get_mut(operation) else {
+        let Some(workflow_versions) = self.workflows.get_mut(&(entity_type, operation.clone()))
+        else {
             return Err(WorkflowExecutionError::UnknownOperation {
                 operation: operation.to_string(),
             });
@@ -179,7 +190,7 @@ impl WorkflowSupervisor {
             // This is a new command request
             if let Some(current_version) = workflow_versions.use_current_version() {
                 let updated_state = command_state.with_workflow_version(current_version);
-                self.commands.insert(updated_state.clone())?;
+                self.commands.insert(entity_type, updated_state.clone())?;
                 Ok(Some(updated_state))
             } else {
                 Err(WorkflowExecutionError::DeprecatedOperation {
@@ -212,8 +223,14 @@ impl WorkflowSupervisor {
             return Err(WorkflowExecutionError::MissingVersion);
         };
 
+        let Some(entry) = self.commands.entry(&command_state.topic.name) else {
+            return Err(WorkflowExecutionError::UnknownRequest {
+                topic: command_state.topic.name.clone(),
+            });
+        };
+
         self.workflows
-            .get(&operation_name.as_str().into())
+            .get(&(entry.entity_type, operation_name.as_str().into()))
             .ok_or(WorkflowExecutionError::UnknownOperation {
                 operation: operation_name.clone(),
             })
@@ -223,7 +240,7 @@ impl WorkflowSupervisor {
 
     /// Return the current state of a command (identified by its topic)
     pub fn get_state(&self, command: &str) -> Option<&GenericCommandState> {
-        self.commands.get_state(command).map(|(_, state)| state)
+        self.commands.entry(command).map(|entry| &entry.state)
     }
 
     /// Rewrite the command state returned by a builtin operation actor
@@ -458,24 +475,34 @@ impl WorkflowVersions {
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "OnDiskCommandBoard", into = "OnDiskCommandBoard")]
 pub struct CommandBoard {
-    /// For each command instance (uniquely identified by its cmd topic):
-    /// - the full state of the command
-    /// - a timestamp marking since when the command request is in this state
-    ///
-    /// TODO: use the timestamp to mark faulty any request making no progress
+    /// Each command instance, uniquely identified by its cmd topic
     #[serde(flatten)]
-    commands: HashMap<TopicName, (Timestamp, GenericCommandState)>,
+    commands: HashMap<TopicName, CommandEntry>,
+}
+
+/// One command instance under execution
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CommandEntry {
+    /// Since when the command is in this state
+    // TODO: use the timestamp to mark faulty any request making no progress
+    pub timestamp: Timestamp,
+
+    /// The full state of the command
+    pub state: GenericCommandState,
+
+    /// The type of the entity the command is addressed to, which scopes its workflow
+    pub entity_type: EntityType,
 }
 
 pub type TopicName = String;
 pub type Timestamp = time::OffsetDateTime;
 
 impl CommandBoard {
-    pub fn new(commands: HashMap<TopicName, (Timestamp, GenericCommandState)>) -> Self {
+    pub fn new(commands: HashMap<TopicName, CommandEntry>) -> Self {
         CommandBoard { commands }
     }
 
-    pub fn get_state(&self, command: &str) -> Option<&(Timestamp, GenericCommandState)> {
+    pub fn entry(&self, command: &str) -> Option<&CommandEntry> {
         self.commands.get(command)
     }
 
@@ -484,16 +511,16 @@ impl CommandBoard {
         // Sequential search is okay because in practice there is no more than 10 concurrent commands
         self.commands
             .values()
-            .find(|(_, command)| command.invoking_command_topic() == Some(command_topic))
-            .map(|(_, command)| command)
+            .find(|entry| entry.state.invoking_command_topic() == Some(command_topic))
+            .map(|entry| &entry.state)
     }
 
     /// Iterate over the pending commands
-    pub fn iter(&self) -> impl Iterator<Item = &(Timestamp, GenericCommandState)> {
+    pub fn iter(&self) -> impl Iterator<Item = &CommandEntry> {
         self.commands.values()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (Timestamp, GenericCommandState)> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut CommandEntry> {
         self.commands.values_mut()
     }
 
@@ -502,17 +529,24 @@ impl CommandBoard {
     /// Reject the request if there is already an entry with the same command id, but in a different state
     pub fn insert(
         &mut self,
+        entity_type: EntityType,
         new_command: GenericCommandState,
     ) -> Result<(), WorkflowExecutionError> {
         match self.commands.get(&new_command.topic.name) {
-            Some((_, command)) if command == &new_command => Ok(()),
+            Some(entry) if entry.state == new_command => Ok(()),
             Some(_) => Err(WorkflowExecutionError::DuplicatedRequest {
                 topic: new_command.topic.name,
             }),
             None => {
                 let timestamp = time::OffsetDateTime::now_utc();
-                self.commands
-                    .insert(new_command.topic.name.clone(), (timestamp, new_command));
+                self.commands.insert(
+                    new_command.topic.name.clone(),
+                    CommandEntry {
+                        timestamp,
+                        state: new_command,
+                        entity_type,
+                    },
+                );
                 Ok(())
             }
         }
@@ -529,9 +563,9 @@ impl CommandBoard {
             None => Err(WorkflowExecutionError::UnknownRequest {
                 topic: updated_command.topic.name,
             }),
-            Some((timestamp, command_state)) => {
-                *timestamp = time::OffsetDateTime::now_utc();
-                *command_state = updated_command;
+            Some(entry) => {
+                entry.timestamp = time::OffsetDateTime::now_utc();
+                entry.state = updated_command;
                 Ok(())
             }
         }
@@ -547,6 +581,100 @@ impl CommandBoard {
 mod tests {
     use super::*;
     use mqtt_channel::Topic;
+
+    #[test]
+    fn a_device_and_a_service_workflow_share_an_operation_name() {
+        let mut workflows = WorkflowSupervisor::default();
+        let restart = OperationType::Restart;
+
+        // A workflow with no `type` is a device workflow, as before this field existed
+        workflows
+            .register_custom_workflow(
+                UserDefined("device-version".to_string()),
+                restart_workflow_of_type("", "device_step"),
+            )
+            .unwrap();
+
+        workflows
+            .register_custom_workflow(
+                UserDefined("service-version".to_string()),
+                restart_workflow_of_type(r#"type = "service""#, "service_step"),
+            )
+            .unwrap();
+
+        // A command addressed to the device is driven by the device workflow
+        let device_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/restart/id_1"),
+            r#"{ "status":"init" }"#,
+        ))
+        .unwrap();
+        let device_cmd = workflows
+            .apply_external_update(EntityType::MainDevice, &restart, device_cmd)
+            .unwrap()
+            .unwrap();
+        assert_eq!(device_cmd.workflow_version(), Some("device-version"));
+        assert_eq!(
+            workflows.get_action(&device_cmd).unwrap(),
+            OperationAction::MoveTo("device_step".into())
+        );
+
+        // A command addressed to a service is driven by the service workflow
+        let service_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/id_2"),
+            r#"{ "status":"init" }"#,
+        ))
+        .unwrap();
+        let service_cmd = workflows
+            .apply_external_update(EntityType::Service, &restart, service_cmd)
+            .unwrap()
+            .unwrap();
+        assert_eq!(service_cmd.workflow_version(), Some("service-version"));
+        assert_eq!(
+            workflows.get_action(&service_cmd).unwrap(),
+            OperationAction::MoveTo("service_step".into())
+        );
+    }
+
+    #[test]
+    fn a_device_command_does_not_fall_back_to_a_service_workflow() {
+        let mut workflows = WorkflowSupervisor::default();
+
+        workflows
+            .register_custom_workflow(
+                UserDefined("service-version".to_string()),
+                restart_workflow_of_type(r#"type = "service""#, "service_step"),
+            )
+            .unwrap();
+
+        let device_cmd = GenericCommandState::from_command_message(&MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/restart/id_1"),
+            r#"{ "status":"init" }"#,
+        ))
+        .unwrap();
+        let error = workflows
+            .apply_external_update(EntityType::MainDevice, &OperationType::Restart, device_cmd)
+            .unwrap_err();
+
+        assert_matches::assert_matches!(error, WorkflowExecutionError::UnknownOperation { .. });
+    }
+
+    #[test]
+    fn the_device_does_not_declare_the_workflow_of_a_service() {
+        let mut workflows = WorkflowSupervisor::default();
+
+        workflows
+            .register_custom_workflow(
+                UserDefined("service-version".to_string()),
+                restart_workflow_of_type(r#"type = "service""#, "service_step"),
+            )
+            .unwrap();
+
+        let schema = MqttSchema::default();
+        let device = EntityTopicId::default_main_device();
+
+        let capabilities = workflows.capability_messages(&schema, &device);
+        assert!(capabilities.is_empty());
+    }
 
     #[test]
     fn retrieve_invoking_command_hierarchy() {
@@ -573,7 +701,7 @@ mod tests {
         ))
         .unwrap();
         workflows
-            .apply_external_update(&level_1_op, level_1_cmd.clone())
+            .apply_external_update(EntityType::MainDevice, &level_1_op, level_1_cmd.clone())
             .unwrap();
 
         // A level 1 command has no invoking command nor root invoking command
@@ -589,7 +717,7 @@ mod tests {
         ))
         .unwrap();
         workflows
-            .apply_external_update(&level_2_op, level_2_cmd.clone())
+            .apply_external_update(EntityType::MainDevice, &level_2_op, level_2_cmd.clone())
             .unwrap();
 
         // The invoking command of the level_2 command, is the previous level_1 command
@@ -610,7 +738,7 @@ mod tests {
         ))
         .unwrap();
         workflows
-            .apply_external_update(&level_3_op, level_3_cmd.clone())
+            .apply_external_update(EntityType::MainDevice, &level_3_op, level_3_cmd.clone())
             .unwrap();
 
         // The invoking command of the level_3 command, is the previous level_2 command
@@ -723,11 +851,12 @@ action = "cleanup"
         for definition in [RESTART_WORKFLOW, WRAPPER_WORKFLOW] {
             let workflow: OperationWorkflow = toml::from_str(definition).unwrap();
             let operation = workflow.operation.to_string();
+            let entity_type = workflow.entity_type;
             workflows
                 .register_custom_workflow(UserDefined(VERSION.to_string()), workflow)
                 .unwrap();
             // Mark the version as in-use, as done when a command is created
-            workflows.use_current_version(&operation);
+            workflows.use_current_version(entity_type, &operation);
         }
         workflows
     }
@@ -737,8 +866,35 @@ action = "cleanup"
         CommandBoard::new(
             commands
                 .into_iter()
-                .map(|command| (command.topic.name.clone(), (now, command)))
+                .map(|command| {
+                    (
+                        command.topic.name.clone(),
+                        CommandEntry {
+                            timestamp: now,
+                            state: command,
+                            entity_type: EntityType::MainDevice,
+                        },
+                    )
+                })
                 .collect(),
         )
+    }
+
+    fn restart_workflow_of_type(type_field: &str, next_state: &str) -> OperationWorkflow {
+        toml::from_str(&format!(
+            r#"
+operation = "restart"
+{type_field}
+
+[init]
+action = "proceed"
+on_success = "{next_state}"
+
+[{next_state}]
+action = "proceed"
+on_success = "successful"
+"#
+        ))
+        .unwrap()
     }
 }

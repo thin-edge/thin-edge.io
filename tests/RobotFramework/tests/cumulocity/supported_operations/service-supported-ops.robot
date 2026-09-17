@@ -8,7 +8,10 @@ Library             ThinEdgeIO
 Suite Setup         Custom Setup
 Test Teardown       Get Logs
 
-Test Tags           theme:c8y    theme:operation
+# Skipped: service capabilities will be mapped to c8y_ServiceCommand operation.
+# Therefore, the c8y mapper should no longer map the capabilities of a service to a Cumulocity operation for device.
+# The suite is to be revisited and rewritten once a Cumulocity operation supports the service commands feature.
+Test Tags           theme:c8y    theme:operation    robot:skip
 
 
 *** Test Cases ***
