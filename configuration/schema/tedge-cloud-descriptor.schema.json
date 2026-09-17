@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thin-edge.io/cloud-descriptor.schema.json",
+  "title": "Cloud descriptor",
+  "description": "A cloud bootstrap descriptor, as installed in `<plugin-path>/clouds.d/<cloud>.toml` (by default `/usr/share/tedge/bootstrap.d/clouds.d/`, overridable per site in `<config-dir>/bootstrap.d/clouds.d/`). It declares which registration methods a cloud supports, what inputs they need, and which settings the cloud requires. Descriptors are metadata only: they power the `tedge bootstrap` wizard, upfront validation and `--describe` output, while registration is executed by the built-in methods or the `register.d` hooks. The files are written in TOML; this schema describes their data model. Unknown keys are rejected here, even though the loader ignores them, so that typos are reported rather than silently doing nothing.",
+  "type": "object",
+  "required": ["cloud"],
+  "additionalProperties": false,
+  "properties": {
+    "cloud": {
+      "description": "The cloud name, as passed to `tedge bootstrap <cloud>`. Conventionally matches the file name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "type": {
+      "description": "The cloud this descriptor derives from (e.g. `type = \"c8y\"`): the instance is bootstrapped as a custom-named instance of that cloud, with the base cloud's registration semantics, and inherits the base descriptor's registration methods and URL spec unless it declares its own. Resolution is single-level: a base that is itself derived is not resolved further.",
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "description": "One-line description of the cloud, shown by the wizard and `--describe`.",
+      "type": "string"
+    },
+    "url": {
+      "$ref": "#/$defs/urlSpec"
+    },
+    "register": {
+      "description": "The registration methods this cloud supports. The first method flagged `default = true`, or else the first listed, is used when `--register` is not given.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/registerMethod" }
+    },
+    "settings": {
+      "description": "Settings the cloud needs, beyond the URL. A setting declared `prompt = false` is applied without asking.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/setting" }
+    }
+  },
+  "$defs": {
+    "configValues": {
+      "description": "Config keys mapped to the values they are set to.",
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "urlSpec": {
+      "description": "How the cloud URL is obtained: prompt text, default, or a value that is not asked for.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "Prompt text shown by the wizard, e.g. \"ThingsBoard server (host or host:port)\".",
+          "type": "string"
+        },
+        "default": {
+          "description": "Pre-filled value offered by the wizard, accepted with an empty answer.",
+          "type": "string"
+        },
+        "choices": {
+          "description": "When set, the wizard offers these values as a pick-list.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "prompt": {
+          "description": "Whether the wizard asks for the URL. With `prompt = false`, the `default` is used without asking, and non-interactive runs do not require `--url`. An explicit `--url` still overrides it. Requires a `default`.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "registerMethod": {
+      "description": "One registration method, as selected by `tedge bootstrap --register <name>`.",
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The method name, passed to `--register` and to the `register.d` hooks.",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "One-line explanation shown by the wizard and `--describe`.",
+          "type": "string"
+        },
+        "default": {
+          "description": "Whether this is the default method when `--register` is not given.",
+          "type": "boolean",
+          "default": false
+        },
+        "inputs": {
+          "description": "Inputs the method needs, passed to the register hooks via environment variables. Restating a built-in c8y method (`c8y-ca`, `self-signed`, `basic`, `basic-preregistered`) without inputs keeps the compiled-in ones.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/methodInput" }
+        },
+        "set": {
+          "description": "Config values implied by choosing this method, applied during the configure step. Keys are relative to the cloud (e.g. `auth_method`). Explicit `--set` values override them.",
+          "$ref": "#/$defs/configValues"
+        }
+      }
+    },
+    "methodInput": {
+      "description": "A value a registration method needs, provided by the environment, prompted for by the wizard, or defaulted.",
+      "type": "object",
+      "required": ["name", "env"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Human readable name, e.g. \"provision key\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "env": {
+          "description": "The environment variable carrying the value.",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "One-line explanation shown by the wizard and `--describe`.",
+          "type": "string"
+        },
+        "secret": {
+          "description": "Secret values are prompted without echo and never shown.",
+          "type": "boolean",
+          "default": false
+        },
+        "required": {
+          "description": "Optional inputs don't fail validation when unset.",
+          "type": "boolean",
+          "default": true
+        },
+        "default": {
+          "description": "Value used when the environment variable is not set, applied in both interactive and non-interactive runs.",
+          "type": "string"
+        },
+        "choices": {
+          "description": "When set, the wizard offers these values as a pick-list.",
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "setting": {
+      "description": "A config value the wizard asks for and applies during the configure step.",
+      "type": "object",
+      "required": ["key"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "description": "The config key, relative to the cloud (e.g. `transport.port`), unless `global` is set.",
+          "type": "string",
+          "minLength": 1
+        },
+        "global": {
+          "description": "The key is a device-global tedge config key (e.g. `proxy.address`), not scoped to the cloud: the answer is applied without the cloud prefix, and lands in the tedge config even for custom mappers.",
+          "type": "boolean",
+          "default": false
+        },
+        "name": {
+          "description": "The human-readable question shown by the wizard (e.g. \"Select the Cumulocity MQTT connection type\"). When absent, the wizard shows the key and description instead.",
+          "type": "string"
+        },
+        "description": {
+          "description": "One-line explanation shown alongside the question.",
+          "type": "string"
+        },
+        "required": {
+          "description": "Whether a value must be given for this setting.",
+          "type": "boolean",
+          "default": false
+        },
+        "default": {
+          "description": "Pre-filled value offered by the wizard, accepted with an empty answer. With choices, this selects the pre-selected choice by its *value*. Wizard-only unless `prompt = false`: shipped configuration defaults belong in the mapper's own `mapper.toml`, not in the descriptor.",
+          "type": "string"
+        },
+        "prompt": {
+          "description": "Whether the wizard asks for this setting. With `prompt = false`, the `default` is applied without asking, in interactive and non-interactive runs alike - the way a cloud pins a config value. Method-level and choice-level `set` values and explicit `--set` values override it. Requires a `default`.",
+          "type": "boolean",
+          "default": true
+        },
+        "choices": {
+          "description": "When set, the wizard offers these values as a pick-list.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/settingChoice" }
+        }
+      }
+    },
+    "settingChoice": {
+      "description": "One selectable answer of a setting's pick-list: either a bare value displayed as-is, or a labeled table presenting the value in product vocabulary and optionally implying further config values.",
+      "oneOf": [
+        {
+          "description": "A bare value, displayed as-is.",
+          "type": "string"
+        },
+        {
+          "description": "A labeled choice: the wizard shows the label and description, while the `value` is what lands in the setting's key.",
+          "type": "object",
+          "required": ["value"],
+          "additionalProperties": false,
+          "properties": {
+            "value": {
+              "description": "The value stored in the setting's key when chosen.",
+              "type": "string"
+            },
+            "label": {
+              "description": "The display label, defaulting to the value.",
+              "type": "string"
+            },
+            "description": {
+              "description": "One-line explanation shown alongside the label.",
+              "type": "string"
+            },
+            "set": {
+              "description": "Further config values implied by this choice, with keys relative to the cloud like the setting's own key. Explicit `--set` values override them.",
+              "$ref": "#/$defs/configValues"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

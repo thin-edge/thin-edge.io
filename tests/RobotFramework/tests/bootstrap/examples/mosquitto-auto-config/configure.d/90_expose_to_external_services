@@ -1,0 +1,45 @@
+#!/bin/sh
+# tedge bootstrap configure hook: when the MQTT broker is bound to a
+# network address, expose the HTTP services the same way and publish
+# the device's host name for the clients on other devices
+set -e
+
+shift # phase
+CLOUD=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cloud) CLOUD="$2"; shift ;;
+    esac
+    shift
+done
+
+BIND_ADDRESS=$(tedge config get mqtt.bind.address)
+
+# a broker reachable only locally needs nothing
+case "$BIND_ADDRESS" in
+    127.*|::1|localhost) exit 2 ;;
+esac
+
+DEVICE_HOST=
+if command -V hostname >/dev/null 2>&1; then
+    DEVICE_HOST=$(hostname)
+elif command -V hostnamectl >/dev/null 2>&1; then
+    DEVICE_HOST=$(hostnamectl hostname)
+elif [ -n "$HOSTNAME" ]; then
+    DEVICE_HOST="$HOSTNAME"
+elif [ -n "$HOST" ]; then
+    DEVICE_HOST="$HOST"
+fi
+
+tedge config set http.bind.address "$BIND_ADDRESS"
+if [ "$CLOUD" = c8y ]; then
+    tedge config set c8y.proxy.bind.address "$BIND_ADDRESS"
+fi
+
+if [ -n "$DEVICE_HOST" ]; then
+    tedge config set http.client.host "$DEVICE_HOST"
+    tedge config set mqtt.client.host "$DEVICE_HOST"
+    if [ "$CLOUD" = c8y ]; then
+        tedge config set c8y.proxy.client.host "$DEVICE_HOST"
+    fi
+fi

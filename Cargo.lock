@@ -863,6 +863,7 @@ dependencies = [
  "csv",
  "download",
  "maplit",
+ "mockito",
  "mqtt_channel",
  "reqwest",
  "serde",
@@ -877,6 +878,7 @@ dependencies = [
  "toml 0.9.6",
  "tracing",
  "url",
+ "zeroize",
 ]
 
 [[package]]

@@ -1,0 +1,2 @@
+Marker file: hides the az cloud from the bootstrap wizard and the
+no-argument --describe listing. The file content is ignored.

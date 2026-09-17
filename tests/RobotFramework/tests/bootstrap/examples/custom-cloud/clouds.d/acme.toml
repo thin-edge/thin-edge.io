@@ -1,0 +1,24 @@
+# A minimal custom cloud descriptor for exercising `tedge bootstrap`
+# without any real cloud account.
+#
+# Install to <plugin-path>/clouds.d/acme.toml, or point at this
+# example's parent directory with --plugin-dir.
+cloud = "acme"
+description = "Acme cloud (test fixture)"
+
+[url]
+description = "Acme endpoint (host or host:port)"
+
+[[register]]
+name = "token"
+default = true
+description = "Store an operator-supplied access token"
+
+[[register.inputs]]
+name = "access token"
+env = "ACME_TOKEN"
+secret = true
+# a declared default keeps the fixture runnable with no environment;
+# inputs are only validated (or prompted for) when the run will
+# actually register — idempotent re-runs never need them
+default = "test-token"

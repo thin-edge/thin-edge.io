@@ -160,25 +160,8 @@ pub enum CA {
 #[async_trait::async_trait]
 impl BuildCommand for TEdgeCertCli {
     async fn build_command(self, config: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
-        let (user, group) = if config.mqtt.bridge.built_in {
-            let system_config = config.read_system_config();
-            (system_config.user, system_config.group)
-        } else {
-            (crate::BROKER_USER.to_owned(), crate::BROKER_USER.to_owned())
-        };
-
-        let csr_template = CsrTemplate {
-            max_cn_size: 64,
-            validity_period_days: config
-                .certificate
-                .validity
-                .requested_duration
-                .duration()
-                .as_secs() as u32
-                / (24 * 3600),
-            organization_name: config.certificate.organization.to_string(),
-            organizational_unit_name: config.certificate.organization_unit.to_string(),
-        };
+        let (user, group) = certificate_owner(config);
+        let csr_template = csr_template(config);
 
         let cmd = match self {
             TEdgeCertCli::Create { id, cloud } => {
@@ -313,6 +296,7 @@ impl BuildCommand for TEdgeCertCli {
                 url,
                 retry_every,
                 max_timeout,
+                show_one_time_password,
             }) => {
                 if prompt && !token.is_empty() {
                     return Err(anyhow!(
@@ -367,6 +351,7 @@ impl BuildCommand for TEdgeCertCli {
                     user: user.clone(),
                     group: group.clone(),
                     cloud: Some(Cloud::c8y(profile.clone())),
+                    show_one_time_password,
                 };
                 cmd.into_boxed()
             }
@@ -458,6 +443,33 @@ impl BuildCommand for TEdgeCertCli {
             }
         };
         Ok(cmd)
+    }
+}
+
+/// The user and group owning the device certificate files:
+/// the broker's, unless the built-in bridge (run by the mapper) is used
+pub(crate) fn certificate_owner(config: &TEdgeConfig) -> (String, String) {
+    if config.mqtt.bridge.built_in {
+        let system_config = config.read_system_config();
+        (system_config.user, system_config.group)
+    } else {
+        (crate::BROKER_USER.to_owned(), crate::BROKER_USER.to_owned())
+    }
+}
+
+/// The CSR template of the device, from the `certificate.*` settings
+pub(crate) fn csr_template(config: &TEdgeConfig) -> CsrTemplate {
+    CsrTemplate {
+        max_cn_size: 64,
+        validity_period_days: config
+            .certificate
+            .validity
+            .requested_duration
+            .duration()
+            .as_secs() as u32
+            / (24 * 3600),
+        organization_name: config.certificate.organization.to_string(),
+        organizational_unit_name: config.certificate.organization_unit.to_string(),
     }
 }
 
@@ -607,6 +619,13 @@ pub enum DownloadCertCli {
         #[arg(value_parser = humantime::parse_duration)]
         /// Maximum time waiting for the device to be registered
         max_timeout: Duration,
+
+        /// Treat a supplied one-time password as freshly generated
+        /// (display it and embed it in the registration URL);
+        /// set programmatically by callers that generate it themselves
+        /// (e.g. tedge bootstrap), not exposed as a command-line flag
+        #[clap(skip)]
+        show_one_time_password: bool,
     },
 }
 
