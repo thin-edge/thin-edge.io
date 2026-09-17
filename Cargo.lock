@@ -899,6 +899,7 @@ dependencies = [
  "httparse",
  "hyper 1.6.0",
  "mockito",
+ "percent-encoding",
  "pin-project",
  "rcgen",
  "reqwest",
