@@ -80,6 +80,11 @@ Custom Setup
     Execute Command    chmod a+x /etc/tedge/operations/shell_execute.sh
 
     Transfer To Device    ${CURDIR}/flows/*    /etc/tedge/mappers/az/flows/direct-methods/
+    # response.js/.toml is shared with the direct-methods flow (see commands/flows/response.js):
+    # it clears any thin-edge command once it reaches a terminal state. Unlike
+    # direct-methods-triggered commands, C2D-triggered commands are only ever cleared,
+    # never answered.
+    Transfer To Device    ${CURDIR}/../flows/response.*    /etc/tedge/mappers/az/flows/cloud-to-device/
     Execute Command    chown -R tedge:tedge /etc/tedge/mappers/az/flows
 
     Execute Command    sudo systemctl restart tedge-mapper-az.service
