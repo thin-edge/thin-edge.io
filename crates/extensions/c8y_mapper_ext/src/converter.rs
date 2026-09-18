@@ -18,6 +18,7 @@ use crate::supported_operations::operation::ResultFormat;
 use crate::supported_operations::Operations;
 use crate::supported_operations::OperationsError;
 use crate::supported_operations::SupportedOperations;
+use crate::supported_operations::SHELL_EXECUTE_OPERATION;
 use anyhow::Context;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlOperation;
@@ -650,6 +651,10 @@ impl CumulocityConverter {
         for (on_fragment, custom_handler) in &handlers {
             if extras.contains_key(on_fragment) {
                 if let Some(command_name) = custom_handler.workflow_operation() {
+                    if self.is_disabled_command(command_name) {
+                        warn!("Received a {on_fragment} operation, however, the shell_execute feature is disabled");
+                        break;
+                    }
                     return self.convert_custom_operation_request(
                         device_xid,
                         cmd_id,
@@ -1383,11 +1388,24 @@ impl CumulocityConverter {
         }
     }
 
+    /// The built-in `shell_execute` command is only mapped to Cumulocity
+    /// when the `c8y.enable.shell_execute` feature is enabled
+    fn is_disabled_command(&self, command_name: &str) -> bool {
+        command_name == SHELL_EXECUTE_OPERATION && !self.config.capabilities.shell_execute
+    }
+
     async fn register_custom_operation(
         &mut self,
         target: &EntityTopicId,
         command_name: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if self.is_disabled_command(command_name) {
+            warn!(
+                "Received {command_name} metadata, however, the shell_execute feature is disabled"
+            );
+            return Ok(vec![]);
+        }
+
         if let Some(c8y_op_name) = self
             .supported_operations
             .get_operation_name_by_workflow_operation(command_name)

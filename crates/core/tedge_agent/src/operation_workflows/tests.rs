@@ -48,6 +48,7 @@ use tedge_api::workflow::OperationStep;
 use tedge_api::workflow::OperationStepHandler;
 use tedge_api::workflow::OperationStepRequest;
 use tedge_api::workflow::OperationStepResponse;
+use tedge_api::workflow::OperationWorkflow;
 use tedge_api::workflow::SyncOnCommand;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
@@ -1365,6 +1366,23 @@ impl MessageSink<RequestEnvelope<OperationStepRequest, OperationStepResponse>>
         &self,
     ) -> DynSender<RequestEnvelope<OperationStepRequest, OperationStepResponse>> {
         self.0.get_sender()
+    }
+}
+
+#[test]
+fn builtin_workflows_are_valid_operation_workflows() {
+    for (name, definition) in [
+        (
+            "device_profile.toml",
+            include_str!("../resources/device_profile.toml"),
+        ),
+        (
+            "shell_execute.toml",
+            include_str!("../resources/shell_execute.toml"),
+        ),
+    ] {
+        toml::from_str::<OperationWorkflow>(definition)
+            .unwrap_or_else(|err| panic!("{name} is not a valid workflow definition: {err}"));
     }
 }
 
