@@ -215,8 +215,10 @@ impl TedgeP11Service for Cryptoki {
             // PIN is not required when reading public objects like public keys
             pin: None,
         };
-        let session = self.open_session_ro(&params)?;
-        session.get_public_key_pem()
+        // No extra context: callers match on the error message, e.g. "Failed to find a key"
+        self.retry_after_reinit(None, is_module_failure, || {
+            self.open_session_ro(&params)?.get_public_key_pem()
+        })
     }
 
     fn get_tokens_uris(&self) -> anyhow::Result<Vec<String>> {
@@ -800,37 +802,48 @@ impl Cryptoki {
 
     /// Returns the signing key.
     ///
-    /// If the key is not found, we reload the PKCS11 library and retry because some PKCS11
-    /// libraries may not always show new slots/objects properly when something changes and we don't
-    /// want to restart the server manually. If the key is still missing after a reload, the
-    /// original error is returned.
+    /// Reloads the PKCS11 library and retries if the key cannot be found, because some PKCS11
+    /// libraries may not always show new slots/objects properly when something changes, or if the
+    /// module is in a broken state (see [`is_module_failure`]).
     pub fn signing_key_retry(&self, session_params: SessionParams) -> anyhow::Result<Pkcs11Signer> {
-        let err = match self
-            .open_session_ro(&session_params)
-            .and_then(|s| s.signing_key())
-            .context("Failed to find a signing key")
-        {
-            Ok(key) => return Ok(key),
-            // The failed session has already been dropped by the time we get here.
+        let recoverable = |err: &anyhow::Error| is_key_not_found(err) || is_module_failure(err);
+        self.retry_after_reinit(Some("Failed to find a signing key"), recoverable, || {
+            self.open_session_ro(&session_params)
+                .and_then(|s| s.signing_key())
+        })
+    }
+
+    /// Runs `op`, and if it fails with an error that is `recoverable` by reloading the PKCS11
+    /// library, reloads the library and runs `op` once more, so the server doesn't have to be
+    /// restarted manually. If given, `context` is added to the error returned by `op`.
+    ///
+    /// Reloads are rate-limited (see [`Cryptoki::should_reinit`]) so a client repeatedly retrying
+    /// doesn't churn the module on every attempt.
+    fn retry_after_reinit<T>(
+        &self,
+        context: Option<&'static str>,
+        recoverable: impl Fn(&anyhow::Error) -> bool,
+        op: impl Fn() -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        let run = || match context {
+            Some(context) => op().context(context),
+            None => op(),
+        };
+
+        let err = match run() {
+            Ok(value) => return Ok(value),
+            // Any session opened by `op` has already been dropped by the time we get here.
             Err(e) => e,
         };
 
-        // Reload the module and retry only if the key couldn't be found, i.e.:
-        // - we didn't find a slot with the token that matches the URI
-        // - we didn't find an object on the token that matches the URI
-        // Reloads are rate-limited (see `should_reinit`) so a client repeatedly retrying to sign
-        // doesn't churn the module on every attempt.
-        let recoverable = {
-            let msg = format!("{err:#}");
-            msg.contains("Didn't find a slot to use") || msg.contains("Failed to find a key")
-        };
-        if recoverable && self.should_reinit() {
-            warn!("Failed to find a signing key, reloading the library to retry");
+        if recoverable(&err) && self.should_reinit() {
+            warn!(
+                error = format!("{err:#}"),
+                "{}, reloading the library to retry",
+                context.unwrap_or("PKCS #11 operation failed")
+            );
             self.reinit()?;
-            return self
-                .open_session_ro(&session_params)
-                .and_then(|s| s.signing_key())
-                .context("Failed to find a signing key");
+            return run();
         }
 
         Err(err)
@@ -989,6 +1002,41 @@ impl Cryptoki {
         config_uri.append_attributes(request_uri);
         Ok(config_uri)
     }
+}
+
+/// Whether the error is caused by a token or key that cannot be found, i.e.:
+/// - we didn't find a slot with the token that matches the URI
+/// - we didn't find an object on the token that matches the URI
+fn is_key_not_found(err: &anyhow::Error) -> bool {
+    let msg = format!("{err:#}");
+    msg.contains("Didn't find a slot to use") || msg.contains("Failed to find a key")
+}
+
+/// Whether the error is a failure of the PKCS #11 module or device that can leave the module's
+/// per-process state broken until it is reloaded (`C_Finalize` + `C_Initialize`).
+///
+/// E.g. once the ESYS context of tpm2-pkcs11 is out of sequence, every `C_Login` fails with
+/// `CKR_GENERAL_ERROR` until the module is finalized.
+///
+/// Errors caused by the request itself (e.g. a wrong PIN) are not included: reloading doesn't fix
+/// them, and retrying them could even lock the token.
+fn is_module_failure(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        matches!(
+            cause.downcast_ref::<Error>(),
+            Some(Error::Pkcs11(
+                RvError::GeneralError
+                    | RvError::DeviceError
+                    | RvError::DeviceRemoved
+                    | RvError::TokenNotPresent
+                    | RvError::TokenNotRecognized
+                    | RvError::SessionHandleInvalid
+                    | RvError::SessionClosed
+                    | RvError::CryptokiNotInitialized,
+                _
+            ))
+        )
+    })
 }
 
 fn get_all_slots_info(cryptoki: &Pkcs11) -> Vec<SlotInfo> {
@@ -1436,4 +1484,49 @@ fn export_session_uri(token_info: &TokenInfo) -> String {
     uri.push_str(&token);
 
     uri
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cryptoki::context::Function;
+
+    fn login_error(rv: RvError) -> anyhow::Error {
+        anyhow::Error::from(Error::Pkcs11(rv, Function::Login))
+            .context("Failed to find a signing key")
+    }
+
+    #[test]
+    fn missing_slot_or_key_is_key_not_found() {
+        let err = anyhow::anyhow!("Didn't find a slot to use. The device may be disconnected.");
+        assert!(is_key_not_found(&err));
+        assert!(!is_module_failure(&err));
+        let err = anyhow::anyhow!("Failed to find a key").context("Failed to find a signing key");
+        assert!(is_key_not_found(&err));
+        assert!(!is_module_failure(&err));
+    }
+
+    #[test]
+    fn broken_module_state_is_module_failure() {
+        // e.g. tpm2-pkcs11 with an out-of-sequence ESYS context
+        for rv in [
+            RvError::GeneralError,
+            RvError::DeviceError,
+            RvError::SessionHandleInvalid,
+        ] {
+            let err = login_error(rv);
+            assert!(is_module_failure(&err), "{err:#}");
+            assert!(!is_key_not_found(&err), "{err:#}");
+        }
+    }
+
+    #[test]
+    fn request_errors_are_not_module_failures() {
+        // retrying a login with a wrong PIN could lock the token
+        assert!(!is_module_failure(&login_error(RvError::PinIncorrect)));
+        assert!(!is_module_failure(&login_error(RvError::PinLocked)));
+        assert!(!is_module_failure(&anyhow::anyhow!(
+            "Failed to parse PKCS #11 URI"
+        )));
+    }
 }
