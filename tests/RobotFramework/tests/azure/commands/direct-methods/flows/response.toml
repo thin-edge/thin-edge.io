@@ -1,0 +1,16 @@
+version = "1.0"
+description = "Answer a terminal thin-edge command as a direct method response, then clear it"
+tags = ["az", "direct-methods", "cloud-to-device"]
+
+expect_loop = true
+
+input.mqtt.topics = ["te/+/+/+/+/cmd/+/+"]
+
+steps = [
+    { script = "response.js" },
+]
+
+[output.mqtt]
+
+[errors.mqtt]
+topic = "te/errors"

@@ -1,0 +1,6 @@
+# [methods.*] is optional: a direct method with no entry runs the tedge operation
+# of the same name. Add an entry to rename the operation, or to require that
+# certain fields be present in the payload.
+[methods.shell]
+operation = "shell_execute"
+required_fragment = ["command"]
