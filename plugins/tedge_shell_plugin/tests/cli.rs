@@ -162,3 +162,37 @@ fn an_invalid_command_id_is_rejected() {
         .failure()
         .stderr(contains("Invalid command id"));
 }
+
+#[test]
+fn a_missing_tmp_dir_is_reported_with_its_path() {
+    let config_dir = TempTedgeDir::new();
+    let tmp_dir = config_dir.path().join("no-such-dir");
+    config_dir
+        .file("tedge.toml")
+        .with_raw_content(&format!("[tmp]\npath = \"{}\"\n", tmp_dir));
+    let reason = format!(
+        r#""reason":"the configured tmp.path '{}' does not exist""#,
+        tmp_dir
+    );
+
+    plugin(&config_dir)
+        .args(["execute", "--cmd-id", "c8y-mapper-1234"])
+        .args(["--command", "echo hello"])
+        .assert()
+        .failure();
+
+    // The tmp dir is not created by the plugin
+    assert!(!tmp_dir.exists());
+
+    plugin(&config_dir)
+        .args(["collect", "--cmd-id", "c8y-mapper-1234"])
+        .assert()
+        .failure()
+        .stdout(contains(reason.as_str()));
+
+    plugin(&config_dir)
+        .args(["--command", "echo hello"])
+        .assert()
+        .failure()
+        .stdout(contains(reason.as_str()));
+}

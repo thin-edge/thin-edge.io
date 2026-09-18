@@ -132,7 +132,11 @@ impl Job {
         let lock = match self.open_lock_file() {
             Ok(lock) => lock,
             // The job never started, or its files have been removed, e.g. by a device reboot
-            Err(err) if err.kind() == ErrorKind::NotFound => return Ok(JobOutcome::Interrupted),
+            Err(err) if matches!(err.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
+                let outcome = self.missing_outcome("The command could not be started");
+                let _ = std::fs::remove_dir_all(&self.dir);
+                return Ok(outcome);
+            }
             Err(err) => return Err(err),
         };
         let lock = Flock::lock(lock, FlockArg::LockExclusive)
@@ -140,13 +144,37 @@ impl Job {
 
         let outcome = match std::fs::read(self.outcome_path()) {
             Ok(content) => serde_json::from_slice(&content).map_err(std::io::Error::other)?,
-            Err(err) if err.kind() == ErrorKind::NotFound => JobOutcome::Interrupted,
+            Err(err) if err.kind() == ErrorKind::NotFound => {
+                self.missing_outcome("The command outcome could not be stored")
+            }
             Err(err) => return Err(err),
         };
 
         drop(lock);
         std::fs::remove_dir_all(&self.dir)?;
         Ok(outcome)
+    }
+
+    /// The outcome of a job which stored none
+    ///
+    /// Either the job has been interrupted, or it failed to write its files,
+    /// e.g. on a full disk or a tmp dir not writable by this user.
+    /// As the job cannot report the latter, the collector tells them apart
+    /// by writing to the job directory the same way the job does.
+    fn missing_outcome(&self, context: &str) -> JobOutcome {
+        match self.check_storage() {
+            Ok(()) => JobOutcome::Interrupted,
+            Err(err) => JobOutcome::LaunchError {
+                reason: format!("{context}, as writing to '{}' failed: {err}", self.dir),
+            },
+        }
+    }
+
+    fn check_storage(&self) -> std::io::Result<()> {
+        std::fs::create_dir_all(&self.dir)?;
+        let mut file = tempfile::NamedTempFile::new_in(&self.dir)?;
+        file.write_all(b"{}")?;
+        file.as_file().sync_all()
     }
 
     fn open_lock_file(&self) -> std::io::Result<File> {
@@ -279,6 +307,40 @@ mod tests {
         job.open_lock_file().unwrap();
 
         assert_eq!(job.collect().unwrap(), JobOutcome::Interrupted);
+    }
+
+    #[test]
+    fn a_job_which_could_not_write_its_files_is_reported_with_the_error() {
+        let ttd = TempTedgeDir::new();
+        let job = Job::new(tmp_dir(&ttd), "c8y-mapper-1234").unwrap();
+        // A file where the job directory is expected makes any write fail, even as root
+        ttd.file("tedge-shell-plugin");
+
+        assert!(job.run(|| Ok(completed("hello\n"))).is_err());
+
+        let JobOutcome::LaunchError { reason } = job.collect().unwrap() else {
+            panic!("expected a launch error")
+        };
+        assert!(
+            reason.starts_with("The command could not be started, as writing to '"),
+            "{reason}"
+        );
+        assert!(
+            reason.contains("tedge-shell-plugin/c8y-mapper-1234"),
+            "{reason}"
+        );
+    }
+
+    #[test]
+    fn no_job_files_are_left_behind_when_reporting_an_interruption() {
+        let ttd = TempTedgeDir::new();
+        let job = Job::new(tmp_dir(&ttd), "c8y-mapper-1234").unwrap();
+
+        assert_eq!(job.collect().unwrap(), JobOutcome::Interrupted);
+        assert!(!ttd
+            .path()
+            .join("tedge-shell-plugin/c8y-mapper-1234")
+            .exists());
     }
 
     #[test]

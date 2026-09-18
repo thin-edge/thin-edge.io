@@ -127,6 +127,34 @@ Supports disabling the shell_execute command on the device
     Service Health Status Should Be Up    tedge-agent
     File Should Not Exist    /etc/tedge/operations/shell_execute.toml
 
+Check Successful shell command with literal double quotes output
+    ${operation}=    Cumulocity.Execute Shell Command    echo \\"helloworld\\"
+    Operation Should Be SUCCESSFUL    ${operation}
+    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    "helloworld"\n
+
+Execute multiline shell command
+    ${operation}=    Cumulocity.Execute Shell Command    echo "hello"${\n}echo "world"
+    Operation Should Be SUCCESSFUL    ${operation}
+    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    hello\nworld\n
+
+Commands fail if the tmp.dir does not exist and include the path in the failure reason
+    [Tags]    \#3796
+    Execute Command    cmd=tedge config set tmp.path /dummy
+    Disconnect Then Connect Mapper    mapper=c8y
+    ${operation}=    Cumulocity.Execute Shell Command    echo helloworld
+    Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=.*the configured tmp.path '/dummy' does not exist.*
+
+Commands fail if the tmp.dir is not writable and include the write error in the failure reason
+    # A tmp dir which cannot be written by the tedge user fails like a full disk would
+    Execute Command    cmd=mkdir -p /tmp/readonly && chmod 555 /tmp/readonly
+    Execute Command    cmd=tedge config set tmp.path /tmp/readonly
+    ${operation}=    Cumulocity.Execute Shell Command    echo helloworld
+    Operation Should Be FAILED
+    ...    ${operation}
+    ...    failure_reason=.*The command could not be started, as writing to '/tmp/readonly/tedge-shell-plugin/.+' failed: Permission denied.*
+
 
 *** Keywords ***
 Custom Setup

@@ -1,5 +1,6 @@
 use crate::execute;
 use crate::job::Job;
+use crate::job::JobOutcome;
 use crate::write_launch_error;
 use crate::write_script_output;
 use crate::ShellOutcome;
@@ -89,19 +90,43 @@ pub fn run(cli: ShellCli, config: TEdgeConfigView) -> anyhow::Result<()> {
 
     match cli.action {
         None => {
-            let outcome = run_command(cli.run, &config);
+            let outcome = check_tmp_dir(&config).and_then(|()| run_command(cli.run, &config));
             report(outcome)
         }
         Some(ShellAction::Execute { cmd_id, run }) => {
+            // The job files cannot be stored, so the reason is reported by the collector,
+            // with no attempt to create the tmp dir: this is up to the device administrator
+            check_tmp_dir(&config).map_err(anyhow::Error::msg)?;
             let job = Job::new(&config.tmp_dir, &cmd_id)?;
             job.run(|| run_command(run, &config))?;
             Ok(())
         }
         Some(ShellAction::Collect { cmd_id }) => {
+            // Without a tmp dir, no job has been run and the command would be reported as interrupted
+            if let Err(reason) = check_tmp_dir(&config) {
+                return report(Err(reason));
+            }
             let job = Job::new(&config.tmp_dir, &cmd_id)?;
-            let outcome = job.collect()?;
-            report(outcome.into_shell_outcome())
+            let outcome = job.collect().map_err(|err| {
+                format!(
+                    "Failed to collect the command outcome from the tmp dir '{}': {err}",
+                    config.tmp_dir
+                )
+            });
+            report(outcome.and_then(JobOutcome::into_shell_outcome))
         }
+    }
+}
+
+/// Check that the tmp dir, used to store the command output, exists
+fn check_tmp_dir(config: &TEdgeConfigView) -> Result<(), String> {
+    if config.tmp_dir.is_dir() {
+        Ok(())
+    } else {
+        Err(format!(
+            "the configured tmp.path '{}' does not exist",
+            config.tmp_dir
+        ))
     }
 }
 
