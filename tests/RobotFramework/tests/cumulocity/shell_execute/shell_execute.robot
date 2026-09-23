@@ -127,6 +127,18 @@ Supports disabling the shell_execute command on the device
     Service Health Status Should Be Up    tedge-agent
     File Should Not Exist    /etc/tedge/operations/shell_execute.toml
 
+Supports disabling the shell_execute command in the agent configuration
+    Execute Command    tedge config set agent.enable.shell_execute false
+    Execute Command    rm -f /etc/tedge/operations/shell_execute.toml
+    Restart Service    tedge-agent
+    Service Health Status Should Be Up    tedge-agent
+    File Should Not Exist    /etc/tedge/operations/shell_execute.toml
+
+    Execute Command    tedge config set agent.enable.shell_execute true
+    Restart Service    tedge-agent
+    Service Health Status Should Be Up    tedge-agent
+    File Should Exist    /etc/tedge/operations/shell_execute.toml
+
 Check Successful shell command with literal double quotes output
     ${operation}=    Cumulocity.Execute Shell Command    echo \\"helloworld\\"
     Operation Should Be SUCCESSFUL    ${operation}

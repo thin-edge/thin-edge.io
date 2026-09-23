@@ -1,5 +1,8 @@
 use tedge_utils::paths::ManagedDir;
 
+/// The name of the built-in command running shell commands
+pub const SHELL_EXECUTE_OPERATION: &str = "shell_execute";
+
 pub struct ShellExecuteBuilder {}
 
 impl ShellExecuteBuilder {

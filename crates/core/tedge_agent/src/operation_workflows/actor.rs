@@ -1,6 +1,7 @@
 use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
+use crate::shell_execute::SHELL_EXECUTE_OPERATION;
 use crate::state_repository::state::AgentStateRepository;
 use crate::Capabilities;
 use async_trait::async_trait;
@@ -891,6 +892,9 @@ impl WorkflowActor {
             OperationType::ConfigUpdate => self.capabilities.config_update,
             OperationType::ConfigSnapshot => self.capabilities.config_snapshot,
             OperationType::LogUpload => self.capabilities.log_upload,
+            OperationType::Custom(operation) if operation == SHELL_EXECUTE_OPERATION => {
+                self.capabilities.shell_execute
+            }
             _ => true,
         }
     }

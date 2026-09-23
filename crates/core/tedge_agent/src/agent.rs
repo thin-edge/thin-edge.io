@@ -184,6 +184,7 @@ impl AgentConfig {
             config_update: tedge_config.agent.enable.config_update,
             config_snapshot: tedge_config.agent.enable.config_snapshot,
             log_upload: tedge_config.agent.enable.log_upload,
+            shell_execute: tedge_config.agent.enable.shell_execute,
         };
 
         let entity_auto_register = tedge_config.agent.entity_store.auto_register;
@@ -276,7 +277,9 @@ impl Agent {
         // Deploy the built-in workflows before starting the workflow actor,
         // which loads the definitions found in the operations directory
         DeviceProfileManagerBuilder::try_new(&self.config.operations_dir).await?;
-        ShellExecuteBuilder::try_new(&self.config.operations_dir).await?;
+        if self.config.capabilities.shell_execute {
+            ShellExecuteBuilder::try_new(&self.config.operations_dir).await?;
+        }
 
         // Inotify actor
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();

@@ -1306,6 +1306,11 @@ define_tedge_config! {
             #[tedge_config(example = "true", default(value = true))]
             #[tedge_config(exposable)]
             log_upload: bool,
+
+            /// Determines if tedge-agent should enable shell_execute operation
+            #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
+            shell_execute: bool,
         },
 
         entity_store: {
