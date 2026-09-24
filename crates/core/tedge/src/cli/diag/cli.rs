@@ -60,8 +60,10 @@ impl BuildCommand for TEdgeDiagCli {
                 let output_dir = output_dir.unwrap_or_else(|| config.tmp.path.to_path_buf());
                 let now = OffsetDateTime::now_utc()
                     .format(
-                        &format_description::parse("[year]-[month]-[day]_[hour]-[minute]-[second]")
-                            .unwrap(),
+                        &format_description::parse_borrowed::<3>(
+                            "[year]-[month]-[day]_[hour]-[minute]-[second]",
+                        )
+                        .unwrap(),
                     )
                     .unwrap();
                 let tarball_name = name.unwrap_or(format!("tedge-diag-{now}"));

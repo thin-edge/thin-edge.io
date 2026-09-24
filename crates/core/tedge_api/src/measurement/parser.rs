@@ -383,7 +383,7 @@ mod tests {
 
         assert_eq!(
             error,
-            "Invalid JSON: Invalid unix timestamp (reading integer value in seconds): -377705116801; timestamp must be in the range -377705116800..=253402300799 at line 2 column 22: `1,\n\"test\": 1023}\n`"
+            "Invalid JSON: Invalid unix timestamp (reading integer value in seconds): -377705116801; timestamp was not in range at line 2 column 22: `1,\n\"test\": 1023}\n`"
         );
     }
 
@@ -428,10 +428,6 @@ mod tests {
     }
 
     fn parse_timestamp(timestamp: &str) -> OffsetDateTime {
-        #[expect(
-            clippy::disallowed_methods,
-            reason = "Not vulnerable to RUSTSEC-2026-0009 as not RFC-2822 format"
-        )]
         OffsetDateTime::parse(timestamp, &time::format_description::well_known::Rfc3339).unwrap()
     }
 }

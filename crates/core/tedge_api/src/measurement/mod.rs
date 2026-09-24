@@ -43,7 +43,7 @@ pub use serialize::*;
 ///
 ///     fn visit_timestamp(&mut self, timestamp: OffsetDateTime) -> Result<(), Self::Error> {
 ///         let format =
-///             format_description::parse("[day] [month repr:short] [year] [hour repr:24]:[minute]:[seconds] [offset_hour sign:mandatory]:[offset_minute]").unwrap();
+///             format_description::parse_borrowed::<3>("[day] [month repr:short] [year] [hour repr:24]:[minute]:[seconds] [offset_hour sign:mandatory]:[offset_minute]").unwrap();
 ///         if self.group.is_none() {
 ///             Ok(println!("time = {}", timestamp.format(&format).unwrap()))
 ///         } else {
