@@ -52,12 +52,10 @@ impl BuildCommand for MapperCli {
                 .into_boxed())
             }
             #[cfg(not(feature = "mapper-config"))]
-            MapperCli::Config { .. } => {
-                Err(anyhow::anyhow!(
-                    "tedge mapper config requires the 'mapper-config' feature"
-                )
-                .into())
-            }
+            MapperCli::Config { .. } => Err(anyhow::anyhow!(
+                "tedge mapper config requires the 'mapper-config' feature"
+            )
+            .into()),
         }
     }
 }

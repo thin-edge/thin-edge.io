@@ -217,10 +217,9 @@ fn is_builtin_cloud_mapper_key(key: &str) -> bool {
     let Some(after) = key.strip_prefix("mappers.") else {
         return false;
     };
-    BUILTIN_CLOUDS.iter().any(|cloud| {
-        after == *cloud
-            || after.starts_with(&format!("{cloud}."))
-    })
+    BUILTIN_CLOUDS
+        .iter()
+        .any(|cloud| after == *cloud || after.starts_with(&format!("{cloud}.")))
 }
 
 fn key_matches_filter(key: &str, filter: Option<&str>) -> bool {
@@ -241,7 +240,9 @@ mod tests {
         #[test]
         fn hides_builtin_clouds() {
             assert!(is_builtin_cloud_mapper_key("mappers.c8y.url"));
-            assert!(is_builtin_cloud_mapper_key("mappers.az.bridge.clean_session"));
+            assert!(is_builtin_cloud_mapper_key(
+                "mappers.az.bridge.clean_session"
+            ));
             assert!(is_builtin_cloud_mapper_key("mappers.aws.url"));
         }
 
@@ -253,7 +254,9 @@ mod tests {
         #[test]
         fn shows_custom_mappers() {
             assert!(!is_builtin_cloud_mapper_key("mappers.thingsboard.url"));
-            assert!(!is_builtin_cloud_mapper_key("mappers.custom.bridge.clean_session"));
+            assert!(!is_builtin_cloud_mapper_key(
+                "mappers.custom.bridge.clean_session"
+            ));
         }
 
         #[test]

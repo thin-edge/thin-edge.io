@@ -91,7 +91,20 @@ fn mapper_key_completions() -> Vec<clap_complete::CompletionCandidate> {
     let Ok(fed) = tedge_mapper_config::load_federated_config(&config_dir) else {
         return Vec::new();
     };
-    fed.all_entries()
+    let mounted_prefixes = fed.mount_prefixes();
+    let mut entries = fed.all_entries();
+
+    for name in tedge_mapper_config::BUILTIN_MAPPER_NAMES {
+        let prefix = format!("mappers.{name}.");
+        if !mounted_prefixes.contains(&prefix) {
+            entries.extend(tedge_mapper_config::builtin_mapper_entries(
+                &config_dir,
+                name,
+            ));
+        }
+    }
+
+    entries
         .into_iter()
         .filter(|e| e.key.starts_with("mappers."))
         .map(|e| {

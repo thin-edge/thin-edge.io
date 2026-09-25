@@ -214,6 +214,73 @@ fn root_stub_defaults_match_real_tedge_defaults() {
     );
 }
 
+#[test]
+fn is_builtin_mapper_name_accepts_base_names() {
+    assert!(crate::is_builtin_mapper_name("c8y"));
+    assert!(crate::is_builtin_mapper_name("az"));
+    assert!(crate::is_builtin_mapper_name("aws"));
+}
+
+#[test]
+fn is_builtin_mapper_name_accepts_profiled_variants() {
+    assert!(crate::is_builtin_mapper_name("c8y.prod"));
+    assert!(crate::is_builtin_mapper_name("az.staging"));
+    assert!(crate::is_builtin_mapper_name("aws.eu"));
+}
+
+#[test]
+fn is_builtin_mapper_name_rejects_unknown_names() {
+    assert!(!crate::is_builtin_mapper_name("thingsboard"));
+    assert!(!crate::is_builtin_mapper_name(""));
+    assert!(!crate::is_builtin_mapper_name("c8yy"));
+    assert!(!crate::is_builtin_mapper_name("c8y."));
+}
+
+#[test]
+fn extract_builtin_mapper_name_returns_base_name() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        crate::extract_builtin_mapper_name("mappers.c8y.url", dir.path()),
+        Some("c8y".to_owned()),
+    );
+}
+
+#[test]
+fn extract_builtin_mapper_name_returns_profiled_name() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        crate::extract_builtin_mapper_name("mappers.c8y.prod.url", dir.path()),
+        Some("c8y.prod".to_owned()),
+    );
+}
+
+#[test]
+fn extract_builtin_mapper_name_handles_nested_config_key() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        crate::extract_builtin_mapper_name("mappers.az.device.id", dir.path()),
+        Some("az".to_owned()),
+    );
+}
+
+#[test]
+fn extract_builtin_mapper_name_returns_none_for_non_mapper_key() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        crate::extract_builtin_mapper_name("device.id", dir.path()),
+        None,
+    );
+}
+
+#[test]
+fn extract_builtin_mapper_name_returns_none_for_custom_mapper() {
+    let dir = tempfile::tempdir().unwrap();
+    assert_eq!(
+        crate::extract_builtin_mapper_name("mappers.thingsboard.url", dir.path()),
+        None,
+    );
+}
+
 fn mapper_manager() -> ConfigManager {
     ConfigManager::from_schema::<MapperConfig>(Path::new("/etc/tedge"))
 }
