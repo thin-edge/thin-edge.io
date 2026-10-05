@@ -1,6 +1,7 @@
 mod actor;
 mod config;
 mod connected_flow;
+mod file_output;
 mod flow;
 mod input_source;
 mod js_lib;

@@ -1,5 +1,7 @@
 use crate::connected_flow::watch_request_topic;
 use crate::connected_flow::ConnectedFlowRegistry;
+use crate::file_output::prepare_output_file;
+use crate::flow::FileOutputFormat;
 use crate::flow::FlowError;
 use crate::flow::FlowOutput;
 use crate::flow::FlowResult;
@@ -31,6 +33,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::QoS;
 use tedge_mqtt_ext::SubscriptionDiff;
 use tedge_mqtt_ext::TopicFilter;
+use tedge_utils::fs::atomically_write_file_async;
 use tedge_watch_ext::WatchEvent;
 use tedge_watch_ext::WatchRequest;
 use time::OffsetDateTime;
@@ -450,7 +453,39 @@ impl FlowsMapper {
                     }
                 }
             }
-            FlowOutput::File { path } => {
+            FlowOutput::File { path, format } => {
+                Self::write_to_file(flow, path, *format, &messages).await;
+            }
+            FlowOutput::Directory { path: dir, format } => {
+                for message in &messages {
+                    let Some(file) = &message.file else {
+                        error!(target: "flows", "{flow}: cannot write message to {dir}: the message has no file name");
+                        continue;
+                    };
+                    match prepare_output_file(dir, &file.name).await {
+                        Ok(path) => {
+                            Self::write_to_file(flow, &path, *format, std::slice::from_ref(message))
+                                .await
+                        }
+                        Err(err) => {
+                            error!(target: "flows", "{flow}: cannot write message to {dir}: {err}")
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Write messages to a file, errors being logged
+    async fn write_to_file(
+        flow: &Utf8Path,
+        path: &Utf8Path,
+        format: FileOutputFormat,
+        messages: &[Message],
+    ) {
+        match format {
+            FileOutputFormat::Lines => {
                 let Ok(file) = tokio::fs::File::options()
                     .create(true)
                     .append(true)
@@ -460,7 +495,7 @@ impl FlowsMapper {
                         error!(target: "flows", "{flow}: cannot open {path}: {err}");
                     })
                 else {
-                    return Ok(());
+                    return;
                 };
                 let mut file = tokio::io::BufWriter::new(file);
                 for message in messages {
@@ -472,8 +507,15 @@ impl FlowsMapper {
                     error!(target: "flows", "{flow}: cannot flush {path}: {err}");
                 }
             }
+            FileOutputFormat::Raw => {
+                // Each message replaces the file content, so only the last message of a batch is written
+                if let Some(message) = messages.last() {
+                    if let Err(err) = atomically_write_file_async(path, &message.payload).await {
+                        error!(target: "flows", "{flow}: cannot write to {path}: {err}");
+                    }
+                }
+            }
         }
-        Ok(())
     }
 
     async fn publish_error(

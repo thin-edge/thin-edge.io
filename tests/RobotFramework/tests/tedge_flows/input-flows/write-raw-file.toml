@@ -1,0 +1,7 @@
+input.mqtt.topics = ["seq/raw"]
+
+steps = [
+]
+
+output.file.path = "/tmp/raw.out"
+output.file.format = "raw"

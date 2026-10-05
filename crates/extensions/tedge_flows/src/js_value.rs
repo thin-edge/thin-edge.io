@@ -2,6 +2,7 @@ use crate::flow::epoch_ms;
 use crate::flow::from_epoch_ms;
 use crate::flow::FlowError;
 use crate::flow::Message;
+use crate::flow::MessageFile;
 use crate::Transport;
 use rquickjs::Ctx;
 use rquickjs::FromJs;
@@ -125,11 +126,15 @@ impl From<Message> for JsonValue {
                 ("retain", JsonValue::Bool(retain)),
             ]),
         });
+        let file = value
+            .file
+            .map(|file| JsonValue::object([("name", JsonValue::string(file.name))]));
         JsonValue::object([
             ("topic", JsonValue::string(value.topic)),
             ("payload", payload),
             ("time", JsonValue::option(value.timestamp)),
             ("mqtt", JsonValue::option(mqtt)),
+            ("file", JsonValue::option(file)),
         ])
     }
 }
@@ -217,6 +222,15 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
             _ => None,
         };
 
+        let file = match value.remove("file") {
+            None | Some(JsonValue::Null) => None,
+            Some(JsonValue::Object(mut file)) => match (file.remove("name"), file.is_empty()) {
+                (Some(JsonValue::String(name)), true) => Some(MessageFile { name }),
+                _ => return Err(unexpected_file_property()),
+            },
+            Some(_) => return Err(unexpected_file_property()),
+        };
+
         let transport = OptionalTransport::from_value(value)?;
 
         Ok(Message {
@@ -224,8 +238,14 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
             payload,
             timestamp,
             transport,
+            file,
         })
     }
+}
+
+fn unexpected_file_property() -> FlowError {
+    anyhow::anyhow!("Unexpected 'file' property. Expected an object with a 'name' string property")
+        .into()
 }
 
 impl TryFrom<JsonValue> for Message {
@@ -397,5 +417,97 @@ impl JsonValue {
     pub(crate) fn display(value: Value<'_>) -> String {
         let json = serde_json::Value::from(JsonValue::from_js_value(value).unwrap_or_default());
         serde_json::to_string_pretty(&json).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn message_object(file: Option<JsonValue>) -> BTreeMap<String, JsonValue> {
+        let mut object = BTreeMap::from([
+            (
+                "topic".to_string(),
+                JsonValue::String("test/output".to_string()),
+            ),
+            (
+                "payload".to_string(),
+                JsonValue::String("hello".to_string()),
+            ),
+        ]);
+        if let Some(file) = file {
+            object.insert("file".to_string(), file);
+        }
+        object
+    }
+
+    fn file_object(properties: &[(&str, JsonValue)]) -> JsonValue {
+        JsonValue::Object(
+            properties
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.clone()))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn message_file_name_is_parsed() {
+        let file = file_object(&[("name", JsonValue::String("a/b.bin".to_string()))]);
+
+        let message = Message::try_from(message_object(Some(file))).unwrap();
+
+        assert_eq!(
+            message.file,
+            Some(MessageFile {
+                name: "a/b.bin".to_string()
+            })
+        );
+        assert!(message.transport.is_none());
+    }
+
+    #[test]
+    fn message_file_is_optional() {
+        for file in [None, Some(JsonValue::Null)] {
+            let message = Message::try_from(message_object(file)).unwrap();
+            assert_eq!(message.file, None);
+        }
+    }
+
+    #[test]
+    fn invalid_message_file_is_rejected() {
+        for file in [
+            JsonValue::String("a.bin".to_string()),
+            file_object(&[]),
+            file_object(&[("name", JsonValue::Number(1.into()))]),
+            file_object(&[
+                ("name", JsonValue::String("a.bin".to_string())),
+                ("path", JsonValue::String("/tmp".to_string())),
+            ]),
+        ] {
+            assert!(
+                Message::try_from(message_object(Some(file.clone()))).is_err(),
+                "{file:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn message_file_is_passed_to_scripts() {
+        let mut message = Message::new("test/output", "hello");
+        message.file = Some(MessageFile {
+            name: "a/b.bin".to_string(),
+        });
+
+        let JsonValue::Object(mut object) = JsonValue::from(message) else {
+            panic!("a message is converted into an object");
+        };
+
+        assert_eq!(
+            object.remove("file"),
+            Some(file_object(&[(
+                "name",
+                JsonValue::String("a/b.bin".to_string())
+            )]))
+        );
     }
 }
