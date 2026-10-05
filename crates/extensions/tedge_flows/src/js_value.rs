@@ -203,16 +203,9 @@ impl TryFrom<BTreeMap<String, JsonValue>> for Message {
         };
 
         let timestamp = match value.remove("time") {
-            Some(JsonValue::String(date)) =>
-            {
-                #[expect(
-                    clippy::disallowed_methods,
-                    reason = "Not vulnerable to RUSTSEC-2026-0009 as not RFC-2822 format"
-                )]
-                OffsetDateTime::parse(&date, &Rfc3339)
-                    .map(|t| t.into())
-                    .ok()
-            }
+            Some(JsonValue::String(date)) => OffsetDateTime::parse(&date, &Rfc3339)
+                .map(|t| t.into())
+                .ok(),
             Some(JsonValue::Number(millis)) => millis.as_u128().and_then(from_epoch_ms),
             _ => None,
         };

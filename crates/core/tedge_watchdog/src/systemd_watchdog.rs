@@ -385,10 +385,6 @@ mod tests {
     }
 
     fn parse_timestamp(timestamp: &str) -> OffsetDateTime {
-        #[expect(
-            clippy::disallowed_methods,
-            reason = "Not vulnerable to RUSTSEC-2026-0009 as not RFC-2822 format"
-        )]
         OffsetDateTime::parse(timestamp, &time::format_description::well_known::Rfc3339).unwrap()
     }
 }

@@ -17,7 +17,7 @@ use time::OffsetDateTime;
 /// Use this to build file names (e.g. log files) that must remain valid across all
 /// commonly used file systems.
 pub fn now_filename_safe_format() -> String {
-    let format = format_description::parse(
+    let format = format_description::parse_borrowed::<3>(
         "[year]-[month]-[day]T[hour]-[minute]-[second].[subsecond digits:9]Z",
     )
     .expect("valid time format description");
@@ -173,10 +173,6 @@ impl de::Visitor<'_> for IsoOrUnixVisitor {
     where
         E: de::Error,
     {
-        #[expect(
-            clippy::disallowed_methods,
-            reason = "Not vulnerable to RUSTSEC-2026-0009 as not RFC-2822 format"
-        )]
         OffsetDateTime::parse(timestamp_str, &Rfc3339)
             .map(IsoOrUnix)
             .map_err(|err| de::Error::custom(invalid_iso8601(timestamp_str, err)))
