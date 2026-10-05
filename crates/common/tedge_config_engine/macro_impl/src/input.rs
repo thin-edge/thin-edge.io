@@ -70,21 +70,32 @@ pub struct FromKeyVia {
     pub function: syn::Path,
 }
 
-#[derive(FromAttributes, Debug)]
-#[darling(attributes(tedge_config))]
-struct FieldAttributes {
-    #[darling(default)]
-    readonly: bool,
-    #[darling(default)]
-    exposable: bool,
-    #[darling(default)]
-    rename: Option<String>,
-    #[darling(default)]
-    deprecated_key: Option<String>,
-    #[darling(default)]
-    default: Option<FieldDefault>,
-    #[darling(multiple, rename = "example")]
-    examples: Vec<String>,
+use field_attributes::FieldAttributes;
+
+// darling's `FromAttributes` derive generates `field: field` for `multiple` fields with a
+// `rename` (e.g. `examples`), which clippy flags as redundant. Wrapping the struct in a
+// module limits the `allow` to the generated impl.
+// This can be removed once darling includes https://github.com/TedDriggs/darling/commit/70b280dede2eaa1ee53f445a970657b16299767b
+#[allow(clippy::redundant_field_names)]
+mod field_attributes {
+    use super::*;
+
+    #[derive(FromAttributes, Debug)]
+    #[darling(attributes(tedge_config))]
+    pub(super) struct FieldAttributes {
+        #[darling(default)]
+        pub(super) readonly: bool,
+        #[darling(default)]
+        pub(super) exposable: bool,
+        #[darling(default)]
+        pub(super) rename: Option<String>,
+        #[darling(default)]
+        pub(super) deprecated_key: Option<String>,
+        #[darling(default)]
+        pub(super) default: Option<FieldDefault>,
+        #[darling(multiple, rename = "example")]
+        pub(super) examples: Vec<String>,
+    }
 }
 
 /// Options declared on the config itself, before its name.
