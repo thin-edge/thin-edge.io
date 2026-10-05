@@ -1313,7 +1313,7 @@ mod tests {
     )]
     #[test_case(
         ListFilters::default()
-            .root("device/child2//".parse().unwrap()), 
+            .root("device/child2//".parse().unwrap()),
         BTreeSet::from([
             "device/child2//",
             "device/child2/service/service20",
@@ -1330,7 +1330,7 @@ mod tests {
     )]
     #[test_case(
         ListFilters::default()
-            .parent("device/child2//".parse().unwrap()), 
+            .parent("device/child2//".parse().unwrap()),
         BTreeSet::from([
             "device/child2/service/service20",
             "device/child2/service/service21",
@@ -1342,7 +1342,7 @@ mod tests {
     )]
     #[test_case(
         ListFilters::default()
-            .r#type(EntityType::ChildDevice), 
+            .r#type(EntityType::ChildDevice),
         BTreeSet::from([
             "device/child0//",
             "device/child1//",
@@ -1360,7 +1360,7 @@ mod tests {
     )]
     #[test_case(
         ListFilters::default()
-            .r#type(EntityType::Service), 
+            .r#type(EntityType::Service),
         BTreeSet::from([
             "device/main/service/service0",
             "device/main/service/service1",
@@ -1374,7 +1374,7 @@ mod tests {
     #[test_case(
         ListFilters::default()
             .root("device/child2//".parse().unwrap())
-            .r#type(EntityType::ChildDevice), 
+            .r#type(EntityType::ChildDevice),
         BTreeSet::from([
             "device/child2//",
             "device/child20//",
@@ -1389,7 +1389,7 @@ mod tests {
     #[test_case(
         ListFilters::default()
             .parent("device/child2//".parse().unwrap())
-            .r#type(EntityType::ChildDevice), 
+            .r#type(EntityType::ChildDevice),
         BTreeSet::from([
             "device/child20//",
             "device/child21//",
@@ -1399,19 +1399,19 @@ mod tests {
     )]
     #[test_case(
         ListFilters::default()
-            .parent("device/child2/service/service20".parse().unwrap()), 
+            .parent("device/child2/service/service20".parse().unwrap()),
         BTreeSet::new();
         "children_of_service_is_empty"
     )]
     #[test_case(
         ListFilters::default()
-            .parent("device/child2100//".parse().unwrap()), 
+            .parent("device/child2100//".parse().unwrap()),
         BTreeSet::new();
         "children_of_leaf_child_is_empty"
     )]
     #[test_case(
         ListFilters::default()
-            .root("device/child2100//".parse().unwrap()), 
+            .root("device/child2100//".parse().unwrap()),
         BTreeSet::from([
             "device/child2100//",
         ]);
@@ -1419,7 +1419,7 @@ mod tests {
     )]
     #[test_case(
         ListFilters::default()
-            .root("device/child2/service/service20".parse().unwrap()), 
+            .root("device/child2/service/service20".parse().unwrap()),
         BTreeSet::from([
             "device/child2/service/service20",
         ]);

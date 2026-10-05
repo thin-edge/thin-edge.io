@@ -462,21 +462,20 @@ mod tests {
             .on_message(system_time + millis(1), &conflicting_msg, &context)
             .unwrap();
         let messages = extract_topic_payload(1, batch);
-        for (topic, payload) in [(
-            "topic/1",
-            json!({ "time": event_time, "a": 1.0, "b": 2.0, "c": 3.0}),
-        )] {
-            assert_eq!(messages.get(topic).unwrap(), &payload.to_string())
-        }
+        assert_eq!(
+            messages.get("topic/1").unwrap(),
+            &json!({ "time": event_time, "a": 1.0, "b": 2.0, "c": 3.0}).to_string()
+        );
 
         // The message with a conflicting value is used to start a new batch
         let batch = batcher
             .on_interval(system_time + millis(600), &context)
             .unwrap();
         let messages = extract_topic_payload(1, batch);
-        for (topic, payload) in [("topic/1", json!({ "time": event_time + 0.26, "a": 4.0}))] {
-            assert_eq!(messages.get(topic).unwrap(), &payload.to_string())
-        }
+        assert_eq!(
+            messages.get("topic/1").unwrap(),
+            &json!({ "time": event_time + 0.26, "a": 4.0}).to_string()
+        );
     }
 
     #[test]

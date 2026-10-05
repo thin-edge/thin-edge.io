@@ -111,35 +111,46 @@ impl Parse for FieldOrGroup {
     }
 }
 
-#[derive(FromField, Debug)]
-#[darling(attributes(tedge_config), forward_attrs)]
-pub struct ConfigurableField {
-    pub attrs: Vec<syn::Attribute>,
-    #[darling(default)]
-    pub readonly: Option<ReadonlySettings>,
-    #[darling(default)]
-    pub dto: FieldDtoSettings,
-    #[darling(default)]
-    pub rename: Option<SpannedValue<String>>,
-    #[darling(multiple, rename = "deprecated_key")]
-    pub deprecated_keys: Vec<SpannedValue<String>>,
-    #[darling(multiple, rename = "deprecated_name")]
-    pub deprecated_names: Vec<SpannedValue<String>>,
-    #[darling(default)]
-    // TODO remove this or separate it from the group ones
-    pub reader: ReaderSettings,
-    #[darling(default)]
-    pub default: Option<FieldDefault>,
-    #[darling(default)]
-    pub note: Option<SpannedValue<String>>,
-    #[darling(multiple, rename = "example")]
-    pub examples: Vec<SpannedValue<String>>,
-    #[darling(default)]
-    pub exposable: bool,
-    pub ident: Option<syn::Ident>,
-    pub ty: syn::Type,
-    #[darling(default)]
-    pub from: Option<syn::Type>,
+pub use configurable_field::ConfigurableField;
+
+// darling's `FromField` derive generates `field: field` for `multiple` fields with a
+// `rename` (e.g. `deprecated_keys`), which clippy flags as redundant. Wrapping the
+// struct in a module limits the `allow` to the generated impl.
+// This can be removed once darling includes https://github.com/TedDriggs/darling/commit/70b280dede2eaa1ee53f445a970657b16299767b
+#[allow(clippy::redundant_field_names)]
+mod configurable_field {
+    use super::*;
+
+    #[derive(FromField, Debug)]
+    #[darling(attributes(tedge_config), forward_attrs)]
+    pub struct ConfigurableField {
+        pub attrs: Vec<syn::Attribute>,
+        #[darling(default)]
+        pub readonly: Option<ReadonlySettings>,
+        #[darling(default)]
+        pub dto: FieldDtoSettings,
+        #[darling(default)]
+        pub rename: Option<SpannedValue<String>>,
+        #[darling(multiple, rename = "deprecated_key")]
+        pub deprecated_keys: Vec<SpannedValue<String>>,
+        #[darling(multiple, rename = "deprecated_name")]
+        pub deprecated_names: Vec<SpannedValue<String>>,
+        #[darling(default)]
+        // TODO remove this or separate it from the group ones
+        pub reader: ReaderSettings,
+        #[darling(default)]
+        pub default: Option<FieldDefault>,
+        #[darling(default)]
+        pub note: Option<SpannedValue<String>>,
+        #[darling(multiple, rename = "example")]
+        pub examples: Vec<SpannedValue<String>>,
+        #[darling(default)]
+        pub exposable: bool,
+        pub ident: Option<syn::Ident>,
+        pub ty: syn::Type,
+        #[darling(default)]
+        pub from: Option<syn::Type>,
+    }
 }
 
 #[derive(Debug, FromMeta, PartialEq, Eq)]
