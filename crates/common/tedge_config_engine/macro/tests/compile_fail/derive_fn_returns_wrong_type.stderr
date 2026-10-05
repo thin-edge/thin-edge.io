@@ -7,8 +7,8 @@ error[E0308]: mismatched types
    |                                                                               expected fn pointer, found fn item
    |                                                                               arguments to this function are incorrect
    |
-   = note: expected fn pointer `for<'a> fn(&'a str) -> std::result::Result<std::option::Option<u16>, std::string::String>`
-                 found fn item `for<'a> fn(&'a str) -> std::result::Result<std::option::Option<std::string::String>, std::string::String> {next_port}`
+   = note: expected fn pointer `for<'a> fn(&'a str) -> Result<Option<u16>, String>`
+                 found fn item `for<'a> fn(&'a str) -> Result<Option<std::string::String>, String> {next_port}`
 note: function defined here
   --> $WORKSPACE/crates/common/tedge_config_engine/src/defaults.rs
    |
