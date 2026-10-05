@@ -740,6 +740,68 @@ async fn onstartup_before_onmessage_in_two_step_flow() {
     let _ = actor_handle.await;
 }
 
+#[tokio::test]
+async fn raw_file_output_writes_the_binary_payload_of_the_last_message() {
+    let config_dir = create_test_flow_dir();
+    let output_file = config_dir.path().join("output.bin");
+    std::fs::write(&output_file, "previous content\n").expect("Failed to write file");
+
+    write_file(
+        &config_dir,
+        "binary.js",
+        r#"
+        export function onMessage(message, config) {
+            return [
+                { topic: "test/output", payload: new Uint8Array([0x01, 0x02]) },
+                { topic: "test/output", payload: new Uint8Array([0x00, 0xff, 0x0a, 0xc3]) },
+            ];
+        }
+    "#,
+    );
+
+    write_file(
+        &config_dir,
+        "binary.toml",
+        &format!(
+            r#"
+        input.mqtt.topics = ["test/input"]
+
+        [[steps]]
+        script = "binary.js"
+
+        [output.file]
+        path = "{}"
+        format = "raw"
+    "#,
+            output_file.display()
+        ),
+    );
+
+    let captured_messages = CapturedMessages::default();
+    let mut mqtt = MockMqtt::new(captured_messages.clone());
+    let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
+
+    mqtt.publish("test/input", "hello").await;
+
+    let expected = vec![0x00, 0xff, 0x0a, 0xc3];
+    let mut content = vec![];
+    for _ in 0..100 {
+        content = tokio::fs::read(&output_file).await.unwrap_or_default();
+        if content == expected {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    assert_eq!(
+        content, expected,
+        "The file content should be replaced by the raw payload of the last message"
+    );
+
+    actor_handle.abort();
+    let _ = actor_handle.await;
+}
+
 fn create_test_flow_dir() -> TempDir {
     tempfile::tempdir().unwrap()
 }

@@ -97,8 +97,25 @@ pub enum FlowInput {
 
 #[derive(Clone)]
 pub enum FlowOutput {
-    Mqtt { topic: Option<Topic> },
-    File { path: Utf8PathBuf },
+    Mqtt {
+        topic: Option<Topic>,
+    },
+    File {
+        path: Utf8PathBuf,
+        format: FileOutputFormat,
+    },
+}
+
+/// How messages are written to an output file
+#[derive(Clone, Copy, Debug, Default, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum FileOutputFormat {
+    /// Append each message to the file as a line of text: `[topic] payload`
+    #[default]
+    Lines,
+
+    /// Replace the content of the file with the raw message payload
+    Raw,
 }
 
 /// The final outcome of a sequence of transformations applied by a flow to a message

@@ -1,3 +1,4 @@
+use crate::flow::FileOutputFormat;
 use crate::flow::Flow;
 use crate::flow::FlowInput;
 use crate::flow::FlowOutput;
@@ -127,7 +128,11 @@ pub enum OutputConfig {
     Mqtt { topic: Option<String> },
 
     #[serde(rename = "file")]
-    File { path: Utf8PathBuf },
+    File {
+        path: Utf8PathBuf,
+        #[serde(default)]
+        format: FileOutputFormat,
+    },
 }
 
 #[derive(Clone)]
@@ -617,8 +622,9 @@ impl OutputConfig {
             OutputConfig::Mqtt { topic } => Ok(OutputConfig::Mqtt {
                 topic: topic.map(|t| params.substitute_inner_paths(&t)),
             }),
-            OutputConfig::File { path } => Ok(OutputConfig::File {
+            OutputConfig::File { path, format } => Ok(OutputConfig::File {
                 path: params.substitute_inner_paths(path.as_str()).into(),
+                format,
             }),
         }
     }
@@ -632,7 +638,7 @@ impl TryFrom<OutputConfig> for FlowOutput {
             OutputConfig::Mqtt { topic } => FlowOutput::Mqtt {
                 topic: topic.map(into_topic).transpose()?,
             },
-            OutputConfig::File { path } => FlowOutput::File { path },
+            OutputConfig::File { path, format } => FlowOutput::File { path, format },
         })
     }
 }
@@ -724,7 +730,7 @@ fn detect_loop(
             (
                 FlowInput::PollFile { path: in_path, .. }
                 | FlowInput::StreamFile { path: in_path, .. },
-                FlowOutput::File { path: out_path },
+                FlowOutput::File { path: out_path, .. },
             ) if in_path == out_path => {
                 return Err(ConfigError::FileInfiniteLoop {
                     name: name.to_string(),
@@ -839,6 +845,7 @@ mod tests {
         };
         let output = FlowOutput::File {
             path: Utf8PathBuf::from("/tmp/data.txt"),
+            format: FileOutputFormat::Lines,
         };
         assert!(matches!(
             detect_loop("my-flow", &[input], &output, false),
@@ -854,6 +861,7 @@ mod tests {
         };
         let output = FlowOutput::File {
             path: Utf8PathBuf::from("/tmp/data.txt"),
+            format: FileOutputFormat::Raw,
         };
         assert!(matches!(
             detect_loop("my-flow", &[input], &output, false),
@@ -985,6 +993,54 @@ topic = "te/device/main///e/"
         let expected_flow: FlowConfig = toml::from_str(expected_flow_toml).unwrap();
 
         assert_eq!(expected_flow, flow.substitute_params(&params).unwrap());
+    }
+
+    #[test]
+    fn file_output_format_defaults_to_lines() {
+        let flow: FlowConfig = toml::from_str(
+            r#"
+            output.file.path = "/tmp/events.log"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            flow.output,
+            OutputConfig::File {
+                path: "/tmp/events.log".into(),
+                format: FileOutputFormat::Lines,
+            }
+        );
+    }
+
+    #[test]
+    fn file_output_format_can_be_raw() {
+        let flow: FlowConfig = toml::from_str(
+            r#"
+            [output.file]
+            path = "/tmp/export.parquet"
+            format = "raw"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            flow.output,
+            OutputConfig::File {
+                path: "/tmp/export.parquet".into(),
+                format: FileOutputFormat::Raw,
+            }
+        );
+    }
+
+    #[test]
+    fn file_output_format_rejects_unknown_values() {
+        let result: Result<FlowConfig, _> = toml::from_str(
+            r#"
+            [output.file]
+            path = "/tmp/export.parquet"
+            format = "binary"
+            "#,
+        );
+        assert!(result.is_err());
     }
 
     #[test]
