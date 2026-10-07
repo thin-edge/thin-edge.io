@@ -16,6 +16,7 @@ mod mea;
 mod operations;
 mod serializer;
 pub mod service_monitor;
+mod shell_execute;
 mod signals;
 mod supported_operations;
 
@@ -33,6 +34,7 @@ pub struct Capabilities {
     pub device_profile: bool,
     pub device_restart: bool,
     pub software_update: bool,
+    pub shell_execute: bool,
 }
 
 #[cfg(test)]
@@ -46,6 +48,7 @@ impl Default for Capabilities {
             device_profile: true,
             device_restart: true,
             software_update: true,
+            shell_execute: true,
         }
     }
 }

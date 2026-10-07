@@ -9,6 +9,7 @@ use crate::operation_workflows::OperationConfig;
 use crate::operation_workflows::WorkflowActorBuilder;
 use crate::restart_manager::builder::RestartManagerBuilder;
 use crate::restart_manager::config::RestartManagerConfig;
+use crate::shell_execute::ShellExecuteBuilder;
 use crate::software_manager::builder::SoftwareManagerBuilder;
 use crate::software_manager::config::SoftwareManagerConfig;
 use crate::state_repository::state::agent_default_state_dir;
@@ -183,6 +184,7 @@ impl AgentConfig {
             config_update: tedge_config.agent.enable.config_update,
             config_snapshot: tedge_config.agent.enable.config_snapshot,
             log_upload: tedge_config.agent.enable.log_upload,
+            shell_execute: tedge_config.agent.enable.shell_execute,
         };
 
         let entity_auto_register = tedge_config.agent.entity_store.auto_register;
@@ -272,9 +274,12 @@ impl Agent {
         // Runtime
         let mut runtime = Runtime::new();
 
-        // Load device profile manager before the workflow actor
-        // as it will create the device_profile workflow if it does not already exist
+        // Deploy the built-in workflows before starting the workflow actor,
+        // which loads the definitions found in the operations directory
         DeviceProfileManagerBuilder::try_new(&self.config.operations_dir).await?;
+        if self.config.capabilities.shell_execute {
+            ShellExecuteBuilder::try_new(&self.config.operations_dir).await?;
+        }
 
         // Inotify actor
         let mut fs_watch_actor_builder = FsWatchActorBuilder::new();

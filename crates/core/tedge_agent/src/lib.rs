@@ -32,6 +32,7 @@ mod entity_manager;
 mod http_server;
 mod operation_workflows;
 mod restart_manager;
+mod shell_execute;
 mod software_manager;
 mod state_repository;
 mod twin_manager;
@@ -121,6 +122,7 @@ pub struct Capabilities {
     config_update: bool,
     config_snapshot: bool,
     log_upload: bool,
+    shell_execute: bool,
 }
 
 #[cfg(test)]
@@ -130,6 +132,7 @@ impl Default for Capabilities {
             config_update: true,
             config_snapshot: true,
             log_upload: true,
+            shell_execute: true,
         }
     }
 }

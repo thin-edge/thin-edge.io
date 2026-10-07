@@ -64,6 +64,13 @@ Plugins must support these subcommands via clap:
 - `0` — success
 - `1` - failure
 
+## Workflow script plugins
+
+Some plugins are not called by the agent directly,
+but by a `script` step of an operation workflow, e.g. `tedge-shell-plugin`.
+They have no imposed CLI contract, and report their outcome
+using the exit code and the output protocol described below.
+
 ## Output
 
 All output captured from the plugins are logged into the operation workflow log.

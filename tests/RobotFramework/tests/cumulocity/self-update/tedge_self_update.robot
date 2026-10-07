@@ -192,6 +192,59 @@ Update tedge Using a Custom Software Update Workflow
     ${agent_version}=    Execute Command    tedge-agent --version    strip=${True}
     Should Be Equal As Strings    ${agent_version}    tedge-agent ${NEW_VERSION}
 
+Update tedge whilst using common community plugins
+    [Documentation]    Validate upgrade path of common community plugins
+    ...    that are replaced by built-in tedge functionality. These community
+    ...    plugins should be replaced seamlessly whilst upgrading tedge and its components.
+
+    # Install base version
+    ${PREV_VERSION}=    Set Variable    2.0.1
+    Execute Command
+    ...    wget -O - https://thin-edge.io/install.sh | sh -s -- ${PREV_VERSION}
+
+    # install common community plugins
+    Execute Command    cmd=apt-get install -y tedge-command-plugin=1.0.1
+
+    # Register device (using already installed version)
+    Register Device With Cumulocity CA    external_id=${DEVICE_SN}
+    Execute Command    cmd=tedge connect c8y
+    Device Should Exist    ${DEVICE_SN}
+
+    Device Should Have Installed Software
+    ...    {"name": "tedge", "softwareType": "apt", "version": "${PREV_VERSION}"}
+    ...    {"name": "tedge-mapper", "softwareType": "apt", "version": "${PREV_VERSION}"}
+    ...    {"name": "tedge-agent", "softwareType": "apt", "version": "${PREV_VERSION}"}
+    ...    {"name": "tedge-watchdog", "softwareType": "apt", "version": "${PREV_VERSION}"}
+    ...    {"name": "tedge-apt-plugin", "softwareType": "apt", "version": "${PREV_VERSION}"}
+    ...    {"name": "tedge-command-plugin", "softwareType": "apt", "version": "1.0.1"}
+
+    # Install new version
+    Create Local Repository
+    ${operation}=    Install Software
+    ...    tedge,${NEW_VERSION}
+    ...    tedge-mapper,${NEW_VERSION}
+    ...    tedge-agent,${NEW_VERSION}
+    ...    tedge-apt-plugin,${NEW_VERSION}
+    ...    tedge-watchdog,${NEW_VERSION}
+    Operation Should Be SUCCESSFUL    ${operation}    timeout=180
+
+    # Software list reported by the former agent, which is still running
+    # but formatted with by the c8y-mapper, which has just been installed
+    Device Should Have Installed Software
+    ...    {"name": "tedge", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-mapper", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-agent", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-apt-plugin", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+    ...    {"name": "tedge-watchdog", "softwareType": "apt", "version": "${NEW_VERSION_ESCAPED}"}
+
+    # tedge-command-plugin should not be installed as it has been replaced by tedge itself
+    Device Should Not Have Installed Software
+    ...    {"name": "tedge-command-plugin", "softwareType": "apt"}
+
+    # Check if shell operation (should be supported out of the box)
+    ${operation}=    Cumulocity.Execute Shell Command    text=uptime
+    Operation Should Be SUCCESSFUL    ${operation}
+
 
 *** Keywords ***
 Custom Setup
