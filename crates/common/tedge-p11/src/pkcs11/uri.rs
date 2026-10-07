@@ -131,6 +131,24 @@ impl<'a> Pkcs11Uri<'a> {
             }
         }
     }
+
+    /// Check if a PKCS11 URIs matches the other URI.
+    ///
+    /// A PKCS11 URI can identify slots, tokens and keys depending on which attributes are present.
+    /// A URI can be used to query for these entities and valid responses are any slots/tokens/keys
+    /// whose attributes are equal to query attributes, or have any value if the query doesn't
+    /// specify the attribute.
+    ///
+    /// Attributes like pin-value that don't identify a slot/token/key don't count.
+    pub fn matches(&self, other: &Self) -> bool {
+        let matching_token = (self.token.is_none() || self.token == other.token)
+            && (self.serial.is_none() || self.serial == other.serial)
+            && (self.slot_id.is_none() || self.slot_id == other.slot_id);
+        let matching_object = (self.object.is_none() || self.object == other.object)
+            && (self.id.is_none() || self.id == other.id);
+
+        matching_token && matching_object
+    }
 }
 
 const PKCS11_ASCII_SET: &percent_encoding::AsciiSet =
