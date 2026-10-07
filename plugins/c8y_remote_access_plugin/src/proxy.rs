@@ -70,7 +70,7 @@ impl WebsocketSocketProxy {
         let (mut reader, mut writer) = self.socket.split();
         let (mut reader, mut writer) = (reader.compat_mut(), writer.compat_mut());
         let incoming = futures_util::io::copy(&mut ws_reader, &mut writer);
-        let outgoing = futures_util::io::copy(&mut reader, &mut ws_writer);
+        let outgoing = copy_and_flush(&mut reader, &mut ws_writer);
         {
             futures::pin_mut!(incoming);
             futures::pin_mut!(outgoing);
@@ -79,6 +79,27 @@ impl WebsocketSocketProxy {
         }
         println!("STOPPING");
         let _ = join(ws_writer.close(), writer.close()).await;
+    }
+}
+
+/// Copies data from `reader` to `writer` until `reader` reaches EOF, flushing `writer` after every write.
+///
+/// The websocket writer may keep written data buffered until it is flushed, and
+/// `futures_util::io::copy` only flushes at EOF. Sockets that stay open (e.g. HTTP keep-alive)
+/// would otherwise not get the end of a transfer forwarded until more data arrives.
+async fn copy_and_flush<R, W>(reader: &mut R, writer: &mut W) -> std::io::Result<()>
+where
+    R: futures_util::io::AsyncRead + Unpin,
+    W: futures_util::io::AsyncWrite + Unpin,
+{
+    let mut buf = vec![0u8; 16 * 1024];
+    loop {
+        let n = reader.read(&mut buf).await?;
+        if n == 0 {
+            return Ok(());
+        }
+        writer.write_all(&buf[..n]).await?;
+        writer.flush().await?;
     }
 }
 
@@ -424,6 +445,65 @@ mod tests {
         let stream = connect_without_delay(&address).await.unwrap();
 
         assert!(stream.nodelay().unwrap());
+    }
+
+    #[tokio::test]
+    async fn data_is_flushed_while_the_socket_stays_open() {
+        // The websocket writer may keep written data buffered until it is flushed. Data read from
+        // the local socket must be flushed without waiting for EOF, as the socket can stay open
+        // after a transfer (e.g. HTTP keep-alive).
+        let (mut socket, local) = tokio::io::duplex(1024);
+        let delivered = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut writer = DeliverOnFlush {
+            buffered: Vec::new(),
+            delivered: delivered.clone(),
+        };
+        tokio::spawn(async move { copy_and_flush(&mut local.compat(), &mut writer).await });
+
+        socket.write_all(b"response").await.unwrap();
+
+        // `socket` is not closed, so the reader does not reach EOF
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while delivered.lock().unwrap().as_slice() != b"response" {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("data should be flushed while the socket stays open");
+        drop(socket);
+    }
+
+    /// A writer that only delivers data when it is flushed
+    struct DeliverOnFlush {
+        buffered: Vec<u8>,
+        delivered: Arc<std::sync::Mutex<Vec<u8>>>,
+    }
+
+    impl futures_util::io::AsyncWrite for DeliverOnFlush {
+        fn poll_write(
+            mut self: Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<std::io::Result<usize>> {
+            self.buffered.extend_from_slice(buf);
+            std::task::Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            let data = std::mem::take(&mut self.buffered);
+            self.delivered.lock().unwrap().extend(data);
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(
+            self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            self.poll_flush(cx)
+        }
     }
 
     fn sign(key: &[u8]) -> HeaderValue {
