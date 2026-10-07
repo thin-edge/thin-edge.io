@@ -1243,12 +1243,25 @@ impl CumulocityConverter {
             {
                 self.parse_c8y_smartrest_topics(message).await
             }
+            topic
+                if topic.name
+                    == C8yTopic::SmartRestRequest
+                        .with_prefix(&self.config.bridge_config.c8y_prefix) =>
+            {
+                // We receive SmartREST operation notifications regardless of whether any custom
+                // operations are configured to use it. This branch exists to prevent us logging
+                // an error for this message we expect
+                Ok(vec![])
+            }
             topic if self.mapper_config.http_event_topic.accept_topic(topic) => {
                 self.post_event_over_http(message).await?;
                 Ok(vec![])
             }
             _ => {
-                error!("Unsupported topic: {}", message.topic.name);
+                warn!(
+                    "Received message on subscribed topic '{}' but no handler matched.",
+                    message.topic.name
+                );
                 Ok(vec![])
             }
         }?;
@@ -2632,6 +2645,19 @@ pub(crate) mod tests {
         let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
         converter.try_convert(&random_message).await.unwrap();
         assert_eq!(converter.active_commands.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn smartrest_message_on_builtin_topic_is_not_an_unsupported_topic() {
+        let (capture, _guard) = tedge_test_utils::tracing::TracingCapture::default().start();
+
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+
+        let message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test-device");
+        converter.try_convert(&message).await.unwrap();
+
+        capture.assert_no_errors();
     }
 
     #[tokio::test]
