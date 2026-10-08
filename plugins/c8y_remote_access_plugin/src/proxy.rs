@@ -86,6 +86,18 @@ struct Websocket {
     socket: WsStream<ClientStream<MaybeTlsStream>>,
 }
 
+/// Connects to the websocket server (or the HTTP proxy) with Nagle's algorithm disabled.
+///
+/// The connection carries interactive traffic. With Nagle's algorithm, a small message can be held
+/// back until the previous one has been acknowledged, which can add a delayed ACK timeout
+/// (typically up to 40 ms) to a response.
+async fn connect_without_delay(address: &str) -> std::io::Result<TcpStream> {
+    let stream = TcpStream::connect(address).await?;
+    // an optimization only, the connection still works if the option cannot be set
+    let _ = stream.set_nodelay(true);
+    Ok(stream)
+}
+
 fn generate_sec_websocket_key() -> String {
     let mut rng = rand::rng();
     let mut bytes = [0u8; 16];
@@ -160,7 +172,7 @@ impl Websocket {
             .ok_or(miette!("{url} does not contain a port"))?;
         let stream = if let Some(address) = proxy.address.or_none() {
             let host_port = format!("{}:{}", address.host(), address.port());
-            let stream = TcpStream::connect(&host_port).await.into_diagnostic()?;
+            let stream = connect_without_delay(&host_port).await.into_diagnostic()?;
             let mut stream = match address.scheme() {
                 ProxyScheme::Https => {
                     let connector: TlsConnector = config.clone().unwrap().into();
@@ -194,7 +206,7 @@ impl Websocket {
             stream
         } else {
             MaybeTlsStream::Plain(
-                TcpStream::connect(format!("{target_host}:{target_port}",))
+                connect_without_delay(&format!("{target_host}:{target_port}"))
                     .await
                     .into_diagnostic()?,
             )
@@ -402,6 +414,16 @@ mod tests {
         })
         .await
         .unwrap();
+    }
+
+    #[tokio::test]
+    async fn websocket_connections_disable_nagles_algorithm() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap().to_string();
+
+        let stream = connect_without_delay(&address).await.unwrap();
+
+        assert!(stream.nodelay().unwrap());
     }
 
     fn sign(key: &[u8]) -> HeaderValue {
