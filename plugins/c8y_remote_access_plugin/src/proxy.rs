@@ -15,6 +15,7 @@ use miette::Diagnostic;
 use miette::IntoDiagnostic;
 use rand::Rng;
 use rustls::ClientConfig;
+use std::io::Write as _;
 use std::pin::Pin;
 use std::sync::Arc;
 use tedge_config::all_or_nothing;
@@ -24,12 +25,12 @@ use thiserror::Error;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::net::TcpStream;
-use tokio::net::ToSocketAddrs;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::TlsConnector;
 use url::Url;
 use ws_stream_tungstenite::WsStream;
 
+use crate::mux;
 use crate::SUCCESS_MESSAGE;
 
 /// This proxy creates a TCP connection to a local socket and creates a websocket. Cumulocity cloud will initiate a
@@ -38,6 +39,8 @@ use crate::SUCCESS_MESSAGE;
 pub struct WebsocketSocketProxy {
     socket: TcpStream,
     websocket: Websocket,
+    /// address of the target, used for further connections in multiplexing mode
+    target: String,
 }
 
 #[derive(Diagnostic, Error, Debug)]
@@ -45,14 +48,14 @@ pub struct WebsocketSocketProxy {
 struct SocketError(#[from] std::io::Error);
 
 impl WebsocketSocketProxy {
-    pub async fn connect<SA: ToSocketAddrs + std::fmt::Debug>(
+    pub async fn connect(
         url: &Url,
-        socket: SA,
+        target: String,
         auth: Auth,
         config: Option<ClientConfig>,
         proxy: &TEdgeConfigReaderProxy,
     ) -> miette::Result<Self> {
-        let socket_future = TcpStream::connect(socket);
+        let socket_future = TcpStream::connect(target.clone());
         let websocket_future = Websocket::new(url, auth.authorization_header(), config, proxy);
 
         match join(socket_future, websocket_future).await {
@@ -60,15 +63,55 @@ impl WebsocketSocketProxy {
             (_, Err(websocket_error)) => Err(websocket_error),
             (Ok(socket), Ok(websocket)) => {
                 println!("{SUCCESS_MESSAGE}");
-                Ok(WebsocketSocketProxy { socket, websocket })
+                Ok(WebsocketSocketProxy {
+                    socket,
+                    websocket,
+                    target,
+                })
             }
         }
     }
 
     pub async fn run(mut self) {
         let (mut ws_reader, mut ws_writer) = self.websocket.socket.split();
+        let received = match mux::negotiate(&mut ws_reader, self.socket.readable()).await {
+            Ok(mux::Mode::Passthrough(received)) => received,
+            Ok(mux::Mode::Multiplex(received)) => {
+                // Not println!: the parent process stops reading stdout once the connection is
+                // established, and println! panics when stdout is closed.
+                let _ = writeln!(
+                    std::io::stdout(),
+                    "Multiplexing connections to {}",
+                    self.target
+                );
+                drop(self.socket);
+                match ws_reader.reunite(ws_writer) {
+                    Ok(websocket) => {
+                        if let Err(err) = mux::run(websocket, received, self.target).await {
+                            let _ =
+                                writeln!(std::io::stdout(), "Multiplexing session ended: {err}");
+                        }
+                    }
+                    Err(_) => unreachable!("the halves belong to the same websocket"),
+                }
+                let _ = writeln!(std::io::stdout(), "STOPPING");
+                return;
+            }
+            Err(_) => {
+                let _ = writeln!(std::io::stdout(), "STOPPING");
+                let _ = ws_writer.close().await;
+                return;
+            }
+        };
+
         let (mut reader, mut writer) = self.socket.split();
         let (mut reader, mut writer) = (reader.compat_mut(), writer.compat_mut());
+        // data the client sent while the mode was negotiated
+        if !received.is_empty() && writer.write_all(&received).await.is_err() {
+            let _ = writeln!(std::io::stdout(), "STOPPING");
+            let _ = ws_writer.close().await;
+            return;
+        }
         let incoming = futures_util::io::copy(&mut ws_reader, &mut writer);
         let outgoing = copy_and_flush(&mut reader, &mut ws_writer);
         {
@@ -87,7 +130,7 @@ impl WebsocketSocketProxy {
 /// The websocket writer may keep written data buffered until it is flushed, and
 /// `futures_util::io::copy` only flushes at EOF. Sockets that stay open (e.g. HTTP keep-alive)
 /// would otherwise not get the end of a transfer forwarded until more data arrives.
-async fn copy_and_flush<R, W>(reader: &mut R, writer: &mut W) -> std::io::Result<()>
+pub(crate) async fn copy_and_flush<R, W>(reader: &mut R, writer: &mut W) -> std::io::Result<()>
 where
     R: futures_util::io::AsyncRead + Unpin,
     W: futures_util::io::AsyncWrite + Unpin,
@@ -445,6 +488,64 @@ mod tests {
         let stream = connect_without_delay(&address).await.unwrap();
 
         assert!(stream.nodelay().unwrap());
+    }
+
+    #[tokio::test]
+    async fn client_data_is_forwarded_when_the_client_sends_first() {
+        // e.g. HTTP: the client sends first, the data read to negotiate the mode must reach the target
+        let app = Router::new().route("/ws", any(handler));
+
+        async fn handler(ws: WebSocketUpgrade) -> Response {
+            ws.protocols(["binary"]).on_upgrade(handle_socket)
+        }
+
+        async fn handle_socket(mut socket: WebSocket) {
+            use axum::extract::ws::Message;
+            socket
+                .send(Message::Binary("GET / HTTP/1.1\r\n\r\n".into()))
+                .await
+                .unwrap();
+            match socket.recv().await {
+                Some(Ok(Message::Binary(msg))) => {
+                    assert_eq!(
+                        std::str::from_utf8(&msg).unwrap(),
+                        "HTTP/1.1 200 OK\r\n\r\n"
+                    )
+                }
+                other => panic!("Expected a binary message, got {other:?}"),
+            }
+        }
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let axum_port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        let target = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target_port = target.local_addr().unwrap().port();
+        let target_task = tokio::spawn(async move {
+            let (mut data, _) = target.accept().await.unwrap();
+            let mut request = [0; 18];
+            data.read_exact(&mut request).await.unwrap();
+            assert_eq!(&request, b"GET / HTTP/1.1\r\n\r\n");
+            data.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await.unwrap();
+        });
+        let tedge_config = TEdgeConfig::load_toml_str("");
+
+        tokio::time::timeout(Duration::from_secs(5), async move {
+            let proxy = WebsocketSocketProxy::connect(
+                &format!("ws://127.0.0.1:{axum_port}/ws").parse().unwrap(),
+                format!("127.0.0.1:{target_port}"),
+                Auth::test_value(HeaderValue::from_static("AUTHORIZATION HEADER")),
+                None,
+                &tedge_config.proxy,
+            )
+            .await
+            .unwrap();
+            proxy.run().await;
+            target_task.await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
