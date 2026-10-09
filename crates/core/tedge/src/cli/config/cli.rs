@@ -1,11 +1,11 @@
 use crate::cli::common::profile_completions;
 use crate::cli::config::commands::*;
+use crate::cli::config::keys::FederatedReadableKey;
+use crate::cli::config::keys::FederatedWritableKey;
 use crate::command::*;
 use crate::ConfigError;
 use clap_complete::ArgValueCandidates;
 use tedge_config::tedge_toml::ProfileName;
-use tedge_config::tedge_toml::ReadableKey;
-use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfig;
 
 #[derive(clap::Subcommand, Debug)]
@@ -13,8 +13,8 @@ pub enum ConfigCmd {
     /// Get the value of the provided configuration key
     Get {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        #[arg(add = ArgValueCandidates::new(ReadableKey::completions))]
-        key: ReadableKey,
+        #[arg(add = ArgValueCandidates::new(FederatedReadableKey::completions))]
+        key: FederatedReadableKey,
 
         /// The cloud profile you wish to use, if accessing a cloud configuration
         /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
@@ -29,8 +29,8 @@ pub enum ConfigCmd {
     /// Set or update the provided configuration key with the given value
     Set {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        #[arg(add = ArgValueCandidates::new(WritableKey::completions))]
-        key: WritableKey,
+        #[arg(add = ArgValueCandidates::new(FederatedWritableKey::completions))]
+        key: FederatedWritableKey,
 
         /// Configuration value.
         value: String,
@@ -48,8 +48,8 @@ pub enum ConfigCmd {
     /// Unset the provided configuration key
     Unset {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        #[arg(add = ArgValueCandidates::new(WritableKey::completions))]
-        key: WritableKey,
+        #[arg(add = ArgValueCandidates::new(FederatedWritableKey::completions))]
+        key: FederatedWritableKey,
 
         /// The cloud profile you wish to use, if accessing a cloud configuration
         /// (i.e. `c8y.*`, `az.*` or `aws.*`). If you don't wish to use cloud profiles,
@@ -64,8 +64,8 @@ pub enum ConfigCmd {
     /// Append or set the provided configuration key with the given value
     Add {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        #[arg(add = ArgValueCandidates::new(WritableKey::completions))]
-        key: WritableKey,
+        #[arg(add = ArgValueCandidates::new(FederatedWritableKey::completions))]
+        key: FederatedWritableKey,
 
         /// Configuration value.
         value: String,
@@ -83,8 +83,8 @@ pub enum ConfigCmd {
     /// Remove value from the provided configuration key
     Remove {
         /// Configuration key. Run `tedge config list --doc` for available keys
-        #[arg(add = ArgValueCandidates::new(WritableKey::completions))]
-        key: WritableKey,
+        #[arg(add = ArgValueCandidates::new(FederatedWritableKey::completions))]
+        key: FederatedWritableKey,
 
         /// Configuration value.
         value: String,
@@ -135,45 +135,91 @@ macro_rules! try_with_profile {
     }};
 }
 
+#[cfg(feature = "mapper-config")]
+fn reject_profile_for_mapper_key(
+    key: &str,
+    profile: &Option<ProfileName>,
+) -> Result<(), ConfigError> {
+    if profile.is_some() {
+        return Err(anyhow::anyhow!("--profile is not supported for mapper key '{key}'").into());
+    }
+    Ok(())
+}
+
 #[async_trait::async_trait]
 impl BuildCommand for ConfigCmd {
     async fn build_command(self, _: &TEdgeConfig) -> Result<Box<dyn Command>, ConfigError> {
         match self {
-            ConfigCmd::Get { key, profile } => Ok(GetConfigCommand {
-                key: try_with_profile!(key, profile),
-            }
-            .into_boxed()),
+            ConfigCmd::Get { key, profile } => match key {
+                FederatedReadableKey::Core(key) => Ok(GetConfigCommand {
+                    key: try_with_profile!(key, profile),
+                }
+                .into_boxed()),
+                #[cfg(feature = "mapper-config")]
+                FederatedReadableKey::Mapper(key) => {
+                    reject_profile_for_mapper_key(&key, &profile)?;
+                    Ok(MapperGetConfigCommand { key }.into_boxed())
+                }
+            },
             ConfigCmd::Set {
                 key,
                 value,
                 profile,
-            } => Ok(SetConfigCommand {
-                key: try_with_profile!(key, profile),
-                value,
-            }
-            .into_boxed()),
-            ConfigCmd::Unset { key, profile } => Ok(UnsetConfigCommand {
-                key: try_with_profile!(key, profile),
-            }
-            .into_boxed()),
+            } => match key {
+                FederatedWritableKey::Core(key) => Ok(SetConfigCommand {
+                    key: try_with_profile!(key, profile),
+                    value,
+                }
+                .into_boxed()),
+                #[cfg(feature = "mapper-config")]
+                FederatedWritableKey::Mapper(key) => {
+                    reject_profile_for_mapper_key(&key, &profile)?;
+                    Ok(MapperMutateConfigCommand::set(key, value).into_boxed())
+                }
+            },
+            ConfigCmd::Unset { key, profile } => match key {
+                FederatedWritableKey::Core(key) => Ok(UnsetConfigCommand {
+                    key: try_with_profile!(key, profile),
+                }
+                .into_boxed()),
+                #[cfg(feature = "mapper-config")]
+                FederatedWritableKey::Mapper(key) => {
+                    reject_profile_for_mapper_key(&key, &profile)?;
+                    Ok(MapperMutateConfigCommand::unset(key).into_boxed())
+                }
+            },
             ConfigCmd::Add {
                 key,
                 value,
                 profile,
-            } => Ok(AddConfigCommand {
-                key: try_with_profile!(key, profile),
-                value,
-            }
-            .into_boxed()),
+            } => match key {
+                FederatedWritableKey::Core(key) => Ok(AddConfigCommand {
+                    key: try_with_profile!(key, profile),
+                    value,
+                }
+                .into_boxed()),
+                #[cfg(feature = "mapper-config")]
+                FederatedWritableKey::Mapper(key) => {
+                    reject_profile_for_mapper_key(&key, &profile)?;
+                    Ok(MapperMutateConfigCommand::add(key, value).into_boxed())
+                }
+            },
             ConfigCmd::Remove {
                 key,
                 value,
                 profile,
-            } => Ok(RemoveConfigCommand {
-                key: try_with_profile!(key, profile),
-                value,
-            }
-            .into_boxed()),
+            } => match key {
+                FederatedWritableKey::Core(key) => Ok(RemoveConfigCommand {
+                    key: try_with_profile!(key, profile),
+                    value,
+                }
+                .into_boxed()),
+                #[cfg(feature = "mapper-config")]
+                FederatedWritableKey::Mapper(key) => {
+                    reject_profile_for_mapper_key(&key, &profile)?;
+                    Ok(MapperMutateConfigCommand::remove(key, value).into_boxed())
+                }
+            },
             ConfigCmd::List {
                 is_all,
                 is_doc,

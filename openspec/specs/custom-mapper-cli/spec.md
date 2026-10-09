@@ -35,44 +35,13 @@ The `cloud_type` field is a valid optional metadata field in `mapper.toml` that 
 - **WHEN** `/etc/tedge/mappers/` contains no subdirectories
 - **THEN** `tedge mapper list` SHALL print a message to stderr indicating no mappers were found
 
-### Requirement: tedge mapper config get
-`tedge mapper config get <name>.<key>` SHALL return the effective resolved value for the named key, not the raw value from `mapper.toml`. For schema-level keys (`device.id`, `device.cert_path`, `device.key_path`, `device.root_cert_path`), the effective value is determined using the same resolution chain as the mapper runtime, including cert/key fallback to root `tedge.toml` and certificate CN inference for `device.id`. For all other keys, the raw TOML value from `mapper.toml` is returned. The resolved value SHALL be printed on stdout. A human-readable annotation explaining the source of the value (e.g., which file it was read from, or that it was inferred from a certificate CN) SHALL be written to stderr. If the effective value cannot be determined (e.g., cert auth is in use but the cert is unreadable), the command SHALL exit with an error.
-
-#### Scenario: device.id inferred from certificate CN
-- **WHEN** a user runs `tedge mapper config get thingsboard.device.id` and cert auth is in use with a readable cert whose CN is `my-device-001`
-- **THEN** stdout SHALL contain `my-device-001` and stderr SHALL contain an annotation referencing the certificate file path
-
-#### Scenario: device.cert_path inherited from tedge.toml
-- **WHEN** a user runs `tedge mapper config get thingsboard.device.cert_path` and `mapper.toml` contains no `device.cert_path`, but root `tedge.toml` has `device.cert_path = "/etc/tedge/device-certs/tedge-certificate.pem"`
-- **THEN** stdout SHALL contain `/etc/tedge/device-certs/tedge-certificate.pem` and stderr SHALL contain an annotation indicating the value was inherited from `tedge.toml`
-
-#### Scenario: Relative device.cert_path resolved to absolute
-- **WHEN** a user runs `tedge mapper config get thingsboard.device.cert_path` and `mapper.toml` contains `cert_path = "cert.pem"` under `[device]`
-- **THEN** stdout SHALL contain the absolute path (e.g., `/etc/tedge/mappers/thingsboard/cert.pem`) and stderr SHALL contain an annotation indicating the original relative path
-
-#### Scenario: Custom key returns raw TOML value
-- **WHEN** a user runs `tedge mapper config get thingsboard.bridge.topic_prefix` and `mapper.toml` contains `[bridge]` with `topic_prefix = "tb"`
-- **THEN** stdout SHALL contain `tb` and stderr SHALL contain an annotation indicating the value was read from `mapper.toml`
-
-#### Scenario: device.id unavailable due to unreadable cert
-- **WHEN** a user runs `tedge mapper config get thingsboard.device.id` and cert auth is in use but the cert file cannot be read
-- **THEN** the command SHALL exit with an error indicating that the device identity could not be determined
-
-#### Scenario: Mapper directory does not exist
-- **WHEN** a user runs `tedge mapper config get noexist.url` and no `/etc/tedge/mappers/noexist/` directory exists
-- **THEN** `tedge mapper config get` SHALL exit with an error indicating the mapper was not found
-
-#### Scenario: mapper.toml absent
-- **WHEN** a user runs `tedge mapper config get thingsboard.url` and `/etc/tedge/mappers/thingsboard/` exists but contains no `mapper.toml`
-- **THEN** `tedge mapper config get` SHALL exit with an error indicating that `mapper.toml` is absent
-
-#### Scenario: Key not found
-- **WHEN** a user runs `tedge mapper config get thingsboard.nonexistent.key` and the key path does not exist in `mapper.toml` and is not a schema-level key with a resolvable fallback
-- **THEN** `tedge mapper config get` SHALL exit with an error indicating the key was not found
-
-#### Scenario: Argument with no dot is rejected
-- **WHEN** a user runs `tedge mapper config get thingsboard` (no `.key` portion)
-- **THEN** `tedge mapper config get` SHALL exit with a usage error indicating the argument must be in `<name>.<key>` format
+### Requirement: tedge mapper config get (hidden alias)
+`tedge mapper config get <name>.<key>` SHALL be a hidden alias
+for `tedge config get mappers.<name>.<key>`.
+It is hidden from `--help` but accepted for backwards compatibility.
+The command SHALL prepend `mappers.` to the user-supplied key
+and delegate to the same `tedge config get` codepath
+defined in the Config Engine CLI Routing spec.
 
 ### Requirement: tedge bridge inspect for custom mappers
 `tedge bridge inspect <cloud>` SHALL display the bridge rules for any cloud or custom mapper. The `<cloud>` argument accepts built-in cloud names (`c8y`, `aws`, `az`) or a custom mapper name. For custom mappers, the command reads bridge rule TOML files from `/etc/tedge/mappers/<name>/bridge/`, loads `mapper.toml` for `${mapper.*}` template expansion and auth method resolution, and displays the expanded rules grouped by direction (outbound, inbound, bidirectional).
