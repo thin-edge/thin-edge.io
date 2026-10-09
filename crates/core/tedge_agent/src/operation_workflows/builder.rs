@@ -2,6 +2,7 @@ use crate::operation_workflows::actor::AgentInput;
 use crate::operation_workflows::actor::InternalCommandState;
 use crate::operation_workflows::actor::WorkflowActor;
 use crate::operation_workflows::config::OperationConfig;
+use crate::operation_workflows::entity_store_client::EntityStoreClient;
 use crate::operation_workflows::message_box::CommandDispatcher;
 use crate::operation_workflows::message_box::SyncSignalDispatcher;
 use crate::operation_workflows::persist::WorkflowRepository;
@@ -65,6 +66,7 @@ pub struct WorkflowActorBuilder {
     signal_sender: mpsc::Sender<RuntimeRequest>,
     downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
     uploader: ClientMessageBox<UploaderRequest, UploaderResult>,
+    entity_store: EntityStoreClient,
     builtin_operation_step_executor: HashMap<
         (OperationType, OperationStep),
         ClientMessageBox<OperationStepRequest, OperationStepResponse>,
@@ -79,6 +81,7 @@ impl WorkflowActorBuilder {
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         downloader: &mut impl Service<DownloaderRequest, DownloaderResult>,
         uploader: &mut impl Service<UploaderRequest, UploaderResult>,
+        entity_store: EntityStoreClient,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();
         let (signal_sender, signal_receiver) = mpsc::channel(10);
@@ -97,11 +100,7 @@ impl WorkflowActorBuilder {
 
         let mqtt_publisher = mqtt_actor.get_sender();
         mqtt_actor.connect_sink(
-            Self::subscriptions(
-                &config.mqtt_schema,
-                &config.device_topic_id,
-                &config.service_topic_id,
-            ),
+            Self::subscriptions(&config.mqtt_schema, &config.service_topic_id),
             &input_sender,
         );
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
@@ -125,6 +124,7 @@ impl WorkflowActorBuilder {
             script_runner,
             downloader,
             uploader,
+            entity_store,
             builtin_operation_step_executor: HashMap::new(),
         }
     }
@@ -173,13 +173,9 @@ impl WorkflowActorBuilder {
 
     pub fn subscriptions(
         mqtt_schema: &MqttSchema,
-        device_topic_id: &EntityTopicId,
         service_topic_id: &EntityTopicId,
     ) -> TopicFilter {
-        let mut topics = mqtt_schema.topics(
-            EntityFilter::Entity(device_topic_id),
-            ChannelFilter::AnyCommand,
-        );
+        let mut topics = mqtt_schema.topics(EntityFilter::AnyEntity, ChannelFilter::AnyCommand);
         topics.add_all(mqtt_schema.topics(
             EntityFilter::Entity(service_topic_id),
             ChannelFilter::AnySignal,
@@ -227,9 +223,12 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             sync_signal_dispatcher: self.sync_signal_dispatcher,
             mqtt_publisher: self.mqtt_publisher,
             command_sender: self.command_sender,
+            resolved_target_sender: self.input_sender.sender_clone(),
             script_runner: self.script_runner,
             downloader: self.downloader,
             uploader: self.uploader,
+            entity_store: self.entity_store,
+            pending_lookups: HashMap::new(),
             tmp_dir: self.config.tmp_dir.root().into(),
         }
     }

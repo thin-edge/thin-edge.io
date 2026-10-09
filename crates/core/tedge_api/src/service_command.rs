@@ -190,6 +190,44 @@ pub struct InvalidServiceType {
     pub reason: String,
 }
 
+/// The actions a service declares as its own capabilities when it starts
+///
+/// Each action is published as a retained message on `te/<service-topic-id>/cmd/<action>`,
+/// `{}` to declare the action and an empty message to clear a previously declared one.
+///
+/// Clearing is required because a capability is retained:
+/// a mapper declares `restart` when it runs standalone,
+/// and has to clear it when the same mapper runs under `tedge run all` with no init unit of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActionCapabilities {
+    pub declared: &'static [&'static str],
+    pub cleared: &'static [&'static str],
+}
+
+impl ActionCapabilities {
+    pub const NONE: ActionCapabilities = ActionCapabilities {
+        declared: &[],
+        cleared: &[],
+    };
+
+    pub const fn declaring(declared: &'static [&'static str]) -> Self {
+        ActionCapabilities {
+            declared,
+            cleared: &[],
+        }
+    }
+
+    pub const fn clearing(cleared: &'static [&'static str]) -> Self {
+        ActionCapabilities {
+            declared: &[],
+            cleared,
+        }
+    }
+}
+
+// Keep this as array so that we can expand the actions later.
+pub const TEDGE_SERVICE_ACTIONS: &[&str] = &["restart"];
+
 #[cfg(test)]
 mod tests {
     use super::*;

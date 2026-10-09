@@ -1,0 +1,16 @@
+operation = "probe"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "service-probed"
+
+[service-probed]
+action = "proceed"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
