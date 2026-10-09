@@ -177,6 +177,9 @@ pub struct CumulocityConverter {
     pub active_commands: HashMap<CmdId, Option<Instant>>,
     pub recently_completed_commands: HashMap<CmdId, Instant>,
     active_commands_last_cleared: Instant,
+    // Keep the software list commands issued by this mapper, until they are cleared,
+    // to avoid requesting a software list while an equivalent request is still pending
+    pending_software_list_requests: HashMap<CmdId, EntityTopicId>,
 
     pub supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
@@ -260,6 +263,7 @@ impl CumulocityConverter {
             active_commands: HashMap::new(),
             recently_completed_commands: HashMap::new(),
             active_commands_last_cleared: Instant::now(),
+            pending_software_list_requests: HashMap::new(),
             operation_handler,
         })
     }
@@ -1040,6 +1044,15 @@ impl CumulocityConverter {
         self.active_commands.contains_key(cmd_id)
             || self.recently_completed_commands.contains_key(cmd_id)
     }
+
+    /// The id of a software list command issued by this mapper to the given target,
+    /// if any is still pending, i.e. not cleared yet whatever its status
+    fn pending_software_list_request(&self, target: &EntityTopicId) -> Option<&CmdId> {
+        self.pending_software_list_requests
+            .iter()
+            .find(|(_, pending_target)| *pending_target == target)
+            .map(|(cmd_id, _)| cmd_id)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -1131,6 +1144,7 @@ impl CumulocityConverter {
                 self.active_commands.remove(cmd_id);
                 self.recently_completed_commands
                     .insert(cmd_id.to_owned(), Instant::now());
+                self.pending_software_list_requests.remove(cmd_id);
                 Ok(vec![])
             }
 
@@ -1173,11 +1187,17 @@ impl CumulocityConverter {
                 }
             }
 
-            Channel::Command { cmd_id, .. } if self.command_id.is_generator_of(cmd_id) => {
+            Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
                 // Keep track of operation if we've received it through a retain message
                 // If we've already got the operation in `active_commands`, set the insertion
                 // time to `None` to disable the time-based expiry
                 self.active_commands.insert(cmd_id.clone(), None);
+                if *operation == OperationType::SoftwareList {
+                    // A software list request, possibly issued before a restart of the mapper,
+                    // which has to be cleared before a new one is issued to the same target
+                    self.pending_software_list_requests
+                        .insert(cmd_id.clone(), source.clone());
+                }
 
                 let entity = self.entity_cache.try_get(&source)?;
                 let entity = operations::EntityTarget {
@@ -1475,7 +1495,11 @@ impl CumulocityConverter {
             Ok(messages) => messages,
         };
 
-        registration.push(self.request_software_list(target));
+        if let Some(cmd_id) = self.pending_software_list_request(target) {
+            info!("Skipping software list request for {target}: command {cmd_id} is still pending");
+        } else {
+            registration.push(self.request_software_list(target));
+        }
         Ok(registration)
     }
 }
@@ -1544,6 +1568,8 @@ pub(crate) mod tests {
     use tedge_api::pending_entity_store::RegisteredEntityData;
     use tedge_api::script::ShellScript;
     use tedge_api::workflow::log::log_dir::OperationLogs;
+    use tedge_api::CommandStatus;
+    use tedge_api::SoftwareListCommand;
     use tedge_api::SoftwareUpdateCommand;
     use tedge_config::models::AutoLogUpload;
     use tedge_config::models::SoftwareManagementApiFlag;
@@ -2632,6 +2658,144 @@ pub(crate) mod tests {
             [],
             "Existing tedge operation should trigger de-duplication"
         );
+    }
+
+    #[tokio::test]
+    async fn software_list_is_requested_when_software_update_capability_is_received() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mqtt_schema = converter.mqtt_schema.clone();
+        let device = EntityTopicId::default_main_device();
+
+        let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
+        let messages = converter.try_convert(&capability).await.unwrap();
+
+        let requests = software_list_requests(&converter, &device, &messages);
+        assert_eq!(
+            requests.len(),
+            1,
+            "Expected a software list request in {messages:?}"
+        );
+        assert_eq!(
+            serde_json::from_slice::<Value>(requests[0].payload_bytes()).unwrap(),
+            json!({"status": "init"})
+        );
+    }
+
+    #[test_case(CommandStatus::Init)]
+    #[test_case(CommandStatus::Executing)]
+    #[test_case(CommandStatus::Successful)]
+    #[tokio::test]
+    async fn software_list_is_not_requested_while_a_previous_request_is_pending(
+        status: CommandStatus,
+    ) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mqtt_schema = converter.mqtt_schema.clone();
+        let device = EntityTopicId::default_main_device();
+
+        // A software list command issued by this mapper, e.g. before being restarted,
+        // received as a retained message from the broker and not cleared yet
+        let previous_request = SoftwareListCommand::new(&device, "c8y-mapper-1234".into())
+            .with_status(status)
+            .command_message(&mqtt_schema);
+        converter.try_convert(&previous_request).await.unwrap();
+
+        let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
+        let messages = converter.try_convert(&capability).await.unwrap();
+
+        assert!(
+            software_list_requests(&converter, &device, &messages).is_empty(),
+            "No software list request expected in {messages:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn software_list_is_requested_once_the_previous_request_is_cleared() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mqtt_schema = converter.mqtt_schema.clone();
+        let device = EntityTopicId::default_main_device();
+
+        let previous_request = SoftwareListCommand::new(&device, "c8y-mapper-1234".into())
+            .with_status(CommandStatus::Successful);
+        converter
+            .try_convert(&previous_request.command_message(&mqtt_schema))
+            .await
+            .unwrap();
+        converter
+            .try_convert(&previous_request.clearing_message(&mqtt_schema))
+            .await
+            .unwrap();
+
+        let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
+        let messages = converter.try_convert(&capability).await.unwrap();
+
+        assert_eq!(
+            software_list_requests(&converter, &device, &messages).len(),
+            1,
+            "Expected a software list request in {messages:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn software_list_request_not_issued_by_the_mapper_does_not_prevent_a_new_request() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mqtt_schema = converter.mqtt_schema.clone();
+        let device = EntityTopicId::default_main_device();
+
+        // A software list command issued locally, e.g. using `tedge mqtt pub`
+        let local_request =
+            SoftwareListCommand::new(&device, "local-1111".into()).command_message(&mqtt_schema);
+        converter.try_convert(&local_request).await.unwrap();
+
+        let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
+        let messages = converter.try_convert(&capability).await.unwrap();
+
+        assert_eq!(
+            software_list_requests(&converter, &device, &messages).len(),
+            1,
+            "Expected a software list request in {messages:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn software_list_request_pending_for_another_device_does_not_prevent_a_new_request() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mqtt_schema = converter.mqtt_schema.clone();
+        let device = EntityTopicId::default_main_device();
+        let child = EntityTopicId::default_child_device("child1").unwrap();
+
+        let child_request = SoftwareListCommand::new(&child, "c8y-mapper-1234".into())
+            .command_message(&mqtt_schema);
+        register_source_entities(&child_request.topic.name, &mut converter).await;
+        converter.try_convert(&child_request).await.unwrap();
+
+        let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
+        let messages = converter.try_convert(&capability).await.unwrap();
+
+        assert_eq!(
+            software_list_requests(&converter, &device, &messages).len(),
+            1,
+            "Expected a software list request in {messages:?}"
+        );
+    }
+
+    fn software_list_requests<'a>(
+        converter: &CumulocityConverter,
+        target: &EntityTopicId,
+        messages: &'a [MqttMessage],
+    ) -> Vec<&'a MqttMessage> {
+        let software_list_topics = converter.mqtt_schema.topics(
+            EntityFilter::Entity(target),
+            ChannelFilter::Command(OperationType::SoftwareList),
+        );
+        messages
+            .iter()
+            .filter(|message| software_list_topics.accept(message))
+            .collect()
     }
 
     #[tokio::test]
