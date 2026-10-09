@@ -29,6 +29,7 @@ use crate::proxy::WebsocketSocketProxy;
 mod auth;
 mod csv;
 mod input;
+mod mux;
 mod proxy;
 
 const UNIX_SOCKFILE: &str = "/run/c8y-remote-access-plugin.sock";
