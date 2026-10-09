@@ -16,6 +16,7 @@ use crate::warning;
 use anyhow::Context;
 use anyhow::Error;
 use c8y_api::json_c8y_deserializer::C8yAPIError;
+use c8y_api::registration::device_registration_url;
 use camino::Utf8PathBuf;
 use certificate::CloudHttpConfig;
 use certificate::CsrTemplate;
@@ -32,7 +33,6 @@ use tedge_config::models::HTTPS_PORT;
 use tedge_config::TEdgeConfig;
 use tedge_p11::service::ListKeysRequest;
 use tedge_p11::CryptokiConfig;
-use url::form_urlencoded;
 use url::Url;
 use yansi::Paint as _;
 
@@ -54,6 +54,15 @@ pub struct DownloadCertCmd {
     /// A password given by the user is kept secret: it is neither displayed
     /// nor added to the device registration URL.
     pub one_time_password: String,
+
+    /// Treat a supplied one-time password as freshly generated:
+    /// display it and embed it in the registration URL.
+    ///
+    /// Set by callers that generate the password themselves
+    /// (e.g. `tedge bootstrap`, which generates it upfront so the
+    /// registration URL can be exposed to bootstrap hooks);
+    /// a password actually supplied by the user is kept secret
+    pub show_one_time_password: bool,
 
     /// Prompt for the one-time password instead of generating a random one
     pub prompt: bool,
@@ -333,6 +342,7 @@ impl DownloadCertCmd {
         let self_device_id = self.device_id.clone();
         let self_one_time_password = self.one_time_password.clone();
         let self_prompt = self.prompt;
+        let self_show_one_time_password = self.show_one_time_password;
         tokio::task::spawn_blocking(move || {
             let device_id = if self_device_id.is_empty() {
                 print!("Enter device id: ");
@@ -345,7 +355,7 @@ impl DownloadCertCmd {
             };
 
             let (one_time_password, generated) = if !self_one_time_password.is_empty() {
-                (self_one_time_password, false)
+                (self_one_time_password, self_show_one_time_password)
             } else if self_prompt {
                 // Read the security token from /dev/tty
                 (
@@ -453,7 +463,7 @@ struct RegistrationData {
 ///
 /// The password is URL friendly, as it is meant to be passed
 /// as a query parameter of the Cumulocity device registration URL.
-fn generate_one_time_password() -> String {
+pub(crate) fn generate_one_time_password() -> String {
     Alphanumeric.sample_string(&mut rand::rng(), GENERATED_ONE_TIME_PASSWORD_LEN)
 }
 
@@ -468,19 +478,7 @@ fn registration_url(
     device_id: &str,
     password: Option<&str>,
 ) -> String {
-    let host = c8y_url.host();
-    let port = c8y_url.port().0;
-    let authority = if port == HTTPS_PORT {
-        host.to_string()
-    } else {
-        format!("{host}:{port}")
-    };
-    let query = form_urlencoded::Serializer::new(String::new())
-        .append_pair("externalId", device_id)
-        .append_pair("one-time-password", password.unwrap_or_default())
-        .finish();
-
-    format!("https://{authority}/apps/devicemanagement/index.html#/deviceregistration?{query}")
+    device_registration_url(c8y_url, device_id, Some(password.unwrap_or_default()))
 }
 
 #[cfg(test)]

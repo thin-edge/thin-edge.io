@@ -21,6 +21,7 @@ RUN apt-get -y update \
     iptables \
     iptables-persistent \
     netfilter-persistent \
+    qrencode \
     # json tools (for tests)
     jq \
     jo \

@@ -59,8 +59,10 @@ use tedge_config::TEdgeConfig;
 ///     }
 /// }
 /// ```
+// `Send + Sync` so a command can compose others (holding a `Box<dyn Command>`
+// across an await point), as `tedge bootstrap` does with the cert commands
 #[async_trait::async_trait]
-pub trait Command {
+pub trait Command: Send + Sync {
     /// Display that command to the user, telling what will be done.
     ///
     /// This description is displayed to the end user in case of an error, to give the context of that error.
