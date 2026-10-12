@@ -100,6 +100,19 @@ Remote access session is not independent from mapper (when socket activation is 
     ...    msg=This message should not be present as the connection will be severed due to being a child process of the tedge-mapper-c8y
     Cumulocity.Should Only Have Completed Operations
 
+Supports multiplexing clients to the same remote access connection
+    [Documentation]    Multiplexing allows a http/https endpoint to be accessed
+    ...                via a single remote access connection (operation) instead
+    ...                of one per http client.
+    Add Remote Access Passthrough Configuration    port=8000    configuration_name=http+mux:tedgeapi
+
+    # use curl to access the tedge api endpoint twice and check if only 1 operation is created
+    ${stdout}=    Execute Remote Access Command On Host
+    ...    command=curl --max-time 30 -v -f $TARGET:$PORT/te/v1/entities >/dev/null && echo OK && curl --max-time 30 -v -f $TARGET:$PORT/te/v1/entities >/dev/null && echo OK
+    ...    exp_exit_code=0
+    Should Match Regexp    ${stdout}    OK\\nOK\\n
+    Should Have Operations    fragment=c8y_RemoteAccessConnect    min_count=1    max_count=1
+
 
 *** Keywords ***
 Custom Setup
