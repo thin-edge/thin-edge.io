@@ -1390,6 +1390,83 @@ class ThinEdgeIO(DeviceLibrary):
 
             return tuple(output)
 
+    @keyword("Execute Remote Access Command On Host")
+    def execute_custom_remote_access_command(
+        self,
+        command,
+        device: str = "",
+        exp_exit_code: int = 0,
+        stdout: bool = True,
+        stderr: bool = False,
+        **kwargs,
+    ) -> Union[str, Tuple[str]]:
+        """Execute a command using the Cumulocity Remote Access feature (using ssh)
+
+        You have to supply it a local ssh key (local to the machine running the tests).
+
+        Examples:
+        | ${stdout} = | Execute Remote Access Command On Host | command=curl %h:%p |
+        """
+        if not device:
+            device = self.get_device().get_id()
+
+        assert shutil.which(
+            "c8y"
+        ), "could not find c8y binary. Check that go-c8y-cli is installed"
+        cmd = [
+            "c8y",
+            "remoteaccess",
+            "connect",
+            "run",
+            "-n",
+            "--device",
+            device,
+            "--",
+            "sh",
+            "-c",
+            command,
+        ]
+
+        env = {
+            **os.environ.copy(),
+            "CI": "true",
+        }
+
+        with subprocess.Popen(
+            cmd,
+            text=True,
+            encoding="utf8",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        ) as proc:
+            timeout = kwargs.pop("timeout", 30)
+            proc.wait(timeout)
+
+            out = proc.stdout.read() if proc.stdout else ""
+            err = proc.stderr.read() if proc.stderr else ""
+            if exp_exit_code is not None:
+                assert (
+                    proc.returncode == exp_exit_code
+                ), f"Failed to connect via remote access.\nstdout: <<EOT{out}\nEOT\n\nstderr <<EOT\n{err}\nEOT"
+
+            log.info("Command:\n%s", out)
+
+            output = []
+            if stdout:
+                output.append(out)
+            if stderr:
+                output.append(err)
+
+            if len(output) == 0:
+                return ""
+
+            if len(output) == 1:
+                return output[0]
+
+            return tuple(output)
+
     @keyword("Configure SSH")
     def configure_ssh(self, user: str = "root", device: Optional[str] = None) -> str:
         """Configure SSH on a device.
