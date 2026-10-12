@@ -79,7 +79,7 @@ impl CumulocityConverter {
     }
 
     /// Create a Cumulocity inventory update message from a JSON fragment
-    fn inventory_update_message(
+    pub(crate) fn inventory_update_message(
         &self,
         source: &EntityTopicId,
         fragment_value: JsonValue,
