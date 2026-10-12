@@ -591,7 +591,12 @@ impl CumulocityConverter {
                 }
             }
             C8yDeviceControlOperation::ServiceCommand(request) => {
-                self.convert_service_command_request(device_xid, cmd_id, &operation_id, request)
+                if self.config.capabilities.service_commands {
+                    self.convert_service_command_request(device_xid, cmd_id, &operation_id, request)
+                } else {
+                    warn!("Received a c8y_ServiceCommand operation, however, service_commands feature is disabled");
+                    vec![]
+                }
             }
             C8yDeviceControlOperation::Custom => {
                 return self
@@ -3171,7 +3176,7 @@ pub(crate) mod tests {
         create_c8y_converter_from_config(config)
     }
 
-    fn c8y_converter_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
+    pub(crate) fn c8y_converter_config(tmp_dir: &TempTedgeDir) -> C8yMapperConfig {
         tmp_dir.dir("operations").dir("c8y");
         tmp_dir.dir("tedge").dir("agent");
         tmp_dir.dir(".tedge-mapper-c8y");
@@ -3230,7 +3235,7 @@ pub(crate) mod tests {
         )
     }
 
-    fn create_c8y_converter_from_config(
+    pub(crate) fn create_c8y_converter_from_config(
         config: C8yMapperConfig,
     ) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
         let mqtt_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage> =

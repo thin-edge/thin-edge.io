@@ -73,6 +73,13 @@ impl CumulocityConverter {
         operation: &OperationType,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if !self.config.capabilities.service_commands {
+            warn!(
+                "Received service command metadata, however, service_commands feature is disabled"
+            );
+            return Ok(vec![]);
+        }
+
         let action = match operation.name().parse::<ActionName>() {
             Ok(action) => action,
             Err(err) => {
@@ -248,7 +255,9 @@ impl CumulocityConverter {
 
 #[cfg(test)]
 mod tests {
+    use crate::converter::tests::c8y_converter_config;
     use crate::converter::tests::create_c8y_converter;
+    use crate::converter::tests::create_c8y_converter_from_config;
     use crate::converter::tests::register_source_entities;
     use serde_json::json;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
@@ -835,6 +844,57 @@ mod tests {
                 .into(),
             )],
         );
+    }
+
+    #[tokio::test]
+    async fn no_action_is_declared_when_service_commands_are_disabled() {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.capabilities.service_commands = false;
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+        register_source_entities("te/device/main/service/collectd", &mut converter).await;
+
+        assert!(converter
+            .convert(&MqttMessage::new(
+                &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
+                "{}"
+            ))
+            .await
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_operation_is_ignored_when_service_commands_are_disabled() {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.capabilities.service_commands = false;
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+        register_source_entities("te/device/main/service/collectd", &mut converter).await;
+        converter
+            .convert(&MqttMessage::new(
+                &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
+                "{}",
+            ))
+            .await;
+
+        let messages = converter
+            .convert(&MqttMessage::new(
+                &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+                json!({
+                    "id": OPERATION_ID,
+                    "status": "PENDING",
+                    "c8y_ServiceCommand": {
+                        "command": "RESTART",
+                        "serviceName": "collectd",
+                        "serviceType": "service",
+                    },
+                    "externalSource": {"externalId": SERVICE_XID, "type": "c8y_Serial"},
+                })
+                .to_string(),
+            ))
+            .await;
+
+        assert!(messages.is_empty());
     }
 
     fn assert_operation_failed(messages: &[MqttMessage], topic: &str, reason: &str) {
