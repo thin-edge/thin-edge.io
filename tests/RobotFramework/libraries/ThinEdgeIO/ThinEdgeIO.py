@@ -1258,7 +1258,7 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Add Remote Access Passthrough Configuration")
     def add_remote_access_passthrough_configuration(
-        self, device: str = "", port: int = 22, **kwargs
+        self, device: str = "", configuration_name: str = 'passthrough', port: int = 22, **kwargs
     ) -> str:
         """Add the Cumulocity Remote Access Passthrough configuration
         to a device
@@ -1279,6 +1279,7 @@ class ThinEdgeIO(DeviceLibrary):
             "remoteaccess",
             "configurations",
             "create-passthrough",
+            f"--name={configuration_name}",
             "--retries=5",
             "--device",
             device,
