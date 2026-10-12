@@ -1569,6 +1569,90 @@ te/device/main///cmd/config_snapshot/c8y-mapper-<c8y-operation-id>
 
 Where the `<c8y-url>` fields from Cumulocity are rewritten by the mapper to `<c8y-proxy-url>` — locally accessible URLs served by the C8Y HTTP proxy — so the tedge-agent can fetch each resource directly from the proxy during execution.
 
+### Service Command
+
+#### Capabilities
+
+A `cmd/<action>` capability of a service is mapped to an entry of the `c8y_SupportedServiceCommands` fragment
+of the service managed object.
+
+These retained capability messages of the `collectd` service:
+
+```text
+[te/device/main/service/collectd/cmd/start] {}
+[te/device/main/service/collectd/cmd/restart] {}
+```
+
+are mapped to the following messages:
+
+```text
+[c8y/s/us/<main-device-id>:device:main:service:collectd] 114,c8y_ServiceCommand
+[c8y/inventory/managedObjects/update/<main-device-id>:device:main:service:collectd] {"c8y_SupportedServiceCommands":["RESTART","START"]}
+```
+
+The action names are uppercased and sorted.
+The whole list is published again on every change.
+When a capability topic is cleared, the action is removed from the list,
+and an empty list is published when no action is left.
+A capability whose action name breaks the
+[action name rule](../../agent/service-commands#actions) is not mapped.
+
+#### Request
+
+<div class="code-indent-left">
+
+**Cumulocity (input)**
+
+```text title="Topic"
+c8y/devicecontrol/notifications
+```
+
+```json5 title="Payload"
+{
+  "id": "<c8y-operation-id>",
+  "status": "PENDING",
+  "c8y_ServiceCommand": {
+    "command": "RESTART",
+    "serviceName": "collectd",
+    "serviceType": "service"
+  },
+  "externalSource": {
+    "externalId": "<main-device-id>:device:main:service:collectd",
+    "type": "c8y_Serial"
+  }
+}
+```
+
+</div>
+
+<div class="code-indent-right">
+
+**%%te%% (output)**
+
+```text title="Topic"
+te/device/main/service/collectd/cmd/restart/c8y-mapper-<c8y-operation-id>
+```
+
+```json5 title="Payload"
+{
+  "status": "init",
+  "serviceName": "collectd",
+  "serviceType": "service"
+}
+```
+
+</div>
+
+- The **action** is the lowercased `command` value, and it names the topic.
+- The **service name** is the first of these that is set:
+  1. the `serviceName` of the operation,
+     which is the service name %%te%% published when registering it
+  2. the `name` field of the [service registration message](../../mqtt-api#entity-registration)
+- The **service type** is the first of these that is set:
+  1. the `serviceType` of the operation
+  2. the `type` field of the [service registration message](../../mqtt-api#entity-registration)
+  3. the default type `service`
+
 ## Signals
 
 Use the `signal` channel to synchronize the %%te%% command capabilities with Cumulocity.
