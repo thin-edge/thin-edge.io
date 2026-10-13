@@ -181,6 +181,9 @@ pub struct CumulocityConverter {
     // Keep the software list commands issued by this mapper, until they are cleared,
     // to avoid requesting a software list while an equivalent request is still pending
     pending_software_list_requests: HashMap<CmdId, EntityTopicId>,
+    // Targets for which a software list has to be requested, once the pending requests are known.
+    // A capability message can be received before the retained requests issued before a restart.
+    deferred_software_list_requests: HashSet<EntityTopicId>,
 
     pub supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
@@ -267,6 +270,7 @@ impl CumulocityConverter {
             recently_completed_commands: HashMap::new(),
             active_commands_last_cleared: Instant::now(),
             pending_software_list_requests: HashMap::new(),
+            deferred_software_list_requests: HashSet::new(),
             operation_handler,
             service_commands: ServiceCommands::default(),
         })
@@ -854,10 +858,25 @@ impl CumulocityConverter {
         Ok(vec![message])
     }
 
-    fn request_software_list(&self, target: &EntityTopicId) -> MqttMessage {
-        let cmd_id = self.command_id.new_id();
-        let request = SoftwareListCommand::new(target, cmd_id);
-        request.command_message(&self.mqtt_schema)
+    pub fn has_deferred_software_list_requests(&self) -> bool {
+        !self.deferred_software_list_requests.is_empty()
+    }
+
+    /// Requests a software list from each target registered for software update,
+    /// unless a request issued by this mapper is still pending for that target
+    pub fn take_software_list_requests(&mut self) -> Vec<MqttMessage> {
+        let mut requests = vec![];
+        for target in std::mem::take(&mut self.deferred_software_list_requests) {
+            if let Some(cmd_id) = self.pending_software_list_request(&target) {
+                info!("Skipping software list request for {target}: command {cmd_id} is still pending");
+                continue;
+            }
+            let cmd_id = self.command_id.new_id();
+            let request = SoftwareListCommand::new(&target, cmd_id.clone());
+            requests.push(request.command_message(&self.mqtt_schema));
+            self.pending_software_list_requests.insert(cmd_id, target);
+        }
+        requests
     }
 
     async fn forward_operation_request(
@@ -1505,7 +1524,7 @@ impl CumulocityConverter {
             );
             return Ok(vec![]);
         }
-        let mut registration = match self.register_operation(target, "c8y_SoftwareUpdate").await {
+        let registration = match self.register_operation(target, "c8y_SoftwareUpdate").await {
             Err(_) => {
                 error!("Fail to register `software-list` operation for unknown device: {target}");
                 return Ok(vec![]);
@@ -1513,11 +1532,7 @@ impl CumulocityConverter {
             Ok(messages) => messages,
         };
 
-        if let Some(cmd_id) = self.pending_software_list_request(target) {
-            info!("Skipping software list request for {target}: command {cmd_id} is still pending");
-        } else {
-            registration.push(self.request_software_list(target));
-        }
+        self.deferred_software_list_requests.insert(target.clone());
         Ok(registration)
     }
 }
@@ -2686,7 +2701,8 @@ pub(crate) mod tests {
         let device = EntityTopicId::default_main_device();
 
         let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
-        let messages = converter.try_convert(&capability).await.unwrap();
+        converter.try_convert(&capability).await.unwrap();
+        let messages = converter.take_software_list_requests();
 
         let requests = software_list_requests(&converter, &device, &messages);
         assert_eq!(
@@ -2720,11 +2736,53 @@ pub(crate) mod tests {
         converter.try_convert(&previous_request).await.unwrap();
 
         let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
-        let messages = converter.try_convert(&capability).await.unwrap();
+        converter.try_convert(&capability).await.unwrap();
+        let messages = converter.take_software_list_requests();
 
         assert!(
             software_list_requests(&converter, &device, &messages).is_empty(),
             "No software list request expected in {messages:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn software_list_is_not_requested_when_a_pending_request_is_received_after_the_capability(
+    ) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mqtt_schema = converter.mqtt_schema.clone();
+        let device = EntityTopicId::default_main_device();
+
+        let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
+        converter.try_convert(&capability).await.unwrap();
+        let previous_request = SoftwareListCommand::new(&device, "c8y-mapper-1234".into())
+            .command_message(&mqtt_schema);
+        converter.try_convert(&previous_request).await.unwrap();
+        let messages = converter.take_software_list_requests();
+
+        assert!(
+            software_list_requests(&converter, &device, &messages).is_empty(),
+            "No software list request expected in {messages:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn software_list_is_requested_once_when_the_capability_is_received_repeatedly() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mqtt_schema = converter.mqtt_schema.clone();
+        let device = EntityTopicId::default_main_device();
+
+        let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
+        converter.try_convert(&capability).await.unwrap();
+        let mut messages = converter.take_software_list_requests();
+        converter.try_convert(&capability).await.unwrap();
+        messages.extend(converter.take_software_list_requests());
+
+        assert_eq!(
+            software_list_requests(&converter, &device, &messages).len(),
+            1,
+            "Expected a single software list request in {messages:?}"
         );
     }
 
@@ -2747,7 +2805,8 @@ pub(crate) mod tests {
             .unwrap();
 
         let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
-        let messages = converter.try_convert(&capability).await.unwrap();
+        converter.try_convert(&capability).await.unwrap();
+        let messages = converter.take_software_list_requests();
 
         assert_eq!(
             software_list_requests(&converter, &device, &messages).len(),
@@ -2769,7 +2828,8 @@ pub(crate) mod tests {
         converter.try_convert(&local_request).await.unwrap();
 
         let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
-        let messages = converter.try_convert(&capability).await.unwrap();
+        converter.try_convert(&capability).await.unwrap();
+        let messages = converter.take_software_list_requests();
 
         assert_eq!(
             software_list_requests(&converter, &device, &messages).len(),
@@ -2792,7 +2852,8 @@ pub(crate) mod tests {
         converter.try_convert(&child_request).await.unwrap();
 
         let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
-        let messages = converter.try_convert(&capability).await.unwrap();
+        converter.try_convert(&capability).await.unwrap();
+        let messages = converter.take_software_list_requests();
 
         assert_eq!(
             software_list_requests(&converter, &device, &messages).len(),
