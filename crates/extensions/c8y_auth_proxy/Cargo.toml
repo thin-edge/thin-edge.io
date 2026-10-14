@@ -43,7 +43,9 @@ env_logger = { workspace = true }
 httparse = { workspace = true }
 mockito = { workspace = true }
 rcgen = { workspace = true }
+rstest = { workspace = true }
 test-case = { workspace = true }
+tokio-rustls = { workspace = true }
 
 [lints]
 workspace = true

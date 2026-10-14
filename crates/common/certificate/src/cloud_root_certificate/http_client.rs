@@ -9,6 +9,7 @@
 
 use reqwest::Identity;
 use reqwest::StatusCode;
+use std::time::Duration;
 
 use super::CloudHttpConfig;
 
@@ -48,6 +49,14 @@ impl HttpClientBuilder {
     pub fn identity(self, identity: Identity) -> Self {
         Self {
             builder: self.builder.identity(identity),
+            ..self
+        }
+    }
+
+    /// Sets how long an idle connection is kept in the pool for reuse
+    pub fn pool_idle_timeout(self, timeout: Duration) -> Self {
+        Self {
+            builder: self.builder.pool_idle_timeout(timeout),
             ..self
         }
     }
