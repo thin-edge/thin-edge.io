@@ -1,0 +1,15 @@
+operation = "probe"
+
+[init]
+action = "proceed"
+on_success = "device-probed"
+
+[device-probed]
+action = "proceed"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

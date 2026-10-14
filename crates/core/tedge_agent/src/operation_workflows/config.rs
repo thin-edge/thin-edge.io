@@ -31,6 +31,7 @@ impl OperationConfig {
             config_update: tedge_config.agent.enable.config_update,
             config_snapshot: tedge_config.agent.enable.config_snapshot,
             log_upload: tedge_config.agent.enable.log_upload,
+            shell_execute: tedge_config.agent.enable.shell_execute,
         };
         let log_dir = tedge_config.operation_logs();
 

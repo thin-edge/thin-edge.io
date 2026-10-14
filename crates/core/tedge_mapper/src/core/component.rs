@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use tedge_actors::Runtime;
 use tedge_config::TEdgeConfig;
+use tedge_supervisor::SupervisorMode;
 use tedge_utils::paths::TedgePaths;
 
 #[async_trait]
@@ -13,5 +14,6 @@ pub trait TEdgeComponent: Sync + Send {
         &self,
         tedge_config: TEdgeConfig,
         cfg_dir: &TedgePaths,
+        supervisor_mode: SupervisorMode,
     ) -> Result<Runtime, anyhow::Error>;
 }

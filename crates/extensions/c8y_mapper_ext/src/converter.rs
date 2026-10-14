@@ -12,6 +12,7 @@ use crate::error::MessageConversionError;
 use crate::mea::events::EventConverter;
 use crate::operations;
 use crate::operations::OperationHandler;
+use crate::shell_execute::SHELL_EXECUTE_OPERATION;
 use crate::supported_operations::operation::get_child_ops;
 use crate::supported_operations::operation::Operation;
 use crate::supported_operations::operation::ResultFormat;
@@ -658,6 +659,10 @@ impl CumulocityConverter {
         for (on_fragment, custom_handler) in &handlers {
             if extras.contains_key(on_fragment) {
                 if let Some(command_name) = custom_handler.workflow_operation() {
+                    if self.is_disabled_command(command_name) {
+                        warn!("Received a {on_fragment} operation, however, the shell_execute feature is disabled");
+                        break;
+                    }
                     return self.convert_custom_operation_request(
                         device_xid,
                         cmd_id,
@@ -1168,6 +1173,9 @@ impl CumulocityConverter {
                     warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing capabilities is not currently supported");
                     return Ok(vec![]);
                 }
+                if entity_type == EntityType::Service {
+                    return Ok(vec![]);
+                }
                 match operation {
                     OperationType::Restart => self.register_restart_operation(&source).await,
                     OperationType::SoftwareList => {
@@ -1282,12 +1290,25 @@ impl CumulocityConverter {
             {
                 self.parse_c8y_smartrest_topics(message).await
             }
+            topic
+                if topic.name
+                    == C8yTopic::SmartRestRequest
+                        .with_prefix(&self.config.bridge_config.c8y_prefix) =>
+            {
+                // We receive SmartREST operation notifications regardless of whether any custom
+                // operations are configured to use it. This branch exists to prevent us logging
+                // an error for this message we expect
+                Ok(vec![])
+            }
             topic if self.mapper_config.http_event_topic.accept_topic(topic) => {
                 self.post_event_over_http(message).await?;
                 Ok(vec![])
             }
             _ => {
-                error!("Unsupported topic: {}", message.topic.name);
+                warn!(
+                    "Received message on subscribed topic '{}' but no handler matched.",
+                    message.topic.name
+                );
                 Ok(vec![])
             }
         }?;
@@ -1422,11 +1443,24 @@ impl CumulocityConverter {
         }
     }
 
+    /// The built-in `shell_execute` command is only mapped to Cumulocity
+    /// when the `c8y.enable.shell_execute` feature is enabled
+    fn is_disabled_command(&self, command_name: &str) -> bool {
+        command_name == SHELL_EXECUTE_OPERATION && !self.config.capabilities.shell_execute
+    }
+
     async fn register_custom_operation(
         &mut self,
         target: &EntityTopicId,
         command_name: &str,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if self.is_disabled_command(command_name) {
+            warn!(
+                "Received {command_name} metadata, however, the shell_execute feature is disabled"
+            );
+            return Ok(vec![]);
+        }
+
         if let Some(c8y_op_name) = self
             .supported_operations
             .get_operation_name_by_workflow_operation(command_name)
@@ -2860,6 +2894,19 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn smartrest_message_on_builtin_topic_is_not_an_unsupported_topic() {
+        let (capture, _guard) = tedge_test_utils::tracing::TracingCapture::default().start();
+
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+
+        let message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test-device");
+        converter.try_convert(&message).await.unwrap();
+
+        capture.assert_no_errors();
+    }
+
+    #[tokio::test]
     async fn handle_operations_for_child_device() {
         let tmp_dir = TempTedgeDir::new();
         let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
@@ -3270,8 +3317,14 @@ pub(crate) mod tests {
 
         let msgs = converter.convert(&operation_msg).await;
         assert_messages_matching(&msgs, [("c8y/s/us/child0", "114,c8y_Operation".into())]);
+    }
 
-        // service command
+    #[tokio::test]
+    async fn a_service_capability_registers_no_supported_operation() {
+        let tmp_dir = TempTedgeDir::new();
+        let config = c8y_converter_config(&tmp_dir);
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+
         let reg_message = MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/service0"),
             json!({
@@ -3288,17 +3341,17 @@ pub(crate) mod tests {
             .await
             .unwrap();
 
-        let service = main_device.default_service_for_device("service0").unwrap();
+        let service = EntityTopicId::default_main_service("service0").unwrap();
         let operation_topic = converter.mqtt_schema.topic_for(
             &service,
             &Channel::CommandMetadata {
-                operation: OperationType::Custom("my_operation".to_string()),
+                operation: OperationType::Restart,
             },
         );
         let operation_msg = MqttMessage::new(&operation_topic, "{}");
 
         let msgs = converter.convert(&operation_msg).await;
-        assert_messages_matching(&msgs, [("c8y/s/us/service0", "114,c8y_Operation".into())]);
+        assert!(msgs.is_empty());
     }
 
     fn registered_entities_into_mqtt_messages(

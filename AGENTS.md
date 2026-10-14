@@ -213,6 +213,7 @@ Plugins are **separate executables** (not dynamically loaded libraries) that han
 - `tedge-file-log-plugin`: Log file uploads
 - `c8y-firmware-plugin`: Firmware updates
 - `c8y-remote-access-plugin`: Remote SSH/VNC access
+- `tedge-shell-plugin`: Shell command execution (`shell_execute` operation)
 
 **Plugin benefits:**
 - Process isolation (crash safety)

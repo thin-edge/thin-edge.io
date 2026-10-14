@@ -20,8 +20,6 @@ replaces:
   - tedge_mapper
 provides:
   - tedge_mapper
-conflicts:
-  - tedge_mapper (<= 0.8.1)
 
 deb:
   fields:
@@ -260,6 +258,8 @@ overrides:
       postremove: configuration/package_scripts/_generated/tedge-mapper/rpm/postrm
 
   deb:
+    conflicts:
+      - tedge_mapper (<= 0.8.1)
     scripts:
       preinstall: configuration/package_scripts/_generated/tedge-mapper/deb/preinst
       postinstall: configuration/package_scripts/_generated/tedge-mapper/deb/postinst
@@ -267,6 +267,8 @@ overrides:
       postremove: configuration/package_scripts/_generated/tedge-mapper/deb/postrm
 
   ipk:
+    conflicts:
+      - tedge_mapper (<= 0.8.1)
     scripts:
       preinstall: configuration/package_scripts/_generated/tedge-mapper/ipk/preinst
       postinstall: configuration/package_scripts/_generated/tedge-mapper/ipk/postinst

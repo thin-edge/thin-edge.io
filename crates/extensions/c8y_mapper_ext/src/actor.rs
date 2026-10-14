@@ -2,6 +2,7 @@ use super::config::C8yMapperConfig;
 use super::converter::CumulocityConverter;
 use super::dynamic_discovery::process_inotify_events;
 use crate::entity_cache::UpdateOutcome;
+use crate::shell_execute;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
@@ -414,6 +415,11 @@ impl C8yMapperBuilder {
     pub async fn init(config: &C8yMapperConfig) -> Result<(), PathsError> {
         // Create c8y operations directory
         config.ops_dir.ensure().await?;
+
+        if config.capabilities.shell_execute {
+            shell_execute::deploy_operation_template(&config.ops_dir).await?;
+        }
+
         Ok(())
     }
 }
