@@ -3,6 +3,10 @@ use crate::command::Command;
 use crate::log::MaybeFancy;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
+use clap_complete::ArgValueCandidates;
+use clap_complete::CompletionCandidate;
+use std::collections::BTreeSet;
+use std::path::Path;
 use std::process::Stdio;
 use tedge_api::service_command::ActionName;
 use tedge_api::service_command::ServiceName;
@@ -10,6 +14,8 @@ use tedge_api::service_command::ServiceType;
 use tedge_api::service_command::DEFAULT_SERVICE_TYPE;
 use tedge_api::workflow::BEGIN_TEDGE_MARKER;
 use tedge_api::workflow::END_TEDGE_MARKER;
+use tedge_config::get_config_dir;
+use tedge_config::SystemConfig;
 use tedge_config::TEdgeConfig;
 use tedge_system_services::service_manager;
 use tedge_system_services::SystemService;
@@ -24,6 +30,7 @@ pub struct TEdgeServiceOpt {
     ///
     /// Which actions are supported is decided depending on the service type.
     /// Init system for the default service type, a service plugin for any other type.
+    #[arg(add(ArgValueCandidates::new(action_completions)))]
     action: ActionName,
 
     /// The name of the service to act on
@@ -34,6 +41,7 @@ pub struct TEdgeServiceOpt {
     /// The default type is handled by the init system configured in system.toml.
     /// Any other type is handled by the service plugin.
     #[clap(long("type"), default_value = DEFAULT_SERVICE_TYPE)]
+    #[arg(add(ArgValueCandidates::new(service_type_completions)))]
     service_type: ServiceType,
 }
 
@@ -243,6 +251,58 @@ fn forward_output(stdout: &str, stderr: &str) {
     eprint!("{stderr}");
 }
 
+/// Only the actions of the default service type are completed, as defined in system.toml.
+/// A completer cannot read the `--type` argument, so it cannot tell which service type is used.
+/// Even when the service type is known, a service plugin cannot be asked which actions it supports.
+fn action_completions() -> Vec<CompletionCandidate> {
+    let Ok(config_dir) = Utf8PathBuf::try_from(get_config_dir()) else {
+        return vec![];
+    };
+    action_completions_for_config_dir(&config_dir)
+}
+
+fn action_completions_for_config_dir(config_dir: &Utf8Path) -> Vec<CompletionCandidate> {
+    let Ok(config) = SystemConfig::try_new(config_dir) else {
+        return vec![];
+    };
+    config
+        .init
+        .action_names()
+        .into_iter()
+        .map(CompletionCandidate::new)
+        .collect()
+}
+
+fn service_type_completions() -> Vec<CompletionCandidate> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(service_type_completions_for_config_dir(get_config_dir()))
+    })
+}
+
+async fn service_type_completions_for_config_dir(
+    config_dir: impl AsRef<Path>,
+) -> Vec<CompletionCandidate> {
+    let mut types = BTreeSet::from([DEFAULT_SERVICE_TYPE.to_string()]);
+    if let Ok(config) = TEdgeConfig::load(config_dir).await {
+        for dir in &config.service.plugin_paths.0 {
+            let Ok(mut entries) = tokio::fs::read_dir(dir).await else {
+                continue;
+            };
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let is_file = tokio::fs::metadata(entry.path())
+                    .await
+                    .is_ok_and(|metadata| metadata.is_file());
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if is_file && name.parse::<ServiceType>().is_ok() {
+                    types.insert(name);
+                }
+            }
+        }
+    }
+    types.into_iter().map(CompletionCandidate::new).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -439,6 +499,69 @@ disable = ["/bin/true", "{}"]
             extract_script_output(without_workflow_markers(stdout)),
             None
         );
+    }
+
+    #[test]
+    fn the_actions_defined_in_system_toml_are_completed() {
+        let config_dir = TempTedgeDir::new();
+        init_system(&config_dir);
+
+        let actions: Vec<_> = action_completions_for_config_dir(config_dir.path())
+            .iter()
+            .map(|candidate| candidate.get_value().to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            actions,
+            [
+                "disable",
+                "enable",
+                "is_active",
+                "reload",
+                "restart",
+                "start",
+                "stop"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_standard_actions_are_completed_when_there_is_no_system_toml() {
+        let config_dir = TempTedgeDir::new();
+
+        let actions: Vec<_> = action_completions_for_config_dir(config_dir.path())
+            .iter()
+            .map(|candidate| candidate.get_value().to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            actions,
+            ["disable", "enable", "is_active", "restart", "start", "stop"]
+        );
+    }
+
+    #[tokio::test]
+    async fn the_service_types_completed_are_the_default_type_and_the_plugin_files() {
+        let config_dir = TempTedgeDir::new();
+        let first = config_dir.dir("first");
+        let second = config_dir.dir("second");
+        service_plugin(first.path(), "container");
+        service_plugin(second.path(), "container");
+        service_plugin(second.path(), "lxc");
+        second.dir("not-a-plugin");
+        config_dir.file("tedge.toml").with_raw_content(&format!(
+            "service.plugin_paths = [\"{}\", \"{}\", \"/no/such/directory\"]",
+            first.path(),
+            second.path()
+        ));
+
+        let types: Vec<_> = service_type_completions_for_config_dir(config_dir.path())
+            .await
+            .iter()
+            .map(|candidate| candidate.get_value().to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(types, ["container", "lxc", "service"]);
     }
 
     fn command(action: &str, service_name: &str, service_type: &str) -> ServiceActionCommand {
