@@ -224,6 +224,54 @@ Resume On Restart A Pending Operation
     Should Contain    ${messages[0]}    item="sleep killed by signal 15"
     Should Contain    ${messages[0]}    item="resumed_at"
 
+Declare A Capability For Each Operation Of An Array And Execute Them
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lock-and-unlock.toml    /etc/tedge/operations/locks.toml
+    Should Have Retained MQTT Messages    te/device/main///cmd/lock    message_pattern=^{}$
+    Should Have Retained MQTT Messages    te/device/main///cmd/unlock    message_pattern=^{}$
+
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/lock/dyn-test-13 '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/lock/dyn-test-13
+    ...    message_pattern=.*successful.*
+
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/unlock/dyn-test-14 '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/unlock/dyn-test-14
+    ...    message_pattern=.*successful.*
+
+Clear The Capabilities Of A Deleted Workflow File
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lock-and-unlock.toml    /etc/tedge/operations/locks.toml
+    Should Have Retained MQTT Messages    te/device/main///cmd/lock    message_pattern=^{}$
+    Should Have Retained MQTT Messages    te/device/main///cmd/unlock    message_pattern=^{}$
+
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lock-only.toml    /etc/tedge/operations/locks.toml
+    Should Have Retained MQTT Messages    te/device/main///cmd/lock    message_pattern=^{}$
+    Should Not Have Retained MQTT Messages    te/device/main///cmd/unlock
+
+    Execute Command    rm /etc/tedge/operations/locks.toml
+    Should Not Have Retained MQTT Messages    te/device/main///cmd/lock
+
+Use Another File Defining The Same Operation When The File Loaded Last Is Deleted
+    ${timestamp}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lock-only.toml    /etc/tedge/operations/lock-only.toml
+    Should Have MQTT Messages    te/device/main///cmd/lock    message_pattern=^{}$    date_from=${timestamp}
+    ${timestamp}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/lock-and-unlock.toml    /etc/tedge/operations/lock-and-unlock.toml
+    Should Have MQTT Messages    te/device/main///cmd/unlock    message_pattern=^{}$    date_from=${timestamp}
+
+    Execute Command    rm /etc/tedge/operations/lock-and-unlock.toml
+    Should Not Have Retained MQTT Messages    te/device/main///cmd/unlock
+    Should Have Retained MQTT Messages    te/device/main///cmd/lock    message_pattern=^{}$
+
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/lock/dyn-test-15 '{"status":"init"}'
+    ${messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/lock/dyn-test-15
+    ...    message_pattern=.*successful.*
+    Should Contain    ${messages[0]}    item="workflow_file":"lock-only.toml"
+
 
 *** Keywords ***
 Custom Setup
@@ -257,6 +305,12 @@ Custom Test Setup
     ...    tedge mqtt pub --retain te/device/main///cmd/sleep/dyn-test-11 ''
     Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/sleep/dyn-test-12 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/lock/dyn-test-13 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/unlock/dyn-test-14 ''
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/lock/dyn-test-15 ''
 
 Copy Scripts
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh    /etc/tedge/operations/

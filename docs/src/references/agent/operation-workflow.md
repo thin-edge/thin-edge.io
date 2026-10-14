@@ -148,7 +148,8 @@ and combined them with the builtin workflows implemented by the agent itself.
 
 Each workflow is defined using a TOML file stored in `/etc/tedge/operations`. Each specifies:
 - the command name that it should trigger on
-  such as `firmware_update` or `restart`
+  such as `firmware_update` or `restart`,
+  or [several command names](#workflow-operation-array)
 - optionally, the [type of entity](#workflow-entity-type) the workflow applies to
 - the list of states
 - for each state:
@@ -246,6 +247,27 @@ so two workflows for the same operation only have to be in two files with differ
 
 A workflow with `type = "service"` publishes no capability.
 Each service [declares its own actions](../service-commands#declaring-an-action).
+
+### One workflow for several operations {#workflow-operation-array}
+
+The `operation` field can be an array of operation names,
+when several operations go through the same steps:
+
+```toml title="file: service_commands.toml"
+operation = ["start", "stop", "restart", "enable", "disable"]
+type = "service"
+
+[init]
+  action = "proceed"
+  on_success = "executing"
+
+[executing]
+  script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
+  on_success = "successful"
+```
+
+The file defines one workflow for each operation of the array.
+A step reads the operation of the current command from `${.topic.operation}`.
 
 ### Script Execution
 

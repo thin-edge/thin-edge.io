@@ -11,6 +11,7 @@ use crate::workflow::GenericStateUpdate;
 use crate::workflow::IterateHandlers;
 use crate::workflow::OperationAction;
 use crate::workflow::OperationWorkflow;
+use crate::workflow::OperationWorkflows;
 use crate::workflow::ScriptDefinitionError;
 use crate::workflow::WorkflowDefinitionError;
 use serde::de::Error;
@@ -32,8 +33,8 @@ use std::time::Duration;
 /// The user view of an operation workflow configured using a TOML file.
 #[derive(Clone, Debug, Deserialize)]
 pub struct TomlOperationWorkflow {
-    /// The operation to which this workflow applies
-    pub operation: OperationType,
+    /// The operations to which this workflow applies
+    pub operation: TomlOperationNames,
 
     /// The type of the entity this workflow applies
     #[serde(rename = "type", default = "crate::workflow::default_entity_type")]
@@ -46,6 +47,26 @@ pub struct TomlOperationWorkflow {
     /// The states of the state machine
     #[serde(flatten)]
     pub states: HashMap<String, TomlOperationState>,
+}
+
+/// The `operation` property of a workflow: a single operation name, or an array of names
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[serde(
+    untagged,
+    expecting = "an operation name or an array of operation names"
+)]
+pub enum TomlOperationNames {
+    Single(OperationType),
+    Array(Vec<OperationType>),
+}
+
+impl TomlOperationNames {
+    pub fn into_operations(self) -> Vec<OperationType> {
+        match self {
+            TomlOperationNames::Single(operation) => vec![operation],
+            TomlOperationNames::Array(operations) => operations,
+        }
+    }
 }
 
 /// User-friendly representation of an [OperationAction] and associated handlers.
@@ -232,11 +253,15 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
     }
 }
 
-impl TryFrom<TomlOperationWorkflow> for OperationWorkflow {
+impl TryFrom<TomlOperationWorkflow> for OperationWorkflows {
     type Error = WorkflowDefinitionError;
 
     fn try_from(input: TomlOperationWorkflow) -> Result<Self, Self::Error> {
-        let operation = input.operation;
+        let operations = input.operation.into_operations();
+        if operations.is_empty() {
+            return Err(WorkflowDefinitionError::NoOperation);
+        }
+
         let default_handlers = DefaultHandlers::try_from(input.handlers)?;
         let mut states = HashMap::new();
         for (state, action_spec) in input.states.into_iter() {
@@ -244,7 +269,25 @@ impl TryFrom<TomlOperationWorkflow> for OperationWorkflow {
             states.insert(state, action);
         }
 
-        OperationWorkflow::try_new(input.entity_type, operation, default_handlers, states)
+        let mut workflows: Vec<OperationWorkflow> = Vec::with_capacity(operations.len());
+        for operation in operations {
+            if workflows
+                .iter()
+                .any(|workflow| workflow.operation == operation)
+            {
+                return Err(WorkflowDefinitionError::DuplicatedOperation {
+                    operation: operation.to_string(),
+                });
+            }
+            workflows.push(OperationWorkflow::try_new(
+                input.entity_type,
+                operation,
+                default_handlers.clone(),
+                states.clone(),
+            )?);
+        }
+
+        Ok(OperationWorkflows { workflows })
     }
 }
 
@@ -727,7 +770,10 @@ on_success = "successful_reboot"
 on_error = "failed_reboot"
 "#;
         let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        assert_eq!(input.operation, "check".parse().unwrap());
+        assert_eq!(
+            input.operation,
+            TomlOperationNames::Single("check".parse().unwrap())
+        );
         assert_eq!(input.handlers.timeout_second, Some(3600));
         assert_eq!(
             input.handlers.on_timeout,
@@ -757,8 +803,7 @@ on_success = "successful"
 "#
         );
 
-        let input: TomlOperationWorkflow = toml::from_str(&file).unwrap();
-        let workflow = OperationWorkflow::try_from(input).unwrap();
+        let workflow = OperationWorkflow::from_toml(&file);
         assert_eq!(workflow.entity_type, expected);
     }
 
@@ -792,7 +837,7 @@ script = "/some/script/which/fails"
 "#;
 
         let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        let error = OperationWorkflow::try_from(input).unwrap_err();
+        let error = OperationWorkflows::try_from(input).unwrap_err();
         assert_eq!(
             error,
             WorkflowDefinitionError::InvalidAction {
@@ -809,6 +854,97 @@ script = "/some/script/which/fails"
                 ),
             }
         )
+    }
+
+    #[test]
+    fn a_workflow_can_be_defined_for_an_array_of_operations() {
+        let file = r#"
+operation = ["start", "stop"]
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "successful"
+"#;
+
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let definition = OperationWorkflows::try_from(input).unwrap();
+        let operations: Vec<_> = definition
+            .workflows
+            .iter()
+            .map(|workflow| (workflow.entity_type, workflow.operation.to_string()))
+            .collect();
+        assert_eq!(
+            operations,
+            vec![
+                (EntityType::Service, "start".to_string()),
+                (EntityType::Service, "stop".to_string())
+            ]
+        );
+        assert_eq!(
+            definition.workflows[0].states,
+            definition.workflows[1].states
+        );
+    }
+
+    #[test]
+    fn an_empty_array_of_operations_is_rejected() {
+        let file = r#"
+operation = []
+
+[init]
+action = "proceed"
+on_success = "successful"
+"#;
+
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let error = OperationWorkflows::try_from(input).unwrap_err();
+        assert_eq!(error, WorkflowDefinitionError::NoOperation);
+    }
+
+    #[test]
+    fn an_operation_given_twice_is_rejected() {
+        let file = r#"
+operation = ["start", "stop", "start"]
+
+[init]
+action = "proceed"
+on_success = "successful"
+"#;
+
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let error = OperationWorkflows::try_from(input).unwrap_err();
+        assert_eq!(
+            error,
+            WorkflowDefinitionError::DuplicatedOperation {
+                operation: "start".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn a_builtin_operation_is_rejected_for_the_other_operations_of_an_array() {
+        let file = r#"
+operation = ["software_update", "software_check"]
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+operation = "builtin:software_update"
+on_exec = "successful"
+"#;
+
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let error = OperationWorkflows::try_from(input).unwrap_err();
+        assert_eq!(
+            error,
+            WorkflowDefinitionError::InvalidBuiltinOperation {
+                main_operation: "software_check".to_string(),
+                builtin_operation: "software_update".to_string()
+            }
+        );
     }
 
     #[test]
@@ -836,8 +972,7 @@ action = "cleanup"
 [failed]
 action = "cleanup"
 "#;
-        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        let workflow = OperationWorkflow::try_from(input).unwrap();
+        let workflow = OperationWorkflow::from_toml(file);
 
         match workflow.states.get("apply_operation").unwrap() {
             OperationAction::Iterate(
@@ -868,7 +1003,7 @@ on_success = "successful"
 on_error = "failed"
 "#;
         let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        let res = OperationWorkflow::try_from(input);
+        let res = OperationWorkflows::try_from(input);
         assert_matches!(res, Err(WorkflowDefinitionError::MissingState { state }) if state == *"on_next");
     }
 
@@ -883,7 +1018,7 @@ on_next = "next_operation"
 on_error = "failed"
 "#;
         let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        let res = OperationWorkflow::try_from(input);
+        let res = OperationWorkflows::try_from(input);
         assert_matches!(res, Err(WorkflowDefinitionError::MissingState { state }) if state == *"on_success");
     }
 
@@ -899,7 +1034,7 @@ on_success = "successful"
 on_error = "failed"
 "#;
         let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        let res = OperationWorkflow::try_from(input);
+        let res = OperationWorkflows::try_from(input);
         assert_matches!(res, Err(WorkflowDefinitionError::InvalidPathExpression(_)));
     }
 
@@ -924,8 +1059,7 @@ action = "cleanup"
 [failed]
 action = "cleanup"
 "#;
-        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        let workflow = OperationWorkflow::try_from(input).unwrap();
+        let workflow = OperationWorkflow::from_toml(file);
 
         match workflow.states.get("download").unwrap() {
             OperationAction::Download(input_excerpt, handlers) => {
@@ -963,8 +1097,7 @@ action = "cleanup"
 [failed]
 action = "cleanup"
 "#;
-        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        let workflow = OperationWorkflow::try_from(input).unwrap();
+        let workflow = OperationWorkflow::from_toml(file);
 
         match workflow.states.get("set").unwrap() {
             OperationAction::BuiltInOperationStep(operation, step, input_excerpt, handlers) => {
@@ -1003,8 +1136,7 @@ action = "cleanup"
 [failed]
 action = "cleanup"
 "#;
-        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        let workflow = OperationWorkflow::try_from(input).unwrap();
+        let workflow = OperationWorkflow::from_toml(file);
 
         match workflow.states.get("upload").unwrap() {
             OperationAction::Upload(input_excerpt, handlers) => {
@@ -1046,8 +1178,7 @@ action = "cleanup"
 [failed]
 action = "cleanup"
 "#;
-        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
-        let workflow = OperationWorkflow::try_from(input).unwrap();
+        let workflow = OperationWorkflow::from_toml(file);
 
         match workflow.states.get("get").unwrap() {
             OperationAction::BuiltInOperationStep(operation, step, input_excerpt, handlers) => {
