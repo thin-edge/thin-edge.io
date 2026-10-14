@@ -226,7 +226,7 @@ Restarting a device is not restarting one of its services.
 
 A workflow therefore declares the type of entity it applies to, with a `type` field:
 
-```toml title="file: service_restart.toml"
+```toml title="file: service_restart_example.toml"
 operation = "restart"
 type = "service"
 

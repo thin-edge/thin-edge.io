@@ -1,9 +1,8 @@
 use tedge_utils::paths::ManagedDir;
 
-// Using an array to expand later for other actions: e.g. start, stop, enable, disable
 const SHIPPED_WORKFLOWS: [(&str, &str); 1] = [(
-    "service_restart.toml",
-    include_str!("../resources/service_restart.toml"),
+    "service_commands.toml",
+    include_str!("../resources/service_commands.toml"),
 )];
 
 pub async fn install_service_workflows(ops_dir: &ManagedDir) -> Result<(), anyhow::Error> {

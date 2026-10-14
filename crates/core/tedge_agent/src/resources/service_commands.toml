@@ -1,4 +1,4 @@
-operation = "restart"
+operation = ["start", "stop", "restart", "enable", "disable"]
 type = "service"
 
 [init]
@@ -7,7 +7,12 @@ on_success = "executing"
 
 [executing]
 action = "proceed"
-on_success = "evaluate-agent-restart"
+on_success = "evaluate-restart"
+
+[evaluate-restart]
+script = "test ${.topic.operation} = restart"
+on_exit.0 = "evaluate-agent-restart"
+on_exit.1-255 = "execute"
 
 # tedge-agent restarts itself: asking the init system would kill it in the middle of this workflow.
 # systemd restarts `tedge-agent.service` and `tedge-agent` alike, and the name comes from the
@@ -29,12 +34,10 @@ on_timeout = { status = "failed", reason = "tedge-agent did not restart in time"
 
 [execute]
 script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
-# systemd waits for the service to stop and to start again, 90 seconds each by default
+# On restart, systemd waits for the service to stop and to start again, 90 seconds each by default
 timeout_second = 180
 on_exit.0 = "successful"
-on_exit.1 = { status = "failed", reason = "The action failed, see the operation log for the reason" }
-on_exit.2 = { status = "failed", reason = "This action is not supported for that type of service" }
-on_exit.3-255 = { status = "failed", reason = "The action failed, see the operation log for the reason" }
+on_exit.1-255 = { status = "failed", reason = "The action failed, see the operation log for the reason" }
 on_kill = { status = "failed", reason = "The action did not complete in time and was cancelled" }
 
 [successful]
