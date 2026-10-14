@@ -18,8 +18,6 @@ depends:
   - tedge
 replaces:
   - tedge_apt_plugin
-conflicts:
-  - tedge_apt_plugin (<= 0.8.1)
 
 deb:
   fields:
@@ -34,3 +32,11 @@ contents:
   - src: /usr/bin/tedge-apt-plugin
     dst: /etc/tedge/sm-plugins/apt
     type: symlink
+
+overrides:
+  deb:
+    conflicts:
+      - tedge_apt_plugin (<= 0.8.1)
+  ipk:
+    conflicts:
+      - tedge_apt_plugin (<= 0.8.1)
