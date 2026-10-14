@@ -38,6 +38,7 @@ impl<'js> TextEncoder {
     }
 
     #[qjs(rename = "encodeInto")]
+    #[allow(unsafe_code)]
     pub fn encode_into(
         &self,
         ctx: Ctx<'js>,

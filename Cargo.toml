@@ -280,3 +280,4 @@ uninlined_format_args = "allow"
 
 [workspace.lints.rust]
 rust_2024_incompatible_pat = "deny"
+unsafe_code = "deny"
