@@ -273,6 +273,17 @@ jobs:
     - name: Run ShellCheck
       uses: ludeeus/action-shellcheck@master
 
+  test-doc-comments:
+    name: Check for doc comments on tests
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check changed tests
+        run: ci/check_test_doc_comments.sh "$(git merge-base origin/${{ github.base_ref }} HEAD)"
+
   typos:
     name: Spell Check with Typos
     runs-on: ubuntu-latest
