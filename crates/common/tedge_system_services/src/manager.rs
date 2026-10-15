@@ -46,6 +46,13 @@ pub trait SystemServiceManager: Debug + Send + Sync {
     /// Checks whether the system service manager facility is available and operational.
     async fn check_operational(&self) -> Result<(), SystemServiceError>;
 
+    /// Returns the command of an action defined in `system.toml` for the given service, without running it.
+    fn action_command(
+        &self,
+        action: &str,
+        service: SystemService<'_>,
+    ) -> Result<ExecCommand, SystemServiceError>;
+
     /// Runs an action defined in `system.toml` on the given service.
     async fn run_action(
         &self,

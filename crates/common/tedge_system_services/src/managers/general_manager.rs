@@ -56,12 +56,20 @@ impl SystemServiceManager for GeneralServiceManager {
         }
     }
 
+    fn action_command(
+        &self,
+        action: &str,
+        service: SystemService<'_>,
+    ) -> Result<ExecCommand, SystemServiceError> {
+        ServiceCommand::Action(action, service).try_exec_command(self)
+    }
+
     async fn run_action(
         &self,
         action: &str,
         service: SystemService<'_>,
     ) -> Result<ServiceCommandOutcome, SystemServiceError> {
-        let exec_command = ServiceCommand::Action(action, service).try_exec_command(self)?;
+        let exec_command = self.action_command(action, service)?;
         self.run_service_command_as_root(exec_command, self.config_path.as_str())
             .await
     }
@@ -78,7 +86,7 @@ impl SystemServiceManager for GeneralServiceManager {
 }
 
 #[derive(Debug, PartialEq)]
-struct ExecCommand {
+pub struct ExecCommand {
     exec: String,
     args: Vec<String>,
 }
@@ -112,7 +120,7 @@ impl ExecCommand {
         Self::try_new(replaced, service_cmd, config_path)
     }
 
-    fn to_command(&self) -> tokio::process::Command {
+    pub fn to_command(&self) -> tokio::process::Command {
         let mut cmd = tokio::process::Command::new(&self.exec);
         cmd.args(&self.args).stdin(Stdio::null());
         cmd
