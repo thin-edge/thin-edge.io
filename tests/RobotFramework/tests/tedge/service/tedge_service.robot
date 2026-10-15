@@ -37,6 +37,22 @@ Run tedge service for service plugin
 Run tedge service for a service type with no plugin
     Execute Command    tedge service restart name --type no_such_backend    exp_exit_code=2
 
+tedge service terminates an action not completing in time
+    ${stderr}=    Execute Command
+    ...    tedge service hang name --type dummy --timeout 1s
+    ...    strip=True
+    ...    stdout=False
+    ...    stderr=True
+    ...    exp_exit_code=124
+    Should Contain    ${stderr}    did not complete within 1s
+    Execute Command    pgrep -f 'sleep 123[4]'    exp_exit_code=1
+
+tedge service terminates the action when it is stopped
+    Execute Command    nohup tedge service hang name --type dummy >/dev/null 2>&1 &
+    Wait Until Keyword Succeeds    10x    1s    Execute Command    pgrep -f 'sleep 123[4]'
+    Execute Command    pkill -TERM -f 'tedge service han[g]'
+    Wait Until Keyword Succeeds    10x    1s    Execute Command    pgrep -f 'sleep 123[4]'    exp_exit_code=1
+
 tedge service does not support name and is_available
     ${stderr}=    Execute Command
     ...    tedge service name sleeper    strip=True    exp_exit_code=2    stdout=False    stderr=True
