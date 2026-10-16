@@ -11,6 +11,7 @@ use crate::reflect::ConfigError;
 use crate::reflect::KeyEntry;
 
 /// A write operation routed through the generic config backend.
+#[derive(Clone)]
 pub enum Action {
     Set(String),
     Unset,
