@@ -5551,6 +5551,7 @@ dependencies = [
  "tedge_config_engine-macro",
  "tempfile",
  "thiserror 2.0.12",
+ "toml 0.9.6",
 ]
 
 [[package]]
@@ -5803,6 +5804,7 @@ dependencies = [
  "tedge_config_engine",
  "tedge_config_engine-macro",
  "tempfile",
+ "toml 0.9.6",
 ]
 
 [[package]]

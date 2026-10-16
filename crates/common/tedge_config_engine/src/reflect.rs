@@ -58,6 +58,11 @@ pub enum ConfigError {
     FromRootInRootConfig { key: String, root_key: String },
     #[error("A config source is already mounted at prefix '{0}'")]
     DuplicatePrefix(String),
+    #[error("Not writing {}, as it has keys this schema doesn't know: {}", path.display(), keys.join(", "))]
+    UnknownKeysInFile {
+        path: std::path::PathBuf,
+        keys: Vec<String>,
+    },
     #[error("I/O error: {0}")]
     IoError(String),
 }
