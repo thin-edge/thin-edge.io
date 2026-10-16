@@ -1,5 +1,6 @@
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use std::collections::HashMap;
-use std::path::Path;
 use tedge_config_engine::federated::FederatedConfig;
 use tedge_config_engine::ops::Action;
 use tedge_config_engine::ops::ConfigOps;
@@ -110,8 +111,8 @@ pub fn is_builtin_mapper_name(name: &str) -> bool {
 }
 
 /// Generates completion entries for a built-in mapper that has no directory yet
-pub fn builtin_mapper_entries(config_dir: &Path, name: &str) -> Vec<KeyEntry> {
-    let mgr = ConfigManager::from_schema::<MapperConfig>(config_dir);
+pub fn builtin_mapper_entries(config_dir: &Utf8Path, name: &str) -> Vec<KeyEntry> {
+    let mgr = ConfigManager::from_schema::<MapperConfig>(config_dir.as_std_path());
     let toml_path = config_dir.join("mappers").join(name).join("mapper.toml");
     let ops = TypedConfigOps::<MapperConfigDto>::new(mgr, toml_path);
     let prefix = format!("mappers.{name}.");
@@ -144,7 +145,7 @@ pub fn extract_builtin_mapper_name(key: &str) -> Option<String> {
 }
 
 /// Turns a `tedge mapper config get` key such as `c8y.prod.url` into its `mappers.*` key
-pub fn mapper_key_from_dir_key(key: &str, config_dir: &Path) -> String {
+pub fn mapper_key_from_dir_key(key: &str, config_dir: &Utf8Path) -> String {
     let mut dirs = mapper_dirs(config_dir);
     // Longest first, so `c8y.prod.url` matches `c8y.prod` rather than `c8y`
     dirs.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
@@ -169,32 +170,32 @@ fn mount_prefix(dir_name: &str) -> String {
 }
 
 /// The mapper directories under `{config_dir}/mappers/`, sorted by name
-fn mapper_dirs(config_dir: &Path) -> Vec<(String, std::path::PathBuf)> {
-    let Ok(entries) = std::fs::read_dir(config_dir.join("mappers")) else {
+fn mapper_dirs(config_dir: &Utf8Path) -> Vec<(String, Utf8PathBuf)> {
+    let Ok(entries) = config_dir.join("mappers").read_dir_utf8() else {
         return Vec::new();
     };
     let mut dirs: Vec<_> = entries
         .flatten()
         .filter(|entry| entry.path().is_dir())
-        .filter_map(|entry| Some((entry.file_name().to_str()?.to_owned(), entry.path())))
+        .map(|entry| (entry.file_name().to_owned(), entry.into_path()))
         .collect();
-    dirs.sort_by(|(a, _), (b, _)| a.cmp(b));
+    dirs.sort();
     dirs
 }
 
 /// Assembles a `FederatedConfig` from the root `tedge.toml` and all
 /// mapper directories discovered under `{config_dir}/mappers/`.
-pub fn load_federated_config(config_dir: impl AsRef<Path>) -> Result<FederatedConfig, ConfigError> {
-    load_federated_config_with_env(config_dir.as_ref(), &EnvOverrides::from_env())
+pub fn load_federated_config(config_dir: &Utf8Path) -> Result<FederatedConfig, ConfigError> {
+    load_federated_config_with_env(config_dir, &EnvOverrides::from_env())
 }
 
 pub(crate) fn load_federated_config_with_env(
-    config_dir: &Path,
+    config_dir: &Utf8Path,
     env: &EnvOverrides,
 ) -> Result<FederatedConfig, ConfigError> {
-    let mut fed = FederatedConfig::new(config_dir);
+    let mut fed = FederatedConfig::new(config_dir.as_std_path());
 
-    let root_mgr = ConfigManager::from_schema::<RootStubConfig>(config_dir);
+    let root_mgr = ConfigManager::from_schema::<RootStubConfig>(config_dir.as_std_path());
     let root_ops =
         TypedConfigOps::<RootStubConfigDto>::new(root_mgr, config_dir.join("tedge.toml"));
     fed.mount("", Box::new(root_ops))?;
@@ -230,7 +231,7 @@ pub(crate) fn load_federated_config_with_env(
         ..
     } in &mappers
     {
-        let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(config_dir);
+        let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(config_dir.as_std_path());
         let owners = &env_prefix_owners[env_prefix.as_str()];
         if let [first, second, ..] = owners.as_slice() {
             // Either directory could be the one the variables are meant for,
@@ -256,7 +257,7 @@ pub(crate) fn load_federated_config_with_env(
 /// Where a mapper directory is mounted, and the prefix of its environment variables
 struct MapperMount {
     name: String,
-    dir: std::path::PathBuf,
+    dir: Utf8PathBuf,
     mount_prefix: String,
     env_prefix: String,
 }

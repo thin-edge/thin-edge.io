@@ -228,13 +228,13 @@ fn env_variable_overrides_toml_value() {
 
     let root_mgr = ConfigManager::from_schema::<RootStubConfig>(dir.std_path());
     let mut root_ops =
-        TypedConfigOps::<RootStubConfigDto>::new(root_mgr, dir.std_path().join("tedge.toml"));
+        TypedConfigOps::<RootStubConfigDto>::new(root_mgr, dir.path().join("tedge.toml"));
     root_ops.apply_env_excluding(&env, &["mappers."]);
     fed.mount("", Box::new(root_ops)).unwrap();
 
     let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(dir.std_path());
     let mut mapper_ops =
-        TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, mapper.join("mapper.toml").into());
+        TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, mapper.join("mapper.toml"));
     mapper_ops.apply_env_with_prefix("TEDGE_MAPPERS_THINGSBOARD_", &env);
     fed.mount("mappers.thingsboard.", Box::new(mapper_ops))
         .unwrap();
@@ -396,10 +396,7 @@ fn mapper_command_key_becomes_its_mappers_key(#[case] key: &str, #[case] expecte
     let dir = config_dir_with_mapper("c8y.prod", "");
     add_mapper(&dir, "c8y", "");
 
-    assert_eq!(
-        crate::mapper_key_from_dir_key(key, dir.std_path()),
-        expected
-    );
+    assert_eq!(crate::mapper_key_from_dir_key(key, dir.path()), expected);
 }
 
 #[test]
@@ -419,7 +416,7 @@ fn profile_keys_are_overridden_by_env_variables_named_after_the_key() {
         "env.example.com:8883".into(),
     )]);
 
-    let fed = crate::schema::load_federated_config_with_env(dir.std_path(), &env).unwrap();
+    let fed = crate::schema::load_federated_config_with_env(dir.path(), &env).unwrap();
 
     assert_eq!(
         fed.read("mappers.c8y.profiles.prod.url")
@@ -437,7 +434,7 @@ fn custom_mapper_keys_are_overridden_by_env_variables() {
         "env.example.com:8883".into(),
     )]);
 
-    let fed = crate::schema::load_federated_config_with_env(dir.std_path(), &env).unwrap();
+    let fed = crate::schema::load_federated_config_with_env(dir.path(), &env).unwrap();
 
     assert_eq!(
         fed.read("mappers.my-mapper.url").unwrap().as_deref(),
@@ -451,11 +448,9 @@ fn mapper_directories_with_the_same_env_variable_name_fail_every_read_and_write(
     add_mapper(&dir, "thingsboard-eu", "url = \"eu.example.com:8883\"\n");
     add_mapper(&dir, "c8y", "url = \"c8y.example.com:8883\"\n");
 
-    let mut fed = crate::schema::load_federated_config_with_env(
-        dir.std_path(),
-        &EnvOverrides::from_pairs([]),
-    )
-    .unwrap();
+    let mut fed =
+        crate::schema::load_federated_config_with_env(dir.path(), &EnvOverrides::from_pairs([]))
+            .unwrap();
 
     for key in ["mappers.thingsboard.eu.url", "mappers.thingsboard-eu.url"] {
         let msg = fed.read(key).unwrap_err().to_string();
@@ -654,7 +649,7 @@ fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> TempTedgeDir {
 /// Loads the config ignoring the process environment, so exported `TEDGE_MAPPERS_*`
 /// variables can't change the result
 fn load_without_env(dir: &TempTedgeDir) -> FederatedConfig {
-    crate::schema::load_federated_config_with_env(dir.std_path(), &EnvOverrides::from_pairs([]))
+    crate::schema::load_federated_config_with_env(dir.path(), &EnvOverrides::from_pairs([]))
         .unwrap()
 }
 
@@ -677,7 +672,7 @@ fn root_manager() -> ConfigManager {
 }
 
 fn mapper_source(
-    path: impl Into<std::path::PathBuf>,
+    path: impl Into<camino::Utf8PathBuf>,
 ) -> Box<dyn tedge_config_engine::ops::ConfigOps> {
     Box::new(TypedConfigOps::<MapperConfigDto>::new(
         mapper_manager(),
@@ -686,7 +681,7 @@ fn mapper_source(
 }
 
 fn root_source(
-    path: impl Into<std::path::PathBuf>,
+    path: impl Into<camino::Utf8PathBuf>,
 ) -> Box<dyn tedge_config_engine::ops::ConfigOps> {
     Box::new(TypedConfigOps::<RootStubConfigDto>::new(
         root_manager(),

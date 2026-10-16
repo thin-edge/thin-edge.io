@@ -1,5 +1,5 @@
-use std::path::Path;
-use std::path::PathBuf;
+use camino::Utf8Path;
+use camino::Utf8PathBuf;
 
 use facet::Facet;
 
@@ -38,7 +38,7 @@ pub trait ConfigOps {
 pub struct TypedConfigOps<T> {
     manager: ConfigManager,
     dto: T,
-    path: PathBuf,
+    path: Utf8PathBuf,
     /// Why the file could not be loaded, returned by reads so one broken file
     /// doesn't stop other sources mounted alongside it from loading
     load_error: Option<ConfigError>,
@@ -52,7 +52,7 @@ where
     ///
     /// A file that cannot be loaded is not an error here: reads from this
     /// source return the load error instead, and writes reload the file.
-    pub fn new(manager: ConfigManager, path: PathBuf) -> Self {
+    pub fn new(manager: ConfigManager, path: Utf8PathBuf) -> Self {
         let (dto, load_error) = match load_dto(&path, &manager, None) {
             Ok(dto) => (dto, None),
             Err(e) => (T::default(), Some(e)),
@@ -117,7 +117,7 @@ where
         let content = toml::to_string(&table).map_err(|e| write_error(e.to_string()))?;
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| write_error(format!("creating {}: {e}", parent.display())))?;
+                .map_err(|e| write_error(format!("creating {parent}: {e}")))?;
         }
         std::fs::write(&self.path, content).map_err(|e| write_error(e.to_string()))
     }
@@ -165,7 +165,7 @@ where
 
 /// Loads the DTO from `path`, first refusing a file with keys outside `known_keys` if given
 fn load_dto<T: for<'a> Facet<'a> + Default>(
-    path: &Path,
+    path: &Utf8Path,
     manager: &ConfigManager,
     known_keys: Option<&[String]>,
 ) -> Result<T, ConfigError> {
@@ -180,7 +180,7 @@ fn load_dto<T: for<'a> Facet<'a> + Default>(
 }
 
 /// Reads the config file, or returns `None` if it doesn't exist
-fn read_file(path: &Path) -> Result<Option<String>, ConfigError> {
+fn read_file(path: &Utf8Path) -> Result<Option<String>, ConfigError> {
     match std::fs::read_to_string(path) {
         Ok(content) => Ok(Some(content)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -190,14 +190,14 @@ fn read_file(path: &Path) -> Result<Option<String>, ConfigError> {
 
 /// Parses the file as TOML, which facet_toml alone does not check strictly
 /// (it reads `url = ` as an empty string)
-fn parse_file(path: &Path, content: &str) -> Result<toml::Table, ConfigError> {
+fn parse_file(path: &Utf8Path, content: &str) -> Result<toml::Table, ConfigError> {
     content
         .parse()
         .map_err(|e: toml::de::Error| invalid_file(path, e.to_string()))
 }
 
 fn parse_dto<T: for<'a> Facet<'a> + Default>(
-    path: &Path,
+    path: &Utf8Path,
     manager: &ConfigManager,
     content: &str,
     table: &toml::Table,
@@ -210,7 +210,7 @@ fn parse_dto<T: for<'a> Facet<'a> + Default>(
     })
 }
 
-fn invalid_file(path: &Path, reason: String) -> ConfigError {
+fn invalid_file(path: &Utf8Path, reason: String) -> ConfigError {
     ConfigError::InvalidFile {
         path: path.to_owned(),
         reason,
@@ -247,7 +247,7 @@ fn toml_value_at<'a>(table: &'a toml::Table, key: &str) -> Option<&'a toml::Valu
 }
 
 fn check_no_unknown_keys(
-    path: &Path,
+    path: &Utf8Path,
     table: &toml::Table,
     known_keys: &[String],
 ) -> Result<(), ConfigError> {
