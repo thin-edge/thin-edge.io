@@ -60,8 +60,7 @@ pub(crate) fn default_entity_type() -> EntityType {
 }
 
 /// An OperationWorkflow defines the state machine that rules an operation
-#[derive(Clone, Debug, Deserialize)]
-#[serde(try_from = "toml_config::TomlOperationWorkflow")]
+#[derive(Clone, Debug)]
 pub struct OperationWorkflow {
     /// The type of the entity this workflow applies
     pub entity_type: EntityType,
@@ -74,6 +73,34 @@ pub struct OperationWorkflow {
 
     /// The states of the state machine
     pub states: HashMap<StateName, OperationAction>,
+}
+
+/// The workflows read from one workflow file
+///
+/// A file with `operation = ["start", "stop"]` gives two workflows: one for `start` and one for `stop`.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(try_from = "toml_config::TomlOperationWorkflow")]
+pub struct OperationWorkflows {
+    pub workflows: Vec<OperationWorkflow>,
+}
+
+#[cfg(test)]
+impl OperationWorkflow {
+    /// Parse the definition of a workflow for a single operation
+    pub(crate) fn from_toml(definition: &str) -> Self {
+        toml::from_str::<OperationWorkflows>(definition)
+            .expect("Expect a valid workflow definition")
+            .workflows
+            .remove(0)
+    }
+}
+
+impl OperationWorkflows {
+    pub fn find(self, entity_type: EntityType, operation: &str) -> Option<OperationWorkflow> {
+        self.workflows.into_iter().find(|workflow| {
+            workflow.entity_type == entity_type && workflow.operation.to_string() == operation
+        })
+    }
 }
 
 /// What needs to be done to advance an operation request in some state

@@ -1,0 +1,5 @@
+operation = ["lock", "unlock"]
+
+[init]
+action = "proceed"
+on_success = "successful"

@@ -1,4 +1,7 @@
 use crate::entity::EntityType;
+use crate::workflow::toml_config::TomlOperationNames;
+use crate::workflow::OperationWorkflow;
+use crate::workflow::OperationWorkflows;
 use serde::Deserialize;
 
 /// Error preventing a workflow to be registered
@@ -27,6 +30,12 @@ pub enum WorkflowDefinitionError {
         main_operation: String,
         builtin_operation: String,
     },
+
+    #[error("The array of operations is empty")]
+    NoOperation,
+
+    #[error("The {operation} operation is given twice")]
+    DuplicatedOperation { operation: String },
 }
 
 /// Error related to a script definition
@@ -105,8 +114,26 @@ pub enum WorkflowExecutionError {
 /// Struct used to recover the bare minimum information from an ill-formed workflow TOML file.
 #[derive(Deserialize)]
 pub struct IllFormedOperationWorkflow {
-    pub operation: String,
+    operation: TomlOperationNames,
 
     #[serde(rename = "type", default = "crate::workflow::default_entity_type")]
-    pub entity_type: EntityType,
+    entity_type: EntityType,
+}
+
+impl IllFormedOperationWorkflow {
+    /// Return, for each operation, a workflow failing any command with the given reason
+    pub fn into_workflows(self, reason: String) -> OperationWorkflows {
+        let operations = self.operation.into_operations();
+        let workflows = operations
+            .into_iter()
+            .map(|operation| {
+                OperationWorkflow::ill_formed(
+                    self.entity_type,
+                    operation.to_string(),
+                    reason.clone(),
+                )
+            })
+            .collect();
+        OperationWorkflows { workflows }
+    }
 }

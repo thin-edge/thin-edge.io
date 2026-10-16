@@ -849,7 +849,7 @@ action = "cleanup"
     fn restart_workflows() -> WorkflowSupervisor {
         let mut workflows = WorkflowSupervisor::default();
         for definition in [RESTART_WORKFLOW, WRAPPER_WORKFLOW] {
-            let workflow: OperationWorkflow = toml::from_str(definition).unwrap();
+            let workflow = OperationWorkflow::from_toml(definition);
             let operation = workflow.operation.to_string();
             let entity_type = workflow.entity_type;
             workflows
@@ -881,7 +881,7 @@ action = "cleanup"
     }
 
     fn restart_workflow_of_type(type_field: &str, next_state: &str) -> OperationWorkflow {
-        toml::from_str(&format!(
+        OperationWorkflow::from_toml(&format!(
             r#"
 operation = "restart"
 {type_field}
@@ -895,6 +895,5 @@ action = "proceed"
 on_success = "successful"
 "#
         ))
-        .unwrap()
     }
 }

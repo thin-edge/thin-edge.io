@@ -1,0 +1,9 @@
+operation = "lock"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "/etc/tedge/operations/echo-as-json.sh workflow_file lock-only.toml"
+on_success = "successful"

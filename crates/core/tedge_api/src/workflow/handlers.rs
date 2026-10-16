@@ -834,7 +834,7 @@ script = "some-script"
 {handlers}
 "#
         );
-        let workflow: OperationWorkflow = toml::from_str(&file).expect("Expect TOML input");
+        let workflow = OperationWorkflow::from_toml(&file);
         if let Some(OperationAction::Script(_, handlers)) = workflow.states.get("init") {
             return handlers.clone();
         }

@@ -136,7 +136,7 @@ impl Actor for WorkflowActor {
                     self.publish_builtin_capability(operation, payload).await?;
                 }
                 AgentInput::FsWatchEvent(file_update) => {
-                    if let Some(updated_capability) = self
+                    for updated_capability in self
                         .workflow_repository
                         .update_operation_workflows(
                             &self.mqtt_schema,

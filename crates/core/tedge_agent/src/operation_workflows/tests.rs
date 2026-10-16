@@ -54,7 +54,7 @@ use tedge_api::workflow::OperationStep;
 use tedge_api::workflow::OperationStepHandler;
 use tedge_api::workflow::OperationStepRequest;
 use tedge_api::workflow::OperationStepResponse;
-use tedge_api::workflow::OperationWorkflow;
+use tedge_api::workflow::OperationWorkflows;
 use tedge_api::workflow::SyncOnCommand;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
@@ -1094,8 +1094,12 @@ fn builtin_workflows_are_valid_operation_workflows() {
             "shell_execute.toml",
             include_str!("../resources/shell_execute.toml"),
         ),
+        (
+            "service_commands.toml",
+            include_str!("../resources/service_commands.toml"),
+        ),
     ] {
-        toml::from_str::<OperationWorkflow>(definition)
+        toml::from_str::<OperationWorkflows>(definition)
             .unwrap_or_else(|err| panic!("{name} is not a valid workflow definition: {err}"));
     }
 }
@@ -1461,13 +1465,240 @@ async fn restarting_the_agent_restarts_the_process_once() {
     .await;
 }
 
+#[tokio::test]
+async fn each_operation_of_an_array_is_declared_and_cleared_when_removed_from_the_file() {
+    let TestHandler {
+        tmp_dir,
+        mut mqtt_box,
+        mut inotify_box,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![(
+            "locks.toml".to_string(),
+            LOCK_AND_UNLOCK_HELD_IN_EXECUTING.to_string(),
+        )],
+    )
+    .await
+    .unwrap();
+
+    assert_received_contains_str(
+        &mut mqtt_box,
+        [
+            ("te/device/main///cmd/lock", "{}"),
+            ("te/device/main///cmd/restart", "{}"),
+            ("te/device/main///cmd/unlock", "{}"),
+        ],
+    )
+    .await;
+
+    let workflow = tmp_dir
+        .dir("operations")
+        .file("locks.toml")
+        .with_raw_content(
+            r#"
+operation = ["lock"]
+
+[init]
+action = "proceed"
+on_success = "executing"
+"#,
+        );
+    inotify_box
+        .send(FsWatchEvent::Modified(workflow.path_buf().into()))
+        .await
+        .unwrap();
+    mqtt_box
+        .assert_received([
+            MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/lock"), "{}")
+                .with_retain(),
+            MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/unlock"), "")
+                .with_retain(),
+        ])
+        .await;
+
+    let path = workflow.path_buf();
+    workflow.delete();
+    inotify_box
+        .send(FsWatchEvent::FileDeleted(path.into()))
+        .await
+        .unwrap();
+    mqtt_box
+        .assert_received([
+            MqttMessage::new(&Topic::new_unchecked("te/device/main///cmd/lock"), "").with_retain(),
+        ])
+        .await;
+}
+
+#[tokio::test]
+async fn each_operation_of_an_array_keeps_its_own_copy_of_the_workflow_in_use() {
+    let TestHandler {
+        tmp_dir,
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![(
+            "locks.toml".to_string(),
+            LOCK_AND_UNLOCK_HELD_IN_EXECUTING.to_string(),
+        )],
+    )
+    .await
+    .unwrap();
+
+    for topic in [
+        "te/device/main///cmd/lock/1",
+        "te/device/main///cmd/unlock/2",
+    ] {
+        mqtt_box
+            .send(MqttMessage::new(
+                &Topic::new_unchecked(topic),
+                r#"{"status":"init"}"#,
+            ))
+            .await
+            .unwrap();
+        recv_command_state_with_status(&mut mqtt_box, &mut actor_handle, topic, "executing").await;
+    }
+
+    let version = sha256::digest(LOCK_AND_UNLOCK_HELD_IN_EXECUTING);
+    let in_use_dir = tmp_dir
+        .path()
+        .join("running-operations")
+        .join("workflows-in-use");
+    assert!(in_use_dir.join(format!("lock-{version}.toml")).exists());
+    assert!(in_use_dir.join(format!("unlock-{version}.toml")).exists());
+}
+
+#[tokio::test]
+async fn an_operation_is_kept_when_a_copy_of_its_workflow_file_is_removed() {
+    let TestHandler {
+        tmp_dir,
+        mut mqtt_box,
+        mut inotify_box,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        vec![(
+            "locks.toml".to_string(),
+            LOCK_AND_UNLOCK_HELD_IN_EXECUTING.to_string(),
+        )],
+    )
+    .await
+    .unwrap();
+
+    assert_received_contains_str(
+        &mut mqtt_box,
+        [
+            ("te/device/main///cmd/lock", "{}"),
+            ("te/device/main///cmd/restart", "{}"),
+            ("te/device/main///cmd/unlock", "{}"),
+        ],
+    )
+    .await;
+
+    let copy = tmp_dir
+        .dir("operations")
+        .file("locks_copy.toml")
+        .with_raw_content(LOCK_AND_UNLOCK_HELD_IN_EXECUTING);
+    inotify_box
+        .send(FsWatchEvent::Modified(copy.path_buf().into()))
+        .await
+        .unwrap();
+    assert_received_contains_str(
+        &mut mqtt_box,
+        [
+            ("te/device/main///cmd/lock", "{}"),
+            ("te/device/main///cmd/unlock", "{}"),
+        ],
+    )
+    .await;
+
+    let path = copy.path_buf();
+    copy.delete();
+    inotify_box
+        .send(FsWatchEvent::FileDeleted(path.into()))
+        .await
+        .unwrap();
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/lock/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_received_contains_str(
+        &mut mqtt_box,
+        [("te/device/main///cmd/lock/1", r#""status":"executing""#)],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn the_builtin_workflow_is_not_restored_while_a_file_still_defines_the_operation() {
+    let TestHandler {
+        tmp_dir,
+        mut mqtt_box,
+        mut inotify_box,
+        ..
+    } = spawn_mqtt_operation_converter(
+        "device/main//",
+        // Not `restart.toml`: on a new command, the agent reads `<operation>.toml` when no file is known for the operation.
+        vec![(
+            "custom_restart.toml".to_string(),
+            RESTART_HELD_IN_EXECUTING.to_string(),
+        )],
+    )
+    .await
+    .unwrap();
+
+    assert_received_contains_str(&mut mqtt_box, [("te/device/main///cmd/restart", "{}")]).await;
+
+    let other = tmp_dir
+        .dir("operations")
+        .file("other_restart.toml")
+        .with_raw_content(
+            r#"
+operation = "restart"
+
+[init]
+action = "proceed"
+on_success = "successful"
+"#,
+        );
+    inotify_box
+        .send(FsWatchEvent::Modified(other.path_buf().into()))
+        .await
+        .unwrap();
+    assert_received_contains_str(&mut mqtt_box, [("te/device/main///cmd/restart", "{}")]).await;
+
+    let path = other.path_buf();
+    other.delete();
+    inotify_box
+        .send(FsWatchEvent::FileDeleted(path.into()))
+        .await
+        .unwrap();
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/restart/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_received_contains_str(
+        &mut mqtt_box,
+        [("te/device/main///cmd/restart/1", r#""status":"executing""#)],
+    )
+    .await;
+}
+
 struct TestHandler {
     tmp_dir: Arc<TempTedgeDir>,
     actor_handle: JoinHandle<Result<(), RuntimeError>>,
     mqtt_box: TimedMessageBox<SimpleMessageBox<MqttMessage, MqttMessage>>,
     software_box: TimedMessageBox<SimpleMessageBox<SoftwareCommand, SoftwareCommand>>,
     restart_box: TimedMessageBox<SimpleMessageBox<RestartCommand, RestartCommand>>,
-    _inotify_box: TimedMessageBox<SimpleMessageBox<NoMessage, FsWatchEvent>>,
+    inotify_box: TimedMessageBox<SimpleMessageBox<NoMessage, FsWatchEvent>>,
     downloader_box: TimedMessageBox<
         SimpleMessageBox<RequestEnvelope<DownloaderRequest, DownloaderResult>, NoMessage>,
     >,
@@ -1623,7 +1854,7 @@ async fn spawn_workflow_actor(
     let mqtt_box = mqtt_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let downloader_box = downloade_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let uploader_box = uploader_builder.build().with_timeout(TEST_TIMEOUT_MS);
-    let _inotify_box = inotify_builder.build().with_timeout(TEST_TIMEOUT_MS);
+    let inotify_box = inotify_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
     tokio::spawn(entity_store.serve(http_builder.build()));
 
@@ -1641,7 +1872,7 @@ async fn spawn_workflow_actor(
         mqtt_box,
         software_box,
         restart_box,
-        _inotify_box,
+        inotify_box,
         downloader_box,
         uploader_box,
         config_box,
@@ -1889,4 +2120,20 @@ on_exec = "awaiting_sub_command"
 action = "await-operation-completion"
 on_success = "successful"
 on_error = "failed"
+"#;
+
+const LOCK_AND_UNLOCK_HELD_IN_EXECUTING: &str = r#"
+operation = ["lock", "unlock"]
+
+[init]
+action = "proceed"
+on_success = "executing"
+"#;
+
+const RESTART_HELD_IN_EXECUTING: &str = r#"
+operation = "restart"
+
+[init]
+action = "proceed"
+on_success = "executing"
 "#;

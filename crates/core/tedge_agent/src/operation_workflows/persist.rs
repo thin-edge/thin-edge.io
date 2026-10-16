@@ -14,6 +14,7 @@ use tedge_api::workflow::IllFormedOperationWorkflow;
 use tedge_api::workflow::OperationAction;
 use tedge_api::workflow::OperationName;
 use tedge_api::workflow::OperationWorkflow;
+use tedge_api::workflow::OperationWorkflows;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::workflow::WorkflowSupervisor;
 use tedge_api::workflow::WorkflowVersion;
@@ -44,8 +45,8 @@ pub struct WorkflowRepository {
     // An entity type and an operation name together identify a workflow.
     definitions: HashMap<(EntityType, OperationName), (WorkflowVersion, Utf8PathBuf)>,
 
-    // Map each workflow version to the count of instance using it
-    in_use_copies: HashMap<WorkflowVersion, u32>,
+    // Map each workflow version of an operation to the count of instance using it
+    in_use_copies: HashMap<(OperationName, WorkflowVersion), u32>,
 
     // The in-memory representation of all the workflows (builtin, user-defined, in-use).
     workflows: WorkflowSupervisor,
@@ -105,22 +106,34 @@ impl WorkflowRepository {
         for entry in dir_path.read_dir_utf8()?.flatten() {
             let file = entry.path();
             if file.extension() == Some("toml") {
-                let result = read_operation_workflow(file)
-                    .await
-                    .and_then(|(workflow, version)| {
-                        let file_source = source.set_inner(file.into());
-                        self.load_operation_workflow(file_source, workflow, version)
-                    });
-                match result {
-                    Ok((entity_type, cmd)) => {
-                        info!(
-                            "Using operation workflow definition from {file:?} for the '{cmd}' operation of a {entity_type}"
-                        );
-                    }
+                let (definition, version) = match read_operation_workflows(file).await {
+                    Ok(definition) => definition,
                     Err(err) => {
-                        error!("Ignoring {file:?}: {err:?}")
+                        error!("Ignoring {file:?}: {err:?}");
+                        continue;
                     }
                 };
+                for workflow in definition.workflows {
+                    // A command in use has a copy of its workflow file, named after its operation: `stop-<version>.toml`.
+                    // When the file lists several operations, the copy holds them all, but only `stop` is in use.
+                    if matches!(source, WorkflowSource::InUseCopy(_))
+                        && file
+                            != self.workflow_copy_path(&workflow.operation.to_string(), &version)
+                    {
+                        continue;
+                    }
+                    let file_source = source.set_inner(file.into());
+                    match self.load_operation_workflow(file_source, workflow, version.clone()) {
+                        Ok((entity_type, cmd)) => {
+                            info!(
+                                "Using operation workflow definition from {file:?} for the '{cmd}' operation of a {entity_type}"
+                            );
+                        }
+                        Err(err) => {
+                            error!("Ignoring {file:?}: {err:?}")
+                        }
+                    };
+                }
             }
         }
         Ok(())
@@ -150,7 +163,7 @@ impl WorkflowRepository {
             }
             WorkflowSource::InUseCopy(_) => {
                 self.in_use_copies
-                    .entry(version.clone())
+                    .entry((operation_name.clone(), version.clone()))
                     .and_modify(|count| *count += 1)
                     .or_insert(1);
                 WorkflowSource::InUseCopy(version)
@@ -175,13 +188,14 @@ impl WorkflowRepository {
 
     /// Update the workflow definitions after some on-disk changes
     ///
-    /// Return the operation capability deregistration message when the operation has been deprecated.
+    /// Return the capability messages of the operations which workflow has been updated,
+    /// and the deregistration messages of the operations which have been removed.
     pub async fn update_operation_workflows(
         &mut self,
         schema: &MqttSchema,
         target: &EntityTopicId,
         file_update: FsWatchEvent,
-    ) -> Option<MqttMessage> {
+    ) -> Vec<MqttMessage> {
         match file_update {
             // FsWatchEvent returns a duplicated Modified events along FileCreated events.
             FsWatchEvent::FileCreated(_) => {}
@@ -191,16 +205,11 @@ impl WorkflowRepository {
                     if self.is_user_defined(&path) {
                         // Checking the path exists as FsWatchEvent returns misleading Modified events along FileDeleted events.
                         if path.exists() {
-                            return self.reload_operation_workflow(&path).await.and_then(
-                                |(workflow_type, updated_operation)| {
-                                    self.capability_message(
-                                        schema,
-                                        target,
-                                        workflow_type,
-                                        &updated_operation,
-                                    )
-                                },
-                            );
+                            if let Some(updated) = self.reload_operation_workflow(&path).await {
+                                let removed =
+                                    self.remove_operation_workflows(&path, &updated).await;
+                                return self.update_messages(schema, target, &updated, &removed);
+                            }
                         }
                     }
                 }
@@ -209,16 +218,8 @@ impl WorkflowRepository {
             FsWatchEvent::FileDeleted(path) => {
                 if let Ok(path) = Utf8PathBuf::try_from(path) {
                     if self.is_user_defined(&path) {
-                        return self.remove_operation_workflow(&path).await.and_then(
-                            |(workflow_type, deprecated_operation)| {
-                                self.deregistration_message(
-                                    schema,
-                                    target,
-                                    workflow_type,
-                                    &deprecated_operation,
-                                )
-                            },
-                        );
+                        let removed = self.remove_operation_workflows(&path, &[]).await;
+                        return self.update_messages(schema, target, &[], &removed);
                     }
                 }
             }
@@ -226,64 +227,127 @@ impl WorkflowRepository {
             FsWatchEvent::DirectoryDeleted(_) | FsWatchEvent::DirectoryCreated(_) => {}
         }
 
-        None
+        vec![]
+    }
+
+    fn update_messages(
+        &self,
+        schema: &MqttSchema,
+        target: &EntityTopicId,
+        updated: &[(EntityType, OperationName)],
+        removed: &[(EntityType, OperationName)],
+    ) -> Vec<MqttMessage> {
+        let mut messages = vec![];
+        for (entity_type, operation) in updated {
+            messages.extend(self.capability_message(schema, target, *entity_type, operation));
+        }
+        for (entity_type, operation) in removed {
+            messages.extend(self.deregistration_message(schema, target, *entity_type, operation));
+        }
+        messages
     }
 
     fn is_user_defined(&mut self, path: &Utf8PathBuf) -> bool {
         path.extension() == Some("toml") && path.parent() == Some(&self.custom_workflows_dir)
     }
 
-    /// Reload a user defined workflow.
+    /// Reload a user defined workflow file.
     ///
-    /// Return the operation name if this is a new operation or workflow version.
+    /// Return the operations defined by the file, or None if the file cannot be read.
     async fn reload_operation_workflow(
         &mut self,
         path: &Utf8PathBuf,
-    ) -> Option<(EntityType, OperationName)> {
-        match read_operation_workflow(path).await {
-            Ok((workflow, version)) => {
-                if let Ok((entity_type, cmd)) = self.load_operation_workflow(
-                    WorkflowSource::UserDefined(path.clone()),
-                    workflow,
-                    version,
-                ) {
-                    info!("Using the updated operation workflow definition from {path} for the '{cmd}' operation of a {entity_type}");
-                    return Some((entity_type, cmd));
+    ) -> Option<Vec<(EntityType, OperationName)>> {
+        match read_operation_workflows(path).await {
+            Ok((definition, version)) => {
+                let mut updated = vec![];
+                for workflow in definition.workflows {
+                    if let Ok((entity_type, cmd)) = self.load_operation_workflow(
+                        WorkflowSource::UserDefined(path.clone()),
+                        workflow,
+                        version.clone(),
+                    ) {
+                        info!("Using the updated operation workflow definition from {path} for the '{cmd}' operation of a {entity_type}");
+                        updated.push((entity_type, cmd));
+                    }
                 }
+                Some(updated)
             }
             Err(err) => {
-                error!("Fail to reload {path}: {err}")
+                error!("Fail to reload {path}: {err}");
+                None
+            }
+        }
+    }
+
+    /// Unregister the workflows read from a file, except those of `kept_operations`.
+    ///
+    /// Return the operations with no version left, i.e. with no builtin workflow.
+    async fn remove_operation_workflows(
+        &mut self,
+        removed_path: &Utf8PathBuf,
+        kept_operations: &[(EntityType, OperationName)],
+    ) -> Vec<(EntityType, OperationName)> {
+        // As this is not intended to be a frequent operation, there is no attempt to be efficient.
+        let mut unregistered: Vec<_> = self
+            .definitions
+            .iter()
+            .filter(|(key, (_, p))| p == removed_path && !kept_operations.contains(key))
+            .map(|(key, (v, _))| (key.clone(), v.clone()))
+            .collect();
+        unregistered.sort_by_key(|((_, operation), _)| operation.clone());
+
+        let mut removed = vec![];
+        for (key, removed_version) in unregistered {
+            self.definitions.remove(&key);
+            let (entity_type, operation) = key;
+            // Unregister before reloading: a copy of the removed file has the same version,
+            // and unregistering that version after the reload would remove the reloaded workflow.
+            let builtin_restored = self.workflows.unregister_custom_workflow(
+                entity_type,
+                &operation,
+                &removed_version,
+            );
+            if let Some(path) = self.reload_from_other_file(entity_type, &operation).await {
+                info!("Using operation workflow definition from {path} for the '{operation}' operation of a {entity_type}");
+            } else if builtin_restored {
+                info!("The builtin workflow for the '{operation}' operation has been restored");
+            } else {
+                info!("The user defined workflow for the '{operation}' operation of a {entity_type} has been removed");
+                removed.push((entity_type, operation));
+            }
+        }
+        removed
+    }
+
+    /// Load the workflow of an operation from the first user defined file that defines it.
+    ///
+    /// Return the path of that file.
+    async fn reload_from_other_file(
+        &mut self,
+        entity_type: EntityType,
+        operation: &OperationName,
+    ) -> Option<Utf8PathBuf> {
+        let entries = self.custom_workflows_dir.read_dir_utf8().ok()?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension() != Some("toml") {
+                continue;
+            }
+            let Ok((definition, version)) = read_operation_workflows(path).await else {
+                continue;
+            };
+            if let Some(workflow) = definition.find(entity_type, operation) {
+                let source = WorkflowSource::UserDefined(path.to_owned());
+                if self
+                    .load_operation_workflow(source, workflow, version)
+                    .is_ok()
+                {
+                    return Some(path.to_owned());
+                }
             }
         }
         None
-    }
-
-    /// Remove a user defined workflow.
-    ///
-    /// Return the operation name if this was the last version for that operation,
-    /// .i.e. there is no builtin workflow.
-    async fn remove_operation_workflow(
-        &mut self,
-        removed_path: &Utf8PathBuf,
-    ) -> Option<(EntityType, OperationName)> {
-        // As this is not intended to be a frequent operation, there is no attempt to be efficient.
-        let (key, removed_version) = self
-            .definitions
-            .iter()
-            .find(|(_, (_, p))| p == removed_path)
-            .map(|(key, (v, _))| (key.clone(), v.clone()))?;
-        self.definitions.remove(&key);
-        let (entity_type, operation) = key;
-        let builtin_restored =
-            self.workflows
-                .unregister_custom_workflow(entity_type, &operation, &removed_version);
-        if builtin_restored {
-            info!("The builtin workflow for the '{operation}' operation has been restored");
-            None
-        } else {
-            info!("The user defined workflow for the '{operation}' operation of a {entity_type} has been removed");
-            Some((entity_type, operation))
-        }
     }
 
     /// Copy the workflow definition file to the persisted state directory,
@@ -297,7 +361,8 @@ impl WorkflowRepository {
         if version_is_builtin(version) {
             return;
         }
-        if let Some(count) = self.in_use_copies.get_mut(version) {
+        let copy = (operation.to_string(), version.to_string());
+        if let Some(count) = self.in_use_copies.get_mut(&copy) {
             *count += 1;
             return;
         };
@@ -307,7 +372,7 @@ impl WorkflowRepository {
             if let Err(err) = tokio::fs::copy(source.clone(), target.clone()).await {
                 error!("Fail to persist a copy of {source} as {target}: {err}");
             } else {
-                self.in_use_copies.insert(version.to_owned(), 1);
+                self.in_use_copies.insert(copy, 1);
             }
         }
     }
@@ -335,14 +400,15 @@ impl WorkflowRepository {
         if version_is_builtin(version) {
             return;
         }
-        if let Some(count) = self.in_use_copies.get_mut(version) {
+        let copy = (operation.to_string(), version.to_string());
+        if let Some(count) = self.in_use_copies.get_mut(&copy) {
             *count -= 1;
             if *count > 0 {
                 return;
             }
         }
 
-        self.in_use_copies.remove(version);
+        self.in_use_copies.remove(&copy);
 
         let target = self.workflow_copy_path(operation, version);
         if let Err(err) = tokio::fs::remove_file(target.clone()).await {
@@ -356,8 +422,9 @@ impl WorkflowRepository {
         operation: &OperationName,
     ) -> Option<(Utf8PathBuf, WorkflowVersion, OperationWorkflow)> {
         if let Some((version, path)) = self.definitions.get(&(entity_type, operation.clone())) {
-            if let Ok((workflow, latest)) = read_operation_workflow(path).await {
+            if let Ok((definition, latest)) = read_operation_workflows(path).await {
                 if version != &latest {
+                    let workflow = definition.find(entity_type, operation)?;
                     return Some((path.to_owned(), latest, workflow));
                 };
             };
@@ -366,10 +433,9 @@ impl WorkflowRepository {
                 .custom_workflows_dir
                 .join(operation)
                 .with_extension("toml");
-            if let Ok((workflow, new)) = read_operation_workflow(&path).await {
-                if workflow.entity_type == entity_type {
-                    return Some((path, new, workflow));
-                }
+            if let Ok((definition, new)) = read_operation_workflows(&path).await {
+                let workflow = definition.find(entity_type, operation)?;
+                return Some((path, new, workflow));
             };
         }
         None
@@ -533,14 +599,14 @@ impl WorkflowRepository {
     }
 }
 
-async fn read_operation_workflow(
+async fn read_operation_workflows(
     path: &Utf8Path,
-) -> Result<(OperationWorkflow, WorkflowVersion), anyhow::Error> {
+) -> Result<(OperationWorkflows, WorkflowVersion), anyhow::Error> {
     let bytes = tokio::fs::read(path).await.context("Fail to read file")?;
     let input = std::str::from_utf8(&bytes).context("Fail to extract UTF8 content")?;
     let version = sha256::digest(input);
 
-    toml::from_str::<OperationWorkflow>(input)
+    toml::from_str::<OperationWorkflows>(input)
         .context("Fail to parse TOML")
         .or_else(|err| {
             error!("Ill-formed operation workflow definition from {path:?}: {err:?}");
@@ -548,11 +614,7 @@ async fn read_operation_workflow(
                 .context("Extracting operation name")?;
 
             let reason = format!("Invalid operation workflow definition {path:?}: {err:?}");
-            Ok(OperationWorkflow::ill_formed(
-                workflow.entity_type,
-                workflow.operation,
-                reason,
-            ))
+            Ok(workflow.into_workflows(reason))
         })
         .map(|workflow| (workflow, version))
 }

@@ -14,7 +14,8 @@ or any other action that service supports.
 - A command is then triggered on that topic, as any other %%te%% command.
 - `tedge-agent` executes the commands of the services registered with its own device as their `@parent`,
   running the workflow defined for that action.
-- The shipped `restart` workflow delegates the work to [`tedge service`](../../cli/tedge-service),
+- The shipped workflow of the `start`, `stop`, `restart`, `enable` and `disable` actions
+  delegates the work to [`tedge service`](../../cli/tedge-service),
   which runs the action through one of two [backends](../../service-plugin-api#backends),
   the init system or a service plugin.
 
@@ -78,7 +79,7 @@ tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/restart/c8y-mapper-1
     "status": "failed",
     "serviceName": "nodered",
     "serviceType": "service",
-    "reason": "This action is not supported for that type of service"
+    "reason": "The action failed, see the operation log for the reason"
 }'
 ```
 
@@ -86,8 +87,8 @@ tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/restart/c8y-mapper-1
 
 A %%te%% service managed by an init unit of its own declares `restart` when it starts.
 
-`tedge-agent` installs the workflow of the `restart` action
-in `/etc/tedge/operations/service_restart.toml`.
+`tedge-agent` installs one workflow for the `start`, `stop`, `restart`, `enable` and `disable` actions
+in `/etc/tedge/operations/service_commands.toml`.
 It declares `type = "service"`, so it applies to service entities.
 See [scoping a workflow by entity type](../operation-workflow#workflow-entity-type).
 
