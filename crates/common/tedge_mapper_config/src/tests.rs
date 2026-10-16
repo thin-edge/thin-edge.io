@@ -204,7 +204,7 @@ fn unknown_key_in_known_mapper_produces_error() {
     let fed = load_without_env(&dir);
 
     let err = fed.read("mappers.test.nonexistent").unwrap_err();
-    assert!(matches!(err, ConfigError::UnknownKey(_)));
+    assert_matches!(err, ConfigError::UnknownKey(_));
 }
 
 #[test]
@@ -286,49 +286,15 @@ fn is_builtin_mapper_name_rejects_unknown_names() {
     assert!(!crate::is_builtin_mapper_name("c8y."));
 }
 
-#[test]
-fn extract_builtin_mapper_name_returns_base_name() {
-    assert_eq!(
-        crate::extract_builtin_mapper_name("mappers.c8y.url"),
-        Some("c8y".to_owned()),
-    );
-}
-
-#[test]
-fn extract_builtin_mapper_name_returns_profile_directory_name() {
-    assert_eq!(
-        crate::extract_builtin_mapper_name("mappers.c8y.profiles.prod.url"),
-        Some("c8y.prod".to_owned()),
-    );
-}
-
-#[test]
-fn extract_builtin_mapper_name_treats_a_key_without_profiles_as_a_base_mapper_key() {
-    assert_eq!(
-        crate::extract_builtin_mapper_name("mappers.c8y.prod.url"),
-        Some("c8y".to_owned()),
-    );
-}
-
-#[test]
-fn extract_builtin_mapper_name_handles_nested_config_key() {
-    assert_eq!(
-        crate::extract_builtin_mapper_name("mappers.az.device.id"),
-        Some("az".to_owned()),
-    );
-}
-
-#[test]
-fn extract_builtin_mapper_name_returns_none_for_non_mapper_key() {
-    assert_eq!(crate::extract_builtin_mapper_name("device.id"), None);
-}
-
-#[test]
-fn extract_builtin_mapper_name_returns_none_for_custom_mapper() {
-    assert_eq!(
-        crate::extract_builtin_mapper_name("mappers.thingsboard.url"),
-        None,
-    );
+#[rstest]
+#[case::cloud_key("mappers.c8y.url", Some("c8y"))]
+#[case::profile_key("mappers.c8y.profiles.prod.url", Some("c8y.prod"))]
+#[case::key_without_profiles("mappers.c8y.prod.url", Some("c8y"))]
+#[case::nested_key("mappers.az.device.id", Some("az"))]
+#[case::non_mapper_key("device.id", None)]
+#[case::custom_mapper_key("mappers.thingsboard.url", None)]
+fn finds_the_builtin_mapper_a_key_belongs_to(#[case] key: &str, #[case] expected: Option<&str>) {
+    assert_eq!(crate::extract_builtin_mapper_name(key).as_deref(), expected);
 }
 
 #[test]
