@@ -112,6 +112,8 @@ where
 
     fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError> {
         self.manager.check_read_only(key)?;
+        // The DTO only holds schema keys, so saving it would delete any other key in the file
+        check_no_unknown_keys(&self.path, &self.manager.keys::<T>())?;
         let mut dto = load_dto(&self.path)?;
         match action {
             Action::Set(ref value) => self.manager.set(&mut dto, key, value)?,
@@ -142,5 +144,51 @@ fn load_dto<T: for<'a> Facet<'a> + Default>(path: &Path) -> Result<T, ConfigErro
             "reading {}: {e}",
             path.display()
         ))),
+    }
+}
+
+fn check_no_unknown_keys(path: &Path, known_keys: &[String]) -> Result<(), ConfigError> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => {
+            return Err(ConfigError::IoError(format!(
+                "reading {}: {e}",
+                path.display()
+            )))
+        }
+    };
+    let table: toml::Table = content
+        .parse()
+        .map_err(|e| ConfigError::IoError(format!("parsing {}: {e}", path.display())))?;
+    let mut unknown = Vec::new();
+    collect_unknown_keys(&table, "", known_keys, &mut unknown);
+    if unknown.is_empty() {
+        Ok(())
+    } else {
+        Err(ConfigError::UnknownKeysInFile {
+            path: path.to_owned(),
+            keys: unknown,
+        })
+    }
+}
+
+fn collect_unknown_keys(
+    table: &toml::Table,
+    prefix: &str,
+    known_keys: &[String],
+    unknown: &mut Vec<String>,
+) {
+    for (name, value) in table {
+        let key = format!("{prefix}{name}");
+        if known_keys.contains(&key) {
+            continue;
+        }
+        match value {
+            toml::Value::Table(group) => {
+                collect_unknown_keys(group, &format!("{key}."), known_keys, unknown)
+            }
+            _ => unknown.push(key),
+        }
     }
 }

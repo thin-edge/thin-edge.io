@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use tedge_config_engine::federated::FederatedConfig;
+use tedge_config_engine::ops::Action;
 use tedge_config_engine::ops::TypedConfigOps;
 use tedge_config_engine::ConfigError;
 use tedge_config_engine::ConfigManager;
@@ -279,6 +280,75 @@ fn extract_builtin_mapper_name_returns_none_for_custom_mapper() {
         crate::extract_builtin_mapper_name("mappers.thingsboard.url", dir.path()),
         None,
     );
+}
+
+#[test]
+#[test]
+fn set_is_refused_when_mapper_file_has_unknown_key() {
+    let original = "url = \"a.example.com:8883\"\n\n[smartrest]\ntemplates = [\"x\"]\n";
+    let dir = config_dir_with_mapper("c8y", original);
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    let err = fed
+        .mutate("mappers.c8y.url", Action::Set("b.example.com:8883".into()))
+        .unwrap_err();
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("mappers/c8y/mapper.toml"),
+        "error should name the file: {msg}"
+    );
+    assert!(
+        msg.contains("smartrest.templates"),
+        "error should name the unknown key: {msg}"
+    );
+    assert_eq!(read_mapper_file(&dir, "c8y"), original);
+}
+
+#[test]
+fn get_still_works_when_mapper_file_has_unknown_key() {
+    let dir = config_dir_with_mapper(
+        "c8y",
+        "url = \"a.example.com:8883\"\n\n[smartrest]\ntemplates = [\"x\"]\n",
+    );
+    let fed = crate::load_federated_config(dir.path()).unwrap();
+
+    assert_eq!(
+        fed.read("mappers.c8y.url").unwrap().as_deref(),
+        Some("a.example.com:8883")
+    );
+}
+
+#[test]
+fn set_works_when_every_key_in_mapper_file_is_known() {
+    let dir = config_dir_with_mapper(
+        "thingsboard",
+        "url = \"a.example.com:8883\"\n\n[bridge]\nclean_session = true\n",
+    );
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    fed.mutate(
+        "mappers.thingsboard.url",
+        Action::Set("b.example.com:8883".into()),
+    )
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "thingsboard").parse().unwrap();
+    assert_eq!(file["url"].as_str(), Some("b.example.com:8883"));
+    assert_eq!(file["bridge"]["clean_session"].as_bool(), Some(true));
+}
+
+fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
+    let mapper = dir.path().join("mappers").join(name);
+    std::fs::create_dir_all(&mapper).unwrap();
+    std::fs::write(mapper.join("mapper.toml"), mapper_toml).unwrap();
+    dir
+}
+
+fn read_mapper_file(dir: &tempfile::TempDir, name: &str) -> String {
+    std::fs::read_to_string(dir.path().join("mappers").join(name).join("mapper.toml")).unwrap()
 }
 
 fn mapper_manager() -> ConfigManager {
