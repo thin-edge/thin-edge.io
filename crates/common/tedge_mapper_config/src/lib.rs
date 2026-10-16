@@ -1,10 +1,12 @@
 #![forbid(unsafe_code)]
 
 mod auth_method;
+mod cloud_type;
 mod schema;
 mod seconds;
 
 pub use auth_method::AuthMethod;
+pub use cloud_type::CloudType;
 pub use schema::builtin_mapper_entries;
 pub use schema::extract_builtin_mapper_name;
 pub use schema::is_builtin_mapper_name;
