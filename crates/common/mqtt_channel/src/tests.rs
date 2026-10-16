@@ -343,6 +343,39 @@ async fn ensure_that_all_messages_are_sent_before_disconnect() -> Result<(), any
 }
 
 #[tokio::test]
+async fn ensure_that_qos0_messages_do_not_block_disconnect() -> Result<(), anyhow::Error> {
+    let broker = mqtt_tests::test_mqtt_broker();
+    let topic = uniquify!("data/topic");
+    let mut messages = broker.messages_published_on(topic).await;
+
+    let mqtt_config = Config::default().with_port(broker.port);
+
+    let topic = Topic::new_unchecked(topic);
+    let mut con = Connection::new(&mqtt_config).await.expect("a connection");
+
+    // QoS 0 messages all share the packet id 0 and are never acknowledged
+    for payload in ["datum 1", "datum 2", "datum 3"] {
+        con.published
+            .send(MqttMessage::new(&topic, payload).with_qos(QoS::AtMostOnce))
+            .await
+            .expect("message sent");
+    }
+
+    tokio::time::timeout(Duration::from_secs(5), con.close())
+        .await
+        .expect("MQTT channel should close");
+
+    mqtt_tests::assert_received(
+        &mut messages,
+        TIMEOUT,
+        vec!["datum 1", "datum 2", "datum 3"],
+    )
+    .await;
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn ensure_that_last_will_message_is_delivered() -> Result<(), anyhow::Error> {
     let topic = uniquify!("test/lwp");
     let broker = mqtt_tests::test_mqtt_broker();

@@ -426,10 +426,14 @@ impl Connection {
                 }
 
                 Ok(Event::Outgoing(Outgoing::Publish(p))) => {
-                    if !awaiting_ack.contains(&p) {
+                    // QoS 0 messages all share the packet id 0 and are never
+                    // acknowledged, so they must not be tracked as awaiting one.
+                    if p == 0 || !awaiting_ack.contains(&p) {
                         pub_count.fetch_sub(1, Ordering::SeqCst);
                     }
-                    awaiting_ack.insert(p);
+                    if p != 0 {
+                        awaiting_ack.insert(p);
+                    }
                 }
 
                 Ok(Event::Incoming(Packet::PubAck(p))) => {
