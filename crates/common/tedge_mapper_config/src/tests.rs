@@ -110,16 +110,12 @@ fn setting_cloud_type_leaves_other_keys_unchanged() {
 
 #[test]
 fn from_root_references_resolve_against_root_stub() {
-    let dir = TempTedgeDir::new();
-    std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
-    let mappers = dir.path().join("mappers/test");
-    std::fs::create_dir_all(&mappers).unwrap();
-    std::fs::write(mappers.join("mapper.toml"), "").unwrap();
+    let dir = config_dir_with_mapper("test", "");
 
     let mut fed = FederatedConfig::new(dir.std_path());
     fed.mount("", root_source(dir.path().join("tedge.toml")))
         .unwrap();
-    fed.mount("mappers.test.", mapper_source(mappers.join("mapper.toml")))
+    fed.mount("mappers.test.", mapper_source(mapper_file(&dir, "test")))
         .unwrap();
 
     let cert = fed.read("mappers.test.device.cert_path").unwrap();
@@ -140,24 +136,8 @@ fn from_root_references_resolve_against_root_stub() {
 
 #[test]
 fn build_federated_config_discovers_mapper_directories() {
-    let dir = TempTedgeDir::new();
-    std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
-
-    let alpha = dir.path().join("mappers/alpha");
-    std::fs::create_dir_all(&alpha).unwrap();
-    std::fs::write(
-        alpha.join("mapper.toml"),
-        "url = \"alpha.example.com:8883\"\n",
-    )
-    .unwrap();
-
-    let beta = dir.path().join("mappers/beta");
-    std::fs::create_dir_all(&beta).unwrap();
-    std::fs::write(
-        beta.join("mapper.toml"),
-        "url = \"beta.example.com:8883\"\n",
-    )
-    .unwrap();
+    let dir = config_dir_with_mapper("alpha", "url = \"alpha.example.com:8883\"\n");
+    add_mapper(&dir, "beta", "url = \"beta.example.com:8883\"\n");
 
     let fed = load_without_env(&dir);
 
@@ -173,11 +153,7 @@ fn build_federated_config_discovers_mapper_directories() {
 
 #[test]
 fn unknown_mapper_name_lists_known_mappers() {
-    let dir = TempTedgeDir::new();
-    std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
-    let known = dir.path().join("mappers/thingsboard");
-    std::fs::create_dir_all(&known).unwrap();
-    std::fs::write(known.join("mapper.toml"), "").unwrap();
+    let dir = config_dir_with_mapper("thingsboard", "");
 
     let fed = load_without_env(&dir);
 
@@ -195,11 +171,7 @@ fn unknown_mapper_name_lists_known_mappers() {
 
 #[test]
 fn unknown_key_in_known_mapper_produces_error() {
-    let dir = TempTedgeDir::new();
-    std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
-    let mapper = dir.path().join("mappers/test");
-    std::fs::create_dir_all(&mapper).unwrap();
-    std::fs::write(mapper.join("mapper.toml"), "").unwrap();
+    let dir = config_dir_with_mapper("test", "");
 
     let fed = load_without_env(&dir);
 
@@ -209,15 +181,7 @@ fn unknown_key_in_known_mapper_produces_error() {
 
 #[test]
 fn env_variable_overrides_toml_value() {
-    let dir = TempTedgeDir::new();
-    std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
-    let mapper = dir.path().join("mappers/thingsboard");
-    std::fs::create_dir_all(&mapper).unwrap();
-    std::fs::write(
-        mapper.join("mapper.toml"),
-        "url = \"file.example.com:8883\"\n",
-    )
-    .unwrap();
+    let dir = config_dir_with_mapper("thingsboard", "url = \"file.example.com:8883\"\n");
 
     let env = EnvOverrides::from_pairs([(
         "TEDGE_MAPPERS_THINGSBOARD_URL".into(),
@@ -234,7 +198,7 @@ fn env_variable_overrides_toml_value() {
 
     let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(dir.std_path());
     let mut mapper_ops =
-        TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, mapper.join("mapper.toml"));
+        TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, mapper_file(&dir, "thingsboard"));
     mapper_ops.apply_env_with_prefix("TEDGE_MAPPERS_THINGSBOARD_", &env);
     fed.mount("mappers.thingsboard.", Box::new(mapper_ops))
         .unwrap();
@@ -605,9 +569,84 @@ fn nested_keys_are_written_as_table_sections() {
     );
 }
 
+#[rstest]
+#[case::cloud_type("cloud_type", "c8y", "az")]
+#[case::tls_enable("bridge.tls.enable", "false", "true")]
+fn single_value_keys_are_replaced_by_add_and_cleared_only_by_removing_their_value(
+    #[case] key: &str,
+    #[case] value: &str,
+    #[case] other_value: &str,
+) {
+    let dir = config_dir_with_mapper("tb", "");
+    let mut fed = load_without_env(&dir);
+    let key = format!("mappers.tb.{key}");
+
+    fed.mutate(&key, Action::Add(other_value.into())).unwrap();
+    fed.mutate(&key, Action::Add(value.into())).unwrap();
+    assert_eq!(fed.read(&key).unwrap().as_deref(), Some(value));
+
+    fed.mutate(&key, Action::Remove(other_value.into()))
+        .unwrap();
+    assert_eq!(fed.read(&key).unwrap().as_deref(), Some(value));
+
+    fed.mutate(&key, Action::Remove(value.into())).unwrap();
+    assert_ne!(fed.read(&key).unwrap().as_deref(), Some(value));
+}
+
+#[test]
+fn reading_a_mapper_whose_file_cannot_be_read_names_its_file() {
+    let dir = TempTedgeDir::new();
+    dir.file("tedge.toml");
+    // A directory where the file should be fails to read with something other than "not found"
+    dir.dir("mappers").dir("broken").dir("mapper.toml");
+    let fed = load_without_env(&dir);
+
+    let err = fed.read("mappers.broken.url").unwrap_err();
+
+    assert!(
+        err.to_string().contains("mappers/broken/mapper.toml"),
+        "error should name the file: {err}"
+    );
+}
+
+#[test]
+fn mapper_directories_with_the_same_env_variable_name_still_list_their_keys() {
+    let dir = config_dir_with_mapper("thingsboard.eu", "");
+    add_mapper(&dir, "thingsboard-eu", "");
+    let fed = load_without_env(&dir);
+
+    let keys: Vec<String> = fed.all_entries().into_iter().map(|e| e.key).collect();
+
+    for key in ["mappers.thingsboard.eu.url", "mappers.thingsboard-eu.url"] {
+        assert!(
+            keys.iter().any(|k| k == key),
+            "{key} should be listed: {keys:?}"
+        );
+    }
+}
+
+#[test]
+fn builtin_mapper_without_a_directory_lists_its_keys_under_its_name() {
+    let dir = TempTedgeDir::new();
+
+    let keys: Vec<String> = crate::builtin_mapper_entries(dir.path(), "c8y")
+        .into_iter()
+        .map(|e| e.key)
+        .collect();
+
+    assert!(
+        keys.iter().any(|k| k == "mappers.c8y.url"),
+        "mappers.c8y.url should be listed: {keys:?}"
+    );
+    assert!(
+        keys.iter().all(|k| k.starts_with("mappers.c8y.")),
+        "every key should be under mappers.c8y.: {keys:?}"
+    );
+}
+
 fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> TempTedgeDir {
     let dir = TempTedgeDir::new();
-    std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
+    dir.file("tedge.toml");
     add_mapper(&dir, name, mapper_toml);
     dir
 }
@@ -620,13 +659,18 @@ fn load_without_env(dir: &TempTedgeDir) -> FederatedConfig {
 }
 
 fn add_mapper(dir: &TempTedgeDir, name: &str, mapper_toml: &str) {
-    let mapper = dir.path().join("mappers").join(name);
-    std::fs::create_dir_all(&mapper).unwrap();
-    std::fs::write(mapper.join("mapper.toml"), mapper_toml).unwrap();
+    dir.dir("mappers")
+        .dir(name)
+        .file("mapper.toml")
+        .with_raw_content(mapper_toml);
 }
 
 fn read_mapper_file(dir: &TempTedgeDir, name: &str) -> String {
-    std::fs::read_to_string(dir.path().join("mappers").join(name).join("mapper.toml")).unwrap()
+    std::fs::read_to_string(mapper_file(dir, name)).unwrap()
+}
+
+fn mapper_file(dir: &TempTedgeDir, name: &str) -> camino::Utf8PathBuf {
+    dir.path().join("mappers").join(name).join("mapper.toml")
 }
 
 fn mapper_manager() -> ConfigManager {
