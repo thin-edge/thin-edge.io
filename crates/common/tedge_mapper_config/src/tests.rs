@@ -1,3 +1,4 @@
+use rstest::rstest;
 use std::path::Path;
 
 use tedge_config_engine::federated::FederatedConfig;
@@ -34,6 +35,75 @@ fn auth_method_accepts_same_values_as_auth_method_config() {
         AuthMethod::Password
     );
     assert_eq!(AuthMethod::from_str("basic").unwrap(), AuthMethod::Password);
+}
+
+#[rstest]
+fn cloud_type_accepts_same_values_as_tedge_config_cloud_type(
+    #[values("c8y", "az", "aws", "", "C8Y", "azure", "notacloud")] value: &str,
+) {
+    use crate::CloudType;
+    use std::str::FromStr;
+    use tedge_config::models::CloudType as TedgeConfigCloudType;
+
+    let ours = CloudType::from_str(value).ok().map(|v| v.to_string());
+    let theirs = TedgeConfigCloudType::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[test]
+fn cloud_type_can_be_set_and_read() {
+    let dir = config_dir_with_mapper("thingsboard", "");
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    fed.mutate("mappers.thingsboard.cloud_type", Action::Set("c8y".into()))
+        .unwrap();
+
+    assert_eq!(
+        fed.read("mappers.thingsboard.cloud_type")
+            .unwrap()
+            .as_deref(),
+        Some("c8y")
+    );
+    let file: toml::Table = read_mapper_file(&dir, "thingsboard").parse().unwrap();
+    assert_eq!(file["cloud_type"].as_str(), Some("c8y"));
+}
+
+#[test]
+fn unknown_cloud_type_is_rejected() {
+    let dir = config_dir_with_mapper("thingsboard", "");
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    let err = fed
+        .mutate(
+            "mappers.thingsboard.cloud_type",
+            Action::Set("notacloud".into()),
+        )
+        .unwrap_err();
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("notacloud"),
+        "error should name the rejected value: {msg}"
+    );
+    assert_eq!(read_mapper_file(&dir, "thingsboard"), "");
+}
+
+#[test]
+fn setting_cloud_type_leaves_other_keys_unchanged() {
+    let dir = config_dir_with_mapper("thingsboard", "url = \"a.example.com:8883\"\n");
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let keys_before: Vec<String> = fed.all_entries().into_iter().map(|e| e.key).collect();
+
+    fed.mutate("mappers.thingsboard.cloud_type", Action::Set("c8y".into()))
+        .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "thingsboard").parse().unwrap();
+    assert_eq!(file["url"].as_str(), Some("a.example.com:8883"));
+    let fed = crate::load_federated_config(dir.path()).unwrap();
+    let keys_after: Vec<String> = fed.all_entries().into_iter().map(|e| e.key).collect();
+    assert_eq!(keys_after, keys_before);
 }
 
 #[test]
@@ -185,6 +255,7 @@ fn mapper_schema_keys_match_custom_mapper_config() {
         "bridge.keepalive_interval",
         "bridge.max_payload_size",
         "bridge.tls",
+        "cloud_type",
         "credentials_path",
         "device.cert_path",
         "device.id",

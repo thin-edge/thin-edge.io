@@ -5801,6 +5801,8 @@ dependencies = [
  "facet",
  "facet-toml",
  "humantime",
+ "rstest",
+ "tedge_config",
  "tedge_config_engine",
  "tedge_config_engine-macro",
  "tempfile",

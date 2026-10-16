@@ -17,10 +17,14 @@ pub mod mapper {
     use tedge_config_engine::*;
 
     use crate::auth_method::AuthMethod;
+    use crate::cloud_type::CloudType;
     use crate::seconds::SecondsOrHumanTime;
 
     tedge_config_engine_macro::define_config! {
         Mapper {
+            /// The built-in cloud integration this mapper uses: c8y, az or aws
+            cloud_type: CloudType,
+
             /// Cloud broker URL in host:port format
             url: String,
 
