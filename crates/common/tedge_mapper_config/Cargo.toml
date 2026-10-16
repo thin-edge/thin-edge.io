@@ -16,6 +16,7 @@ tedge_config_engine = { workspace = true }
 tedge_config_engine-macro = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 rstest = { workspace = true }
 tedge_config = { workspace = true }
 tempfile = { workspace = true }

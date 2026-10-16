@@ -5347,6 +5347,7 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rpassword",
+ "rstest",
  "rumqttc",
  "serde",
  "serde_json",
@@ -6021,6 +6022,7 @@ dependencies = [
 name = "tedge_mapper_config"
 version = "2.1.0"
 dependencies = [
+ "assert_matches",
  "camino",
  "facet",
  "facet-toml",

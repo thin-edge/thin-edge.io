@@ -248,7 +248,7 @@ mod tests {
 
         #[test]
         fn hides_builtin_cloud_profiles() {
-            assert!(is_builtin_cloud_mapper_key("mappers.c8y.prod.url"));
+            assert!(is_builtin_cloud_mapper_key("mappers.c8y.profiles.prod.url"));
         }
 
         #[test]

@@ -124,22 +124,60 @@ pub fn builtin_mapper_entries(config_dir: &Path, name: &str) -> Vec<KeyEntry> {
 
 pub const BUILTIN_MAPPER_NAMES: &[&str] = &["c8y", "az", "aws"];
 
-/// Extracts the builtin mapper name from a full config key like
-/// `mappers.c8y.url` or `mappers.c8y.prod.device.id`,
-/// using the schema to disambiguate profile segments from config keys
-pub fn extract_builtin_mapper_name(key: &str, config_dir: &Path) -> Option<String> {
+/// Extracts the builtin mapper directory name from a full config key like
+/// `mappers.c8y.url` or `mappers.c8y.profiles.prod.device.id`
+pub fn extract_builtin_mapper_name(key: &str) -> Option<String> {
     let rest = key.strip_prefix("mappers.")?;
-    let schema_keys =
-        ConfigManager::from_schema::<MapperConfig>(config_dir).keys::<MapperConfigDto>();
+    let (cloud, rest) = rest.split_once('.')?;
+    if !BUILTIN_MAPPER_NAMES.contains(&cloud) {
+        return None;
+    }
+    match rest
+        .strip_prefix("profiles.")
+        .and_then(|r| r.split_once('.'))
+    {
+        Some((profile, _)) => Some(format!("{cloud}.{profile}")),
+        None => Some(cloud.to_owned()),
+    }
+}
 
-    for (i, _) in rest.match_indices('.') {
-        let candidate = &rest[..i];
-        let config_key = &rest[i + 1..];
-        if is_builtin_mapper_name(candidate) && schema_keys.iter().any(|k| k == config_key) {
-            return Some(candidate.to_owned());
+/// Turns a `tedge mapper config get` key such as `c8y.prod.url` into its `mappers.*` key
+pub fn mapper_key_from_dir_key(key: &str, config_dir: &Path) -> String {
+    let mut dirs = mapper_dirs(config_dir);
+    // Longest first, so `c8y.prod.url` matches `c8y.prod` rather than `c8y`
+    dirs.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
+    for (name, _) in dirs {
+        if let Some(rest) = key.strip_prefix(&name).and_then(|r| r.strip_prefix('.')) {
+            return format!("{}{rest}", mount_prefix(&name));
         }
     }
-    None
+    format!("mappers.{key}")
+}
+
+/// The key prefix a mapper directory is mounted at:
+/// `c8y.prod` (a built-in cloud profile) at `mappers.c8y.profiles.prod.`,
+/// any other directory at `mappers.<name>.`
+fn mount_prefix(dir_name: &str) -> String {
+    match dir_name.split_once('.') {
+        Some((cloud, profile)) if is_builtin_mapper_name(dir_name) => {
+            format!("mappers.{cloud}.profiles.{profile}.")
+        }
+        _ => format!("mappers.{dir_name}."),
+    }
+}
+
+/// The mapper directories under `{config_dir}/mappers/`, sorted by name
+fn mapper_dirs(config_dir: &Path) -> Vec<(String, std::path::PathBuf)> {
+    let Ok(entries) = std::fs::read_dir(config_dir.join("mappers")) else {
+        return Vec::new();
+    };
+    let mut dirs: Vec<_> = entries
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| Some((entry.file_name().to_str()?.to_owned(), entry.path())))
+        .collect();
+    dirs.sort_by(|(a, _), (b, _)| a.cmp(b));
+    dirs
 }
 
 /// Assembles a `FederatedConfig` from the root `tedge.toml` and all
@@ -156,32 +194,18 @@ pub fn load_federated_config(config_dir: impl AsRef<Path>) -> Result<FederatedCo
     root_ops.apply_env_excluding(&env, &["mappers."]);
     fed.mount("", Box::new(root_ops))?;
 
-    let mappers_dir = config_dir.join("mappers");
-    if let Ok(entries) = std::fs::read_dir(&mappers_dir) {
-        let mut mapper_names: Vec<(String, std::path::PathBuf)> = Vec::new();
-        for entry in entries.flatten() {
-            if entry.path().is_dir() {
-                if let Some(name) = entry.file_name().to_str() {
-                    mapper_names.push((name.to_owned(), entry.path()));
-                }
-            }
-        }
-        mapper_names.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (name, dir) in mapper_dirs(config_dir) {
+        let toml_path = dir.join("mapper.toml");
+        let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(config_dir);
+        let mut mapper_ops = TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, toml_path)?;
 
-        for (name, dir) in mapper_names {
-            let toml_path = dir.join("mapper.toml");
-            let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(config_dir);
-            let mut mapper_ops = TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, toml_path)?;
+        let env_prefix = format!(
+            "TEDGE_CONFIG_MAPPERS_{}_",
+            name.to_uppercase().replace('-', "_")
+        );
+        mapper_ops.apply_env_with_prefix(&env_prefix, &env);
 
-            let env_prefix = format!(
-                "TEDGE_CONFIG_MAPPERS_{}_",
-                name.to_uppercase().replace('-', "_")
-            );
-            mapper_ops.apply_env_with_prefix(&env_prefix, &env);
-
-            let prefix = format!("mappers.{name}.");
-            fed.mount(&prefix, Box::new(mapper_ops))?;
-        }
+        fed.mount(&mount_prefix(&name), Box::new(mapper_ops))?;
     }
 
     Ok(fed)
