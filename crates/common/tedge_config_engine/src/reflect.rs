@@ -66,19 +66,19 @@ pub enum ConfigError {
     },
     #[error("A config source is already mounted at prefix '{0}'")]
     DuplicatePrefix(String),
-    #[error("Not writing {}, as it has keys this schema doesn't know: {}", path.display(), keys.join(", "))]
+    #[error("Not writing {path}, as it has keys this schema doesn't know: {}", keys.join(", "))]
     UnknownKeysInFile {
-        path: std::path::PathBuf,
+        path: camino::Utf8PathBuf,
         keys: Vec<String>,
     },
-    #[error("Failed to write {}: {reason}", path.display())]
+    #[error("Failed to write {path}: {reason}")]
     WriteFile {
-        path: std::path::PathBuf,
+        path: camino::Utf8PathBuf,
         reason: String,
     },
-    #[error("Failed to load {}: {reason}", path.display())]
+    #[error("Failed to load {path}: {reason}")]
     InvalidFile {
-        path: std::path::PathBuf,
+        path: camino::Utf8PathBuf,
         reason: String,
     },
     #[error("I/O error: {0}")]

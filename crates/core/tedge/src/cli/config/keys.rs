@@ -87,7 +87,9 @@ impl FederatedWritableKey {
 
 #[cfg(feature = "mapper-config")]
 fn mapper_key_completions() -> Vec<clap_complete::CompletionCandidate> {
-    let config_dir = tedge_config::get_config_dir();
+    let Ok(config_dir) = camino::Utf8PathBuf::try_from(tedge_config::get_config_dir()) else {
+        return Vec::new();
+    };
     let Ok(fed) = tedge_mapper_config::load_federated_config(&config_dir) else {
         return Vec::new();
     };
