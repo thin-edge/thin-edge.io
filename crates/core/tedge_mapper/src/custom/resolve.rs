@@ -1196,6 +1196,40 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         ));
     }
 
+    #[test]
+    fn mapper_config_schema_has_the_same_keys_as_custom_mapper_config() {
+        let schema = tedge_config_engine::ConfigManager::from_schema::<
+            tedge_mapper_config::MapperConfig,
+        >(std::path::Path::new("/etc/tedge"));
+        let mut facet_keys = schema.keys::<tedge_mapper_config::MapperConfigDto>();
+        facet_keys.sort();
+
+        // custom_mapper_schema_keys() only lists the keys `${mapper.*}` templates can use,
+        // and the runtime reads cloud_type directly from CustomMapperConfig
+        let mut expected = custom_mapper_schema_keys();
+        expected.push("cloud_type".to_owned());
+        expected.sort();
+
+        assert_eq!(facet_keys, expected);
+    }
+
+    #[rstest::rstest]
+    fn mapper_config_tls_enable_accepts_same_values_as_bridge_tls_enable(
+        #[values("true", "false", "auto", "", "on", "off", "TRUE")] value: &str,
+    ) {
+        use std::str::FromStr;
+
+        let ours = tedge_mapper_config::TlsEnable::from_str(value)
+            .ok()
+            .map(|v| v.to_string());
+        let theirs = serde_json::from_value::<crate::custom::config::BridgeTlsEnable>(
+            serde_json::json!(value),
+        )
+        .ok()
+        .map(|v| v.to_string());
+        assert_eq!(ours, theirs);
+    }
+
     mod deep_merge_fn {
         use super::*;
 

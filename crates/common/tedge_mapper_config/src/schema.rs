@@ -19,6 +19,7 @@ pub mod mapper {
     use crate::auth_method::AuthMethod;
     use crate::cloud_type::CloudType;
     use crate::seconds::SecondsOrHumanTime;
+    use crate::tls_enable::TlsEnable;
 
     tedge_config_engine_macro::define_config! {
         Mapper {
@@ -53,9 +54,11 @@ pub mod mapper {
                 /// MQTT keepalive interval
                 keepalive_interval: SecondsOrHumanTime,
 
-                /// TLS transport control
-                #[tedge_config(default(value = "auto"))]
-                tls: String,
+                tls: {
+                    /// Whether to use TLS: true, false, or auto to decide from the port
+                    #[tedge_config(default(value = "auto"))]
+                    enable: TlsEnable,
+                },
 
                 /// Maximum MQTT payload size
                 #[tedge_config(default(value = "268435455"))]

@@ -4,6 +4,7 @@ mod auth_method;
 mod cloud_type;
 mod schema;
 mod seconds;
+mod tls_enable;
 
 pub use auth_method::AuthMethod;
 pub use cloud_type::CloudType;
@@ -17,6 +18,7 @@ pub use schema::RootStubConfig;
 pub use schema::RootStubConfigDto;
 pub use schema::BUILTIN_MAPPER_NAMES;
 pub use seconds::SecondsOrHumanTime;
+pub use tls_enable::TlsEnable;
 
 #[cfg(test)]
 mod tests;

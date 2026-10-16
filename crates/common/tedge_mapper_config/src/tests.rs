@@ -244,30 +244,6 @@ fn env_variable_overrides_toml_value() {
 }
 
 #[test]
-fn mapper_schema_keys_match_custom_mapper_config() {
-    let mgr = mapper_manager();
-    let mut keys: Vec<String> = mgr.keys::<MapperConfigDto>();
-    keys.sort();
-
-    let expected = vec![
-        "auth_method",
-        "bridge.clean_session",
-        "bridge.keepalive_interval",
-        "bridge.max_payload_size",
-        "bridge.tls",
-        "cloud_type",
-        "credentials_path",
-        "device.cert_path",
-        "device.id",
-        "device.key_path",
-        "device.root_cert_path",
-        "url",
-    ];
-
-    assert_eq!(keys, expected);
-}
-
-#[test]
 fn root_stub_defaults_match_real_tedge_defaults() {
     let mgr = root_manager();
     let dto = RootStubConfigDto::default();
