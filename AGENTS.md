@@ -224,7 +224,7 @@ Plugins are **separate executables** (not dynamically loaded libraries) that han
 
 ### General Guidelines
 
-Refer to @CODING_GUIDELINES.md
+Refer to @CODING_GUIDELINES.md and @CODING_STANDARDS.md
 
 ### Actor Development Patterns
 
