@@ -173,8 +173,8 @@ mod tests {
 
     #[test]
     fn creates_base_mapper_directory() {
-        let dir = tempfile::tempdir().unwrap();
-        let config_dir = Utf8Path::from_path(dir.path()).unwrap();
+        let dir = TempTedgeDir::new();
+        let config_dir = dir.path();
 
         ensure_builtin_mapper_dir("mappers.c8y.url", config_dir).unwrap();
 
@@ -183,8 +183,8 @@ mod tests {
 
     #[test]
     fn creates_profiled_mapper_directory() {
-        let dir = tempfile::tempdir().unwrap();
-        let config_dir = Utf8Path::from_path(dir.path()).unwrap();
+        let dir = TempTedgeDir::new();
+        let config_dir = dir.path();
 
         ensure_builtin_mapper_dir("mappers.c8y.profiles.prod.url", config_dir).unwrap();
 
@@ -200,8 +200,8 @@ mod tests {
 
     #[test]
     fn key_without_profiles_creates_no_profile_directory() {
-        let dir = tempfile::tempdir().unwrap();
-        let config_dir = Utf8Path::from_path(dir.path()).unwrap();
+        let dir = TempTedgeDir::new();
+        let config_dir = dir.path();
 
         ensure_builtin_mapper_dir("mappers.c8y.prod.url", config_dir).unwrap();
 
@@ -210,8 +210,8 @@ mod tests {
 
     #[test]
     fn skips_non_builtin_mapper() {
-        let dir = tempfile::tempdir().unwrap();
-        let config_dir = Utf8Path::from_path(dir.path()).unwrap();
+        let dir = TempTedgeDir::new();
+        let config_dir = dir.path();
 
         ensure_builtin_mapper_dir("mappers.thingsboard.url", config_dir).unwrap();
 
@@ -220,8 +220,8 @@ mod tests {
 
     #[test]
     fn skips_non_mapper_key() {
-        let dir = tempfile::tempdir().unwrap();
-        let config_dir = Utf8Path::from_path(dir.path()).unwrap();
+        let dir = TempTedgeDir::new();
+        let config_dir = dir.path();
 
         ensure_builtin_mapper_dir("device.id", config_dir).unwrap();
 
