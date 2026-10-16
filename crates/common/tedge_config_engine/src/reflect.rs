@@ -12,7 +12,7 @@ use facet_reflect::Peek;
 use facet_reflect::Poke;
 
 /// Errors produced while navigating or mutating Facet-backed config DTOs.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum ConfigError {
     #[error("Unknown config key: '{0}'")]
     UnknownKey(String),
@@ -68,6 +68,11 @@ pub enum ConfigError {
     UnknownKeysInFile {
         path: std::path::PathBuf,
         keys: Vec<String>,
+    },
+    #[error("Failed to load {}: {reason}", path.display())]
+    InvalidFile {
+        path: std::path::PathBuf,
+        reason: String,
     },
     #[error("I/O error: {0}")]
     IoError(String),

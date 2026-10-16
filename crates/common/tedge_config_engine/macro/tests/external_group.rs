@@ -302,5 +302,8 @@ fn typed_source<T>(manager: ConfigManager) -> Box<dyn ConfigOps>
 where
     T: for<'a> facet::Facet<'a> + Default + 'static,
 {
-    Box::new(TypedConfigOps::<T>::new(manager, "/nonexistent/tedge/config.toml".into()).unwrap())
+    Box::new(TypedConfigOps::<T>::new(
+        manager,
+        "/nonexistent/tedge/config.toml".into(),
+    ))
 }
