@@ -39,6 +39,9 @@ pub struct TypedConfigOps<T> {
     manager: ConfigManager,
     dto: T,
     path: PathBuf,
+    /// Why the file could not be loaded, returned by reads so one broken file
+    /// doesn't stop other sources mounted alongside it from loading
+    load_error: Option<ConfigError>,
 }
 
 impl<T> TypedConfigOps<T>
@@ -46,9 +49,24 @@ where
     T: for<'a> Facet<'a> + Default,
 {
     /// Loads a DTO from `path`, or starts from `T::default()` if it does not exist.
-    pub fn new(manager: ConfigManager, path: PathBuf) -> Result<Self, ConfigError> {
-        let dto = load_dto(&path)?;
-        Ok(Self { manager, dto, path })
+    ///
+    /// A file that cannot be loaded is not an error here: reads from this
+    /// source return the load error instead, and writes reload the file.
+    pub fn new(manager: ConfigManager, path: PathBuf) -> Self {
+        let (dto, load_error) = match load_dto(&path) {
+            Ok(dto) => (dto, None),
+            Err(e) => (T::default(), Some(e)),
+        };
+        Self {
+            manager,
+            dto,
+            path,
+            load_error,
+        }
+    }
+
+    fn check_loaded(&self) -> Result<(), ConfigError> {
+        self.load_error.clone().map_or(Ok(()), Err)
     }
 
     /// Applies the manager's configured environment prefix to this DTO.
@@ -103,10 +121,12 @@ where
     T: for<'a> Facet<'a> + Default,
 {
     fn get(&self, key: &str) -> Result<Option<String>, ConfigError> {
+        self.check_loaded()?;
         self.manager.get(&self.dto, key)
     }
 
     fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError> {
+        self.check_loaded()?;
         self.manager.read_with_root(&self.dto, key, root)
     }
 
@@ -123,6 +143,7 @@ where
         }
         self.save(&dto)?;
         self.dto = dto;
+        self.load_error = None;
         Ok(())
     }
 
@@ -136,14 +157,14 @@ where
 }
 
 fn load_dto<T: for<'a> Facet<'a> + Default>(path: &Path) -> Result<T, ConfigError> {
+    let invalid = |reason: String| ConfigError::InvalidFile {
+        path: path.to_owned(),
+        reason,
+    };
     match std::fs::read_to_string(path) {
-        Ok(content) => facet_toml::from_str(&content)
-            .map_err(|e| ConfigError::IoError(format!("parsing {}: {e}", path.display()))),
+        Ok(content) => facet_toml::from_str(&content).map_err(|e| invalid(e.to_string())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
-        Err(e) => Err(ConfigError::IoError(format!(
-            "reading {}: {e}",
-            path.display()
-        ))),
+        Err(e) => Err(invalid(e.to_string())),
     }
 }
 

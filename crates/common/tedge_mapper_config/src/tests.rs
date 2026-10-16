@@ -227,13 +227,13 @@ fn env_variable_overrides_toml_value() {
 
     let root_mgr = ConfigManager::from_schema::<RootStubConfig>(dir.path());
     let mut root_ops =
-        TypedConfigOps::<RootStubConfigDto>::new(root_mgr, dir.path().join("tedge.toml")).unwrap();
+        TypedConfigOps::<RootStubConfigDto>::new(root_mgr, dir.path().join("tedge.toml"));
     root_ops.apply_env_excluding(&env, &["mappers."]);
     fed.mount("", Box::new(root_ops)).unwrap();
 
     let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(dir.path());
     let mut mapper_ops =
-        TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, mapper.join("mapper.toml")).unwrap();
+        TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, mapper.join("mapper.toml"));
     mapper_ops.apply_env_with_prefix("TEDGE_MAPPERS_THINGSBOARD_", &env);
     fed.mount("mappers.thingsboard.", Box::new(mapper_ops))
         .unwrap();
@@ -527,6 +527,36 @@ fn set_works_when_every_key_in_mapper_file_is_known() {
     assert_eq!(file["bridge"]["clean_session"].as_bool(), Some(true));
 }
 
+#[test]
+fn set_on_another_mapper_succeeds_while_one_mapper_file_is_invalid() {
+    let dir = config_dir_with_mapper("broken", "[bridge]\ntls.enable = \"on\"\n");
+    add_mapper(&dir, "thingsboard", "");
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    fed.mutate(
+        "mappers.thingsboard.url",
+        Action::Set("a.example.com:8883".into()),
+    )
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "thingsboard").parse().unwrap();
+    assert_eq!(file["url"].as_str(), Some("a.example.com:8883"));
+}
+
+#[test]
+fn reading_the_invalid_mapper_names_its_file() {
+    let dir = config_dir_with_mapper("broken", "[bridge]\ntls.enable = \"on\"\n");
+    let fed = crate::load_federated_config(dir.path()).unwrap();
+
+    let err = fed.read("mappers.broken.url").unwrap_err();
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("mappers/broken/mapper.toml"),
+        "error should name the file: {msg}"
+    );
+}
+
 fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
@@ -555,9 +585,15 @@ fn root_manager() -> ConfigManager {
 }
 
 fn mapper_source(path: std::path::PathBuf) -> Box<dyn tedge_config_engine::ops::ConfigOps> {
-    Box::new(TypedConfigOps::<MapperConfigDto>::new(mapper_manager(), path).unwrap())
+    Box::new(TypedConfigOps::<MapperConfigDto>::new(
+        mapper_manager(),
+        path,
+    ))
 }
 
 fn root_source(path: std::path::PathBuf) -> Box<dyn tedge_config_engine::ops::ConfigOps> {
-    Box::new(TypedConfigOps::<RootStubConfigDto>::new(root_manager(), path).unwrap())
+    Box::new(TypedConfigOps::<RootStubConfigDto>::new(
+        root_manager(),
+        path,
+    ))
 }

@@ -113,9 +113,7 @@ pub fn is_builtin_mapper_name(name: &str) -> bool {
 pub fn builtin_mapper_entries(config_dir: &Path, name: &str) -> Vec<KeyEntry> {
     let mgr = ConfigManager::from_schema::<MapperConfig>(config_dir);
     let toml_path = config_dir.join("mappers").join(name).join("mapper.toml");
-    let Ok(ops) = TypedConfigOps::<MapperConfigDto>::new(mgr, toml_path) else {
-        return Vec::new();
-    };
+    let ops = TypedConfigOps::<MapperConfigDto>::new(mgr, toml_path);
     let prefix = format!("mappers.{name}.");
     ops.entries()
         .into_iter()
@@ -198,7 +196,7 @@ pub(crate) fn load_federated_config_with_env(
 
     let root_mgr = ConfigManager::from_schema::<RootStubConfig>(config_dir);
     let root_ops =
-        TypedConfigOps::<RootStubConfigDto>::new(root_mgr, config_dir.join("tedge.toml"))?;
+        TypedConfigOps::<RootStubConfigDto>::new(root_mgr, config_dir.join("tedge.toml"));
     fed.mount("", Box::new(root_ops))?;
 
     let mappers: Vec<_> = mapper_dirs(config_dir)
@@ -247,7 +245,7 @@ pub(crate) fn load_federated_config_with_env(
             continue;
         }
         let mut mapper_ops =
-            TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, dir.join("mapper.toml"))?;
+            TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, dir.join("mapper.toml"));
         mapper_ops.apply_env_with_prefix(env_prefix, env);
         fed.mount(mount_prefix, Box::new(mapper_ops))?;
     }

@@ -50,26 +50,14 @@ fn print_config_list(
         }
     }
     #[cfg(feature = "mapper-config")]
-    match tedge_mapper_config::load_federated_config(config.root_dir()) {
-        Ok(fed) => {
-            for entry in fed.all_entries() {
-                if !entry.key.starts_with("mappers.") {
-                    continue;
-                }
-                if is_builtin_cloud_mapper_key(&entry.key) {
-                    continue;
-                }
-                if !key_matches_filter(&entry.key, filter) {
-                    continue;
-                }
-                match fed.read(&entry.key).ok().flatten() {
-                    Some(value) => println!("{key}={value}", key = entry.key),
-                    None => keys_without_values.push(entry.key),
-                }
-            }
+    {
+        let mappers = list_mapper_config(config.root_dir(), filter);
+        for line in mappers.values {
+            println!("{line}");
         }
-        Err(e) => {
-            tracing::warn!("Failed to load mapper configuration: {e}");
+        keys_without_values.extend(mappers.keys_without_values);
+        for warning in mappers.warnings {
+            tracing::warn!("{warning}");
         }
     }
 
@@ -87,6 +75,56 @@ struct DocEntry {
     doc: String,
     note: Option<String>,
     examples: Vec<String>,
+}
+
+/// The custom mapper part of `tedge config list`
+#[cfg(feature = "mapper-config")]
+#[derive(Default)]
+struct MapperListing {
+    /// `key=value` lines
+    values: Vec<String>,
+    keys_without_values: Vec<String>,
+    /// One per mapper whose configuration could not be read
+    warnings: Vec<String>,
+}
+
+#[cfg(feature = "mapper-config")]
+fn list_mapper_config(config_dir: &camino::Utf8Path, filter: Option<&str>) -> MapperListing {
+    let mut listing = MapperListing::default();
+    let fed = match tedge_mapper_config::load_federated_config(config_dir) {
+        Ok(fed) => fed,
+        Err(e) => {
+            listing
+                .warnings
+                .push(format!("Failed to load mapper configuration: {e}"));
+            return listing;
+        }
+    };
+    let mut read_errors = std::collections::BTreeSet::new();
+    for entry in fed.all_entries() {
+        if !entry.key.starts_with("mappers.") {
+            continue;
+        }
+        if is_builtin_cloud_mapper_key(&entry.key) {
+            continue;
+        }
+        if !key_matches_filter(&entry.key, filter) {
+            continue;
+        }
+        match fed.read(&entry.key) {
+            Ok(Some(value)) => listing
+                .values
+                .push(format!("{key}={value}", key = entry.key)),
+            Ok(None) => listing.keys_without_values.push(entry.key),
+            // Every key of a mapper whose file didn't load fails the same way
+            Err(e) => {
+                read_errors.insert(e.to_string());
+            }
+        }
+    }
+    // Each error already says what failed and on which file
+    listing.warnings.extend(read_errors);
+    listing
 }
 
 fn normalise_doc_comment(comment: &str) -> String {
@@ -264,6 +302,38 @@ mod tests {
             assert!(!is_builtin_cloud_mapper_key("c8y.url"));
             assert!(!is_builtin_cloud_mapper_key("device.id"));
         }
+    }
+
+    #[cfg(feature = "mapper-config")]
+    #[test]
+    fn a_broken_mapper_file_is_reported_once_while_other_mappers_are_listed() {
+        let config_dir = tedge_test_utils::fs::TempTedgeDir::new();
+        let mappers = config_dir.dir("mappers");
+        mappers
+            .dir("broken")
+            .file("mapper.toml")
+            .with_raw_content("[bridge\n");
+        mappers
+            .dir("thingsboard")
+            .file("mapper.toml")
+            .with_raw_content("url = \"tb.example.com:8883\"\n");
+
+        let listing = list_mapper_config(config_dir.path(), None);
+
+        let broken_file = config_dir.path().join("mappers/broken/mapper.toml");
+        assert_eq!(listing.warnings.len(), 1, "{:?}", listing.warnings);
+        let warning = &listing.warnings[0];
+        assert!(
+            warning.starts_with(&format!("Failed to load {broken_file}: ")),
+            "{warning}"
+        );
+        assert!(
+            listing
+                .values
+                .contains(&"mappers.thingsboard.url=tb.example.com:8883".to_owned()),
+            "{:?}",
+            listing.values
+        );
     }
 
     #[test]
