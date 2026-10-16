@@ -527,9 +527,12 @@ fn set_works_when_every_key_in_mapper_file_is_known() {
     assert_eq!(file["bridge"]["clean_session"].as_bool(), Some(true));
 }
 
-#[test]
-fn set_on_another_mapper_succeeds_while_one_mapper_file_is_invalid() {
-    let dir = config_dir_with_mapper("broken", "[bridge]\ntls.enable = \"on\"\n");
+#[rstest]
+#[case::invalid_toml("[bridge\n")]
+#[case::missing_value("url = \n")]
+#[case::invalid_value("[bridge]\ntls.enable = \"on\"\n")]
+fn set_on_another_mapper_succeeds_while_one_mapper_file_is_invalid(#[case] broken_file: &str) {
+    let dir = config_dir_with_mapper("broken", broken_file);
     add_mapper(&dir, "thingsboard", "");
     let mut fed = crate::load_federated_config(dir.path()).unwrap();
 
@@ -543,9 +546,12 @@ fn set_on_another_mapper_succeeds_while_one_mapper_file_is_invalid() {
     assert_eq!(file["url"].as_str(), Some("a.example.com:8883"));
 }
 
-#[test]
-fn reading_the_invalid_mapper_names_its_file() {
-    let dir = config_dir_with_mapper("broken", "[bridge]\ntls.enable = \"on\"\n");
+#[rstest]
+#[case::invalid_toml("[bridge\n")]
+#[case::missing_value("url = \n")]
+#[case::invalid_value("[bridge]\ntls.enable = \"on\"\n")]
+fn reading_the_invalid_mapper_names_its_file(#[case] broken_file: &str) {
+    let dir = config_dir_with_mapper("broken", broken_file);
     let fed = crate::load_federated_config(dir.path()).unwrap();
 
     let err = fed.read("mappers.broken.url").unwrap_err();
@@ -554,6 +560,67 @@ fn reading_the_invalid_mapper_names_its_file() {
     assert!(
         msg.contains("mappers/broken/mapper.toml"),
         "error should name the file: {msg}"
+    );
+}
+
+#[rstest]
+#[case::invalid_toml("[bridge\n")]
+#[case::missing_value("url = \n")]
+#[case::invalid_value("[bridge]\ntls.enable = \"on\"\n")]
+fn setting_a_key_of_the_invalid_mapper_names_its_file(#[case] broken_file: &str) {
+    let dir = config_dir_with_mapper("broken", broken_file);
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    let err = fed
+        .mutate(
+            "mappers.broken.url",
+            Action::Set("a.example.com:8883".into()),
+        )
+        .unwrap_err();
+
+    assert_matches!(err, ConfigError::InvalidFile { .. });
+    assert!(
+        err.to_string().contains("mappers/broken/mapper.toml"),
+        "error should name the file: {err}"
+    );
+    assert_eq!(read_mapper_file(&dir, "broken"), broken_file);
+}
+
+#[test]
+fn invalid_enum_value_is_rejected_naming_the_key_and_the_allowed_values() {
+    let dir = config_dir_with_mapper("tb", "");
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    let err = fed
+        .mutate("mappers.tb.bridge.tls.enable", Action::Set("on".into()))
+        .unwrap_err();
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("mappers.tb.bridge.tls.enable"),
+        "error should name the key: {msg}"
+    );
+    assert!(
+        msg.contains("expected one of: true, false, auto"),
+        "error should list the allowed values: {msg}"
+    );
+}
+
+#[test]
+fn invalid_value_in_mapper_file_is_reported_with_its_key() {
+    let dir = config_dir_with_mapper("broken", "[bridge]\ntls.enable = \"on\"\n");
+    let fed = crate::load_federated_config(dir.path()).unwrap();
+
+    let err = fed.read("mappers.broken.url").unwrap_err();
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("bridge.tls.enable"),
+        "error should name the key: {msg}"
+    );
+    assert!(
+        msg.contains("expected one of: true, false, auto"),
+        "error should list the allowed values: {msg}"
     );
 }
 
