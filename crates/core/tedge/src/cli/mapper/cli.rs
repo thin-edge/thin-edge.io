@@ -47,7 +47,10 @@ impl BuildCommand for MapperCli {
             } => {
                 use crate::cli::config::MapperGetConfigCommand;
                 Ok(MapperGetConfigCommand {
-                    key: format!("mappers.{key}"),
+                    key: tedge_mapper_config::mapper_key_from_dir_key(
+                        &key,
+                        config.root_dir().as_std_path(),
+                    ),
                 }
                 .into_boxed())
             }

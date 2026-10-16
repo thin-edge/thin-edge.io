@@ -1,3 +1,4 @@
+use assert_matches::assert_matches;
 use rstest::rstest;
 use std::path::Path;
 
@@ -286,50 +287,129 @@ fn is_builtin_mapper_name_rejects_unknown_names() {
 
 #[test]
 fn extract_builtin_mapper_name_returns_base_name() {
-    let dir = tempfile::tempdir().unwrap();
     assert_eq!(
-        crate::extract_builtin_mapper_name("mappers.c8y.url", dir.path()),
+        crate::extract_builtin_mapper_name("mappers.c8y.url"),
         Some("c8y".to_owned()),
     );
 }
 
 #[test]
-fn extract_builtin_mapper_name_returns_profiled_name() {
-    let dir = tempfile::tempdir().unwrap();
+fn extract_builtin_mapper_name_returns_profile_directory_name() {
     assert_eq!(
-        crate::extract_builtin_mapper_name("mappers.c8y.prod.url", dir.path()),
+        crate::extract_builtin_mapper_name("mappers.c8y.profiles.prod.url"),
         Some("c8y.prod".to_owned()),
     );
 }
 
 #[test]
-fn extract_builtin_mapper_name_handles_nested_config_key() {
-    let dir = tempfile::tempdir().unwrap();
+fn extract_builtin_mapper_name_treats_a_key_without_profiles_as_a_base_mapper_key() {
     assert_eq!(
-        crate::extract_builtin_mapper_name("mappers.az.device.id", dir.path()),
+        crate::extract_builtin_mapper_name("mappers.c8y.prod.url"),
+        Some("c8y".to_owned()),
+    );
+}
+
+#[test]
+fn extract_builtin_mapper_name_handles_nested_config_key() {
+    assert_eq!(
+        crate::extract_builtin_mapper_name("mappers.az.device.id"),
         Some("az".to_owned()),
     );
 }
 
 #[test]
 fn extract_builtin_mapper_name_returns_none_for_non_mapper_key() {
-    let dir = tempfile::tempdir().unwrap();
-    assert_eq!(
-        crate::extract_builtin_mapper_name("device.id", dir.path()),
-        None,
-    );
+    assert_eq!(crate::extract_builtin_mapper_name("device.id"), None);
 }
 
 #[test]
 fn extract_builtin_mapper_name_returns_none_for_custom_mapper() {
-    let dir = tempfile::tempdir().unwrap();
     assert_eq!(
-        crate::extract_builtin_mapper_name("mappers.thingsboard.url", dir.path()),
+        crate::extract_builtin_mapper_name("mappers.thingsboard.url"),
         None,
     );
 }
 
 #[test]
+fn profile_keys_are_read_and_written_under_profiles() {
+    let dir = config_dir_with_mapper("c8y.prod", "");
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    fed.mutate(
+        "mappers.c8y.profiles.prod.url",
+        Action::Set("prod.example.com:8883".into()),
+    )
+    .unwrap();
+
+    assert_eq!(
+        fed.read("mappers.c8y.profiles.prod.url")
+            .unwrap()
+            .as_deref(),
+        Some("prod.example.com:8883")
+    );
+    let file: toml::Table = read_mapper_file(&dir, "c8y.prod").parse().unwrap();
+    assert_eq!(file["url"].as_str(), Some("prod.example.com:8883"));
+}
+
+#[test]
+fn group_key_reaches_base_mapper_when_a_profile_is_named_after_the_group() {
+    let dir = config_dir_with_mapper("c8y", "");
+    add_mapper(&dir, "c8y.bridge", "url = \"bridge.example.com:8883\"\n");
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    fed.mutate(
+        "mappers.c8y.bridge.clean_session",
+        Action::Set("true".into()),
+    )
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "c8y").parse().unwrap();
+    assert_eq!(file["bridge"]["clean_session"].as_bool(), Some(true));
+    assert_eq!(
+        read_mapper_file(&dir, "c8y.bridge"),
+        "url = \"bridge.example.com:8883\"\n"
+    );
+}
+
+#[test]
+fn profile_key_without_profiles_is_an_unknown_key_of_the_base_mapper() {
+    let dir = config_dir_with_mapper("c8y", "");
+    add_mapper(&dir, "c8y.prod", "");
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    let err = fed
+        .mutate(
+            "mappers.c8y.prod.url",
+            Action::Set("prod.example.com:8883".into()),
+        )
+        .unwrap_err();
+
+    assert_matches!(err, ConfigError::UnknownKey(_));
+}
+
+#[rstest]
+#[case::profile("c8y.prod.url", "mappers.c8y.profiles.prod.url")]
+#[case::base_cloud("c8y.url", "mappers.c8y.url")]
+#[case::custom_mapper("thingsboard.url", "mappers.thingsboard.url")]
+fn mapper_command_key_becomes_its_mappers_key(
+    #[case] key: &str,
+    #[case] expected: &str,
+) {
+    let dir = config_dir_with_mapper("c8y.prod", "");
+    add_mapper(&dir, "c8y", "");
+
+    assert_eq!(crate::mapper_key_from_dir_key(key, dir.path()), expected);
+}
+
+#[test]
+fn mapper_schema_has_no_profiles_group() {
+    let keys = mapper_manager().keys::<MapperConfigDto>();
+    assert!(
+        keys.iter().all(|k| k.split('.').next() != Some("profiles")),
+        "'profiles' is reserved for profile keys: {keys:?}"
+    );
+}
+
 #[test]
 fn set_is_refused_when_mapper_file_has_unknown_key() {
     let original = "url = \"a.example.com:8883\"\n\n[smartrest]\ntemplates = [\"x\"]\n";
@@ -392,6 +472,12 @@ fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> tempfile::TempDir {
     std::fs::create_dir_all(&mapper).unwrap();
     std::fs::write(mapper.join("mapper.toml"), mapper_toml).unwrap();
     dir
+}
+
+fn add_mapper(dir: &tempfile::TempDir, name: &str, mapper_toml: &str) {
+    let mapper = dir.path().join("mappers").join(name);
+    std::fs::create_dir_all(&mapper).unwrap();
+    std::fs::write(mapper.join("mapper.toml"), mapper_toml).unwrap();
 }
 
 fn read_mapper_file(dir: &tempfile::TempDir, name: &str) -> String {
