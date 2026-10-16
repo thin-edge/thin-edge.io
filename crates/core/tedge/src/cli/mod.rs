@@ -19,6 +19,7 @@ use tedge_watchdog::WatchdogOpt;
 use tedge_write::bin::Args as TedgeWriteOpt;
 
 use self::init::TEdgeInitCmd;
+mod bootstrap;
 mod bridge;
 mod certificate;
 mod common;
@@ -121,6 +122,12 @@ pub enum TEdgeOpt {
         #[clap(long)]
         relative_links: bool,
     },
+
+    /// Bootstrap the device and onboard it to a cloud (experimental)
+    ///
+    /// Configures the cloud endpoints, obtains device credentials,
+    /// and connects the device, in a single command.
+    Bootstrap(bootstrap::TEdgeBootstrapCli),
 
     /// Create and manage device certificate
     #[clap(subcommand)]
@@ -246,6 +253,7 @@ impl BuildCommand for TEdgeOpt {
             } => Ok(Box::new(TEdgeInitCmd::new(user, group, relative_links))),
 
             TEdgeOpt::Upload(opt) => opt.build_command(config).await,
+            TEdgeOpt::Bootstrap(opt) => opt.build_command(config).await,
             TEdgeOpt::Cert(opt) => opt.build_command(config).await,
             TEdgeOpt::Config(opt) => opt.build_command(config).await,
             TEdgeOpt::Hsm(opt) => opt.build_command(config).await,

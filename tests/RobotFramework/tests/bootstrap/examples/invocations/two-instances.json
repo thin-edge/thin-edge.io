@@ -1,0 +1,20 @@
+[
+  {
+    "cloud": "c8y",
+    "url": "example.cumulocity.com",
+    "register": "basic",
+    "device_id": "device01",
+    "env": [
+      "C8Y_BOOTSTRAP_PASSWORD"
+    ]
+  },
+  {
+    "cloud": "acme",
+    "url": "acme.example.com",
+    "register": "token",
+    "device_id": "device01-acme",
+    "env": [
+      "ACME_TOKEN"
+    ]
+  }
+]

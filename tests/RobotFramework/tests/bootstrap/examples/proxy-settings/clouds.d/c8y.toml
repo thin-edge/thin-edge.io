@@ -1,0 +1,55 @@
+# Site override of the Cumulocity descriptor that additionally asks
+# for optional HTTP proxy settings — a device-global question
+# (`global = true`: the key is a tedge config key, not cloud-scoped),
+# asked by the wizard before anything runs.
+#
+# An override replaces the whole descriptor for the cloud, so the
+# compiled-in parts are restated. The built-in methods are restated
+# without their inputs: a built-in method keeps its compiled-in inputs
+# unless the override declares its own (omitting a method only hides it
+# from the wizard, the implementation keeps working).
+cloud = "c8y"
+description = "Cumulocity"
+
+[url]
+description = "Cumulocity URL (the HTTP/S address used to talk to the platform)"
+
+[[register]]
+name = "c8y-ca"
+default = true
+description = "Request a device certificate from the Cumulocity certificate authority"
+
+[[register]]
+name = "self-signed"
+description = "Create a self-signed certificate and upload it using user credentials"
+
+[[register]]
+name = "basic"
+description = "Request username/password device credentials via the bootstrap user (device not registered yet)"
+
+[[register]]
+name = "basic-preregistered"
+description = "The device is already pre-registered: store its issued username/password"
+
+[[settings]]
+key = "mqtt_service.enabled"
+name = "Select the Cumulocity MQTT connection type"
+default = "false"
+
+[[settings.choices]]
+value = "false"
+label = "Core MQTT"
+description = "The standard device endpoint (port 8883)"
+
+[[settings.choices]]
+value = "true"
+label = "MQTT Service"
+description = "Next-gen endpoint with free-form topics (port 9883); requires the mqtt-service.smartrest tenant feature (Public Preview)"
+
+# The site's addition: an optional, device-global proxy question.
+# Applied via the tedge config (proxy.address), so the registration
+# and connection steps go through the proxy
+[[settings]]
+key = "proxy.address"
+global = true
+name = "HTTP proxy for cloud connections (scheme://host:port; leave empty for none)"

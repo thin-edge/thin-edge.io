@@ -1,4 +1,4 @@
 mod cli;
-mod command;
+pub(crate) mod command;
 
 pub use cli::TEdgeReconnectCli;

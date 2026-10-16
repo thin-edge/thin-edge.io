@@ -1,11 +1,13 @@
+pub(crate) use self::cli::certificate_owner;
+pub(crate) use self::cli::csr_template;
 pub use self::cli::TEdgeCertCli;
 use camino::Utf8Path;
 use tokio::io::AsyncReadExt;
 
-mod c8y;
+pub(crate) mod c8y;
 mod cli;
 mod create;
-mod create_csr;
+pub(crate) mod create_csr;
 mod error;
 mod remove;
 mod renew;

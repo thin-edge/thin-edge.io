@@ -1,0 +1,35 @@
+#!/bin/sh
+set -e
+# tedge bootstrap register hook for the "acme" test cloud:
+# stores the operator-supplied token as the mapper's credentials.
+#
+# args: <phase> --cloud <cloud> [--url <url>]
+#       [--re-register] [--clean] [--register-method <name>] ...
+shift # phase
+CLOUD=""
+RE_REGISTER=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cloud) CLOUD="$2"; shift ;;
+        # --clean implies --re-register, so keying on --re-register covers both
+        --re-register) RE_REGISTER=1 ;;
+    esac
+    shift
+done
+
+# self-select: other clouds' bootstraps skip this hook
+[ "$CLOUD" = "acme" ] || exit 2
+
+CRED="$TEDGE_CONFIG_DIR/mappers/acme/credentials.toml"
+
+# idempotent: keep existing credentials, unless re-registering
+if [ -f "$CRED" ] && [ -z "$RE_REGISTER" ]; then
+    echo "Keeping the existing credentials at $CRED" >&2
+    exit 0
+fi
+
+[ -n "$ACME_TOKEN" ] || { echo "ACME_TOKEN is not set" >&2; exit 1; }
+mkdir -p "$TEDGE_CONFIG_DIR/mappers/acme"
+umask 077
+printf '[credentials]\nusername = "%s"\npassword = ""\n' "$ACME_TOKEN" > "$CRED"
+echo "Credentials stored at $CRED" >&2

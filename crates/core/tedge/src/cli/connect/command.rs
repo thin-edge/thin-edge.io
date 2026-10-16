@@ -8,6 +8,7 @@ use crate::bridge::BridgeConfig;
 use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
+use crate::cli::common::custom_mapper_service_name;
 use crate::cli::common::Cloud;
 use crate::cli::common::MaybeBorrowedCloud;
 #[cfg(feature = "c8y")]
@@ -102,9 +103,12 @@ impl Command for ConnectCommand {
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         if let Cloud::Custom(ref name) = self.cloud {
             if self.is_test_connection {
-                return wait_for_custom_mapper_health(&tedge_config, name)
-                    .await
-                    .map_err(Into::into);
+                return match wait_for_custom_mapper_health(&tedge_config, name).await {
+                    Ok(()) => Ok(()),
+                    // The spinner has already reported the failure;
+                    // exit with the code documenting which check failed
+                    Err(err) => std::process::exit(err.exit_code()),
+                };
             } else {
                 return Err(anyhow::anyhow!(
                     "'tedge connect' is not supported for custom mappers (only --test is available)."
@@ -557,14 +561,35 @@ impl ConnectCommand {
 /// and waits up to [`RESPONSE_TIMEOUT`] for each to report `"up"`. The bridge
 /// phase is skipped entirely when the mapper's `bridge/` directory does not
 /// exist, because a flows-only mapper never publishes bridge health.
-async fn wait_for_custom_mapper_health(
+/// How the custom mapper connection check failed.
+///
+/// `tedge connect <name> --test` maps these to its documented exit codes;
+/// other callers (e.g. `tedge bootstrap`) can retry instead
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum CustomMapperCheckError {
+    #[error(transparent)]
+    Mapper(Fancy<ConnectError>),
+    #[error(transparent)]
+    Bridge(Fancy<ConnectError>),
+}
+
+impl CustomMapperCheckError {
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            Self::Mapper(_) => 2,
+            Self::Bridge(_) => 3,
+        }
+    }
+}
+
+pub(crate) async fn wait_for_custom_mapper_health(
     tedge_config: &TEdgeConfig,
     mapper_name: &str,
-) -> Result<(), Fancy<ConnectError>> {
+) -> Result<(), CustomMapperCheckError> {
     let mqtt_schema = MqttSchema::with_root(tedge_config.mqtt.topic_root.clone());
     let device_topic_id = tedge_config.mqtt.device_topic_id.clone();
 
-    let mapper_service = format!("tedge-mapper-{mapper_name}");
+    let mapper_service = custom_mapper_service_name(mapper_name);
     let bridge_service = format!("tedge-mapper-bridge-{mapper_name}");
 
     let mapper_health = service_health_topic(&mqtt_schema, &device_topic_id, &mapper_service).name;
@@ -579,12 +604,14 @@ async fn wait_for_custom_mapper_health(
 
     const CLIENT_ID: &str = "check_connection_custom_mapper";
 
+    let mapper_err = |e: ConnectError| CustomMapperCheckError::Mapper(e.into());
+
     let mut mqtt_options = tedge_config
         .mqtt_config()
-        .map_err(ConnectError::from)?
+        .map_err(|e| mapper_err(e.into()))?
         .with_session_prefix(CLIENT_ID)
         .rumqttc_options()
-        .map_err(ConnectError::from)?;
+        .map_err(|e| mapper_err(e.into()))?;
     mqtt_options.set_keep_alive(RESPONSE_TIMEOUT);
 
     let (client, mut event_loop) = rumqttc::AsyncClient::new(mqtt_options, 10);
@@ -592,12 +619,12 @@ async fn wait_for_custom_mapper_health(
     client
         .subscribe(&mapper_health, rumqttc::QoS::AtLeastOnce)
         .await
-        .map_err(ConnectError::from)?;
+        .map_err(|e| mapper_err(e.into()))?;
     if has_bridge {
         client
             .subscribe(&bridge_health, rumqttc::QoS::AtLeastOnce)
             .await
-            .map_err(ConnectError::from)?;
+            .map_err(|e| mapper_err(e.into()))?;
     }
 
     // Poll the MQTT event loop, tracking the health of each service separately.
@@ -648,11 +675,9 @@ async fn wait_for_custom_mapper_health(
             "{mapper_service} did not report as up"
         ))),
     };
-    if mapper_spinner.finish(mapper_result).is_err() {
-        std::process::exit(2);
-    }
+    let mapper_check = mapper_spinner.finish(mapper_result);
 
-    if !mapper_up || !has_bridge {
+    if mapper_check.is_err() || !has_bridge {
         let _ = client.disconnect().await;
         loop {
             match event_loop.poll().await {
@@ -660,7 +685,7 @@ async fn wait_for_custom_mapper_health(
                 _ => {}
             }
         }
-        return Ok(());
+        return mapper_check.map_err(CustomMapperCheckError::Mapper);
     }
 
     // Phase 2 – wait for bridge health (may already be done)
@@ -701,9 +726,7 @@ async fn wait_for_custom_mapper_health(
             "{bridge_service} did not report as up"
         ))),
     };
-    if bridge_spinner.finish(bridge_result).is_err() {
-        std::process::exit(3);
-    }
+    let bridge_check = bridge_spinner.finish(bridge_result);
 
     let _ = client.disconnect().await;
     loop {
@@ -713,7 +736,7 @@ async fn wait_for_custom_mapper_health(
         }
     }
 
-    Ok(())
+    bridge_check.map_err(CustomMapperCheckError::Bridge)
 }
 
 fn warn_if_cert_cn_invalid(bridge_config: &BridgeConfig) {

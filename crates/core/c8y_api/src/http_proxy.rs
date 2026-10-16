@@ -13,6 +13,7 @@ use mqtt_channel::TopicFilter;
 use reqwest::header::HeaderValue;
 use reqwest::header::InvalidHeaderValue;
 use reqwest::Url;
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::time::Duration;
 use tedge_config::models::auth_method::AuthType;
@@ -297,15 +298,15 @@ pub enum C8yAuthRetriever {
 /// username = "t1234/octocat"
 /// password = "abcd1234"
 /// ```
-#[derive(Debug, serde::Deserialize)]
-struct Credentials {
-    c8y: BasicCredentials,
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+struct Credentials<'a> {
+    c8y: BasicCredentials<'a>,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct BasicCredentials {
-    username: String,
-    password: String,
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+struct BasicCredentials<'a> {
+    username: Cow<'a, str>,
+    password: Cow<'a, str>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -444,7 +445,20 @@ pub fn read_c8y_credentials(
         .map_err(|e| CredentialsFileError::TomlError(credentials_path.into(), e))?;
     let BasicCredentials { username, password } = credentials.c8y;
 
-    Ok((username, password))
+    Ok((username.into_owned(), password.into_owned()))
+}
+
+/// The content of a credentials file, as read by [`read_c8y_credentials`]
+pub(crate) fn c8y_credentials_toml(
+    username: &str,
+    password: &str,
+) -> Result<String, toml::ser::Error> {
+    toml::to_string(&Credentials {
+        c8y: BasicCredentials {
+            username: Cow::Borrowed(username),
+            password: Cow::Borrowed(password),
+        },
+    })
 }
 
 #[derive(thiserror::Error, Debug)]

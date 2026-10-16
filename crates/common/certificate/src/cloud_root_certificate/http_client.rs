@@ -52,6 +52,14 @@ impl HttpClientBuilder {
         }
     }
 
+    /// A timeout for every request of the client, from start to finish
+    pub fn timeout(self, timeout: std::time::Duration) -> Self {
+        Self {
+            builder: self.builder.timeout(timeout),
+            ..self
+        }
+    }
+
     pub fn set_user_agent(mut self, should_set: bool) -> Self {
         if should_set {
             self.user_agent = Some(USER_AGENT);
