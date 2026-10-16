@@ -118,7 +118,9 @@ impl Command for ServiceActionCommand {
             }
             Err(
                 err @ (ServiceActionError::InitSystemTimeout { .. }
-                | ServiceActionError::PluginTimeout { .. }),
+                | ServiceActionError::InitSystemKilledOnTimeout { .. }
+                | ServiceActionError::PluginTimeout { .. }
+                | ServiceActionError::PluginKilledOnTimeout { .. }),
             ) => {
                 eprintln!("Error: {err}");
                 std::process::exit(TIMEOUT_EXIT_CODE)
@@ -166,10 +168,17 @@ impl ServiceActionCommand {
         forward_output(&output);
 
         match status {
-            CmdStatus::KilledWithSigterm | CmdStatus::KilledWithSigKill => {
+            CmdStatus::KilledWithSigterm => {
                 return Err(ServiceActionError::InitSystemTimeout {
                     service_command,
                     timeout: self.graceful_timeout,
+                })
+            }
+            CmdStatus::KilledWithSigKill => {
+                return Err(ServiceActionError::InitSystemKilledOnTimeout {
+                    service_command,
+                    timeout: self.graceful_timeout,
+                    forceful_timeout: self.forceful_timeout,
                 })
             }
             CmdStatus::KilledWithInterrupt => {
@@ -212,10 +221,17 @@ impl ServiceActionCommand {
         forward_output(&output);
 
         match status {
-            CmdStatus::KilledWithSigterm | CmdStatus::KilledWithSigKill => {
+            CmdStatus::KilledWithSigterm => {
                 return Err(ServiceActionError::PluginTimeout {
                     plugin,
                     timeout: self.graceful_timeout,
+                })
+            }
+            CmdStatus::KilledWithSigKill => {
+                return Err(ServiceActionError::PluginKilledOnTimeout {
+                    plugin,
+                    timeout: self.graceful_timeout,
+                    forceful_timeout: self.forceful_timeout,
                 })
             }
             CmdStatus::KilledWithInterrupt => {
@@ -291,12 +307,23 @@ enum ServiceActionError {
     InitSystemKilled { service_command: String },
 
     #[error(
-        "The init system command <{service_command}> did not complete within {}",
+        "The init system command <{service_command}> did not complete within {} and was stopped with SIGTERM",
         humantime::format_duration(*.timeout)
     )]
     InitSystemTimeout {
         service_command: String,
         timeout: Duration,
+    },
+
+    #[error(
+        "The init system command <{service_command}> did not complete within {} and did not stop within {} after SIGTERM, so it was killed with SIGKILL",
+        humantime::format_duration(*.timeout),
+        humantime::format_duration(*.forceful_timeout)
+    )]
+    InitSystemKilledOnTimeout {
+        service_command: String,
+        timeout: Duration,
+        forceful_timeout: Duration,
     },
 
     #[error("The init system command <{service_command}> was interrupted")]
@@ -319,12 +346,23 @@ enum ServiceActionError {
     PluginKilled { plugin: Utf8PathBuf },
 
     #[error(
-        "The service plugin {plugin} did not complete within {}",
+        "The service plugin {plugin} did not complete within {} and was stopped with SIGTERM",
         humantime::format_duration(*.timeout)
     )]
     PluginTimeout {
         plugin: Utf8PathBuf,
         timeout: Duration,
+    },
+
+    #[error(
+        "The service plugin {plugin} did not complete within {} and did not stop within {} after SIGTERM, so it was killed with SIGKILL",
+        humantime::format_duration(*.timeout),
+        humantime::format_duration(*.forceful_timeout)
+    )]
+    PluginKilledOnTimeout {
+        plugin: Utf8PathBuf,
+        timeout: Duration,
+        forceful_timeout: Duration,
     },
 
     #[error("The service plugin {plugin} was interrupted")]
@@ -511,7 +549,34 @@ disable = ["/bin/true", "{}"]
         assert_matches!(err, ServiceActionError::PluginTimeout { .. });
         assert_eq!(
             err.to_string(),
-            format!("The service plugin {plugin} did not complete within 100ms")
+            format!(
+                "The service plugin {plugin} did not complete within 100ms and was stopped with SIGTERM"
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn a_plugin_ignoring_sigterm_is_not_reported_as_stopped_with_sigterm() {
+        let dir = TempTedgeDir::new();
+        let plugin = dir.path().join("container");
+        with_exec_permission(&plugin, "#!/bin/sh\ntrap '' TERM\nsleep 60\n");
+
+        let mut cmd = command("start", "nodered", "container");
+        cmd.plugin_paths = vec![dir.path().to_path_buf()];
+        cmd.graceful_timeout = Duration::from_millis(100);
+        cmd.forceful_timeout = Duration::from_millis(200);
+
+        let err = tokio::time::timeout(Duration::from_secs(10), cmd.run_plugin_action())
+            .await
+            .expect("the plugin to be killed on timeout")
+            .unwrap_err();
+
+        assert_matches!(err, ServiceActionError::PluginKilledOnTimeout { .. });
+        assert_eq!(
+            err.to_string(),
+            format!(
+                "The service plugin {plugin} did not complete within 100ms and did not stop within 200ms after SIGTERM, so it was killed with SIGKILL"
+            )
         );
     }
 
@@ -546,7 +611,7 @@ is_active = ["/bin/true", "{}"]
         assert_matches!(err, ServiceActionError::InitSystemTimeout { .. });
         assert_eq!(
             err.to_string(),
-            "The init system command </bin/sh -c sleep 60 nginx> did not complete within 100ms"
+            "The init system command </bin/sh -c sleep 60 nginx> did not complete within 100ms and was stopped with SIGTERM"
         );
     }
 
