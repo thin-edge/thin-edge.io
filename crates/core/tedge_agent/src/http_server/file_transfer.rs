@@ -297,6 +297,123 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
+    /// A symlink planted inside the file transfer directory must not become a way to
+    /// read, overwrite or delete files outside of it.
+    #[test_matrix(
+        [Method::GET, Method::PUT, Method::DELETE],
+        ["escape/secret.txt", "escape"]
+    )]
+    #[tokio::test]
+    async fn access_is_denied_if_request_resolves_through_a_symlink(method: Method, path: &str) {
+        let (ttd, mut app) = app();
+        let file_transfer_dir = ttd.path().join("file-transfer");
+        std::fs::create_dir_all(&file_transfer_dir).unwrap();
+
+        let outside = ttd.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let secret = outside.join("secret.txt");
+        std::fs::write(&secret, "secret contents").unwrap();
+        std::os::unix::fs::symlink(&outside, file_transfer_dir.join("escape")).unwrap();
+
+        let response = request_with(method, &mut app, path, "overwritten").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            std::fs::read_to_string(&secret).unwrap(),
+            "secret contents",
+            "the file outside the file transfer directory was modified"
+        );
+    }
+
+    /// Same as above, but where the final component is itself the symlink rather than
+    /// one of its parents.
+    #[test_matrix([Method::GET, Method::PUT, Method::DELETE])]
+    #[tokio::test]
+    async fn access_is_denied_if_the_target_itself_is_an_escaping_symlink(method: Method) {
+        let (ttd, mut app) = app();
+        let file_transfer_dir = ttd.path().join("file-transfer");
+        std::fs::create_dir_all(&file_transfer_dir).unwrap();
+
+        let secret = ttd.path().join("secret.txt");
+        std::fs::write(&secret, "secret contents").unwrap();
+        std::os::unix::fs::symlink(&secret, file_transfer_dir.join("escape")).unwrap();
+
+        let response = request_with(method, &mut app, "escape", "overwritten").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            std::fs::read_to_string(&secret).unwrap(),
+            "secret contents",
+            "the file outside the file transfer directory was modified"
+        );
+    }
+
+    /// A symlink whose target doesn't exist yet cannot be canonicalised, so it must not
+    /// be mistaken for a path component that is merely waiting to be created: an upload
+    /// would otherwise follow it and create the file outside the directory.
+    #[test_matrix([Method::GET, Method::PUT, Method::DELETE])]
+    #[tokio::test]
+    async fn access_is_denied_if_the_target_is_a_dangling_escaping_symlink(method: Method) {
+        let (ttd, mut app) = app();
+        let file_transfer_dir = ttd.path().join("file-transfer");
+        std::fs::create_dir_all(&file_transfer_dir).unwrap();
+
+        let outside = ttd.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let target = outside.join("planted.txt");
+        std::os::unix::fs::symlink(&target, file_transfer_dir.join("escape")).unwrap();
+
+        let response = request_with(method, &mut app, "escape", "planted contents").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert!(
+            !target.exists(),
+            "a file was created outside the file transfer directory"
+        );
+    }
+
+    /// A symlink loop cannot be canonicalised either. It has nowhere to escape to, but
+    /// it should be rejected as an invalid path rather than reaching the handlers and
+    /// surfacing as an internal error.
+    #[test_matrix([Method::GET, Method::PUT, Method::DELETE])]
+    #[tokio::test]
+    async fn access_is_denied_if_the_target_is_a_symlink_loop(method: Method) {
+        let (ttd, mut app) = app();
+        let file_transfer_dir = ttd.path().join("file-transfer");
+        std::fs::create_dir_all(&file_transfer_dir).unwrap();
+
+        std::os::unix::fs::symlink(file_transfer_dir.join("b"), file_transfer_dir.join("a"))
+            .unwrap();
+        std::os::unix::fs::symlink(file_transfer_dir.join("a"), file_transfer_dir.join("b"))
+            .unwrap();
+
+        let response = request_with(method, &mut app, "a", "some content").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// The agent symlinks from the file transfer directory into the cache directory so
+    /// that a downloaded config file can be served over this API. Containment must not
+    /// break `config_update`.
+    #[tokio::test]
+    async fn a_symlink_into_the_cache_directory_can_still_be_downloaded() {
+        let (ttd, mut app) = app();
+        let file_transfer_dir = ttd.path().join("file-transfer");
+        std::fs::create_dir_all(&file_transfer_dir).unwrap();
+
+        let cache_dir = ttd.path().join("cache");
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        let cached_file = cache_dir.join("d3b07384d113edec49eaa6238ad5ff00");
+        std::fs::write(&cached_file, "cached config").unwrap();
+        std::os::unix::fs::symlink(&cached_file, file_transfer_dir.join("config-link")).unwrap();
+
+        let response = download_file(&mut app, "config-link").await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&*body, b"cached config");
+    }
+
     const VALID_TEST_URI: &str = "/v1/files/another/dir/test-file";
     const INVALID_TEST_URI: &str = "/wrong/place/test-file";
 
