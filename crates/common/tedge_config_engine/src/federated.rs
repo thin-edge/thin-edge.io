@@ -67,15 +67,6 @@ impl FederatedConfig {
         Ok(())
     }
 
-    /// Reads values explicitly set in the mounted source.
-    pub fn get(&self, full_key: &str) -> Result<Option<String>, ConfigError> {
-        let (mount, local_key) = self.route(full_key)?;
-        mount
-            .source
-            .get(&local_key)
-            .map_err(|e| self.contextualize(full_key, e))
-    }
-
     /// Reads the effective value, including defaults that may fall back to root config.
     pub fn read(&self, full_key: &str) -> Result<Option<String>, ConfigError> {
         let (mount, local_key) = self.route(full_key)?;

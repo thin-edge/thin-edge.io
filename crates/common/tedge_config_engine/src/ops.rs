@@ -21,7 +21,6 @@ pub enum Action {
 
 /// Object-safe boundary used to mount different DTO types in one config space.
 pub trait ConfigOps {
-    fn get(&self, key: &str) -> Result<Option<String>, ConfigError>;
     fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError>;
     /// Reloads the persisted configuration, applies `action`, and saves it.
     ///
@@ -127,11 +126,6 @@ impl<T> ConfigOps for TypedConfigOps<T>
 where
     T: for<'a> Facet<'a> + Default,
 {
-    fn get(&self, key: &str) -> Result<Option<String>, ConfigError> {
-        self.check_loaded()?;
-        self.manager.get(&self.dto, key)
-    }
-
     fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError> {
         self.check_loaded()?;
         self.manager.read_with_root(&self.dto, key, root)

@@ -283,10 +283,6 @@ impl CollidingMapper {
 }
 
 impl ConfigOps for CollidingMapper {
-    fn get(&self, _key: &str) -> Result<Option<String>, ConfigError> {
-        Err(self.error())
-    }
-
     fn read(&self, _key: &str, _root: RootResolver<'_>) -> Result<Option<String>, ConfigError> {
         Err(self.error())
     }
@@ -300,6 +296,7 @@ impl ConfigOps for CollidingMapper {
     }
 
     fn root_dependencies(&self) -> Vec<RootDependency> {
-        self.manager.root_dependencies()
+        // It never reads a value, so has no `from_root` default to resolve
+        Vec::new()
     }
 }
