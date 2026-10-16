@@ -36,6 +36,16 @@ Options:
           
           If off only reports ERROR, WARN, and INFO, if on also reports DEBUG
 
+      --timeout <TIMEOUT>
+          Timeout for the action to complete, after which a graceful termination starts
+          
+          [default: 180s]
+
+      --forceful-timeout <FORCEFUL_TIMEOUT>
+          Timeout for forced termination, starting after a graceful timeout expires
+          
+          [default: 60s]
+
       --log-level <LOG_LEVEL>
           Configures the logging level.
           
