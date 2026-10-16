@@ -62,6 +62,25 @@ Show connected initialized tokens when token argument is not provided
     Should Contain    ${stderr}    token=create-key-token1
     Should Contain    ${stderr}    token=create-key-token2
 
+List keys from a token excluded by the configured URI
+    Execute Command    cmd=softhsm2-util --init-token --free --label token1 --pin=123456 --so-pin=123456
+    Execute Command    cmd=softhsm2-util --init-token --free --label token2 --pin=123456 --so-pin=123456
+
+    Execute Command
+    ...    cmd=tedge hsm create-key --type ecdsa --label token1-key "pkcs11:token=token1"
+    Execute Command
+    ...    cmd=tedge hsm create-key --type ecdsa --label token2-key "pkcs11:token=token2"
+
+    Set tedge-p11-server Uri    pkcs11:token=token2
+
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm list-keys "pkcs11:token=token1"
+    ...    stdout=False
+    ...    stderr=True
+    ...    strip=True
+    Should Contain        ${stderr}    No keys were found on the token
+    Should Contain        ${stderr}    2 results were not shown
+
 Set key ID using --id flag
     ${output}=    Execute Command
     ...    cmd=tedge hsm create-key --type ecdsa --label my-key --id 010203 "${TOKEN_URI}"
