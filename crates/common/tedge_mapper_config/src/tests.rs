@@ -219,7 +219,7 @@ fn env_variable_overrides_toml_value() {
     .unwrap();
 
     let env = EnvOverrides::from_pairs([(
-        "TEDGE_CONFIG_MAPPERS_THINGSBOARD_URL".into(),
+        "TEDGE_MAPPERS_THINGSBOARD_URL".into(),
         "env.example.com:8883".into(),
     )]);
 
@@ -234,7 +234,7 @@ fn env_variable_overrides_toml_value() {
     let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(dir.path());
     let mut mapper_ops =
         TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, mapper.join("mapper.toml")).unwrap();
-    mapper_ops.apply_env_with_prefix("TEDGE_CONFIG_MAPPERS_THINGSBOARD_", &env);
+    mapper_ops.apply_env_with_prefix("TEDGE_MAPPERS_THINGSBOARD_", &env);
     fed.mount("mappers.thingsboard.", Box::new(mapper_ops))
         .unwrap();
 
@@ -391,10 +391,7 @@ fn profile_key_without_profiles_is_an_unknown_key_of_the_base_mapper() {
 #[case::profile("c8y.prod.url", "mappers.c8y.profiles.prod.url")]
 #[case::base_cloud("c8y.url", "mappers.c8y.url")]
 #[case::custom_mapper("thingsboard.url", "mappers.thingsboard.url")]
-fn mapper_command_key_becomes_its_mappers_key(
-    #[case] key: &str,
-    #[case] expected: &str,
-) {
+fn mapper_command_key_becomes_its_mappers_key(#[case] key: &str, #[case] expected: &str) {
     let dir = config_dir_with_mapper("c8y.prod", "");
     add_mapper(&dir, "c8y", "");
 
@@ -407,6 +404,71 @@ fn mapper_schema_has_no_profiles_group() {
     assert!(
         keys.iter().all(|k| k.split('.').next() != Some("profiles")),
         "'profiles' is reserved for profile keys: {keys:?}"
+    );
+}
+
+#[test]
+fn profile_keys_are_overridden_by_env_variables_named_after_the_key() {
+    let dir = config_dir_with_mapper("c8y.prod", "url = \"file.example.com:8883\"\n");
+    let env = EnvOverrides::from_pairs([(
+        "TEDGE_MAPPERS_C8Y_PROFILES_PROD_URL".into(),
+        "env.example.com:8883".into(),
+    )]);
+
+    let fed = crate::schema::load_federated_config_with_env(dir.path(), &env).unwrap();
+
+    assert_eq!(
+        fed.read("mappers.c8y.profiles.prod.url")
+            .unwrap()
+            .as_deref(),
+        Some("env.example.com:8883")
+    );
+}
+
+#[test]
+fn custom_mapper_keys_are_overridden_by_env_variables() {
+    let dir = config_dir_with_mapper("my-mapper", "url = \"file.example.com:8883\"\n");
+    let env = EnvOverrides::from_pairs([(
+        "TEDGE_MAPPERS_MY_MAPPER_URL".into(),
+        "env.example.com:8883".into(),
+    )]);
+
+    let fed = crate::schema::load_federated_config_with_env(dir.path(), &env).unwrap();
+
+    assert_eq!(
+        fed.read("mappers.my-mapper.url").unwrap().as_deref(),
+        Some("env.example.com:8883")
+    );
+}
+
+#[test]
+fn mapper_directories_with_the_same_env_variable_name_fail_every_read_and_write() {
+    let dir = config_dir_with_mapper("thingsboard.eu", "url = \"eu.example.com:8883\"\n");
+    add_mapper(&dir, "thingsboard-eu", "url = \"eu.example.com:8883\"\n");
+    add_mapper(&dir, "c8y", "url = \"c8y.example.com:8883\"\n");
+
+    let mut fed =
+        crate::schema::load_federated_config_with_env(dir.path(), &EnvOverrides::from_pairs([]))
+            .unwrap();
+
+    for key in ["mappers.thingsboard.eu.url", "mappers.thingsboard-eu.url"] {
+        let msg = fed.read(key).unwrap_err().to_string();
+        for expected in [
+            "thingsboard.eu",
+            "thingsboard-eu",
+            "TEDGE_MAPPERS_THINGSBOARD_EU_",
+        ] {
+            assert!(
+                msg.contains(expected),
+                "reading {key} should name '{expected}': {msg}"
+            );
+        }
+        fed.mutate(key, Action::Set("other.example.com:8883".into()))
+            .unwrap_err();
+    }
+    assert_eq!(
+        fed.read("mappers.c8y.url").unwrap().as_deref(),
+        Some("c8y.example.com:8883")
     );
 }
 
