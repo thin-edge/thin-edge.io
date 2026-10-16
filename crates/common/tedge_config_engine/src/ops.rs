@@ -53,7 +53,7 @@ where
     /// A file that cannot be loaded is not an error here: reads from this
     /// source return the load error instead, and writes reload the file.
     pub fn new(manager: ConfigManager, path: PathBuf) -> Self {
-        let (dto, load_error) = match load_dto(&path) {
+        let (dto, load_error) = match load_dto(&path, &manager, None) {
             Ok(dto) => (dto, None),
             Err(e) => (T::default(), Some(e)),
         };
@@ -140,8 +140,8 @@ where
     fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError> {
         self.manager.check_read_only(key)?;
         // The DTO only holds schema keys, so saving it would delete any other key in the file
-        check_no_unknown_keys(&self.path, &self.manager.keys::<T>())?;
-        let mut dto = load_dto(&self.path)?;
+        let known_keys = self.manager.keys::<T>();
+        let mut dto = load_dto(&self.path, &self.manager, Some(&known_keys))?;
         match action {
             Action::Set(ref value) => self.manager.set(&mut dto, key, value)?,
             Action::Unset => self.manager.unset(&mut dto, key)?,
@@ -163,34 +163,96 @@ where
     }
 }
 
-fn load_dto<T: for<'a> Facet<'a> + Default>(path: &Path) -> Result<T, ConfigError> {
-    let invalid = |reason: String| ConfigError::InvalidFile {
-        path: path.to_owned(),
-        reason,
+/// Loads the DTO from `path`, first refusing a file with keys outside `known_keys` if given
+fn load_dto<T: for<'a> Facet<'a> + Default>(
+    path: &Path,
+    manager: &ConfigManager,
+    known_keys: Option<&[String]>,
+) -> Result<T, ConfigError> {
+    let Some(content) = read_file(path)? else {
+        return Ok(T::default());
     };
+    let table = parse_file(path, &content)?;
+    if let Some(known_keys) = known_keys {
+        check_no_unknown_keys(path, &table, known_keys)?;
+    }
+    parse_dto(path, manager, &content, &table)
+}
+
+/// Reads the config file, or returns `None` if it doesn't exist
+fn read_file(path: &Path) -> Result<Option<String>, ConfigError> {
     match std::fs::read_to_string(path) {
-        Ok(content) => facet_toml::from_str(&content).map_err(|e| invalid(e.to_string())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
-        Err(e) => Err(invalid(e.to_string())),
+        Ok(content) => Ok(Some(content)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(invalid_file(path, e.to_string())),
     }
 }
 
-fn check_no_unknown_keys(path: &Path, known_keys: &[String]) -> Result<(), ConfigError> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(content) => content,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => {
-            return Err(ConfigError::IoError(format!(
-                "reading {}: {e}",
-                path.display()
-            )))
-        }
-    };
-    let table: toml::Table = content
+/// Parses the file as TOML, which facet_toml alone does not check strictly
+/// (it reads `url = ` as an empty string)
+fn parse_file(path: &Path, content: &str) -> Result<toml::Table, ConfigError> {
+    content
         .parse()
-        .map_err(|e| ConfigError::IoError(format!("parsing {}: {e}", path.display())))?;
+        .map_err(|e: toml::de::Error| invalid_file(path, e.to_string()))
+}
+
+fn parse_dto<T: for<'a> Facet<'a> + Default>(
+    path: &Path,
+    manager: &ConfigManager,
+    content: &str,
+    table: &toml::Table,
+) -> Result<T, ConfigError> {
+    facet_toml::from_str(content).map_err(|e| {
+        invalid_file(
+            path,
+            first_invalid_value::<T>(manager, table).unwrap_or_else(|| e.to_string()),
+        )
+    })
+}
+
+fn invalid_file(path: &Path, reason: String) -> ConfigError {
+    ConfigError::InvalidFile {
+        path: path.to_owned(),
+        reason,
+    }
+}
+
+/// Finds the first key whose value doesn't parse, as facet_toml's error names
+/// neither the full key nor the values it accepts
+fn first_invalid_value<T: for<'a> Facet<'a> + Default>(
+    manager: &ConfigManager,
+    table: &toml::Table,
+) -> Option<String> {
+    manager.keys::<T>().into_iter().find_map(|key| {
+        let value = match toml_value_at(table, &key)? {
+            toml::Value::String(s) => s.clone(),
+            toml::Value::Array(_) | toml::Value::Table(_) => return None,
+            other => other.to_string(),
+        };
+        let reason = match manager.set(&mut T::default(), &key, &value).err()? {
+            ConfigError::ParseError(reason) => reason,
+            e => e.to_string(),
+        };
+        Some(format!("{key}: {reason}"))
+    })
+}
+
+fn toml_value_at<'a>(table: &'a toml::Table, key: &str) -> Option<&'a toml::Value> {
+    let mut segments = key.split('.');
+    let mut value = table.get(segments.next()?)?;
+    for segment in segments {
+        value = value.as_table()?.get(segment)?;
+    }
+    Some(value)
+}
+
+fn check_no_unknown_keys(
+    path: &Path,
+    table: &toml::Table,
+    known_keys: &[String],
+) -> Result<(), ConfigError> {
     let mut unknown = Vec::new();
-    collect_unknown_keys(&table, "", known_keys, &mut unknown);
+    collect_unknown_keys(table, "", known_keys, &mut unknown);
     if unknown.is_empty() {
         Ok(())
     } else {

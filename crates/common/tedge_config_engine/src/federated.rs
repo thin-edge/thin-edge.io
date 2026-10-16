@@ -168,6 +168,11 @@ impl FederatedConfig {
     ) -> ConfigError {
         match err {
             ConfigError::UnknownKey(_) => make_unknown_key_error(full_key, config_dir, mounts),
+            // The source only knows its local key, which isn't what the user typed
+            ConfigError::ParseError(reason) => ConfigError::InvalidKeyValue {
+                key: full_key.to_owned(),
+                reason,
+            },
             other => other,
         }
     }
