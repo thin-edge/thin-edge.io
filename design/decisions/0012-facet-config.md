@@ -33,7 +33,7 @@ For instance, the syntax could look something like this:
 
 ```bash
 tedge config set mappers.thingsboard.url thingsboard.example.com
-TEDGE_CONFIG_MAPPERS_THINGSBOARD_URL=thingsboard.example.com tedge config get mappers.thingsboard.url
+TEDGE_MAPPERS_THINGSBOARD_URL=thingsboard.example.com tedge config get mappers.thingsboard.url
 ```
 
 ### Config schema federation

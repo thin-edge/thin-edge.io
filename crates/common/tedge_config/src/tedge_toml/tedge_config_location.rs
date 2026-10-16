@@ -587,6 +587,8 @@ fn update_with_environment_variables(
         let tedge_key = match key.strip_prefix("TEDGE_") {
             Some("CONFIG_DIR") => continue,
             Some("CLOUD_PROFILE") => continue,
+            // `mappers.*` keys belong to the mapper config engine, which reads these itself
+            Some(tedge_key) if tedge_key.starts_with("MAPPERS_") => continue,
             Some(tedge_key) => match parse_key_without_warnings(tedge_key) {
                 Ok(key) => key,
                 Err(_) => {
@@ -870,6 +872,21 @@ type = "a-service-type""#;
             "Verify that c8y/mapper.toml file has actually been read"
         );
         assert_eq!(c8y_config.root_cert_path.to_string(), "/root/cert/path");
+    }
+
+    #[tokio::test]
+    async fn mapper_environment_variables_are_not_reported_as_unknown_keys() {
+        let mut env = EnvSandbox::new().await;
+        env.set_var("TEDGE_MAPPERS_THINGSBOARD_URL", "example.com:8883");
+        let mut warnings = UnusedValueWarnings(vec![]);
+
+        update_with_environment_variables(&mut TEdgeConfigDto::default(), &mut warnings).unwrap();
+
+        assert!(
+            warnings.0.iter().all(|w| !w.contains("TEDGE_MAPPERS_")),
+            "{:?}",
+            warnings.0
+        );
     }
 
     #[tokio::test]

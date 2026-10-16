@@ -1,11 +1,15 @@
+use std::collections::HashMap;
 use std::path::Path;
 use tedge_config_engine::federated::FederatedConfig;
+use tedge_config_engine::ops::Action;
 use tedge_config_engine::ops::ConfigOps;
 use tedge_config_engine::ops::TypedConfigOps;
 use tedge_config_engine::ConfigError;
 use tedge_config_engine::ConfigManager;
 use tedge_config_engine::EnvOverrides;
 use tedge_config_engine::KeyEntry;
+use tedge_config_engine::RootDependency;
+use tedge_config_engine::RootResolver;
 
 pub use mapper::MapperConfig;
 pub use mapper::MapperConfigDto;
@@ -183,30 +187,120 @@ fn mapper_dirs(config_dir: &Path) -> Vec<(String, std::path::PathBuf)> {
 /// Assembles a `FederatedConfig` from the root `tedge.toml` and all
 /// mapper directories discovered under `{config_dir}/mappers/`.
 pub fn load_federated_config(config_dir: impl AsRef<Path>) -> Result<FederatedConfig, ConfigError> {
-    let config_dir = config_dir.as_ref();
-    let env = EnvOverrides::from_env();
+    load_federated_config_with_env(config_dir.as_ref(), &EnvOverrides::from_env())
+}
 
+pub(crate) fn load_federated_config_with_env(
+    config_dir: &Path,
+    env: &EnvOverrides,
+) -> Result<FederatedConfig, ConfigError> {
     let mut fed = FederatedConfig::new(config_dir);
 
     let root_mgr = ConfigManager::from_schema::<RootStubConfig>(config_dir);
-    let mut root_ops =
+    let root_ops =
         TypedConfigOps::<RootStubConfigDto>::new(root_mgr, config_dir.join("tedge.toml"))?;
-    root_ops.apply_env_excluding(&env, &["mappers."]);
     fed.mount("", Box::new(root_ops))?;
 
-    for (name, dir) in mapper_dirs(config_dir) {
-        let toml_path = dir.join("mapper.toml");
+    let mappers: Vec<_> = mapper_dirs(config_dir)
+        .into_iter()
+        .map(|(name, dir)| {
+            let mount_prefix = mount_prefix(&name);
+            let env_prefix = format!(
+                "TEDGE_{}",
+                mount_prefix.to_uppercase().replace(['.', '-'], "_")
+            );
+            MapperMount {
+                name,
+                dir,
+                mount_prefix,
+                env_prefix,
+            }
+        })
+        .collect();
+    let mut env_prefix_owners: HashMap<&str, Vec<&str>> = HashMap::new();
+    for mapper in &mappers {
+        env_prefix_owners
+            .entry(&mapper.env_prefix)
+            .or_default()
+            .push(&mapper.name);
+    }
+
+    for MapperMount {
+        dir,
+        mount_prefix,
+        env_prefix,
+        ..
+    } in &mappers
+    {
         let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(config_dir);
-        let mut mapper_ops = TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, toml_path)?;
-
-        let env_prefix = format!(
-            "TEDGE_CONFIG_MAPPERS_{}_",
-            name.to_uppercase().replace('-', "_")
-        );
-        mapper_ops.apply_env_with_prefix(&env_prefix, &env);
-
-        fed.mount(&mount_prefix(&name), Box::new(mapper_ops))?;
+        let owners = &env_prefix_owners[env_prefix.as_str()];
+        if let [first, second, ..] = owners.as_slice() {
+            // Either directory could be the one the variables are meant for,
+            // so neither is loaded until one of them is renamed
+            let colliding = CollidingMapper {
+                first: first.to_string(),
+                second: second.to_string(),
+                prefix: env_prefix.clone(),
+                manager: mapper_mgr,
+            };
+            fed.mount(mount_prefix, Box::new(colliding))?;
+            continue;
+        }
+        let mut mapper_ops =
+            TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, dir.join("mapper.toml"))?;
+        mapper_ops.apply_env_with_prefix(env_prefix, env);
+        fed.mount(mount_prefix, Box::new(mapper_ops))?;
     }
 
     Ok(fed)
+}
+
+/// Where a mapper directory is mounted, and the prefix of its environment variables
+struct MapperMount {
+    name: String,
+    dir: std::path::PathBuf,
+    mount_prefix: String,
+    env_prefix: String,
+}
+
+/// A mapper whose directory name gives the same environment variable prefix as
+/// another's; it fails every read and write, but still lists its keys so they
+/// are routed to it
+struct CollidingMapper {
+    first: String,
+    second: String,
+    prefix: String,
+    manager: ConfigManager,
+}
+
+impl CollidingMapper {
+    fn error(&self) -> ConfigError {
+        ConfigError::EnvPrefixCollision {
+            first: self.first.clone(),
+            second: self.second.clone(),
+            prefix: self.prefix.clone(),
+        }
+    }
+}
+
+impl ConfigOps for CollidingMapper {
+    fn get(&self, _key: &str) -> Result<Option<String>, ConfigError> {
+        Err(self.error())
+    }
+
+    fn read(&self, _key: &str, _root: RootResolver<'_>) -> Result<Option<String>, ConfigError> {
+        Err(self.error())
+    }
+
+    fn mutate(&mut self, _key: &str, _action: Action) -> Result<(), ConfigError> {
+        Err(self.error())
+    }
+
+    fn entries(&self) -> Vec<KeyEntry> {
+        self.manager.key_entries::<MapperConfigDto>()
+    }
+
+    fn root_dependencies(&self) -> Vec<RootDependency> {
+        self.manager.root_dependencies()
+    }
 }

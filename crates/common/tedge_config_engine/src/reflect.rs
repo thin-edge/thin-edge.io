@@ -56,6 +56,12 @@ pub enum ConfigError {
     UnknownRootKey { key: String, root_key: String },
     #[error("'{key}' uses a from_root default ('{root_key}'), which is not allowed in the root config itself")]
     FromRootInRootConfig { key: String, root_key: String },
+    #[error("Mapper directories mappers/{first} and mappers/{second} both use the environment variable prefix {prefix}; rename one of them")]
+    EnvPrefixCollision {
+        first: String,
+        second: String,
+        prefix: String,
+    },
     #[error("A config source is already mounted at prefix '{0}'")]
     DuplicatePrefix(String),
     #[error("Not writing {}, as it has keys this schema doesn't know: {}", path.display(), keys.join(", "))]
