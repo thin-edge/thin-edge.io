@@ -1,6 +1,7 @@
 use assert_matches::assert_matches;
 use rstest::rstest;
 use std::path::Path;
+use tedge_test_utils::fs::TempTedgeDir;
 
 use tedge_config_engine::federated::FederatedConfig;
 use tedge_config_engine::ops::Action;
@@ -56,7 +57,7 @@ fn cloud_type_accepts_same_values_as_tedge_config_cloud_type(
 #[test]
 fn cloud_type_can_be_set_and_read() {
     let dir = config_dir_with_mapper("thingsboard", "");
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     fed.mutate("mappers.thingsboard.cloud_type", Action::Set("c8y".into()))
         .unwrap();
@@ -74,7 +75,7 @@ fn cloud_type_can_be_set_and_read() {
 #[test]
 fn unknown_cloud_type_is_rejected() {
     let dir = config_dir_with_mapper("thingsboard", "");
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     let err = fed
         .mutate(
@@ -94,7 +95,7 @@ fn unknown_cloud_type_is_rejected() {
 #[test]
 fn setting_cloud_type_leaves_other_keys_unchanged() {
     let dir = config_dir_with_mapper("thingsboard", "url = \"a.example.com:8883\"\n");
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
     let keys_before: Vec<String> = fed.all_entries().into_iter().map(|e| e.key).collect();
 
     fed.mutate("mappers.thingsboard.cloud_type", Action::Set("c8y".into()))
@@ -102,20 +103,20 @@ fn setting_cloud_type_leaves_other_keys_unchanged() {
 
     let file: toml::Table = read_mapper_file(&dir, "thingsboard").parse().unwrap();
     assert_eq!(file["url"].as_str(), Some("a.example.com:8883"));
-    let fed = crate::load_federated_config(dir.path()).unwrap();
+    let fed = load_without_env(&dir);
     let keys_after: Vec<String> = fed.all_entries().into_iter().map(|e| e.key).collect();
     assert_eq!(keys_after, keys_before);
 }
 
 #[test]
 fn from_root_references_resolve_against_root_stub() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = TempTedgeDir::new();
     std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
     let mappers = dir.path().join("mappers/test");
     std::fs::create_dir_all(&mappers).unwrap();
     std::fs::write(mappers.join("mapper.toml"), "").unwrap();
 
-    let mut fed = FederatedConfig::new(dir.path());
+    let mut fed = FederatedConfig::new(dir.std_path());
     fed.mount("", root_source(dir.path().join("tedge.toml")))
         .unwrap();
     fed.mount("mappers.test.", mapper_source(mappers.join("mapper.toml")))
@@ -139,7 +140,7 @@ fn from_root_references_resolve_against_root_stub() {
 
 #[test]
 fn build_federated_config_discovers_mapper_directories() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = TempTedgeDir::new();
     std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
 
     let alpha = dir.path().join("mappers/alpha");
@@ -158,7 +159,7 @@ fn build_federated_config_discovers_mapper_directories() {
     )
     .unwrap();
 
-    let fed = crate::load_federated_config(dir.path()).unwrap();
+    let fed = load_without_env(&dir);
 
     assert_eq!(
         fed.read("mappers.alpha.url").unwrap().as_deref(),
@@ -172,13 +173,13 @@ fn build_federated_config_discovers_mapper_directories() {
 
 #[test]
 fn unknown_mapper_name_lists_known_mappers() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = TempTedgeDir::new();
     std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
     let known = dir.path().join("mappers/thingsboard");
     std::fs::create_dir_all(&known).unwrap();
     std::fs::write(known.join("mapper.toml"), "").unwrap();
 
-    let fed = crate::load_federated_config(dir.path()).unwrap();
+    let fed = load_without_env(&dir);
 
     let err = fed.read("mappers.noexist.url").unwrap_err();
     let msg = err.to_string();
@@ -194,13 +195,13 @@ fn unknown_mapper_name_lists_known_mappers() {
 
 #[test]
 fn unknown_key_in_known_mapper_produces_error() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = TempTedgeDir::new();
     std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
     let mapper = dir.path().join("mappers/test");
     std::fs::create_dir_all(&mapper).unwrap();
     std::fs::write(mapper.join("mapper.toml"), "").unwrap();
 
-    let fed = crate::load_federated_config(dir.path()).unwrap();
+    let fed = load_without_env(&dir);
 
     let err = fed.read("mappers.test.nonexistent").unwrap_err();
     assert!(matches!(err, ConfigError::UnknownKey(_)));
@@ -208,7 +209,7 @@ fn unknown_key_in_known_mapper_produces_error() {
 
 #[test]
 fn env_variable_overrides_toml_value() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = TempTedgeDir::new();
     std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
     let mapper = dir.path().join("mappers/thingsboard");
     std::fs::create_dir_all(&mapper).unwrap();
@@ -223,17 +224,17 @@ fn env_variable_overrides_toml_value() {
         "env.example.com:8883".into(),
     )]);
 
-    let mut fed = FederatedConfig::new(dir.path());
+    let mut fed = FederatedConfig::new(dir.std_path());
 
-    let root_mgr = ConfigManager::from_schema::<RootStubConfig>(dir.path());
+    let root_mgr = ConfigManager::from_schema::<RootStubConfig>(dir.std_path());
     let mut root_ops =
-        TypedConfigOps::<RootStubConfigDto>::new(root_mgr, dir.path().join("tedge.toml"));
+        TypedConfigOps::<RootStubConfigDto>::new(root_mgr, dir.std_path().join("tedge.toml"));
     root_ops.apply_env_excluding(&env, &["mappers."]);
     fed.mount("", Box::new(root_ops)).unwrap();
 
-    let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(dir.path());
+    let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(dir.std_path());
     let mut mapper_ops =
-        TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, mapper.join("mapper.toml"));
+        TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, mapper.join("mapper.toml").into());
     mapper_ops.apply_env_with_prefix("TEDGE_MAPPERS_THINGSBOARD_", &env);
     fed.mount("mappers.thingsboard.", Box::new(mapper_ops))
         .unwrap();
@@ -333,7 +334,7 @@ fn extract_builtin_mapper_name_returns_none_for_custom_mapper() {
 #[test]
 fn profile_keys_are_read_and_written_under_profiles() {
     let dir = config_dir_with_mapper("c8y.prod", "");
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     fed.mutate(
         "mappers.c8y.profiles.prod.url",
@@ -355,7 +356,7 @@ fn profile_keys_are_read_and_written_under_profiles() {
 fn group_key_reaches_base_mapper_when_a_profile_is_named_after_the_group() {
     let dir = config_dir_with_mapper("c8y", "");
     add_mapper(&dir, "c8y.bridge", "url = \"bridge.example.com:8883\"\n");
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     fed.mutate(
         "mappers.c8y.bridge.clean_session",
@@ -375,7 +376,7 @@ fn group_key_reaches_base_mapper_when_a_profile_is_named_after_the_group() {
 fn profile_key_without_profiles_is_an_unknown_key_of_the_base_mapper() {
     let dir = config_dir_with_mapper("c8y", "");
     add_mapper(&dir, "c8y.prod", "");
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     let err = fed
         .mutate(
@@ -395,7 +396,10 @@ fn mapper_command_key_becomes_its_mappers_key(#[case] key: &str, #[case] expecte
     let dir = config_dir_with_mapper("c8y.prod", "");
     add_mapper(&dir, "c8y", "");
 
-    assert_eq!(crate::mapper_key_from_dir_key(key, dir.path()), expected);
+    assert_eq!(
+        crate::mapper_key_from_dir_key(key, dir.std_path()),
+        expected
+    );
 }
 
 #[test]
@@ -415,7 +419,7 @@ fn profile_keys_are_overridden_by_env_variables_named_after_the_key() {
         "env.example.com:8883".into(),
     )]);
 
-    let fed = crate::schema::load_federated_config_with_env(dir.path(), &env).unwrap();
+    let fed = crate::schema::load_federated_config_with_env(dir.std_path(), &env).unwrap();
 
     assert_eq!(
         fed.read("mappers.c8y.profiles.prod.url")
@@ -433,7 +437,7 @@ fn custom_mapper_keys_are_overridden_by_env_variables() {
         "env.example.com:8883".into(),
     )]);
 
-    let fed = crate::schema::load_federated_config_with_env(dir.path(), &env).unwrap();
+    let fed = crate::schema::load_federated_config_with_env(dir.std_path(), &env).unwrap();
 
     assert_eq!(
         fed.read("mappers.my-mapper.url").unwrap().as_deref(),
@@ -447,9 +451,11 @@ fn mapper_directories_with_the_same_env_variable_name_fail_every_read_and_write(
     add_mapper(&dir, "thingsboard-eu", "url = \"eu.example.com:8883\"\n");
     add_mapper(&dir, "c8y", "url = \"c8y.example.com:8883\"\n");
 
-    let mut fed =
-        crate::schema::load_federated_config_with_env(dir.path(), &EnvOverrides::from_pairs([]))
-            .unwrap();
+    let mut fed = crate::schema::load_federated_config_with_env(
+        dir.std_path(),
+        &EnvOverrides::from_pairs([]),
+    )
+    .unwrap();
 
     for key in ["mappers.thingsboard.eu.url", "mappers.thingsboard-eu.url"] {
         let msg = fed.read(key).unwrap_err().to_string();
@@ -476,7 +482,7 @@ fn mapper_directories_with_the_same_env_variable_name_fail_every_read_and_write(
 fn set_is_refused_when_mapper_file_has_unknown_key() {
     let original = "url = \"a.example.com:8883\"\n\n[smartrest]\ntemplates = [\"x\"]\n";
     let dir = config_dir_with_mapper("c8y", original);
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     let err = fed
         .mutate("mappers.c8y.url", Action::Set("b.example.com:8883".into()))
@@ -500,7 +506,7 @@ fn get_still_works_when_mapper_file_has_unknown_key() {
         "c8y",
         "url = \"a.example.com:8883\"\n\n[smartrest]\ntemplates = [\"x\"]\n",
     );
-    let fed = crate::load_federated_config(dir.path()).unwrap();
+    let fed = load_without_env(&dir);
 
     assert_eq!(
         fed.read("mappers.c8y.url").unwrap().as_deref(),
@@ -514,7 +520,7 @@ fn set_works_when_every_key_in_mapper_file_is_known() {
         "thingsboard",
         "url = \"a.example.com:8883\"\n\n[bridge]\nclean_session = true\n",
     );
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     fed.mutate(
         "mappers.thingsboard.url",
@@ -534,7 +540,7 @@ fn set_works_when_every_key_in_mapper_file_is_known() {
 fn set_on_another_mapper_succeeds_while_one_mapper_file_is_invalid(#[case] broken_file: &str) {
     let dir = config_dir_with_mapper("broken", broken_file);
     add_mapper(&dir, "thingsboard", "");
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     fed.mutate(
         "mappers.thingsboard.url",
@@ -552,7 +558,7 @@ fn set_on_another_mapper_succeeds_while_one_mapper_file_is_invalid(#[case] broke
 #[case::invalid_value("[bridge]\ntls.enable = \"on\"\n")]
 fn reading_the_invalid_mapper_names_its_file(#[case] broken_file: &str) {
     let dir = config_dir_with_mapper("broken", broken_file);
-    let fed = crate::load_federated_config(dir.path()).unwrap();
+    let fed = load_without_env(&dir);
 
     let err = fed.read("mappers.broken.url").unwrap_err();
 
@@ -569,7 +575,7 @@ fn reading_the_invalid_mapper_names_its_file(#[case] broken_file: &str) {
 #[case::invalid_value("[bridge]\ntls.enable = \"on\"\n")]
 fn setting_a_key_of_the_invalid_mapper_names_its_file(#[case] broken_file: &str) {
     let dir = config_dir_with_mapper("broken", broken_file);
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     let err = fed
         .mutate(
@@ -589,7 +595,7 @@ fn setting_a_key_of_the_invalid_mapper_names_its_file(#[case] broken_file: &str)
 #[test]
 fn invalid_enum_value_is_rejected_naming_the_key_and_the_allowed_values() {
     let dir = config_dir_with_mapper("tb", "");
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     let err = fed
         .mutate("mappers.tb.bridge.tls.enable", Action::Set("on".into()))
@@ -609,7 +615,7 @@ fn invalid_enum_value_is_rejected_naming_the_key_and_the_allowed_values() {
 #[test]
 fn invalid_value_in_mapper_file_is_reported_with_its_key() {
     let dir = config_dir_with_mapper("broken", "[bridge]\ntls.enable = \"on\"\n");
-    let fed = crate::load_federated_config(dir.path()).unwrap();
+    let fed = load_without_env(&dir);
 
     let err = fed.read("mappers.broken.url").unwrap_err();
 
@@ -627,7 +633,7 @@ fn invalid_value_in_mapper_file_is_reported_with_its_key() {
 #[test]
 fn nested_keys_are_written_as_table_sections() {
     let dir = config_dir_with_mapper("tb", "");
-    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+    let mut fed = load_without_env(&dir);
 
     fed.mutate("mappers.tb.bridge.tls.enable", Action::Set("false".into()))
         .unwrap();
@@ -638,22 +644,27 @@ fn nested_keys_are_written_as_table_sections() {
     );
 }
 
-fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
+fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> TempTedgeDir {
+    let dir = TempTedgeDir::new();
     std::fs::write(dir.path().join("tedge.toml"), "").unwrap();
-    let mapper = dir.path().join("mappers").join(name);
-    std::fs::create_dir_all(&mapper).unwrap();
-    std::fs::write(mapper.join("mapper.toml"), mapper_toml).unwrap();
+    add_mapper(&dir, name, mapper_toml);
     dir
 }
 
-fn add_mapper(dir: &tempfile::TempDir, name: &str, mapper_toml: &str) {
+/// Loads the config ignoring the process environment, so exported `TEDGE_MAPPERS_*`
+/// variables can't change the result
+fn load_without_env(dir: &TempTedgeDir) -> FederatedConfig {
+    crate::schema::load_federated_config_with_env(dir.std_path(), &EnvOverrides::from_pairs([]))
+        .unwrap()
+}
+
+fn add_mapper(dir: &TempTedgeDir, name: &str, mapper_toml: &str) {
     let mapper = dir.path().join("mappers").join(name);
     std::fs::create_dir_all(&mapper).unwrap();
     std::fs::write(mapper.join("mapper.toml"), mapper_toml).unwrap();
 }
 
-fn read_mapper_file(dir: &tempfile::TempDir, name: &str) -> String {
+fn read_mapper_file(dir: &TempTedgeDir, name: &str) -> String {
     std::fs::read_to_string(dir.path().join("mappers").join(name).join("mapper.toml")).unwrap()
 }
 
@@ -665,16 +676,20 @@ fn root_manager() -> ConfigManager {
     ConfigManager::from_schema::<RootStubConfig>(Path::new("/etc/tedge"))
 }
 
-fn mapper_source(path: std::path::PathBuf) -> Box<dyn tedge_config_engine::ops::ConfigOps> {
+fn mapper_source(
+    path: impl Into<std::path::PathBuf>,
+) -> Box<dyn tedge_config_engine::ops::ConfigOps> {
     Box::new(TypedConfigOps::<MapperConfigDto>::new(
         mapper_manager(),
-        path,
+        path.into(),
     ))
 }
 
-fn root_source(path: std::path::PathBuf) -> Box<dyn tedge_config_engine::ops::ConfigOps> {
+fn root_source(
+    path: impl Into<std::path::PathBuf>,
+) -> Box<dyn tedge_config_engine::ops::ConfigOps> {
     Box::new(TypedConfigOps::<RootStubConfigDto>::new(
         root_manager(),
-        path,
+        path.into(),
     ))
 }
