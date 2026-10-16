@@ -206,6 +206,7 @@ impl C8yMapperConfig {
             device_restart: c8y_config.cloud_specific.enable.device_restart,
             software_update: c8y_config.cloud_specific.enable.software_update,
             shell_execute: c8y_config.cloud_specific.enable.shell_execute,
+            service_commands: c8y_config.cloud_specific.enable.service_commands,
         };
         let bridge_config = BridgeConfig {
             c8y_prefix: c8y_config.bridge.topic_prefix.clone(),

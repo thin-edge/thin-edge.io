@@ -427,6 +427,9 @@ pub struct EnableConfig {
 
     /// Enable shell_execute feature
     pub shell_execute: bool,
+
+    /// Enable service_commands feature
+    pub service_commands: bool,
 }
 
 /// Bridge include configuration

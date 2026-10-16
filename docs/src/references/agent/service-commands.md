@@ -90,3 +90,8 @@ A %%te%% service managed by an init unit of its own declares `restart` when it s
 in `/etc/tedge/operations/service_restart.toml`.
 It declares `type = "service"`, so it applies to service entities.
 See [scoping a workflow by entity type](../operation-workflow#workflow-entity-type).
+
+## From the cloud
+
+A Cumulocity operator triggers these actions from the service itself.
+See [service commands with Cumulocity](../../../operate/c8y/service-commands).

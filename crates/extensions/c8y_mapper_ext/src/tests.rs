@@ -70,6 +70,7 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::paths::TedgePaths;
+use test_case::test_case;
 
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
@@ -2955,6 +2956,87 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_Restart")]).await;
 }
 
+#[test_case(json!({"status": "successful"}), "503,c8y_ServiceCommand"; "successful")]
+#[test_case(
+    json!({"status": "failed", "reason": "failed with reason"}),
+    "502,c8y_ServiceCommand,The 'restart' action failed: failed with reason";
+    "failed"
+)]
+#[tokio::test]
+async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service(
+    final_state: serde_json::Value,
+    smartrest: &str,
+) {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
+        "{}",
+    ))
+    .await
+    .unwrap();
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+            "id": "1234",
+            "status": "PENDING",
+            "c8y_ServiceCommand": {
+                "command": "RESTART",
+                "serviceName": "collectd",
+                "serviceType": "service"
+            },
+            "externalSource": {
+                "externalId": "test-device:device:main:service:collectd",
+                "type": "c8y_Serial"
+            }
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
+
+    let topic = Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/c8y-mapper-1234");
+    assert_received_contains_str(&mut mqtt, [(topic.name.as_str(), r#""status":"init""#)]).await;
+
+    mqtt.send(MqttMessage::new(
+        &topic,
+        json!({"status": "executing"}).to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:main:service:collectd",
+            "501,c8y_ServiceCommand",
+        )],
+    )
+    .await;
+
+    mqtt.send(MqttMessage::new(&topic, final_state.to_string()))
+        .await
+        .unwrap();
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:main:service:collectd",
+            smartrest,
+        )],
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
     let ttd = TempTedgeDir::new();
@@ -3191,7 +3273,7 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     ttd.dir("operations")
         .dir("c8y")
         .dir("test-device:device:main:service:collectd")
-        .file("c8y_Restart");
+        .file("c8y_ServiceCommand");
 
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
     let TestHandle { mqtt, .. } = test_handle;
@@ -3243,7 +3325,7 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
             ),
             (
                 "c8y/s/us/test-device:device:main:service:collectd",
-                "114,c8y_Restart",
+                "114,c8y_ServiceCommand",
             ),
         ],
     )

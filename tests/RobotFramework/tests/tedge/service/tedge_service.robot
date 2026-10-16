@@ -34,6 +34,9 @@ Run tedge service for service plugin
     # Unsupported action should return exit code 2
     Execute Command    tedge service invalid name --type dummy    exp_exit_code=2
 
+Run tedge service for a service type with no plugin
+    Execute Command    tedge service restart name --type no_such_backend    exp_exit_code=2
+
 tedge service does not support name and is_available
     ${stderr}=    Execute Command
     ...    tedge service name sleeper    strip=True    exp_exit_code=2    stdout=False    stderr=True

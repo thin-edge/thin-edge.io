@@ -203,6 +203,7 @@ pub enum CumulocitySupportedOperations {
     C8yDownloadConfigFile,
     C8yFirmware,
     C8yDeviceProfile,
+    C8yServiceCommand,
     C8yCustom(String),
 }
 
@@ -216,6 +217,7 @@ impl CumulocitySupportedOperations {
             CumulocitySupportedOperations::C8yDownloadConfigFile => "c8y_DownloadConfigFile",
             CumulocitySupportedOperations::C8yFirmware => "c8y_Firmware",
             CumulocitySupportedOperations::C8yDeviceProfile => "c8y_DeviceProfile",
+            CumulocitySupportedOperations::C8yServiceCommand => "c8y_ServiceCommand",
             CumulocitySupportedOperations::C8yCustom(operation) => operation.as_str(),
         }
     }

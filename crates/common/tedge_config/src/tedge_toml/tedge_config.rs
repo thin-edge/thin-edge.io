@@ -755,6 +755,11 @@ define_tedge_config! {
             #[tedge_config(example = "true", default(value = true))]
             #[tedge_config(exposable)]
             shell_execute: bool,
+
+            /// Enable service commands feature
+            #[tedge_config(example = "true", default(value = true))]
+            #[tedge_config(exposable)]
+            service_commands: bool,
         },
 
         mapper: {
