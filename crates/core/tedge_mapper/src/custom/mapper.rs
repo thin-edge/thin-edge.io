@@ -193,7 +193,7 @@ pub async fn build_cloud_mqtt_options(
     if !tls_enabled && config.effective_auth.value == AuthMethod::Certificate {
         anyhow::bail!(
             "certificate authentication requires TLS, but TLS is disabled for this mapper. \
-             Either set `[bridge]\ntls = \"on\"` in mapper.toml, or change the auth method."
+             Either set `[bridge.tls]\nenable = \"true\"` in mapper.toml, or change the auth method."
         );
     }
 
@@ -1177,7 +1177,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 assert_eq!(
                     err.to_string(),
                     "certificate authentication requires TLS, but TLS is disabled for this mapper. \
-                     Either set `[bridge]\ntls = \"on\"` in mapper.toml, or change the auth method."
+                     Either set `[bridge.tls]\nenable = \"true\"` in mapper.toml, or change the auth method."
                 );
             }
 
@@ -1199,7 +1199,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
                 assert_eq!(
                     err.to_string(),
                     "certificate authentication requires TLS, but TLS is disabled for this mapper. \
-                     Either set `[bridge]\ntls = \"on\"` in mapper.toml, or change the auth method."
+                     Either set `[bridge.tls]\nenable = \"true\"` in mapper.toml, or change the auth method."
                 );
             }
         }

@@ -40,7 +40,7 @@ impl FederatedReadableKey {
         #[cfg_attr(not(feature = "mapper-config"), expect(unused_mut))]
         let mut candidates = ReadableKey::completions();
         #[cfg(feature = "mapper-config")]
-        candidates.extend(mapper_key_completions());
+        candidates.extend(mapper_key_completions(&tedge_config::get_config_dir()));
         candidates
     }
 }
@@ -80,14 +80,16 @@ impl FederatedWritableKey {
         #[cfg_attr(not(feature = "mapper-config"), expect(unused_mut))]
         let mut candidates = WritableKey::completions();
         #[cfg(feature = "mapper-config")]
-        candidates.extend(mapper_key_completions());
+        candidates.extend(mapper_key_completions(&tedge_config::get_config_dir()));
         candidates
     }
 }
 
 #[cfg(feature = "mapper-config")]
-fn mapper_key_completions() -> Vec<clap_complete::CompletionCandidate> {
-    let config_dir = tedge_config::get_config_dir();
+fn mapper_key_completions(config_dir: &std::path::Path) -> Vec<clap_complete::CompletionCandidate> {
+    let Ok(config_dir) = camino::Utf8PathBuf::try_from(config_dir.to_owned()) else {
+        return Vec::new();
+    };
     let Ok(fed) = tedge_mapper_config::load_federated_config(&config_dir) else {
         return Vec::new();
     };
@@ -115,4 +117,50 @@ fn mapper_key_completions() -> Vec<clap_complete::CompletionCandidate> {
             c
         })
         .collect()
+}
+
+#[cfg(all(test, feature = "mapper-config"))]
+mod tests {
+    use super::*;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    #[test]
+    fn mapper_keys_are_completed_for_mapper_directories_and_builtin_clouds() {
+        let dir = TempTedgeDir::new();
+        dir.file("tedge.toml");
+        dir.dir("mappers").dir("thingsboard").file("mapper.toml");
+
+        let completions: Vec<String> = mapper_key_completions(dir.std_path())
+            .iter()
+            .map(|c| c.get_value().to_string_lossy().into_owned())
+            .collect();
+
+        for key in [
+            "mappers.thingsboard.url",
+            "mappers.c8y.url",
+            "mappers.aws.url",
+        ] {
+            assert!(
+                completions.iter().any(|c| c == key),
+                "{key} should be completed: {completions:?}"
+            );
+        }
+        assert!(
+            completions.iter().all(|c| c.starts_with("mappers.")),
+            "only mapper keys should be completed: {completions:?}"
+        );
+    }
+
+    #[test]
+    fn readable_and_writable_key_completions_include_core_keys() {
+        for completions in [
+            FederatedReadableKey::completions(),
+            FederatedWritableKey::completions(),
+        ] {
+            assert!(
+                completions.iter().any(|c| c.get_value() == "device.type"),
+                "device.type should be completed"
+            );
+        }
+    }
 }
