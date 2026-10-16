@@ -69,6 +69,11 @@ pub enum ConfigError {
         path: std::path::PathBuf,
         keys: Vec<String>,
     },
+    #[error("Failed to write {}: {reason}", path.display())]
+    WriteFile {
+        path: std::path::PathBuf,
+        reason: String,
+    },
     #[error("Failed to load {}: {reason}", path.display())]
     InvalidFile {
         path: std::path::PathBuf,

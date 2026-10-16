@@ -557,6 +557,20 @@ fn reading_the_invalid_mapper_names_its_file() {
     );
 }
 
+#[test]
+fn nested_keys_are_written_as_table_sections() {
+    let dir = config_dir_with_mapper("tb", "");
+    let mut fed = crate::load_federated_config(dir.path()).unwrap();
+
+    fed.mutate("mappers.tb.bridge.tls.enable", Action::Set("false".into()))
+        .unwrap();
+
+    assert_eq!(
+        read_mapper_file(&dir, "tb"),
+        "[bridge.tls]\nenable = \"false\"\n"
+    );
+}
+
 fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("tedge.toml"), "").unwrap();

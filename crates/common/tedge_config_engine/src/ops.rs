@@ -104,15 +104,22 @@ where
     }
 
     fn save(&self, dto: &T) -> Result<(), ConfigError> {
-        let content = facet_toml::to_string(dto)
-            .map_err(|e| ConfigError::IoError(format!("serialization error: {e}")))?;
+        let write_error = |reason: String| ConfigError::WriteFile {
+            path: self.path.clone(),
+            reason,
+        };
+        let content = facet_toml::to_string(dto).map_err(|e| write_error(e.to_string()))?;
+        // facet_toml writes nested groups as inline tables; the toml crate writes
+        // `[group]` sections, matching the docs and files written by tedge_config
+        let table: toml::Table = content
+            .parse()
+            .map_err(|e: toml::de::Error| write_error(e.to_string()))?;
+        let content = toml::to_string(&table).map_err(|e| write_error(e.to_string()))?;
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| ConfigError::IoError(format!("{}: {e}", parent.display())))?;
+                .map_err(|e| write_error(format!("creating {}: {e}", parent.display())))?;
         }
-        std::fs::write(&self.path, content)
-            .map_err(|e| ConfigError::IoError(format!("{}: {e}", self.path.display())))?;
-        Ok(())
+        std::fs::write(&self.path, content).map_err(|e| write_error(e.to_string()))
     }
 }
 
