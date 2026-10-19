@@ -113,7 +113,51 @@ End with:
 
 - one line per axis: number of findings and the worst one (Polish items do not count);
 - a verdict: **Approve**, **Request changes** or **Needs discussion**;
-- in local mode, a reminder to run `just format` and `just check` before opening the PR.
+- in local mode, a reminder to run `just format` and `just check` before opening the PR;
+- in PR mode, an offer to draft the findings as PR comments.
+
+### 5. Draft PR comments
+
+PR mode only, when the user takes up the offer or asks for comments.
+Draft one comment per finding, following [Writing PR comments](#writing-pr-comments), and anchor each on a changed line.
+Findings with no changed line to anchor on go in a draft review body.
+
+Then give the drafts a **cold read**: one sub-agent, given only `diff.patch` and the drafts, reports for each draft every sentence it had to read twice and every term used before it was explained.
+Tell it that it reads as a thin-edge.io maintainer who knows Rust and Unix but has seen only this diff, so it flags what this change's reader would miss, not standard library or system calls.
+Rewrite the flagged sentences in the visible prose; flags inside `<details>` need no change.
+Run at most two rounds: each round finds smaller things, so a third rarely pays.
+The step is done after the second round, or sooner when a round flags nothing in the visible prose.
+Show the user every draft with its `file:line`, and under each draft any flag from the last round that you did not fix.
+
+## Writing PR comments
+
+A comment should be understood in one read by someone who has seen the diff and nothing else.
+
+- **Prefix.** Start with `[AI] ` and then the team's conventional-comment prefix:
+  `issue:` for a defect, `suggestion:` for a better approach, `todo:` for a missing test or doc,
+  and `question:` when the finding depends on what the author intended.
+  When you are unsure whether something is wrong, ask: a question costs the author little if the answer is "yes, on purpose".
+- **Why, not what.** The reader can see the code.
+  Write what goes wrong for the user or the system, and why.
+  Describe the code only where the failure depends on a detail the reader would miss.
+- **The reader's level.** Use only ideas that appear in the diff or the PR description.
+  When the failure depends on another subsystem, explain that idea in one clause before using it.
+- **Plain English.** One idea per sentence, under 20 words each, active voice, common words, no idioms.
+- **Short.** Keep the prose under 80 words.
+  Put a reproduction or a complete new test in `<details><summary>…</summary>`, so the comment reads at a glance.
+- **Output, not claims.** When you ran something, paste the command and the relevant lines of its output.
+  "Verified" or "confirmed" appears only next to that output.
+- **Smallest fix.** Give the fix as a `suggestion` block with the minimal change, or in one sentence when it spans several places.
+  A new test belongs in a comment only when the finding is that the behaviour is untested.
+- **Existing problems.** When the problem is already on `main`, say so and offer it as a follow-up.
+- **One line per paragraph.** GitHub shows every line break in a comment, so write each paragraph on a single line,
+  with a blank line between the prefixed headline and the paragraphs that follow.
+
+```markdown
+[AI] question: Does the action need to run in `tmp.path`?
+
+If that directory is missing, the spawn fails and the user sees "Service command not found", so they look in `system.toml` instead. If the action does not need the tmp dir, keep the caller's directory. If it does, name the directory in the error.
+```
 
 ## Smell baseline
 
