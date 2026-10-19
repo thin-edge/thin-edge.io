@@ -193,7 +193,8 @@ as a process executed by tedge-agent, and never as a competing MQTT subscriber.
 ### Requirement: Service command workflows delegate execution to the tedge service CLI
 
 The workflows shipped for service commands SHALL execute the command by invoking
-`sudo -n tedge service <action> <serviceName> --type <serviceType>`,
+`tedge service <action> <serviceName> --type <serviceType>` from a script state with `sudo = true`,
+so that it is run through `sudo -n` when `sudo.enable` is set and sudo is installed,
 taking the action name from the command topic and the service name and type from the command payload.
 
 A zero exit code SHALL move the command to `successful`;
