@@ -38,7 +38,9 @@ Untagged rules apply to every change.
 - No unchecked slice or array indexing where the index comes from input.
   Use `.get()` and handle `None`.
 - No `todo!()` or `unimplemented!()` in shipped code paths.
-- `unsafe` is forbidden (`#![forbid(unsafe_code)]`).
+- `unsafe` code is denied by the workspace lints.
+  Where it cannot be avoided, the item carries `#[allow(unsafe_code)]`
+  and the block has a `// SAFETY:` comment stating why it is sound.
 
 ### Errors
 
@@ -126,6 +128,9 @@ Test code may use literal topics.
 - Cover edge cases: empty input, maximum values, error paths, concurrent access.
 - Each test checks one behaviour.
   Split tests that check several unrelated things.
+- When working test-first, run the new tests before implementing the behaviour,
+  and check that they fail on their assertions.
+  A test that fails only because the code does not compile yet has not been checked. **(polish)**
 
 ### Naming and layout
 
@@ -134,7 +139,8 @@ Test code may use literal topics.
   Avoid internal vocabulary ("gate", "buffer", "watch channel") in test names. **(polish)**
 - No doc comments (`///`) on test functions.
   If a test needs one, the name is not descriptive enough.
-  Inline `//` comments explaining a non-obvious step are fine. **(polish)**
+  Inline `//` comments explaining a non-obvious step are fine.
+  CI rejects doc comments on new and changed tests; `just check-test-docs` runs the same check. **(polish)**
 - Unit tests go in an inline `#[cfg(test)] mod tests`,
   or in a `tests.rs` next to the module when they get long. **(polish)**
 - Helper functions go at the bottom of the test module, after all the tests. **(polish)**
@@ -195,6 +201,9 @@ A suggestion with that payoff is not polish, and it says what the payoff is.
 - Write plainly.
   Many contributors read English as a second language,
   so avoid idioms, allusions and invented names for things. **(polish)**
+- In docs, a few short sentences read better than one long sentence with many clauses.
+  Use a bulleted list for items that really are separate (e.g. which signal triggers which action),
+  not to split up a single sentence. **(polish)**
 - Doc comments use the third person ("Iterates over the entities", not "Iterate over the entities").
   Short single-phrase comments have no trailing full stop;
   multi-sentence docs use normal punctuation. **(polish)**
@@ -203,6 +212,12 @@ A suggestion with that payoff is not polish, and it says what the payoff is.
 - Don't link to private items from public docs; rustdoc warns about it.
   Use a plain code span instead. **(polish)**
 - Markdown uses [semantic line breaks](https://sembr.org/). **(polish)**
+- Design documents, specs and guides describe the current design.
+  They don't refer to their own earlier versions ("earlier versions of this guide said…"),
+  because readers have not seen them.
+  The reasons for rejecting an alternative design are fine to include.
+- Design documents and specs state decisions.
+  Settle open questions before writing them down, rather than recording the uncertainty.
 
 ## Commits and pull requests
 
