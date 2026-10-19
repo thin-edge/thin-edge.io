@@ -385,7 +385,8 @@ on_success = "successful"
 on_timeout = { status = "failed", reason = "tedge-agent did not restart in time" }
 
 [execute]
-script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
+script = "tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
+sudo = true
 # systemd waits for the service to stop and to start again, 90 seconds each by default
 timeout_second = 180
 on_exit.0 = "successful"
@@ -403,7 +404,8 @@ action = "cleanup"
 action = "cleanup"
 ```
 
-* The `execute` script resolves to `sudo -n tedge service restart collectd --type service`.
+* The `execute` script resolves to `tedge service restart collectd --type service`,
+  run as `sudo -n tedge service restart collectd --type service` when `sudo.enable` is set.
 * Then type `service` routes to `systemctl restart collectd`.
 * Exit code `0` → status `successful` → the mapper reports `506`.
 
@@ -471,7 +473,8 @@ action = "proceed"
 on_success = "execute"
 
 [execute]
-script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
+script = "tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
+sudo = true
 timeout_second = 180
 on_exit.0 = "successful"
 on_exit.1 = { status = "failed", reason = "The action failed, see the operation log for the reason given by the backend" }
@@ -486,7 +489,7 @@ action = "cleanup"
 action = "cleanup"
 ```
 
-* The `execute` script resolves to `sudo -n tedge service pause nodered --type container`,
+* The `execute` script resolves to `tedge service pause nodered --type container`, run through `sudo -n` when `sudo.enable` is set,
 which executes `/usr/share/tedge/service-plugins/container pause nodered`.
 * The plugin maps the action to its container engine (e.g. `docker pause`).
 

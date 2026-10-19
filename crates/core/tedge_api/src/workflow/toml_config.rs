@@ -91,6 +91,10 @@ pub struct TomlOperationState {
     /// Values to be extracted from the sub-operation final state
     #[serde(default)]
     pub output: Option<Value>,
+
+    /// Run the script of this state through sudo, if sudo is enabled
+    #[serde(default)]
+    pub sudo: bool,
 }
 
 /// User-friendly representation of an [OperationAction]
@@ -152,11 +156,15 @@ impl TryFrom<(TomlOperationState, DefaultHandlers)> for OperationAction {
         match input.action {
             TomlOperationAction::Script(script) => {
                 let handlers = ExitHandlers::try_from((input.handlers, defaults))?;
-                Ok(OperationAction::Script(script, handlers))
+                Ok(OperationAction::Script(script, input.sudo.into(), handlers))
             }
             TomlOperationAction::BackgroundScript(script) => {
                 let handlers = ExecHandlers::try_from((input.handlers, defaults))?;
-                Ok(OperationAction::BgScript(script, handlers))
+                Ok(OperationAction::BgScript(
+                    script,
+                    input.sudo.into(),
+                    handlers,
+                ))
             }
             TomlOperationAction::Operation(operation) => match operation.strip_prefix("builtin:") {
                 None => {
@@ -265,7 +273,21 @@ impl TryFrom<TomlOperationWorkflow> for OperationWorkflows {
         let default_handlers = DefaultHandlers::try_from(input.handlers)?;
         let mut states = HashMap::new();
         for (state, action_spec) in input.states.into_iter() {
+            let sudo = action_spec.sudo;
             let action = OperationAction::try_from((action_spec, default_handlers.clone()))?;
+            if sudo
+                && !matches!(
+                    action,
+                    OperationAction::Script(..) | OperationAction::BgScript(..)
+                )
+            {
+                return Err(WorkflowDefinitionError::InvalidAction {
+                    state,
+                    action: format!(
+                        "{action} (with `sudo = true`, which applies only to `script` and `background_script`)"
+                    ),
+                });
+            }
             states.insert(state, action);
         }
 
@@ -576,6 +598,7 @@ impl FromStr for ExitCodes {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::workflow::Elevation;
     use crate::workflow::GenericStateUpdate;
     use crate::workflow::StateExcerpt;
     use assert_matches::assert_matches;
@@ -849,6 +872,7 @@ script = "/some/script/which/fails"
                             command: "/some/script/which/fails".to_string(),
                             args: vec![]
                         },
+                        Elevation::None,
                         ExitHandlers::default()
                     )
                 ),
@@ -1192,5 +1216,154 @@ action = "cleanup"
             }
             other => panic!("Expected BuiltInOperationStep action, but got {:?}", other),
         }
+    }
+
+    fn workflow_with_state(state: &str) -> String {
+        format!(
+            r#"
+operation = "sudo-test"
+
+[init]
+action = "proceed"
+on_success = "test"
+
+[test]
+{state}
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#
+        )
+    }
+
+    fn try_workflow_with_state(state: &str) -> Result<OperationWorkflows, WorkflowDefinitionError> {
+        let input: TomlOperationWorkflow = toml::from_str(&workflow_with_state(state)).unwrap();
+        OperationWorkflows::try_from(input)
+    }
+
+    #[test]
+    fn sudo_elevates_a_script() {
+        let workflow = OperationWorkflow::from_toml(&workflow_with_state(
+            r#"
+script = "tedge service restart nginx"
+sudo = true
+on_success = "successful"
+"#,
+        ));
+
+        assert_matches!(
+            workflow.states.get("test"),
+            Some(OperationAction::Script(_, Elevation::Sudo, _))
+        );
+    }
+
+    #[test]
+    fn sudo_elevates_a_background_script() {
+        let workflow = OperationWorkflow::from_toml(&workflow_with_state(
+            r#"
+background_script = "reboot"
+sudo = true
+on_exec = "successful"
+"#,
+        ));
+
+        assert_matches!(
+            workflow.states.get("test"),
+            Some(OperationAction::BgScript(_, Elevation::Sudo, _))
+        );
+    }
+
+    #[test_case("sudo = false")]
+    #[test_case("")]
+    fn a_script_is_not_elevated_by_default(sudo: &str) {
+        let workflow = OperationWorkflow::from_toml(&workflow_with_state(&format!(
+            r#"
+script = "tedge service restart nginx"
+{sudo}
+on_success = "successful"
+"#,
+        )));
+
+        assert_matches!(
+            workflow.states.get("test"),
+            Some(OperationAction::Script(_, Elevation::None, _))
+        );
+    }
+
+    #[test]
+    fn sudo_cannot_be_derived_from_the_payload() {
+        let file = workflow_with_state(
+            r#"
+script = "tedge service restart nginx"
+sudo = "${.payload.elevate}"
+on_success = "successful"
+"#,
+        );
+
+        assert!(toml::from_str::<TomlOperationWorkflow>(&file).is_err());
+    }
+
+    #[test]
+    fn sudo_is_rejected_on_a_state_running_no_script() {
+        let error = try_workflow_with_state(
+            r#"
+action = "proceed"
+sudo = true
+on_success = "successful"
+"#,
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "Invalid action on test state: move to successful state \
+             (with `sudo = true`, which applies only to `script` and `background_script`)"
+        );
+    }
+
+    #[test]
+    fn sudo_is_rejected_on_a_sub_operation_with_an_input_script() {
+        let error = try_workflow_with_state(
+            r#"
+operation = "restart"
+input_script = "/some/script.sh"
+sudo = true
+on_exec = "successful"
+"#,
+        )
+        .unwrap_err();
+
+        assert_matches!(error, WorkflowDefinitionError::InvalidAction { state, .. } if state == "test");
+    }
+
+    #[test]
+    fn sudo_false_is_accepted_on_a_state_running_no_script() {
+        assert!(try_workflow_with_state(
+            r#"
+action = "proceed"
+sudo = false
+on_success = "successful"
+"#,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn an_elevated_script_is_displayed_with_sudo() {
+        let workflow = OperationWorkflow::from_toml(&workflow_with_state(
+            r#"
+script = "tedge service restart nginx"
+sudo = true
+on_success = "successful"
+"#,
+        ));
+
+        assert_eq!(
+            workflow.states.get("test").unwrap().to_string(),
+            "tedge service restart nginx (sudo = true)"
+        );
     }
 }

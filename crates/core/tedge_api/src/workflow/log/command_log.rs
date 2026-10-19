@@ -13,6 +13,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::io::BufWriter;
 use tracing::error;
 use tracing::info;
+use tracing::warn;
 
 /// Log all command steps
 pub struct CommandLog {
@@ -180,6 +181,14 @@ Action:   {action}
     pub async fn log_info(&mut self, msg: &str) {
         info!("{msg}");
         let line = format!("{msg}\n");
+        if let Err(err) = self.write(&line).await {
+            error!("Fail to log to {}: {err}", self.path)
+        }
+    }
+
+    pub async fn log_warning(&mut self, msg: &str) {
+        warn!("{msg}");
+        let line = format!("WARNING: {msg}\n");
         if let Err(err) = self.write(&line).await {
             error!("Fail to log to {}: {err}", self.path)
         }

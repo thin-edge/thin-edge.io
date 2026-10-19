@@ -58,6 +58,8 @@ use tedge_api::workflow::OperationWorkflows;
 use tedge_api::workflow::SyncOnCommand;
 use tedge_api::RestartCommand;
 use tedge_api::SoftwareUpdateCommand;
+use tedge_config::SudoCommandBuilder;
+use tedge_config::SudoResolution;
 use tedge_downloader_ext::DownloadResponse;
 use tedge_file_system_ext::FsWatchEvent;
 use tedge_http_ext::test_helpers::HttpResponseBuilder;
@@ -1104,6 +1106,400 @@ fn builtin_workflows_are_valid_operation_workflows() {
     }
 }
 
+const ELEVATED_SCRIPT_WORKFLOW: &str = r#"
+operation = "elevated"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "tedge service ${.payload.action} ${.payload.serviceName}"
+sudo = true
+timeout_second = 60
+on_exit.0 = "successful"
+on_exit.2 = { status = "failed", reason = "not supported" }
+on_exit._ = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+const ELEVATED_BACKGROUND_SCRIPT_WORKFLOW: &str = r#"
+operation = "elevated"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+background_script = "reboot"
+sudo = true
+on_exec = "restarting"
+
+[restarting]
+action = "proceed"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+async fn spawn_elevated_workflow(
+    tmp_dir: Arc<TempTedgeDir>,
+    workflow: &str,
+    sudo: SudoCommandBuilder,
+) -> TestHandler {
+    spawn_workflow_actor_with_sudo(
+        tmp_dir,
+        "device/main//",
+        vec![("elevated.toml".to_string(), workflow.to_string())],
+        FakeEntityStore::Entities(vec![]),
+        sudo,
+    )
+    .await
+    .unwrap()
+}
+
+fn script_output(code: i32, stdout: &str) -> Output {
+    use std::os::unix::process::ExitStatusExt;
+    Output {
+        status: std::process::ExitStatus::from_raw(code << 8),
+        stdout: stdout.as_bytes().to_vec(),
+        stderr: vec![],
+    }
+}
+
+#[tokio::test]
+async fn an_elevated_script_is_launched_through_sudo() {
+    let tmp_dir = Arc::new(TempTedgeDir::new());
+    let TestHandler {
+        mut mqtt_box,
+        mut script_box,
+        mut actor_handle,
+        ..
+    } = spawn_elevated_workflow(
+        tmp_dir.clone(),
+        ELEVATED_SCRIPT_WORKFLOW,
+        SudoCommandBuilder::with_program("echo"),
+    )
+    .await;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/elevated/1"),
+            r#"{"status":"init","action":"restart","serviceName":"nginx"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let RequestEnvelope {
+        request,
+        mut reply_to,
+    } = recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
+        .await
+        .expect("script request expected");
+    let SudoResolution::Sudo(echo) = SudoCommandBuilder::with_program("echo").resolve() else {
+        panic!("echo expected in $PATH");
+    };
+    assert_eq!(request.command, echo.to_string_lossy());
+    assert_eq!(request.args, ["-n", "tedge", "service", "restart", "nginx"]);
+    assert_eq!(
+        request.timeouts.map(|(graceful, _)| graceful),
+        Some(Duration::from_secs(60)),
+        "the timeout of the step applies to the elevated script"
+    );
+
+    reply_to
+        .send(Ok(script_output(
+            0,
+            ":::begin-tedge:::\n{\"elevated\": true}\n:::end-tedge:::\n",
+        )))
+        .await
+        .unwrap();
+
+    let payload = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/elevated/1",
+        "successful",
+    )
+    .await;
+    assert_eq!(payload["elevated"], json!(true));
+
+    let log = std::fs::read_to_string(tmp_dir.path().join("workflow-elevated-1.log")).unwrap();
+    assert!(
+        log.contains("Action:   tedge service restart nginx (sudo = true)"),
+        "{log}"
+    );
+    assert!(
+        log.contains(&format!(
+            "----- $ {} -n tedge service restart nginx",
+            echo.display()
+        )),
+        "{log}"
+    );
+}
+
+#[tokio::test]
+async fn the_exit_code_of_an_elevated_script_reaches_the_handlers() {
+    let TestHandler {
+        mut mqtt_box,
+        mut script_box,
+        mut actor_handle,
+        ..
+    } = spawn_elevated_workflow(
+        Arc::new(TempTedgeDir::new()),
+        ELEVATED_SCRIPT_WORKFLOW,
+        SudoCommandBuilder::with_program("echo"),
+    )
+    .await;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/elevated/1"),
+            r#"{"status":"init","action":"reload","serviceName":"nginx"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let RequestEnvelope { mut reply_to, .. } =
+        recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
+            .await
+            .expect("script request expected");
+    reply_to.send(Ok(script_output(2, ""))).await.unwrap();
+
+    let payload = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/elevated/1",
+        "failed",
+    )
+    .await;
+    assert_eq!(payload["reason"], json!("not supported"));
+}
+
+#[tokio::test]
+async fn the_failure_reason_of_an_elevated_script_names_the_script_not_sudo() {
+    let TestHandler {
+        mut mqtt_box,
+        mut script_box,
+        mut actor_handle,
+        ..
+    } = spawn_elevated_workflow(
+        Arc::new(TempTedgeDir::new()),
+        ELEVATED_SCRIPT_WORKFLOW,
+        SudoCommandBuilder::with_program("echo"),
+    )
+    .await;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/elevated/1"),
+            r#"{"status":"init","action":"restart","serviceName":"nginx"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let RequestEnvelope { mut reply_to, .. } =
+        recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
+            .await
+            .expect("script request expected");
+    reply_to.send(Ok(script_output(1, ""))).await.unwrap();
+
+    let payload = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/elevated/1",
+        "failed",
+    )
+    .await;
+    assert_eq!(payload["reason"], json!("tedge returned exit code 1"));
+}
+
+#[tokio::test]
+async fn the_failure_reason_names_sudo_when_sudo_refuses_the_script() {
+    let tmp_dir = Arc::new(TempTedgeDir::new());
+    // A sudo program that fails, both to run the script and to list it as allowed
+    let sudo = SudoCommandBuilder::with_program("false");
+    let SudoResolution::Sudo(sudo_program) = sudo.resolve() else {
+        panic!("false expected in $PATH");
+    };
+    let TestHandler {
+        mut mqtt_box,
+        mut script_box,
+        mut actor_handle,
+        ..
+    } = spawn_elevated_workflow(tmp_dir.clone(), ELEVATED_SCRIPT_WORKFLOW, sudo).await;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/elevated/1"),
+            r#"{"status":"init","action":"restart","serviceName":"nginx"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let RequestEnvelope { mut reply_to, .. } =
+        recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
+            .await
+            .expect("script request expected");
+    reply_to.send(Ok(script_output(1, ""))).await.unwrap();
+
+    let payload = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/elevated/1",
+        "failed",
+    )
+    .await;
+    assert_eq!(
+        payload["reason"],
+        json!(format!("{} returned exit code 1", sudo_program.display()))
+    );
+
+    let log = std::fs::read_to_string(tmp_dir.path().join("workflow-elevated-1.log")).unwrap();
+    assert!(
+        log.contains("ERROR: sudo refused to run 'tedge': not allowed by the sudoers rules"),
+        "{log}"
+    );
+}
+
+#[tokio::test]
+async fn an_elevated_script_is_launched_directly_when_sudo_is_disabled() {
+    let tmp_dir = Arc::new(TempTedgeDir::new());
+    let TestHandler {
+        mut mqtt_box,
+        mut script_box,
+        mut actor_handle,
+        ..
+    } = spawn_elevated_workflow(
+        tmp_dir.clone(),
+        ELEVATED_SCRIPT_WORKFLOW,
+        SudoCommandBuilder::enabled(false),
+    )
+    .await;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/elevated/1"),
+            r#"{"status":"init","action":"restart","serviceName":"nginx"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let RequestEnvelope {
+        request,
+        mut reply_to,
+    } = recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
+        .await
+        .expect("script request expected");
+    assert_eq!(request.command, "tedge");
+    assert_eq!(request.args, ["service", "restart", "nginx"]);
+    reply_to.send(Ok(script_output(0, ""))).await.unwrap();
+
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/elevated/1",
+        "successful",
+    )
+    .await;
+
+    let log = std::fs::read_to_string(tmp_dir.path().join("workflow-elevated-1.log")).unwrap();
+    assert!(log.contains("----- $ tedge service restart nginx"), "{log}");
+}
+
+#[tokio::test]
+async fn a_missing_sudo_is_reported_in_the_operation_log() {
+    let tmp_dir = Arc::new(TempTedgeDir::new());
+    let TestHandler {
+        mut mqtt_box,
+        mut script_box,
+        mut actor_handle,
+        ..
+    } = spawn_elevated_workflow(
+        tmp_dir.clone(),
+        ELEVATED_SCRIPT_WORKFLOW,
+        SudoCommandBuilder::with_program("no-such-sudo-program"),
+    )
+    .await;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/elevated/1"),
+            r#"{"status":"init","action":"restart","serviceName":"nginx"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let RequestEnvelope {
+        request,
+        mut reply_to,
+    } = recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
+        .await
+        .expect("script request expected");
+    assert_eq!(request.command, "tedge");
+    reply_to.send(Ok(script_output(0, ""))).await.unwrap();
+
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/elevated/1",
+        "successful",
+    )
+    .await;
+
+    let log = std::fs::read_to_string(tmp_dir.path().join("workflow-elevated-1.log")).unwrap();
+    assert!(
+        log.contains("WARNING: `sudo.enable` set to `true`, but sudo not found in $PATH"),
+        "{log}"
+    );
+}
+
+#[tokio::test]
+async fn an_elevated_background_script_moves_on_before_being_launched() {
+    let TestHandler {
+        mut mqtt_box,
+        mut script_box,
+        mut actor_handle,
+        ..
+    } = spawn_elevated_workflow(
+        Arc::new(TempTedgeDir::new()),
+        ELEVATED_BACKGROUND_SCRIPT_WORKFLOW,
+        SudoCommandBuilder::with_program("echo"),
+    )
+    .await;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/elevated/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/elevated/1",
+        "restarting",
+    )
+    .await;
+
+    let RequestEnvelope { request, .. } =
+        recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
+            .await
+            .expect("script request expected");
+    assert_eq!(request.args, ["-n", "reboot"]);
+}
+
 #[tokio::test]
 async fn an_init_command_for_a_registered_service_of_this_device_moves_to_executing() {
     let TestHandler {
@@ -1709,6 +2105,9 @@ struct TestHandler {
         SimpleMessageBox<RequestEnvelope<OperationStepRequest, OperationStepResponse>, NoMessage>,
     >,
     sync_signal_box: TimedMessageBox<SimpleMessageBox<CmdMetaSyncSignal, NoMessage>>,
+    script_box: TimedMessageBox<
+        SimpleMessageBox<RequestEnvelope<Execute, std::io::Result<Output>>, NoMessage>,
+    >,
 }
 
 /// A fake entity store, answering the entity lookups of the workflow actor over HTTP
@@ -1773,6 +2172,23 @@ async fn spawn_workflow_actor(
     workflows: Vec<(String, String)>,
     entity_store: FakeEntityStore,
 ) -> Result<TestHandler, DynError> {
+    spawn_workflow_actor_with_sudo(
+        tmp_dir,
+        device_topic_id,
+        workflows,
+        entity_store,
+        SudoCommandBuilder::enabled(false),
+    )
+    .await
+}
+
+async fn spawn_workflow_actor_with_sudo(
+    tmp_dir: Arc<TempTedgeDir>,
+    device_topic_id: &str,
+    workflows: Vec<(String, String)>,
+    entity_store: FakeEntityStore,
+    sudo: SudoCommandBuilder,
+) -> Result<TestHandler, DynError> {
     let mut software_builder = SoftwareActor(SimpleMessageBoxBuilder::new("Software", 5));
     let mut restart_builder = RestartActor(SimpleMessageBoxBuilder::new("Restart", 5));
     let mut config_builder = ConfigActorBuilder(SimpleMessageBoxBuilder::new("Config", 5));
@@ -1824,6 +2240,7 @@ async fn spawn_workflow_actor(
         operations_dir: config_root.dir("operations").unwrap(),
         tmp_dir: TedgePaths::from_root_with_defaults(tmp_path.join(tmp_path), "", ""),
         capabilities: Capabilities::default(),
+        sudo,
     };
     let entity_store_client = EntityStoreClient::remote(
         EntityStoreUrls::new("127.0.0.1:8000".into(), Protocol::Http),
@@ -1855,6 +2272,7 @@ async fn spawn_workflow_actor(
     let downloader_box = downloade_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let uploader_box = uploader_builder.build().with_timeout(TEST_TIMEOUT_MS);
     let inotify_box = inotify_builder.build().with_timeout(TEST_TIMEOUT_MS);
+    let script_box = script_builder.build().with_timeout(TEST_TIMEOUT_MS);
 
     tokio::spawn(entity_store.serve(http_builder.build()));
 
@@ -1877,6 +2295,7 @@ async fn spawn_workflow_actor(
         uploader_box,
         config_box,
         sync_signal_box,
+        script_box,
     })
 }
 
