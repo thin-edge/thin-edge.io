@@ -284,6 +284,53 @@ Trigger wrapped workflow without an intermediate state
     ...    Execute Command    tedge mqtt pub --retain te/device/main///cmd/restart-tedge-agent-wrapper/robot-4 ''
     ...    AND    Get Logs
 
+Run an elevated script through sudo
+    Execute Command
+    ...    cmd=echo 'tedge ALL = (ALL) NOPASSWD:SETENV: /etc/tedge/operations/whoami-as-json.sh' > /etc/sudoers.d/tedge-elevated-command
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/elevated-command/robot-sudo-1 '{"status":"init"}'
+    ${messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/elevated-command/robot-sudo-1
+    ...    message_pattern=.*successful.*
+    ...    maximum=1
+    Should Contain    ${messages[0]}    item="uid":"0"
+    ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-elevated-command-robot-sudo-1.log
+    Should Contain    ${workflow_log}    item=-n -- /etc/tedge/operations/whoami-as-json.sh
+    [Teardown]    Run Keywords
+    ...    Execute Command    tedge mqtt pub --retain te/device/main///cmd/elevated-command/robot-sudo-1 ''
+    ...    AND    Execute Command    rm -f /etc/sudoers.d/tedge-elevated-command
+    ...    AND    Get Logs
+
+Run an elevated script directly when sudo is disabled
+    Execute Command    tedge config set sudo.enable false
+    Restart Service    tedge-agent
+    ${tedge_uid}    Execute Command    id -u tedge    strip=True
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/elevated-command/robot-sudo-2 '{"status":"init"}'
+    ${messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/elevated-command/robot-sudo-2
+    ...    message_pattern=.*successful.*
+    ...    maximum=1
+    Should Contain    ${messages[0]}    item="uid":"${tedge_uid}"
+    [Teardown]    Run Keywords
+    ...    Execute Command    tedge mqtt pub --retain te/device/main///cmd/elevated-command/robot-sudo-2 ''
+    ...    AND    Execute Command    tedge config unset sudo.enable
+    ...    AND    Restart Service    tedge-agent
+    ...    AND    Get Logs
+
+Reject a workflow setting sudo on a state that runs no script
+    ${start}    Get Unix Timestamp
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/elevated-proceed.toml    /etc/tedge/operations/
+    Wait Until Keyword Succeeds
+    ...    30s
+    ...    2s
+    ...    Logs Should Contain
+    ...    applies only to `script` and `background_script`
+    ...    date_from=${start}
+    [Teardown]    Run Keywords
+    ...    Execute Command    rm -f /etc/tedge/operations/elevated-proceed.toml
+    ...    AND    Get Logs
+
 
 *** Keywords ***
 Custom Test Setup
@@ -315,6 +362,8 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/super_command.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/sub_command.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/whoami-as-json.sh    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/elevated-command.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/write-file.sh    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/restart_sub_command.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/extract_updates.sh    /etc/tedge/operations/

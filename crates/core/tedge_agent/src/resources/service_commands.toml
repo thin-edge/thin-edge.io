@@ -33,7 +33,8 @@ on_success = "successful"
 on_timeout = { status = "failed", reason = "tedge-agent did not restart in time" }
 
 [execute]
-script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
+script = "tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
+sudo = true
 # Longer than tedge service takes at most to terminate an action on timeout,
 # 240 seconds with its default --timeout and --forceful-timeout,
 # so that tedge service exits with 124 before this workflow kills it

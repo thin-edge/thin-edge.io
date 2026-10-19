@@ -103,6 +103,27 @@ impl OperationWorkflows {
     }
 }
 
+/// The privileges a workflow asks for to run a script
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Elevation {
+    /// Run the script as the agent user
+    #[default]
+    None,
+
+    /// Run the script through sudo, when sudo is enabled and installed
+    Sudo,
+}
+
+impl From<bool> for Elevation {
+    fn from(sudo: bool) -> Self {
+        if sudo {
+            Elevation::Sudo
+        } else {
+            Elevation::None
+        }
+    }
+}
+
 /// What needs to be done to advance an operation request in some state
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(try_from = "toml_config::TomlOperationState")]
@@ -155,16 +176,23 @@ pub enum OperationAction {
     RestartAgent(ExecHandlers),
 
     /// A script has to be executed
-    Script(ShellScript, ExitHandlers),
+    ///
+    /// ```toml
+    /// script = "/some/script.sh ${.payload.x}"
+    /// sudo = true
+    /// on_success = "<state>"
+    /// ```
+    Script(ShellScript, Elevation, ExitHandlers),
 
     /// Executes a script but move to the next state without waiting for that script to return
     ///
     /// Notably such a script can trigger a device reboot or an agent restart.
     /// ```toml
-    /// background_script = "sudo systemctl restart tedge-agent"
+    /// background_script = "systemctl restart tedge-agent"
+    /// sudo = true
     /// on_exec = "<state>"
     /// ```
-    BgScript(ShellScript, ExecHandlers),
+    BgScript(ShellScript, Elevation, ExecHandlers),
 
     /// Generic download action (reusable across operations)
     ///
@@ -263,8 +291,8 @@ impl Display for OperationAction {
             OperationAction::BuiltIn(_, _) => "builtin action".to_string(),
             OperationAction::AwaitingAgentRestart { .. } => "await agent restart".to_string(),
             OperationAction::RestartAgent(_) => "restart agent".to_string(),
-            OperationAction::Script(script, _) => script.to_string(),
-            OperationAction::BgScript(script, _) => script.to_string(),
+            OperationAction::Script(script, elevation, _) => script_display(script, *elevation),
+            OperationAction::BgScript(script, elevation, _) => script_display(script, *elevation),
             OperationAction::Download(_, _) => "builtin download action".to_string(),
             OperationAction::Upload(_, _) => "builtin upload action".to_string(),
             OperationAction::Operation(operation, maybe_script, _, _) => match maybe_script {
@@ -289,6 +317,13 @@ impl Display for OperationAction {
             }
         };
         f.write_str(&str)
+    }
+}
+
+fn script_display(script: &ShellScript, elevation: Elevation) -> String {
+    match elevation {
+        Elevation::None => script.to_string(),
+        Elevation::Sudo => format!("{script} (sudo = true)"),
     }
 }
 
@@ -463,11 +498,11 @@ impl OperationWorkflow {
 impl OperationAction {
     pub fn inject_state(&self, state: &GenericCommandState) -> Self {
         match self {
-            OperationAction::Script(script, handlers) => {
-                OperationAction::Script(script.inject_values(state), handlers.clone())
+            OperationAction::Script(script, elevation, handlers) => {
+                OperationAction::Script(script.inject_values(state), *elevation, handlers.clone())
             }
-            OperationAction::BgScript(script, handlers) => {
-                OperationAction::BgScript(script.inject_values(state), handlers.clone())
+            OperationAction::BgScript(script, elevation, handlers) => {
+                OperationAction::BgScript(script.inject_values(state), *elevation, handlers.clone())
             }
             OperationAction::Operation(operation_expr, optional_script, input, handlers) => {
                 let operation = state.inject_values_into_template(operation_expr);

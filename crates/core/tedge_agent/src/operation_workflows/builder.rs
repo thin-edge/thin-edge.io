@@ -230,6 +230,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             entity_store: self.entity_store,
             pending_lookups: HashMap::new(),
             tmp_dir: self.config.tmp_dir.root().into(),
+            sudo: self.config.sudo,
         }
     }
 }
