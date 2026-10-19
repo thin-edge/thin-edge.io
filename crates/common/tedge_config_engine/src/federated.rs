@@ -91,12 +91,13 @@ impl FederatedConfig {
     }
 
     /// Routes a write operation to the mounted source and persists that source.
-    pub fn mutate(&mut self, full_key: &str, action: Action) -> Result<(), ConfigError> {
+    pub async fn mutate(&mut self, full_key: &str, action: Action) -> Result<(), ConfigError> {
         let err_key = full_key.to_owned();
         let (mount, local_key) = self.route_mut(full_key)?;
         mount
             .source
             .mutate(&local_key, action)
+            .await
             .map_err(|e| Self::contextualize_with(&err_key, e, &self.config_dir, &self.mounts))
     }
 

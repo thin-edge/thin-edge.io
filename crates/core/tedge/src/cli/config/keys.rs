@@ -87,10 +87,22 @@ impl FederatedWritableKey {
 
 #[cfg(feature = "mapper-config")]
 fn mapper_key_completions(config_dir: &std::path::Path) -> Vec<clap_complete::CompletionCandidate> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(mapper_key_completions_for_config_dir(config_dir))
+    })
+}
+
+#[cfg(feature = "mapper-config")]
+async fn mapper_key_completions_for_config_dir(
+    config_dir: &std::path::Path,
+) -> Vec<clap_complete::CompletionCandidate> {
     let Ok(config_dir) = camino::Utf8PathBuf::try_from(config_dir.to_owned()) else {
         return Vec::new();
     };
-    let Ok(fed) = tedge_mapper_config::load_federated_config(&config_dir) else {
+    // Completion only reads the files, so their ownership doesn't matter
+    let config_root = tedge_utils::paths::TedgePaths::from_root_with_defaults(&config_dir, "", "");
+    let Ok(fed) = tedge_mapper_config::load_federated_config(&config_root).await else {
         return Vec::new();
     };
     let mounted_prefixes = fed.mount_prefixes();
@@ -124,13 +136,14 @@ mod tests {
     use super::*;
     use tedge_test_utils::fs::TempTedgeDir;
 
-    #[test]
-    fn mapper_keys_are_completed_for_mapper_directories_and_builtin_clouds() {
+    #[tokio::test]
+    async fn mapper_keys_are_completed_for_mapper_directories_and_builtin_clouds() {
         let dir = TempTedgeDir::new();
         dir.file("tedge.toml");
         dir.dir("mappers").dir("thingsboard").file("mapper.toml");
 
-        let completions: Vec<String> = mapper_key_completions(dir.std_path())
+        let completions: Vec<String> = mapper_key_completions_for_config_dir(dir.std_path())
+            .await
             .iter()
             .map(|c| c.get_value().to_string_lossy().into_owned())
             .collect();
@@ -151,8 +164,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn readable_and_writable_key_completions_include_core_keys() {
+    // Completion blocks on the runtime, which needs more than one thread
+    #[tokio::test(flavor = "multi_thread")]
+    async fn readable_and_writable_key_completions_include_core_keys() {
         for completions in [
             FederatedReadableKey::completions(),
             FederatedWritableKey::completions(),

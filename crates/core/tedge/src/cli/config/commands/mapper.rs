@@ -1,10 +1,8 @@
-use camino::Utf8Path;
-use camino::Utf8PathBuf;
-
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use tedge_config::TEdgeConfig;
 use tedge_config_engine::ops::Action;
+use tedge_utils::paths::TedgePaths;
 
 pub struct MapperGetConfigCommand {
     pub key: String,
@@ -17,7 +15,8 @@ impl Command for MapperGetConfigCommand {
     }
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        let fed = tedge_mapper_config::load_federated_config(tedge_config.root_dir())
+        let fed = tedge_mapper_config::load_federated_config(&tedge_config.config_root())
+            .await
             .map_err(anyhow::Error::new)?;
         match fed.read(&self.key).map_err(anyhow::Error::new)? {
             Some(value) => println!("{value}"),
@@ -77,49 +76,20 @@ impl Command for MapperMutateConfigCommand {
     }
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        mutate_mapper_key(tedge_config.root_dir(), &self.key, self.action.clone())
+        mutate_mapper_key(&tedge_config.config_root(), &self.key, self.action.clone())
+            .await
+            .map_err(|e| anyhow::Error::new(e).into())
     }
 }
 
-fn mutate_mapper_key(
-    config_dir: &Utf8Path,
+async fn mutate_mapper_key(
+    config_root: &TedgePaths,
     key: &str,
     action: Action,
-) -> Result<(), MaybeFancy<anyhow::Error>> {
-    // The directory has to exist before loading, as only existing directories are mounted
-    let created = ensure_builtin_mapper_dir(key, config_dir)?;
-    let result = tedge_mapper_config::load_federated_config(config_dir)
-        .and_then(|mut fed| fed.mutate(key, action));
-    if let (Err(_), Some(created)) = (&result, created) {
-        // This command created the directory and its write failed, so it holds nothing to keep
-        if let Err(e) = std::fs::remove_dir_all(&created) {
-            tracing::warn!("Failed to remove mapper directory {created}: {e}");
-        }
-    }
-    result.map_err(|e| anyhow::Error::new(e).into())
-}
-
-/// Creates the directory for a built-in mapper key if it doesn't exist yet,
-/// returning the outermost directory it created
-fn ensure_builtin_mapper_dir(
-    key: &str,
-    config_dir: &Utf8Path,
-) -> Result<Option<Utf8PathBuf>, MaybeFancy<anyhow::Error>> {
-    let Some(name) = tedge_mapper_config::extract_builtin_mapper_name(key) else {
-        return Ok(None);
-    };
-    let mappers = config_dir.join("mappers");
-    let dir = mappers.join(&name);
-    let created = if !mappers.exists() {
-        mappers
-    } else if !dir.exists() {
-        dir.clone()
-    } else {
-        return Ok(None);
-    };
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| anyhow::anyhow!("creating mapper directory {dir}: {e}"))?;
-    Ok(Some(created))
+) -> Result<(), tedge_config_engine::ConfigError> {
+    let mut fed = tedge_mapper_config::load_federated_config(config_root).await?;
+    tedge_mapper_config::mount_builtin_mapper(&mut fed, config_root, key)?;
+    fed.mutate(key, action).await
 }
 
 #[cfg(test)]
@@ -129,12 +99,16 @@ mod tests {
 
     #[rstest::rstest]
     #[case::unknown_key("mappers.c8y.prod.url", "c8y.example.com:8883")]
+    #[case::unknown_mapper("mappers.thingsboard.url", "tb.example.com:8883")]
     #[case::invalid_value("mappers.c8y.bridge.tls.enable", "on")]
     #[case::invalid_profile_value("mappers.c8y.profiles.prod.bridge.tls.enable", "on")]
-    fn a_rejected_write_creates_no_mapper_directory(#[case] key: &str, #[case] value: &str) {
+    #[tokio::test]
+    async fn a_rejected_write_creates_no_mapper_directory(#[case] key: &str, #[case] value: &str) {
         let dir = TempTedgeDir::new();
 
-        mutate_mapper_key(dir.path(), key, Action::Set(value.into())).unwrap_err();
+        mutate_mapper_key(&config_root(&dir), key, Action::Set(value.into()))
+            .await
+            .unwrap_err();
 
         assert!(
             !dir.path().join("mappers").exists(),
@@ -142,89 +116,54 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_rejected_write_keeps_an_existing_mapper_directory() {
+    #[tokio::test]
+    async fn a_rejected_write_keeps_an_existing_mapper_directory() {
         let dir = TempTedgeDir::new();
         dir.dir("mappers").dir("c8y");
 
         mutate_mapper_key(
-            dir.path(),
+            &config_root(&dir),
             "mappers.c8y.bridge.tls.enable",
             Action::Set("on".into()),
         )
+        .await
         .unwrap_err();
 
         assert!(dir.path().join("mappers/c8y").is_dir());
     }
 
-    #[test]
-    fn a_write_creates_the_mapper_file() {
+    #[tokio::test]
+    async fn a_write_creates_the_mapper_file() {
         let dir = TempTedgeDir::new();
 
         mutate_mapper_key(
-            dir.path(),
+            &config_root(&dir),
             "mappers.c8y.url",
             Action::Set("c8y.example.com:8883".into()),
         )
+        .await
         .unwrap();
 
         assert!(dir.path().join("mappers/c8y/mapper.toml").is_file());
     }
 
-    #[test]
-    fn creates_base_mapper_directory() {
+    #[tokio::test]
+    async fn a_write_to_a_profile_creates_only_the_profiled_mapper_file() {
         let dir = TempTedgeDir::new();
-        let config_dir = dir.path();
 
-        ensure_builtin_mapper_dir("mappers.c8y.url", config_dir).unwrap();
+        mutate_mapper_key(
+            &config_root(&dir),
+            "mappers.c8y.profiles.prod.url",
+            Action::Set("c8y.example.com:8883".into()),
+        )
+        .await
+        .unwrap();
 
-        assert!(config_dir.join("mappers/c8y").is_dir());
+        assert!(dir.path().join("mappers/c8y.prod/mapper.toml").is_file());
+        assert!(!dir.path().join("mappers/c8y").exists());
     }
 
-    #[test]
-    fn creates_profiled_mapper_directory() {
-        let dir = TempTedgeDir::new();
-        let config_dir = dir.path();
-
-        ensure_builtin_mapper_dir("mappers.c8y.profiles.prod.url", config_dir).unwrap();
-
-        assert!(
-            config_dir.join("mappers/c8y.prod").is_dir(),
-            "should create mappers/c8y.prod/, not mappers/c8y/"
-        );
-        assert!(
-            !config_dir.join("mappers/c8y").exists(),
-            "should not create mappers/c8y/ for a profiled key"
-        );
-    }
-
-    #[test]
-    fn key_without_profiles_creates_no_profile_directory() {
-        let dir = TempTedgeDir::new();
-        let config_dir = dir.path();
-
-        ensure_builtin_mapper_dir("mappers.c8y.prod.url", config_dir).unwrap();
-
-        assert!(!config_dir.join("mappers/c8y.prod").exists());
-    }
-
-    #[test]
-    fn skips_non_builtin_mapper() {
-        let dir = TempTedgeDir::new();
-        let config_dir = dir.path();
-
-        ensure_builtin_mapper_dir("mappers.thingsboard.url", config_dir).unwrap();
-
-        assert!(!config_dir.join("mappers/thingsboard").exists());
-    }
-
-    #[test]
-    fn skips_non_mapper_key() {
-        let dir = TempTedgeDir::new();
-        let config_dir = dir.path();
-
-        ensure_builtin_mapper_dir("device.id", config_dir).unwrap();
-
-        assert!(!config_dir.join("mappers").exists());
+    fn config_root(dir: &TempTedgeDir) -> TedgePaths {
+        TedgePaths::from_root_with_defaults(dir.path(), "", "")
     }
 }
