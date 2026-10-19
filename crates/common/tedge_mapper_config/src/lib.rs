@@ -13,6 +13,7 @@ pub use schema::extract_builtin_mapper_name;
 pub use schema::is_builtin_mapper_name;
 pub use schema::load_federated_config;
 pub use schema::mapper_key_from_dir_key;
+pub use schema::mount_builtin_mapper;
 pub use schema::MapperConfig;
 pub use schema::MapperConfigDto;
 pub use schema::RootStubConfig;

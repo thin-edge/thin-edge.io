@@ -1,5 +1,4 @@
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 use std::collections::HashMap;
 use tedge_config_engine::federated::FederatedConfig;
 use tedge_config_engine::ops::Action;
@@ -11,6 +10,8 @@ use tedge_config_engine::EnvOverrides;
 use tedge_config_engine::KeyEntry;
 use tedge_config_engine::RootDependency;
 use tedge_config_engine::RootResolver;
+use tedge_utils::paths::ManagedFile;
+use tedge_utils::paths::TedgePaths;
 
 pub use mapper::MapperConfig;
 pub use mapper::MapperConfigDto;
@@ -113,10 +114,8 @@ pub fn is_builtin_mapper_name(name: &str) -> bool {
 /// Generates completion entries for a built-in mapper that has no directory yet
 pub fn builtin_mapper_entries(config_dir: &Utf8Path, name: &str) -> Vec<KeyEntry> {
     let mgr = ConfigManager::from_schema::<MapperConfig>(config_dir.as_std_path());
-    let toml_path = config_dir.join("mappers").join(name).join("mapper.toml");
-    let ops = TypedConfigOps::<MapperConfigDto>::new(mgr, toml_path);
     let prefix = format!("mappers.{name}.");
-    ops.entries()
+    mgr.key_entries::<MapperConfigDto>()
         .into_iter()
         .map(|e| KeyEntry {
             key: format!("{prefix}{}", e.key),
@@ -145,11 +144,11 @@ pub fn extract_builtin_mapper_name(key: &str) -> Option<String> {
 }
 
 /// Turns a `tedge mapper config get` key such as `c8y.prod.url` into its `mappers.*` key
-pub fn mapper_key_from_dir_key(key: &str, config_dir: &Utf8Path) -> String {
-    let mut dirs = mapper_dirs(config_dir);
+pub async fn mapper_key_from_dir_key(key: &str, config_root: &TedgePaths) -> String {
+    let mut dirs = mapper_dirs(config_root).await;
     // Longest first, so `c8y.prod.url` matches `c8y.prod` rather than `c8y`
-    dirs.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
-    for (name, _) in dirs {
+    dirs.sort_by_key(|name| std::cmp::Reverse(name.len()));
+    for name in dirs {
         if let Some(rest) = key.strip_prefix(&name).and_then(|r| r.strip_prefix('.')) {
             return format!("{}{rest}", mount_prefix(&name));
         }
@@ -170,39 +169,42 @@ fn mount_prefix(dir_name: &str) -> String {
 }
 
 /// The mapper directories under `{config_dir}/mappers/`, sorted by name
-fn mapper_dirs(config_dir: &Utf8Path) -> Vec<(String, Utf8PathBuf)> {
-    let Ok(entries) = config_dir.join("mappers").read_dir_utf8() else {
+async fn mapper_dirs(config_root: &TedgePaths) -> Vec<String> {
+    let Ok(mappers) = config_root.dir("mappers") else {
         return Vec::new();
     };
-    let mut dirs: Vec<_> = entries
-        .flatten()
-        .filter(|entry| entry.path().is_dir())
-        .map(|entry| (entry.file_name().to_owned(), entry.into_path()))
-        .collect();
+    let mut dirs = mappers.subdirectories().await.unwrap_or_default();
     dirs.sort();
     dirs
 }
 
 /// Assembles a `FederatedConfig` from the root `tedge.toml` and all
 /// mapper directories discovered under `{config_dir}/mappers/`.
-pub fn load_federated_config(config_dir: &Utf8Path) -> Result<FederatedConfig, ConfigError> {
-    load_federated_config_with_env(config_dir, &EnvOverrides::from_env())
+pub async fn load_federated_config(
+    config_root: &TedgePaths,
+) -> Result<FederatedConfig, ConfigError> {
+    load_federated_config_with_env(config_root, &EnvOverrides::from_env()).await
 }
 
-pub(crate) fn load_federated_config_with_env(
-    config_dir: &Utf8Path,
+pub(crate) async fn load_federated_config_with_env(
+    config_root: &TedgePaths,
     env: &EnvOverrides,
 ) -> Result<FederatedConfig, ConfigError> {
+    let config_dir = config_root.root();
     let mut fed = FederatedConfig::new(config_dir.as_std_path());
 
     let root_mgr = ConfigManager::from_schema::<RootStubConfig>(config_dir.as_std_path());
-    let root_ops =
-        TypedConfigOps::<RootStubConfigDto>::new(root_mgr, config_dir.join("tedge.toml"));
+    let root_ops = TypedConfigOps::<RootStubConfigDto>::load(
+        root_mgr,
+        managed_file(config_root, "tedge.toml"),
+    )
+    .await;
     fed.mount("", Box::new(root_ops))?;
 
-    let mappers: Vec<_> = mapper_dirs(config_dir)
+    let mappers: Vec<_> = mapper_dirs(config_root)
+        .await
         .into_iter()
-        .map(|(name, dir)| {
+        .map(|name| {
             let mount_prefix = mount_prefix(&name);
             let env_prefix = format!(
                 "TEDGE_{}",
@@ -210,7 +212,6 @@ pub(crate) fn load_federated_config_with_env(
             );
             MapperMount {
                 name,
-                dir,
                 mount_prefix,
                 env_prefix,
             }
@@ -225,7 +226,7 @@ pub(crate) fn load_federated_config_with_env(
     }
 
     for MapperMount {
-        dir,
+        name,
         mount_prefix,
         env_prefix,
         ..
@@ -246,7 +247,8 @@ pub(crate) fn load_federated_config_with_env(
             continue;
         }
         let mut mapper_ops =
-            TypedConfigOps::<MapperConfigDto>::new(mapper_mgr, dir.join("mapper.toml"));
+            TypedConfigOps::<MapperConfigDto>::load(mapper_mgr, mapper_file(config_root, name))
+                .await;
         mapper_ops.apply_env_with_prefix(env_prefix, env);
         fed.mount(mount_prefix, Box::new(mapper_ops))?;
     }
@@ -254,10 +256,38 @@ pub(crate) fn load_federated_config_with_env(
     Ok(fed)
 }
 
+/// Mounts the built-in mapper that `key` belongs to if it has no directory yet,
+/// so a write to it creates the directory along with the file
+pub fn mount_builtin_mapper(
+    fed: &mut FederatedConfig,
+    config_root: &TedgePaths,
+    key: &str,
+) -> Result<(), ConfigError> {
+    let Some(name) = extract_builtin_mapper_name(key) else {
+        return Ok(());
+    };
+    let prefix = mount_prefix(&name);
+    if fed.mount_prefixes().contains(&prefix) {
+        return Ok(());
+    }
+    let mgr = ConfigManager::from_schema::<MapperConfig>(config_root.root().as_std_path());
+    let ops = TypedConfigOps::<MapperConfigDto>::empty(mgr, mapper_file(config_root, &name));
+    fed.mount(&prefix, Box::new(ops))
+}
+
+fn mapper_file(config_root: &TedgePaths, name: &str) -> ManagedFile {
+    managed_file(config_root, format!("mappers/{name}/mapper.toml"))
+}
+
+fn managed_file(config_root: &TedgePaths, path: impl AsRef<Utf8Path>) -> ManagedFile {
+    config_root
+        .file(path)
+        .expect("a relative path without `..` stays inside the config root")
+}
+
 /// Where a mapper directory is mounted, and the prefix of its environment variables
 struct MapperMount {
     name: String,
-    dir: Utf8PathBuf,
     mount_prefix: String,
     env_prefix: String,
 }
@@ -282,12 +312,13 @@ impl CollidingMapper {
     }
 }
 
+#[async_trait::async_trait]
 impl ConfigOps for CollidingMapper {
     fn read(&self, _key: &str, _root: RootResolver<'_>) -> Result<Option<String>, ConfigError> {
         Err(self.error())
     }
 
-    fn mutate(&mut self, _key: &str, _action: Action) -> Result<(), ConfigError> {
+    async fn mutate(&mut self, _key: &str, _action: Action) -> Result<(), ConfigError> {
         Err(self.error())
     }
 

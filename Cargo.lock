@@ -5548,13 +5548,16 @@ dependencies = [
 name = "tedge_config_engine"
 version = "2.0.1"
 dependencies = [
+ "async-trait",
  "camino",
  "facet",
  "facet-reflect",
  "facet-toml",
  "tedge_config_engine-macro",
+ "tedge_utils",
  "tempfile",
  "thiserror 2.0.12",
+ "tokio",
  "toml 0.9.6",
 ]
 
@@ -5581,6 +5584,7 @@ dependencies = [
  "facet-value",
  "tedge_config_engine",
  "tedge_config_engine-impl",
+ "tedge_utils",
  "trybuild",
 ]
 
@@ -5802,6 +5806,7 @@ name = "tedge_mapper_config"
 version = "2.0.1"
 dependencies = [
  "assert_matches",
+ "async-trait",
  "camino",
  "facet",
  "facet-toml",
@@ -5811,6 +5816,8 @@ dependencies = [
  "tedge_config_engine",
  "tedge_config_engine-macro",
  "tedge_test_utils",
+ "tedge_utils",
+ "tokio",
  "toml 0.9.6",
 ]
 

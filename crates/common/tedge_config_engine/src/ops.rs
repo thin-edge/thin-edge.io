@@ -1,7 +1,7 @@
 use camino::Utf8Path;
-use camino::Utf8PathBuf;
 
 use facet::Facet;
+use tedge_utils::paths::ManagedFile;
 
 use crate::defaults::EnvOverrides;
 use crate::defaults::RootDependency;
@@ -20,14 +20,15 @@ pub enum Action {
 }
 
 /// Object-safe boundary used to mount different DTO types in one config space.
-pub trait ConfigOps {
+#[async_trait::async_trait]
+pub trait ConfigOps: Send + Sync {
     fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError>;
     /// Reloads the persisted configuration, applies `action`, and saves it.
     ///
     /// Any environment overrides previously applied to this source are
     /// deliberately discarded before the mutation so they cannot affect the
     /// value being changed or leak into the backing file.
-    fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError>;
+    async fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError>;
     fn entries(&self) -> Vec<KeyEntry>;
     /// The `from_root` references this source's schema declares.
     fn root_dependencies(&self) -> Vec<RootDependency>;
@@ -37,7 +38,7 @@ pub trait ConfigOps {
 pub struct TypedConfigOps<T> {
     manager: ConfigManager,
     dto: T,
-    path: Utf8PathBuf,
+    file: ManagedFile,
     /// Why the file could not be loaded, returned by reads so one broken file
     /// doesn't stop other sources mounted alongside it from loading
     load_error: Option<ConfigError>,
@@ -47,20 +48,30 @@ impl<T> TypedConfigOps<T>
 where
     T: for<'a> Facet<'a> + Default,
 {
-    /// Loads a DTO from `path`, or starts from `T::default()` if it does not exist.
+    /// Loads a DTO from `file`, or starts from `T::default()` if it does not exist.
     ///
     /// A file that cannot be loaded is not an error here: reads from this
     /// source return the load error instead, and writes reload the file.
-    pub fn new(manager: ConfigManager, path: Utf8PathBuf) -> Self {
-        let (dto, load_error) = match load_dto(&path, &manager, None) {
+    pub async fn load(manager: ConfigManager, file: ManagedFile) -> Self {
+        let (dto, load_error) = match load_dto(&file, &manager, None).await {
             Ok(dto) => (dto, None),
             Err(e) => (T::default(), Some(e)),
         };
         Self {
             manager,
             dto,
-            path,
+            file,
             load_error,
+        }
+    }
+
+    /// Starts from `T::default()` without reading `file`, for a file that doesn't exist yet
+    pub fn empty(manager: ConfigManager, file: ManagedFile) -> Self {
+        Self {
+            manager,
+            dto: T::default(),
+            file,
+            load_error: None,
         }
     }
 
@@ -102,9 +113,9 @@ where
         &self.manager
     }
 
-    fn save(&self, dto: &T) -> Result<(), ConfigError> {
+    async fn save(&self, dto: &T) -> Result<(), ConfigError> {
         let write_error = |reason: String| ConfigError::WriteFile {
-            path: self.path.clone(),
+            path: self.file.path().to_owned(),
             reason,
         };
         let content = facet_toml::to_string(dto).map_err(|e| write_error(e.to_string()))?;
@@ -114,35 +125,41 @@ where
             .parse()
             .map_err(|e: toml::de::Error| write_error(e.to_string()))?;
         let content = toml::to_string(&table).map_err(|e| write_error(e.to_string()))?;
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| write_error(format!("creating {parent}: {e}")))?;
-        }
-        std::fs::write(&self.path, content).map_err(|e| write_error(e.to_string()))
+        // Like tedge_config, a file that can't be given tedge ownership is still written
+        let file = self.file.clone().warn_and_ignore_permission_errors();
+        let parent = file.parent();
+        parent
+            .ensure()
+            .await
+            .map_err(|e| write_error(format!("creating {parent}: {e}")))?;
+        file.replace_atomic(content)
+            .await
+            .map_err(|e| write_error(e.to_string()))
     }
 }
 
+#[async_trait::async_trait]
 impl<T> ConfigOps for TypedConfigOps<T>
 where
-    T: for<'a> Facet<'a> + Default,
+    T: for<'a> Facet<'a> + Default + Send + Sync,
 {
     fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError> {
         self.check_loaded()?;
         self.manager.read_with_root(&self.dto, key, root)
     }
 
-    fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError> {
+    async fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError> {
         self.manager.check_read_only(key)?;
         // The DTO only holds schema keys, so saving it would delete any other key in the file
         let known_keys = self.manager.keys::<T>();
-        let mut dto = load_dto(&self.path, &self.manager, Some(&known_keys))?;
+        let mut dto = load_dto(&self.file, &self.manager, Some(&known_keys)).await?;
         match action {
             Action::Set(ref value) => self.manager.set(&mut dto, key, value)?,
             Action::Unset => self.manager.unset(&mut dto, key)?,
             Action::Add(ref value) => self.manager.add(&mut dto, key, value)?,
             Action::Remove(ref value) => self.manager.remove(&mut dto, key, value)?,
         }
-        self.save(&dto)?;
+        self.save(&dto).await?;
         self.dto = dto;
         self.load_error = None;
         Ok(())
@@ -157,13 +174,18 @@ where
     }
 }
 
-/// Loads the DTO from `path`, first refusing a file with keys outside `known_keys` if given
-fn load_dto<T: for<'a> Facet<'a> + Default>(
-    path: &Utf8Path,
+/// Loads the DTO from `file`, first refusing a file with keys outside `known_keys` if given
+async fn load_dto<T: for<'a> Facet<'a> + Default>(
+    file: &ManagedFile,
     manager: &ConfigManager,
     known_keys: Option<&[String]>,
 ) -> Result<T, ConfigError> {
-    let Some(content) = read_file(path)? else {
+    let path = file.path();
+    let Some(content) = file
+        .read_to_string()
+        .await
+        .map_err(|e| invalid_file(path, e.to_string()))?
+    else {
         return Ok(T::default());
     };
     let table = parse_file(path, &content)?;
@@ -171,15 +193,6 @@ fn load_dto<T: for<'a> Facet<'a> + Default>(
         check_no_unknown_keys(path, &table, known_keys)?;
     }
     parse_dto(path, manager, &content, &table)
-}
-
-/// Reads the config file, or returns `None` if it doesn't exist
-fn read_file(path: &Utf8Path) -> Result<Option<String>, ConfigError> {
-    match std::fs::read_to_string(path) {
-        Ok(content) => Ok(Some(content)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(invalid_file(path, e.to_string())),
-    }
 }
 
 /// Parses the file as TOML, which facet_toml alone does not check strictly

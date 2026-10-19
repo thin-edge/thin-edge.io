@@ -21,16 +21,16 @@ impl Command for ListConfigCommand {
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
         if self.is_doc {
-            print_config_doc(&tedge_config, self.filter.as_deref());
+            print_config_doc(&tedge_config, self.filter.as_deref()).await;
         } else {
-            print_config_list(&tedge_config, self.is_all, self.filter.as_deref())?;
+            print_config_list(&tedge_config, self.is_all, self.filter.as_deref()).await?;
         }
 
         Ok(())
     }
 }
 
-fn print_config_list(
+async fn print_config_list(
     config: &TEdgeConfig,
     all: bool,
     filter: Option<&str>,
@@ -51,7 +51,7 @@ fn print_config_list(
     }
     #[cfg(feature = "mapper-config")]
     {
-        let mappers = list_mapper_config(config.root_dir(), filter);
+        let mappers = list_mapper_config(&config.config_root(), filter).await;
         for line in mappers.values {
             println!("{line}");
         }
@@ -89,9 +89,12 @@ struct MapperListing {
 }
 
 #[cfg(feature = "mapper-config")]
-fn list_mapper_config(config_dir: &camino::Utf8Path, filter: Option<&str>) -> MapperListing {
+async fn list_mapper_config(
+    config_root: &tedge_utils::paths::TedgePaths,
+    filter: Option<&str>,
+) -> MapperListing {
     let mut listing = MapperListing::default();
-    let fed = match tedge_mapper_config::load_federated_config(config_dir) {
+    let fed = match tedge_mapper_config::load_federated_config(config_root).await {
         Ok(fed) => fed,
         Err(e) => {
             listing
@@ -136,7 +139,7 @@ fn normalise_doc_comment(comment: &str) -> String {
     normalised
 }
 
-fn print_config_doc(config: &TEdgeConfig, filter: Option<&str>) {
+async fn print_config_doc(config: &TEdgeConfig, filter: Option<&str>) {
     #[cfg_attr(not(feature = "mapper-config"), expect(unused_mut))]
     let mut entries: Vec<DocEntry> = READABLE_KEYS
         .iter()
@@ -164,7 +167,7 @@ fn print_config_doc(config: &TEdgeConfig, filter: Option<&str>) {
         .collect();
 
     #[cfg(feature = "mapper-config")]
-    match tedge_mapper_config::load_federated_config(config.root_dir()) {
+    match tedge_mapper_config::load_federated_config(&config.config_root()).await {
         Ok(fed) => {
             for entry in fed.all_entries() {
                 if !entry.key.starts_with("mappers.") {
@@ -305,8 +308,8 @@ mod tests {
     }
 
     #[cfg(feature = "mapper-config")]
-    #[test]
-    fn a_broken_mapper_file_is_reported_once_while_other_mappers_are_listed() {
+    #[tokio::test]
+    async fn a_broken_mapper_file_is_reported_once_while_other_mappers_are_listed() {
         let config_dir = tedge_test_utils::fs::TempTedgeDir::new();
         let mappers = config_dir.dir("mappers");
         mappers
@@ -318,7 +321,9 @@ mod tests {
             .file("mapper.toml")
             .with_raw_content("url = \"tb.example.com:8883\"\n");
 
-        let listing = list_mapper_config(config_dir.path(), None);
+        let config_root =
+            tedge_utils::paths::TedgePaths::from_root_with_defaults(config_dir.path(), "", "");
+        let listing = list_mapper_config(&config_root, None).await;
 
         let broken_file = config_dir.path().join("mappers/broken/mapper.toml");
         assert_eq!(listing.warnings.len(), 1, "{:?}", listing.warnings);

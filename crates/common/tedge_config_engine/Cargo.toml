@@ -8,11 +8,14 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
+async-trait = { workspace = true }
 camino = { workspace = true }
 facet = { workspace = true }
 facet-reflect = { workspace = true }
 facet-toml = { workspace = true }
+tedge_utils = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
 toml = { workspace = true }
 
 [dev-dependencies]
