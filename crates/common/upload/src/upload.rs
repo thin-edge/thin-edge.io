@@ -687,12 +687,13 @@ mod tests {
         let url = UploadInfo::new(&target_url).set_method(UploadMethod::PUT);
 
         let mut uploader = Uploader::new(file.path_buf(), None, CloudHttpConfig::test_value());
-        // tweaked to exactly 1 retry
+        // tweaked to exactly 1 retry: the second interval (5s) always exceeds
+        // max_elapsed_time, which is generous so a slow first attempt still retries
         uploader.set_backoff(ExponentialBackoff {
             initial_interval: Duration::from_millis(5),
-            multiplier: 10.0,
+            multiplier: 1000.0,
             randomization_factor: f64::EPSILON,
-            max_elapsed_time: Some(Duration::from_millis(50)),
+            max_elapsed_time: Some(Duration::from_secs(1)),
             ..Default::default()
         });
         uploader.upload(&url).await
