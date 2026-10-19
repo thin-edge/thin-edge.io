@@ -10,7 +10,7 @@ Test Tags           theme:c8y    theme:configuration    theme:workflows
 
 
 *** Variables ***
-${DEVICE_SN}        None
+${DEVICE_SN}    None
 
 
 *** Test Cases ***

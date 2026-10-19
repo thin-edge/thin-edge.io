@@ -158,9 +158,17 @@ tedge connect --test fails if c8y-bridge.conf is missing and mosquitto bridge is
 
     # but after a restart it should fail
     Execute Command    sudo systemctl restart mosquitto
-    ${output}=    Execute Command    sudo tedge connect c8y --test    stdout=${False}    stderr=${True}    exp_exit_code=1
-    Should Contain    ${output}    warning: The bridge is not currently configured; run "tedge reconnect" to establish a new connection
-    Should Contain    ${output}    error: Failed to verify device is connected to Cumulocity: Connection to Cumulocity is not healthy
+    ${output}=    Execute Command
+    ...    sudo tedge connect c8y --test
+    ...    stdout=${False}
+    ...    stderr=${True}
+    ...    exp_exit_code=1
+    Should Contain
+    ...    ${output}
+    ...    warning: The bridge is not currently configured; run "tedge reconnect" to establish a new connection
+    Should Contain
+    ...    ${output}
+    ...    error: Failed to verify device is connected to Cumulocity: Connection to Cumulocity is not healthy
 
 
 *** Keywords ***
