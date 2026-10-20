@@ -17,6 +17,24 @@ Check retained alarms
     minor
     warning
 
+Alarm cleared while the mapper is down is cleared on mapper startup
+    Execute Command
+    ...    tedge mqtt pub -r te/device/main///a/clearedWhileDown '{"text":"Alarm cleared while mapper is down","severity":"major"}'
+    Device Should Have Alarm/s
+    ...    minimum=1
+    ...    maximum=1
+    ...    expected_text=Alarm cleared while mapper is down
+    ...    type=clearedWhileDown
+    ...    resolved=false
+
+    # The clear is published with QoS 0 so it is not queued in the mapper's persistent session.
+    # The mapper can then only detect it from the retained state, by comparing it with its internal record of alarms
+    Stop Service    tedge-mapper-c8y
+    Execute Command    tedge mqtt pub -r -q 0 te/device/main///a/clearedWhileDown ''
+    Start Service    tedge-mapper-c8y
+
+    Device Should Not Have Alarm/s    type=clearedWhileDown
+
 
 *** Keywords ***
 Custom Setup
