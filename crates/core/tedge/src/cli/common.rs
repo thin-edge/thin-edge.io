@@ -9,6 +9,8 @@ use tedge_config::tedge_toml::ProfileName;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::TEdgeConfig;
 use tedge_system_services::SystemService;
+use tedge_system_services::SystemServiceManager;
+use tracing::debug;
 
 #[derive(clap::Subcommand, Debug, Clone, PartialEq, Eq)]
 #[clap(rename_all = "snake_case")]
@@ -416,12 +418,149 @@ async fn profile_completions_for_config_dir(dir: impl AsRef<Path>) -> Vec<Comple
         .collect()
 }
 
+/// The init service that runs all the thin-edge components in one process (`tedge run all`)
+pub const RUN_ALL_SERVICE: &str = "tedge";
+
+/// Returns true when the thin-edge components run inside `tedge run all`,
+/// i.e. when the [RUN_ALL_SERVICE] init service is active.
+///
+/// A failure to query the init system is treated as not active,
+/// so the caller falls back to managing the per-component services.
+pub async fn is_run_all_active(service_manager: &dyn SystemServiceManager) -> bool {
+    match service_manager
+        .is_service_running(SystemService::new(RUN_ALL_SERVICE))
+        .await
+    {
+        Ok(active) => active,
+        Err(err) => {
+            debug!("Failed to check whether the '{RUN_ALL_SERVICE}' service is active: {err}");
+            false
+        }
+    }
+}
+
+/// A [SystemServiceManager] recording the actions it is asked to run, for unit tests
+#[cfg(test)]
+pub(crate) mod test_service_manager {
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+    use std::sync::Mutex;
+    use tedge_system_services::ExecCommand;
+    use tedge_system_services::ServiceCommandOutcome;
+    use tedge_system_services::SystemService;
+    use tedge_system_services::SystemServiceError;
+    use tedge_system_services::SystemServiceManager;
+
+    #[derive(Debug, Default)]
+    pub struct RecordingServiceManager {
+        /// Services reported as active; `None` makes every status query fail
+        pub active: Option<Vec<String>>,
+        /// The actions run so far, formatted as `<action> <service>`
+        pub actions: Mutex<Vec<String>>,
+    }
+
+    impl RecordingServiceManager {
+        pub fn with_active(services: &[&str]) -> Self {
+            Self {
+                active: Some(services.iter().map(|s| s.to_string()).collect()),
+                ..Self::default()
+            }
+        }
+
+        pub fn failing_status_queries() -> Self {
+            Self::default()
+        }
+
+        pub fn actions(&self) -> Vec<String> {
+            self.actions.lock().unwrap().clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SystemServiceManager for RecordingServiceManager {
+        fn name(&self) -> &str {
+            "test"
+        }
+
+        async fn check_operational(&self) -> Result<(), SystemServiceError> {
+            Ok(())
+        }
+
+        fn action_command(
+            &self,
+            action: &str,
+            service: SystemService<'_>,
+        ) -> Result<ExecCommand, SystemServiceError> {
+            Err(SystemServiceError::ServiceManagerUnavailable {
+                cmd: format!("{action} {service}"),
+                name: "test".to_string(),
+            })
+        }
+
+        async fn run_action(
+            &self,
+            action: &str,
+            service: SystemService<'_>,
+        ) -> Result<ServiceCommandOutcome, SystemServiceError> {
+            let service_command = format!("{action} {service}");
+            self.actions.lock().unwrap().push(service_command.clone());
+            Ok(ServiceCommandOutcome {
+                service_command,
+                status: ExitStatus::from_raw(0),
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        }
+
+        async fn is_service_running(
+            &self,
+            service: SystemService<'_>,
+        ) -> Result<bool, SystemServiceError> {
+            match &self.active {
+                Some(active) => Ok(active.contains(&service.to_string())),
+                None => Err(SystemServiceError::ServiceManagerUnavailable {
+                    cmd: format!("is_active {service}"),
+                    name: "test".to_string(),
+                }),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
+    use crate::cli::common::is_run_all_active;
     use crate::cli::common::mapper_config_key_completions_for_config_dir;
     use crate::cli::common::profile_completions_for_config_dir;
+    use crate::cli::common::test_service_manager::RecordingServiceManager;
+
+    #[tokio::test]
+    async fn run_all_is_active_when_the_tedge_service_is_active() {
+        let manager = RecordingServiceManager::with_active(&["mosquitto", "tedge"]);
+        assert!(is_run_all_active(&manager).await);
+    }
+
+    #[tokio::test]
+    async fn run_all_is_not_active_when_only_component_services_are_active() {
+        let manager =
+            RecordingServiceManager::with_active(&["mosquitto", "tedge-agent", "tedge-mapper-c8y"]);
+        assert!(!is_run_all_active(&manager).await);
+    }
+
+    #[tokio::test]
+    async fn run_all_is_not_active_when_the_status_query_fails() {
+        let manager = RecordingServiceManager::failing_status_queries();
+        assert!(!is_run_all_active(&manager).await);
+    }
+
+    #[tokio::test]
+    async fn checking_run_all_runs_no_service_action() {
+        let manager = RecordingServiceManager::with_active(&["tedge"]);
+        is_run_all_active(&manager).await;
+        assert!(manager.actions().is_empty());
+    }
 
     #[tokio::test]
     async fn profile_completions_include_tedge_toml_profile_names() {

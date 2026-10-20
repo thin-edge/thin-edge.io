@@ -8,8 +8,10 @@ use crate::bridge::BridgeConfig;
 use crate::bridge::BridgeLocation;
 use crate::bridge::CommonMosquittoConfig;
 use crate::bridge::TEDGE_BRIDGE_CONF_DIR_PATH;
+use crate::cli::common::is_run_all_active;
 use crate::cli::common::Cloud;
 use crate::cli::common::MaybeBorrowedCloud;
+use crate::cli::common::RUN_ALL_SERVICE;
 #[cfg(feature = "c8y")]
 use crate::cli::connect::c8y::*;
 use crate::cli::connect::*;
@@ -254,10 +256,13 @@ impl ConnectCommand {
             Err(err) => return Err(err),
         }
 
+        // When the components run inside `tedge run all`, the per-component services are not used
+        let run_all = is_run_all_active(&*self.service_manager).await;
+
         if bridge_config.use_mapper && bridge_config.bridge_location == BridgeLocation::BuiltIn {
             // If the bridge is built in, the mapper needs to be running with the new configuration
             // to be connected
-            self.start_mapper().await;
+            self.start_mapper(run_all).await;
         }
 
         let mut connection_check_success = true;
@@ -283,7 +288,7 @@ impl ConnectCommand {
         if bridge_config.use_mapper && bridge_config.bridge_location == BridgeLocation::Mosquitto {
             // If the bridge is in mosquitto, the mapper should only start once the cloud connection
             // is verified
-            self.start_mapper().await;
+            self.start_mapper(run_all).await;
         }
 
         match &self.cloud {
@@ -294,7 +299,10 @@ impl ConnectCommand {
                         .tenant_matches_configured_url(tedge_config, bridge_config)
                         .await;
                 }
-                enable_software_management(bridge_config, &*self.service_manager).await;
+                // Under `tedge run all`, the agent runs in the process restarted with the mapper
+                if !run_all {
+                    enable_software_management(bridge_config, &*self.service_manager).await;
+                }
             }
             #[cfg(feature = "aws")]
             Cloud::Aws(_) => (),
@@ -539,8 +547,19 @@ impl ConnectCommand {
         path_exists(&bridge_conf_path).await
     }
 
-    async fn start_mapper(&self) {
-        if which_async("tedge-mapper").await.is_err() {
+    async fn start_mapper(&self, run_all: bool) {
+        if run_all {
+            // `tedge run all` selects and configures its mappers when it starts,
+            // so the whole process has to be restarted to apply the new connection
+            let spinner = Spinner::start(format!("Restarting {RUN_ALL_SERVICE} (tedge run all)"));
+            let _ = spinner.finish(
+                restart_and_enable_service(
+                    &*self.service_manager,
+                    SystemService::new(RUN_ALL_SERVICE),
+                )
+                .await,
+            );
+        } else if which_async("tedge-mapper").await.is_err() {
             warning!("tedge-mapper is not installed.");
         } else {
             let spinner = Spinner::start(format!("Enabling {}", self.cloud.mapper_service()));
@@ -1255,6 +1274,15 @@ async fn start_and_enable_service(
     Ok(())
 }
 
+async fn restart_and_enable_service(
+    service_manager: &dyn SystemServiceManager,
+    service: SystemService<'_>,
+) -> anyhow::Result<()> {
+    service_manager.restart_service(service).await?;
+    service_manager.enable_service(service).await?;
+    Ok(())
+}
+
 // To preserve error chain and not discard other errors we need to ignore error here
 // (don't use '?' with the call to this function to preserve original error).
 pub fn clean_up(
@@ -1355,6 +1383,73 @@ async fn tenant_matches_configured_url(
 mod tests {
     use super::*;
     use mqtt_channel::QoS::AtLeastOnce;
+
+    #[cfg(feature = "c8y")]
+    mod start_mapper {
+        use super::*;
+        use crate::cli::common::test_service_manager::RecordingServiceManager;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        #[tokio::test]
+        async fn run_all_restarts_and_enables_only_the_tedge_service() {
+            let manager = Arc::new(RecordingServiceManager::with_active(&["tedge"]));
+            let cmd = connect_command(manager.clone());
+
+            cmd.start_mapper(true).await;
+
+            assert_eq!(manager.actions(), ["restart tedge", "enable tedge"]);
+        }
+
+        #[tokio::test]
+        async fn connecting_under_run_all_restarts_tedge_instead_of_the_component_services() {
+            let ttd = TempTedgeDir::new();
+            let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
+            let cert_path = ttd
+                .file("test.crt")
+                .with_raw_content(&cert.cert.pem())
+                .path_buf();
+            let key_path = ttd
+                .file("test.key")
+                .with_raw_content(&cert.signing_key.serialize_pem())
+                .path_buf();
+            // An empty user and group keep the config files owned by the current user
+            ttd.file("system.toml")
+                .with_raw_content("user = ''\ngroup = ''\n");
+            ttd.file("tedge.toml").with_raw_content(&format!(
+                "c8y.url = \"example.com\"
+                c8y.device.cert_path = \"{cert_path}\"
+                c8y.device.key_path = \"{key_path}\""
+            ));
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+            let manager = Arc::new(RecordingServiceManager::with_active(&["tedge"]));
+            let mut cmd = connect_command(manager.clone());
+            cmd.offline_mode = true;
+            let bridge_config = bridge_config(&config, &cmd.cloud).await.unwrap();
+
+            cmd.connect_bridge(&config, &bridge_config).await.unwrap();
+
+            assert_eq!(
+                manager.actions(),
+                [
+                    "stop mosquitto",
+                    "restart mosquitto",
+                    "enable mosquitto",
+                    "restart tedge",
+                    "enable tedge"
+                ]
+            );
+        }
+
+        fn connect_command(service_manager: Arc<RecordingServiceManager>) -> ConnectCommand {
+            ConnectCommand {
+                cloud: Cloud::c8y(None),
+                is_test_connection: false,
+                offline_mode: false,
+                service_manager,
+                is_reconnect: true,
+            }
+        }
+    }
 
     mod is_bridge_health_up_message {
         use super::*;
