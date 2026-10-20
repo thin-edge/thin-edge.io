@@ -559,7 +559,7 @@ impl ConnectCommand {
                 )
                 .await,
             );
-        } else if which_async("tedge-mapper").await.is_err() {
+        } else if !self.service_manager.has_executable("tedge-mapper").await {
             warning!("tedge-mapper is not installed.");
         } else {
             let spinner = Spinner::start(format!("Enabling {}", self.cloud.mapper_service()));
@@ -1248,7 +1248,7 @@ async fn enable_software_management(
     service_manager: &dyn SystemServiceManager,
 ) {
     if bridge_config.use_agent {
-        if which_async("tedge-agent").await.is_ok() {
+        if service_manager.has_executable("tedge-agent").await {
             let spinner = Spinner::start("Enabling tedge-agent");
             let _ = spinner.finish(
                 start_and_enable_service(service_manager, SystemService::new("tedge-agent")).await,
@@ -1257,12 +1257,6 @@ async fn enable_software_management(
             println!("Info: Software management is not installed. So, skipping enabling related components.\n");
         }
     }
-}
-
-async fn which_async(name: &'static str) -> Result<std::path::PathBuf, which::Error> {
-    tokio::task::spawn_blocking(move || ::which::which(name))
-        .await
-        .unwrap()
 }
 
 async fn start_and_enable_service(
