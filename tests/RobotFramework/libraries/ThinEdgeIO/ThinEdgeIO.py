@@ -20,6 +20,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from robot.api import FatalError
 from robot.api.deco import keyword, library
 from robot.libraries.BuiltIn import BuiltIn
 from DeviceLibrary import DeviceLibrary, DeviceAdapter
@@ -895,6 +896,25 @@ class ThinEdgeIO(DeviceLibrary):
         Returns:
             str: Serial number
         """
+        if register and not skip_bootstrap:
+            # A missing Cumulocity config would otherwise only surface after long
+            # registration timeouts, and every subsequent test would fail the same way
+            missing = [
+                name
+                for name in ("C8Y_BASEURL", "C8Y_USER")
+                if not os.getenv(name, "").strip()
+            ]
+            if (
+                not os.getenv("C8Y_PASSWORD", "").strip()
+                and not os.getenv("C8Y_TOKEN", "").strip()
+            ):
+                missing.append("C8Y_PASSWORD (or C8Y_TOKEN)")
+            if missing:
+                raise FatalError(
+                    f"Missing Cumulocity environment variables: {', '.join(missing)}. "
+                    "Set them in tests/RobotFramework/.env (see devdata/env.template)"
+                )
+
         serial_sn = super().setup(
             skip_bootstrap=skip_bootstrap,
             bootstrap_args=bootstrap_args,
@@ -1258,7 +1278,11 @@ class ThinEdgeIO(DeviceLibrary):
 
     @keyword("Add Remote Access Passthrough Configuration")
     def add_remote_access_passthrough_configuration(
-        self, device: str = "", configuration_name: str = 'passthrough', port: int = 22, **kwargs
+        self,
+        device: str = "",
+        configuration_name: str = "passthrough",
+        port: int = 22,
+        **kwargs,
     ) -> str:
         """Add the Cumulocity Remote Access Passthrough configuration
         to a device
