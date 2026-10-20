@@ -34,10 +34,14 @@ on_timeout = { status = "failed", reason = "tedge-agent did not restart in time"
 
 [execute]
 script = "sudo -n tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
-# On restart, systemd waits for the service to stop and to start again, 90 seconds each by default
-timeout_second = 180
+# Longer than tedge service takes at most to terminate an action on timeout,
+# 240 seconds with its default --timeout and --forceful-timeout,
+# so that tedge service exits with 124 before this workflow kills it
+timeout_second = 300
 on_exit.0 = "successful"
-on_exit.1-255 = { status = "failed", reason = "The action failed, see the operation log for the reason" }
+on_exit.1-123 = { status = "failed", reason = "The action failed, see the operation log for the reason" }
+on_exit.124 = { status = "failed", reason = "The action did not complete in time" }
+on_exit.125-255 = { status = "failed", reason = "The action failed, see the operation log for the reason" }
 on_kill = { status = "failed", reason = "The action did not complete in time and was cancelled" }
 
 [successful]

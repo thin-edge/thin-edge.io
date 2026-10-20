@@ -105,19 +105,12 @@ pub enum Signal {
     SIGKILL,
 }
 
-/// Send a signal to a process, or to its whole process group when the process leads one
-pub fn terminate_process(pid: u32, signal_type: Signal) {
-    let pid: Pid = nix::unistd::Pid::from_raw(pid as nix::libc::pid_t);
+/// Send a signal to all the processes of a process group
+pub fn terminate_process_group(pgid: u32, signal_type: Signal) {
+    let pgid: Pid = nix::unistd::Pid::from_raw(pgid as nix::libc::pid_t);
     let signal = match signal_type {
         Signal::SIGTERM => nix::sys::signal::SIGTERM,
         Signal::SIGKILL => nix::sys::signal::SIGKILL,
     };
-    match nix::unistd::getpgid(Some(pid)) {
-        Ok(pgid) if pgid == pid => {
-            let _ = nix::sys::signal::killpg(pgid, signal);
-        }
-        _ => {
-            let _ = nix::sys::signal::kill(pid, signal);
-        }
-    }
+    let _ = nix::sys::signal::killpg(pgid, signal);
 }

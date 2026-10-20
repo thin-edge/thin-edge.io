@@ -1,5 +1,6 @@
 use crate::CommandLog;
 use std::ffi::OsStr;
+use std::future::Future;
 use std::io::Cursor;
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
@@ -7,7 +8,7 @@ use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
-use tedge_utils::signals::terminate_process;
+use tedge_utils::signals::terminate_process_group;
 use tedge_utils::signals::Signal;
 use tokio::io::AsyncBufRead;
 use tokio::io::AsyncBufReadExt as _;
@@ -21,6 +22,7 @@ pub enum CmdStatus {
     Successful,
     KilledWithSigterm,
     KilledWithSigKill,
+    KilledWithInterrupt,
 }
 #[derive(Debug)]
 pub struct LoggingChild {
@@ -35,14 +37,41 @@ impl LoggingChild {
         graceful_timeout: Duration,
         forceful_timeout: Duration,
     ) -> Result<Output, std::io::Error> {
+        let cmd_line = self.command_line.clone();
+        let outcome = self
+            .wait_for_output_or_terminate(
+                graceful_timeout,
+                forceful_timeout,
+                std::future::pending(),
+            )
+            .await
+            .map(|(output, status)| match status {
+                CmdStatus::Successful => output,
+                CmdStatus::KilledWithSigterm
+                | CmdStatus::KilledWithSigKill
+                | CmdStatus::KilledWithInterrupt => update_stderr_message(output, graceful_timeout),
+            });
+        command_log
+            .log_command_and_output(&cmd_line, outcome.as_ref())
+            .await;
+        outcome
+    }
+
+    /// Wait for the command output, terminating the command on timeout or as soon as `interrupt` completes
+    pub async fn wait_for_output_or_terminate(
+        self,
+        graceful_timeout: Duration,
+        forceful_timeout: Duration,
+        interrupt: impl Future<Output = ()>,
+    ) -> Result<(Output, CmdStatus), std::io::Error> {
         let cid = self.inner_child.id();
         let cmd_line = self.command_line;
         let mut status = CmdStatus::Successful;
         tokio::select! {
             outcome = self.inner_child.wait_with_output() => {
-               Self::update_and_log_outcome(cmd_line, outcome, command_log, graceful_timeout, &status).await
+                outcome.map(|output| (output, status))
             }
-            _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout) => {
+            _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout, interrupt) => {
                 Err(std::io::Error::other(format!("failed to kill the process: {cmd_line}")))
             }
         }
@@ -61,45 +90,31 @@ impl LoggingChild {
         outcome
     }
 
-    async fn update_and_log_outcome(
-        command_line: String,
-        outcome: Result<Output, std::io::Error>,
-        command_log: &mut CommandLog,
-        timeout: Duration,
-        status: &CmdStatus,
-    ) -> Result<Output, std::io::Error> {
-        let outcome = match status {
-            CmdStatus::Successful => outcome,
-            CmdStatus::KilledWithSigterm | CmdStatus::KilledWithSigKill => {
-                outcome.map(|outcome| update_stderr_message(outcome, timeout))?
-            }
-        };
-        command_log
-            .log_command_and_output(&command_line, outcome.as_ref())
-            .await;
-        outcome
-    }
-
     async fn timeout_operation(
         status: &mut CmdStatus,
         child_id: Option<u32>,
         graceful_timeout: Duration,
         forceful_timeout: Duration,
+        interrupt: impl Future<Output = ()>,
     ) -> Result<(), std::io::Error> {
         *status = CmdStatus::Successful;
 
         if let Some(pid) = child_id {
-            tokio::time::sleep(graceful_timeout).await;
+            tokio::select! {
+                _ = tokio::time::sleep(graceful_timeout) => *status = CmdStatus::KilledWithSigterm,
+                _ = interrupt => *status = CmdStatus::KilledWithInterrupt,
+            }
 
             // stop the child process by sending sigterm
-            *status = CmdStatus::KilledWithSigterm;
-            terminate_process(pid, Signal::SIGTERM);
+            terminate_process_group(pid, Signal::SIGTERM);
 
             tokio::time::sleep(forceful_timeout).await;
 
             // stop the child process by sending sigkill
-            *status = CmdStatus::KilledWithSigKill;
-            terminate_process(pid, Signal::SIGKILL);
+            if !matches!(status, CmdStatus::KilledWithInterrupt) {
+                *status = CmdStatus::KilledWithSigKill;
+            }
+            terminate_process_group(pid, Signal::SIGKILL);
         }
 
         // wait for the process to exit after signal
@@ -109,7 +124,7 @@ impl LoggingChild {
     }
 }
 
-fn update_stderr_message(mut output: Output, timeout: Duration) -> Result<Output, std::io::Error> {
+fn update_stderr_message(mut output: Output, timeout: Duration) -> Output {
     output.stderr.append(
         &mut format!(
             "operation failed due to timeout: duration={}s\n",
@@ -118,7 +133,7 @@ fn update_stderr_message(mut output: Output, timeout: Duration) -> Result<Output
         .as_bytes()
         .to_vec(),
     );
-    Ok(output)
+    output
 }
 
 /// A command which execution is logged.
@@ -178,16 +193,18 @@ impl LoggedCommand {
         Ok(LoggedCommand { command })
     }
 
-    pub fn from_command(mut command: std::process::Command, working_dir: impl AsRef<Path>) -> Self {
+    pub fn from_command(
+        command: impl Into<tokio::process::Command>,
+        working_dir: impl AsRef<Path>,
+    ) -> Self {
+        let mut command = command.into();
         command
             .current_dir(working_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        Self {
-            command: tokio::process::Command::from(command),
-        }
+        Self { command }
     }
 
     pub fn arg(&mut self, arg: impl AsRef<OsStr>) -> &mut LoggedCommand {
@@ -333,6 +350,7 @@ impl<'a> From<&'a std::process::Output> for CommandOutput<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_matches::assert_matches;
     use tedge_test_utils::fs::TempTedgeDir;
 
     #[tokio::test]
@@ -361,6 +379,112 @@ mod tests {
         assert_eq!(output.status.signal(), Some(15));
         let background_pid = String::from_utf8(output.stdout).unwrap();
         assert_killed(background_pid.trim()).await;
+    }
+
+    #[tokio::test]
+    async fn a_command_completing_in_time_is_not_terminated() {
+        let mut command = LoggedCommand::new("sh -c 'echo done'", "/tmp").unwrap();
+        let child = command.spawn().unwrap();
+
+        let (output, status) = child
+            .wait_for_output_or_terminate(
+                Duration::from_secs(10),
+                Duration::from_secs(5),
+                std::future::pending(),
+            )
+            .await
+            .unwrap();
+
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"done\n");
+        assert_matches!(status, CmdStatus::Successful);
+    }
+
+    #[tokio::test]
+    async fn a_command_terminated_on_timeout_reports_the_timeout() {
+        let mut command = LoggedCommand::new("sleep 60", "/tmp").unwrap();
+        let child = command.spawn().unwrap();
+
+        let (output, status) = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_for_output_or_terminate(
+                Duration::from_millis(100),
+                Duration::from_secs(5),
+                std::future::pending(),
+            ),
+        )
+        .await
+        .expect("the command to be killed within the timeout")
+        .unwrap();
+
+        assert_eq!(output.status.signal(), Some(15));
+        assert_matches!(status, CmdStatus::KilledWithSigterm);
+    }
+
+    #[tokio::test]
+    async fn an_interrupted_command_is_terminated_before_its_timeout() {
+        let mut command =
+            LoggedCommand::new("sh -c 'sleep 60 & echo $!; sleep 60'", "/tmp").unwrap();
+        let child = command.spawn().unwrap();
+
+        let (output, status) = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_for_output_or_terminate(
+                Duration::from_secs(60),
+                Duration::from_secs(5),
+                tokio::time::sleep(Duration::from_secs(1)),
+            ),
+        )
+        .await
+        .expect("the command to be killed on interrupt")
+        .unwrap();
+
+        assert_eq!(output.status.signal(), Some(15));
+        assert_matches!(status, CmdStatus::KilledWithInterrupt);
+        let background_pid = String::from_utf8(output.stdout).unwrap();
+        assert_killed(background_pid.trim()).await;
+    }
+
+    #[tokio::test]
+    async fn a_command_ignoring_sigterm_is_killed_after_the_forceful_timeout() {
+        let mut command = LoggedCommand::new("sh -c 'trap \"\" TERM; sleep 60'", "/tmp").unwrap();
+        let child = command.spawn().unwrap();
+
+        let (output, status) = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_for_output_or_terminate(
+                Duration::from_secs(1),
+                Duration::from_millis(100),
+                std::future::pending(),
+            ),
+        )
+        .await
+        .expect("the command to be killed within the forceful timeout")
+        .unwrap();
+
+        assert_eq!(output.status.signal(), Some(9));
+        assert_matches!(status, CmdStatus::KilledWithSigKill);
+    }
+
+    #[tokio::test]
+    async fn a_background_process_ignoring_sigterm_is_killed_after_its_parent_exits() {
+        let mut command =
+            LoggedCommand::new("sh -c '(trap \"\" TERM; sleep 60) & sleep 60'", "/tmp").unwrap();
+        let child = command.spawn().unwrap();
+
+        let (_, status) = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_for_output_or_terminate(
+                Duration::from_secs(1),
+                Duration::from_secs(1),
+                std::future::pending(),
+            ),
+        )
+        .await
+        .expect("the background process to be killed within the forceful timeout")
+        .unwrap();
+
+        assert_matches!(status, CmdStatus::KilledWithSigKill);
     }
 
     async fn is_running(pid: &str) -> bool {

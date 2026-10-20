@@ -10,6 +10,9 @@ case "$ACTION" in
     restart | reload)
         echo "dummy plugin: $ACTION $NAME"
         ;;
+    hang)
+        sleep 1234
+        ;;
     *)
         echo "dummy plugin: unsupported action '$ACTION'" >&2
         exit 2

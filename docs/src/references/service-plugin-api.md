@@ -71,12 +71,27 @@ For any other type, they are whatever the plugin implements.
   `0` stays `0`, `2` stays `2`, any other non-zero code is reported as a failure of that action.
 * A service type with no plugin file is reported as not supported, with exit code `2`.
 
+### Timeout
+
+An action that does not complete in time is terminated.
+After the `--timeout` duration, 180 seconds per default,
+the runner sends `SIGTERM` to the process group of the init system command or the service plugin.
+The process group also holds the processes started by the action.
+If the action is still running after the `--forceful-timeout` duration, 60 seconds per default,
+the runner sends `SIGKILL` to the same process group.
+The runner then exits with code `124`.
+
+When the runner receives `SIGINT`, `SIGTERM` or `SIGQUIT`, for example on Ctrl-C,
+it terminates the action in the same way without waiting for the timeout,
+and exits with code `1`.
+
 ### Exit codes
 
 | Code           | Meaning                                                                     |
 |----------------|-------------------------------------------------------------------------------|
 | `0`            | The action succeeded                                                        |
 | `2`            | The action is not supported for that service type                           |
+| `124`          | The action did not complete in time and was terminated                      |
 | other non-zero | The action was run and failed, with the reason on stderr                    |
 
 Exit code `2` separates "no backend can run this" from "the backend ran it and it failed".
