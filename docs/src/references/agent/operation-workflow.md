@@ -445,6 +445,8 @@ Note that:
 - `sudo` is invoked with `-n`, so it fails instead of prompting for a password.
   What can be run is decided by the sudoers rules alone:
   a command these rules do not allow fails, and is handled as any failing script, using the state's `on_exit` handlers.
+  When sudo refuses a command, the operation log shows the error `sudo refused to run '<command>'`,
+  and the failure reason is, for example, `/usr/bin/sudo returned exit code 1`.
 - The `sudo -n` prefix is added after the `${...}` values are substituted,
   so a substituted argument cannot be split into extra `sudo` arguments.
 - Do not let the payload provide the command of an elevated step, as in `script = "${.payload.command}"`.

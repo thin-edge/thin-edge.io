@@ -182,10 +182,13 @@ impl WorkflowActor {
     /// Check that the sudoers rules allow a script to be run through sudo
     async fn sudo_authorizes(&self, script: &ShellScript) -> bool {
         let sudo = self.sudo.clone();
-        let script = script.clone();
-        tokio::task::spawn_blocking(move || sudo.is_authorized(&script.command, &script.args))
+        let listed = script.clone();
+        tokio::task::spawn_blocking(move || sudo.is_authorized(&listed.command, &listed.args))
             .await
-            .unwrap_or(true)
+            .unwrap_or_else(|err| {
+                warn!("Cannot check if sudo allows '{}': {err}", script.command);
+                true
+            })
     }
 
     async fn publish_operation_capabilities(&mut self) -> Result<(), RuntimeError> {
@@ -784,9 +787,12 @@ impl WorkflowActor {
                 let generated_init_state = match input_script {
                     None => GenericStateUpdate::empty_payload(),
                     Some(script) => {
+                        let command_line = script.to_string();
                         let command = Execute::new(script.command.clone(), script.args);
                         let output = self.script_runner.await_response(command).await?;
-                        log_file.log_script_output(output.as_ref()).await;
+                        log_file
+                            .log_command_and_output(&command_line, output.as_ref())
+                            .await;
                         match extract_json_output(&script.command, output) {
                             Ok(init_state) => init_state,
                             Err(reason) => {

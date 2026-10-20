@@ -69,6 +69,7 @@ use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::Topic;
 use tedge_script_ext::Execute;
+use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_uploader_ext::UploadResponse;
 use tedge_utils::paths::TedgePaths;
@@ -1287,15 +1288,22 @@ async fn the_exit_code_of_an_elevated_script_reaches_the_handlers() {
 
 #[tokio::test]
 async fn the_failure_reason_of_an_elevated_script_names_the_script_not_sudo() {
+    let tmp_dir = TempTedgeDir::new();
+    let sudo = tmp_dir.path().join("sudo");
+    // Allows only `tedge service restart nginx`, to check which command the agent asks sudo about
+    with_exec_permission(
+        &sudo,
+        "#!/bin/sh\n[ \"$*\" = \"-n --list tedge service restart nginx\" ]\n",
+    );
     let TestHandler {
         mut mqtt_box,
         mut script_box,
         mut actor_handle,
         ..
     } = spawn_elevated_workflow(
-        Arc::new(TempTedgeDir::new()),
+        Arc::new(tmp_dir),
         ELEVATED_SCRIPT_WORKFLOW,
-        SudoCommandBuilder::with_program("echo"),
+        SudoCommandBuilder::with_program(sudo.as_str()),
     )
     .await;
 
@@ -1369,6 +1377,47 @@ async fn the_failure_reason_names_sudo_when_sudo_refuses_the_script() {
         log.contains("ERROR: sudo refused to run 'tedge': not allowed by the sudoers rules"),
         "{log}"
     );
+}
+
+#[tokio::test]
+async fn a_script_not_run_through_sudo_is_not_reported_as_refused() {
+    let tmp_dir = Arc::new(TempTedgeDir::new());
+    let TestHandler {
+        mut mqtt_box,
+        mut script_box,
+        mut actor_handle,
+        ..
+    } = spawn_elevated_workflow(
+        tmp_dir.clone(),
+        ELEVATED_SCRIPT_WORKFLOW,
+        SudoCommandBuilder::enabled(false),
+    )
+    .await;
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/elevated/1"),
+            r#"{"status":"init","action":"restart","serviceName":"nginx"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let RequestEnvelope { mut reply_to, .. } =
+        recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
+            .await
+            .expect("script request expected");
+    reply_to.send(Ok(script_output(1, ""))).await.unwrap();
+
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/elevated/1",
+        "failed",
+    )
+    .await;
+
+    let log = std::fs::read_to_string(tmp_dir.path().join("workflow-elevated-1.log")).unwrap();
+    assert!(!log.contains("sudo refused"), "{log}");
 }
 
 #[tokio::test]

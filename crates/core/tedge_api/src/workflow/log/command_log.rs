@@ -161,13 +161,6 @@ Action:   {action}
             .await
     }
 
-    pub async fn log_script_output(
-        &mut self,
-        result: Result<impl Into<CommandOutput<'_>>, &std::io::Error>,
-    ) {
-        self.log_command_and_output("", result).await
-    }
-
     pub async fn log_command_and_output(
         &mut self,
         command_line: &str,
