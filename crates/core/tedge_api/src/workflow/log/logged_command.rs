@@ -8,7 +8,7 @@ use std::process::ExitStatus;
 use std::process::Output;
 use std::process::Stdio;
 use std::time::Duration;
-use tedge_utils::signals::terminate_process;
+use tedge_utils::signals::terminate_process_group;
 use tedge_utils::signals::Signal;
 use tokio::io::AsyncBufRead;
 use tokio::io::AsyncBufReadExt as _;
@@ -106,7 +106,7 @@ impl LoggingChild {
             }
 
             // stop the child process by sending sigterm
-            terminate_process(pid, Signal::SIGTERM);
+            terminate_process_group(pid, Signal::SIGTERM);
 
             tokio::time::sleep(forceful_timeout).await;
 
@@ -114,7 +114,7 @@ impl LoggingChild {
             if !matches!(status, CmdStatus::KilledWithInterrupt) {
                 *status = CmdStatus::KilledWithSigKill;
             }
-            terminate_process(pid, Signal::SIGKILL);
+            terminate_process_group(pid, Signal::SIGKILL);
         }
 
         // wait for the process to exit after signal
@@ -463,6 +463,27 @@ mod tests {
         .unwrap();
 
         assert_eq!(output.status.signal(), Some(9));
+        assert_matches!(status, CmdStatus::KilledWithSigKill);
+    }
+
+    #[tokio::test]
+    async fn a_background_process_ignoring_sigterm_is_killed_after_its_parent_exits() {
+        let mut command =
+            LoggedCommand::new("sh -c '(trap \"\" TERM; sleep 60) & sleep 60'", "/tmp").unwrap();
+        let child = command.spawn().unwrap();
+
+        let (_, status) = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_for_output_or_terminate(
+                Duration::from_secs(1),
+                Duration::from_secs(1),
+                std::future::pending(),
+            ),
+        )
+        .await
+        .expect("the background process to be killed within the forceful timeout")
+        .unwrap();
+
         assert_matches!(status, CmdStatus::KilledWithSigKill);
     }
 
