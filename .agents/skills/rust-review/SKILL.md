@@ -4,8 +4,14 @@ description: Expert Rust code review focused on correctness, testing, and idioma
 ---
 
 Perform an expert Rust code review focusing on correctness, testing quality, and idiomatic style.
+The rules are in [`CODING_STANDARDS.md`](../../../CODING_STANDARDS.md) at the repository root; this skill is the process for applying them.
 
 **Input**: Optionally specify a file path, glob, or description (e.g., `src/mapper.rs`, `the auth changes`). If omitted, review the current working diff.
+
+**Correctness-only mode**: the `pr-review` skill runs this skill as its Correctness axis.
+In that mode it supplies the diff and lists the `CODING_STANDARDS.md` sections you own.
+That list replaces the sections named under the Correctness and Testing dimensions below:
+review only the listed sections (plus the extra bug hunting under Correctness), skip the Idiomatic Rust dimension, and leave the working tree untouched.
 
 **Steps**
 
@@ -34,60 +40,26 @@ Perform an expert Rust code review focusing on correctness, testing quality, and
 
 3. **Review the code**
 
-   Analyse the code across three dimensions, in priority order:
+   Read `CODING_STANDARDS.md` and apply every rule in it to the code in scope, across three dimensions, in priority order:
 
    ### Correctness
 
-   Look for real bugs and logic errors. Flag anything where:
+   The "Correctness" and "thin-edge.io specifics" sections of `CODING_STANDARDS.md`, plus any other real bug.
+   The standards list the known traps; hunt beyond them as well:
 
-   - **Panics in non-test code**: `unwrap()` without justification, direct array/slice indexing without bounds checks. Prefer `expect("reason")` for invariants, `?` for recoverable errors.
-   - **Silent error swallowing**: `let _ = result`, ignoring `Result` arms, or `.ok()` without explanation
    - **Off-by-one / overflow**: integer arithmetic, iterator ranges, index calculations
-   - **Incorrect `Option`/`Result` handling**: returning `None`/`Err` where a value should always exist, or vice versa
-   - **Shared state issues**: incorrect use of `Arc<Mutex<_>>`, potential deadlocks, missing synchronisation
    - **Lifetime issues**: returned references with incorrect lifetimes, self-referential patterns that are unsound
-   - **Logic errors that are hard to reason about**: even if possibly correct, flag code where correctness is non-obvious and suggest simplifying or adding a comment
-   - **Blocking code in async context**: synchronous operations inside `async fn` can starve the tokio executor. Flag:
-     - `std::fs` calls — use `tokio::fs` instead
-     - `std::net` blocking I/O — use `tokio::net`
-     - `camino::Utf8Path` methods like `.exists()`, `.read_dir()`, `.metadata()` — these are thin wrappers over `std::fs` and block the thread; use `tokio::fs` equivalents (e.g. `tokio::fs::metadata()`)
-     - Any other syscalls or long-running CPU work that should be moved to `tokio::task::spawn_blocking`
-
-   **Project-specific (thin-edge.io)**:
-   - **MQTT topics should go through the typed schema**, not hand-built strings. The canonical API lives in `crates/core/tedge_api/src/mqtt_topics.rs`:
-     - Build publish topics with `MqttSchema::topic_for(&entity, &channel)`, using an `EntityTopicId` and a `Channel` variant.
-     - Build subscription filters with `MqttSchema::topics(EntityFilter, ChannelFilter)`.
-     - Parse an incoming topic back with `MqttSchema::entity_channel_of(&topic)`.
-
-     Flag raw string-literal or `format!("te/device/...")` topics in non-test code: they bypass the schema, are easy to mistype, and don't track the configurable root prefix (`MqttSchema::root`, default `te`). When a raw topic is genuinely unavoidable, check its structure against the scheme — the entity identifier is a fixed 4-segment group (`device/<name>/<service-kind>/<service>`) followed by a channel group (e.g. `m/<type>`, `e/<type>`, `a/<type>`, `cmd/<op>/<id>`, `status/health`). The `Channel`/`ChannelFilter` enums and the `parse` method are the authoritative grammar; the doctests on `topic_for` and `topics` show worked examples.
-   - Actor message ordering assumptions — verify senders and receivers are correctly wired
-   - Entity store mutations — check that registration/deregistration is symmetric
+   - **Ordering and races**: code that only works if messages, tasks or file events arrive in a particular order
+   - **Logic errors**: trace each changed branch with a concrete input and check the result is what the caller expects
 
    ### Testing
 
-   - Are there tests covering the changed or added behaviour? If not, note what's missing.
-   - **Test names** should describe the *behaviour* being tested, not the implementation (e.g. `returns_error_when_topic_is_empty` not `test_parse`)
-   - **Focus**: each test should verify one behaviour; split tests that verify multiple things
-   - **Speed and determinism**: flag sleeps (`tokio::time::sleep`, `std::thread::sleep`) in tests, flaky network usage, or non-deterministic ordering
-   - **Edge cases**: empty inputs, maximum values, error paths, concurrent access — check they're covered
-   - **Project conventions**:
-     - Use `#[tokio::test]` for async tests
-     - Inline `#[cfg(test)]` modules for unit tests in the same file
-     - Separate `tests.rs` (in the same directory) for larger test suites
-     - Use `pretty_assertions` for readable diffs, `test-case` for parameterised tests
+   The "Tests" section of `CODING_STANDARDS.md`.
+   For each changed behaviour, name the test that covers it, or note what is missing.
 
    ### Idiomatic Rust
 
-   Based on the MSRV and edition read from Cargo.toml:
-
-   - **Prefer `?`** over explicit `match`/`if let` on `Result`/`Option` where the intent is clear
-   - **Iterator adapters** over manual loops: `.map()`, `.filter()`, `.flat_map()`, `.collect()` etc. — but only where it improves readability
-   - **Unnecessary clones/allocations**: `.clone()` on `Copy` types, redundant `to_string()`, avoidable `Vec` allocations
-   - **`#[derive]`** everything that can be derived: `Clone`, `Debug`, `PartialEq`, `Default`, etc.
-   - **Error types**: prefer `thiserror` in **library crates**, where errors are part of the public API and callers may need to match on individual variants (project convention). `anyhow` is acceptable in the **binary/application crates** that power the shipped executables — where errors are typically propagated to the top level and displayed rather than matched on — as well as in tests and examples.
-   - **Naming**: follow Rust conventions — `snake_case` for functions/variables, `CamelCase` for types, `SCREAMING_SNAKE_CASE` for constants
-   - **`unsafe`**: flag any usage — it is forbidden in this project
-   - **Edition idioms**: use `let-else` (1.65+), `if let` chains, or other features available given the actual MSRV
+   The "Idiomatic Rust" section of `CODING_STANDARDS.md`, using the language features the MSRV and edition from step 2 allow.
 
 4. **Write the review**
 
@@ -130,6 +102,8 @@ Perform an expert Rust code review focusing on correctness, testing quality, and
    **Verdict**: Approve / Request Changes / Needs Discussion
    ```
 
+   In correctness-only mode, omit the Idiomatic Rust section and the Verdict; `pr-review` gives the verdict.
+
    Severity tags:
    - `[critical]` — likely bug, data loss, panic, or soundness issue
    - `[warning]` — likely to cause problems, should be fixed
@@ -141,6 +115,5 @@ Perform an expert Rust code review focusing on correctness, testing quality, and
 - Only flag real problems with clear explanations — do not invent issues
 - Provide concrete suggestions and code snippets, not vague advice
 - Do not re-review code that is not in scope of the diff/file specified
-- If the code under review is a test file, apply correctness and clarity checks but relax the "no `unwrap()`" rule — panicking tests are acceptable
 - If `unsafe` appears anywhere, always flag it as `[critical]` regardless of apparent correctness
-- **Formatting**: run `just format` before reviewing so that formatting issues are fixed automatically rather than flagged. If `just format` is not available, note that the reviewer should run it before treating line-length or formatting observations as blocking.
+- **Formatting**: outside correctness-only mode, run `just format` before reviewing so that formatting issues are fixed automatically rather than flagged. If `just format` is not available, note that the reviewer should run it before treating line-length or formatting observations as blocking.

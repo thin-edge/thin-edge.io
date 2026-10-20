@@ -425,6 +425,7 @@ fn default_group(shape: &'static Shape) -> HeapValue<'static, false> {
     expect_reflect(expect_reflect(alloc_shape(shape).set_default()).build())
 }
 
+#[allow(unsafe_code)]
 fn alloc_shape(shape: &'static Shape) -> Partial<'static, false> {
     // SAFETY: `shape` is reached by walking the shape tree of a `Facet` type,
     // so it describes a real type

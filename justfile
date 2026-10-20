@@ -134,6 +134,7 @@ check TARGET=DEFAULT_TARGET:
     {{CARGO}} check --target {{TARGET}}
     {{CARGO}} clippy --all-targets --all-features --target {{TARGET}}
     just -f {{justfile()}} check-dependencies
+    just -f {{justfile()}} check-test-docs
     if [ ! -d tests/RobotFramework/.venv ]; then
         just -f {{justfile()}} setup-integration-test
     fi
@@ -141,6 +142,10 @@ check TARGET=DEFAULT_TARGET:
     source .venv/bin/activate
     echo Checking tests...
     invoke lint-tests
+
+# Check that tests changed since BASE have no doc comments
+check-test-docs BASE="main":
+    ci/check_test_doc_comments.sh "$(git merge-base {{BASE}} HEAD)"
 
 # Check dependencies using cargo-deny
 check-dependencies:
