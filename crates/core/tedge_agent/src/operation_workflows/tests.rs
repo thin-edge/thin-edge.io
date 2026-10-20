@@ -1107,76 +1107,6 @@ fn builtin_workflows_are_valid_operation_workflows() {
     }
 }
 
-const ELEVATED_SCRIPT_WORKFLOW: &str = r#"
-operation = "elevated"
-
-[init]
-action = "proceed"
-on_success = "executing"
-
-[executing]
-script = "tedge service ${.payload.action} ${.payload.serviceName}"
-sudo = true
-timeout_second = 60
-on_exit.0 = "successful"
-on_exit.2 = { status = "failed", reason = "not supported" }
-on_exit._ = "failed"
-
-[successful]
-action = "cleanup"
-
-[failed]
-action = "cleanup"
-"#;
-
-const ELEVATED_BACKGROUND_SCRIPT_WORKFLOW: &str = r#"
-operation = "elevated"
-
-[init]
-action = "proceed"
-on_success = "executing"
-
-[executing]
-background_script = "reboot"
-sudo = true
-on_exec = "restarting"
-
-[restarting]
-action = "proceed"
-on_success = "successful"
-
-[successful]
-action = "cleanup"
-
-[failed]
-action = "cleanup"
-"#;
-
-async fn spawn_elevated_workflow(
-    tmp_dir: Arc<TempTedgeDir>,
-    workflow: &str,
-    sudo: SudoCommandBuilder,
-) -> TestHandler {
-    spawn_workflow_actor_with_sudo(
-        tmp_dir,
-        "device/main//",
-        vec![("elevated.toml".to_string(), workflow.to_string())],
-        FakeEntityStore::Entities(vec![]),
-        sudo,
-    )
-    .await
-    .unwrap()
-}
-
-fn script_output(code: i32, stdout: &str) -> Output {
-    use std::os::unix::process::ExitStatusExt;
-    Output {
-        status: std::process::ExitStatus::from_raw(code << 8),
-        stdout: stdout.as_bytes().to_vec(),
-        stderr: vec![],
-    }
-}
-
 #[tokio::test]
 async fn an_elevated_script_is_launched_through_sudo() {
     let tmp_dir = Arc::new(TempTedgeDir::new());
@@ -2348,6 +2278,22 @@ async fn spawn_workflow_actor_with_sudo(
     })
 }
 
+async fn spawn_elevated_workflow(
+    tmp_dir: Arc<TempTedgeDir>,
+    workflow: &str,
+    sudo: SudoCommandBuilder,
+) -> TestHandler {
+    spawn_workflow_actor_with_sudo(
+        tmp_dir,
+        "device/main//",
+        vec![("elevated.toml".to_string(), workflow.to_string())],
+        FakeEntityStore::Entities(vec![]),
+        sudo,
+    )
+    .await
+    .unwrap()
+}
+
 async fn skip_capability_messages(mqtt: &mut impl MessageReceiver<MqttMessage>, device: &str) {
     //Skip all the init messages by still doing loose assertions
     assert_received_contains_str(
@@ -2430,6 +2376,15 @@ async fn assert_no_message_or_actor_exit<T>(
                 Err(err) => panic!("workflow actor panicked while {context}: {err}"),
             }
         }
+    }
+}
+
+fn script_output(code: i32, stdout: &str) -> Output {
+    use std::os::unix::process::ExitStatusExt;
+    Output {
+        status: std::process::ExitStatus::from_raw(code << 8),
+        stdout: stdout.as_bytes().to_vec(),
+        stderr: vec![],
     }
 }
 
@@ -2604,4 +2559,49 @@ operation = "restart"
 [init]
 action = "proceed"
 on_success = "executing"
+"#;
+
+const ELEVATED_SCRIPT_WORKFLOW: &str = r#"
+operation = "elevated"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "tedge service ${.payload.action} ${.payload.serviceName}"
+sudo = true
+timeout_second = 60
+on_exit.0 = "successful"
+on_exit.2 = { status = "failed", reason = "not supported" }
+on_exit._ = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+const ELEVATED_BACKGROUND_SCRIPT_WORKFLOW: &str = r#"
+operation = "elevated"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+background_script = "reboot"
+sudo = true
+on_exec = "restarting"
+
+[restarting]
+action = "proceed"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
 "#;

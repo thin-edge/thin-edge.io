@@ -104,9 +104,6 @@ impl OperationWorkflows {
 }
 
 /// The privileges a workflow asks for to run a script
-///
-/// Whether sudo is actually used is decided when the script is run,
-/// depending on the `sudo.enable` setting and on sudo being installed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Elevation {
     /// Run the script as the agent user

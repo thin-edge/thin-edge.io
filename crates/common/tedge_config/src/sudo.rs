@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn a_resolved_sudo_prefixes_the_script() {
+    fn an_installed_sudo_prefixes_the_script() {
         let sudo = SudoCommandBuilder::with_program("echo");
         let echo = which::which("echo").unwrap();
         let script: ShellScript = "tedge service restart nginx".parse().unwrap();

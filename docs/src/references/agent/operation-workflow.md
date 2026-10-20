@@ -452,8 +452,8 @@ Note that:
 - Do not let the payload provide the command of an elevated step, as in `script = "${.payload.command}"`.
   That value is passed to `sudo` right after `-n`,
   so it can be a `sudo` option (*e.g.* `-u` or `-E`) or an environment assignment (`VAR=value`).
-  With the sudoers rules shipped by %%te%%, which grant `SETENV`,
-  the cloud could then set the environment of a command run as root,
+  The sudoers rules shipped by %%te%% grant `SETENV`,
+  so with an environment assignment, the cloud could set the environment of a command run as root,
   and not only pick a command that these rules allow.
   The same applies to a script starting with `sudo -n ${...}`.
 - The operation log shows the command line as launched, including `sudo -n` when it is used.

@@ -92,7 +92,7 @@ pub struct TomlOperationState {
     #[serde(default)]
     pub output: Option<Value>,
 
-    /// Run the script of this state through sudo, if sudo is enabled
+    /// Run the script of this state through sudo, when sudo is enabled and installed
     #[serde(default)]
     pub sudo: bool,
 }
@@ -1218,32 +1218,6 @@ action = "cleanup"
         }
     }
 
-    fn workflow_with_state(state: &str) -> String {
-        format!(
-            r#"
-operation = "sudo-test"
-
-[init]
-action = "proceed"
-on_success = "test"
-
-[test]
-{state}
-
-[successful]
-action = "cleanup"
-
-[failed]
-action = "cleanup"
-"#
-        )
-    }
-
-    fn try_workflow_with_state(state: &str) -> Result<OperationWorkflows, WorkflowDefinitionError> {
-        let input: TomlOperationWorkflow = toml::from_str(&workflow_with_state(state)).unwrap();
-        OperationWorkflows::try_from(input)
-    }
-
     #[test]
     fn sudo_elevates_a_script() {
         let workflow = OperationWorkflow::from_toml(&workflow_with_state(
@@ -1365,5 +1339,31 @@ on_success = "successful"
             workflow.states.get("test").unwrap().to_string(),
             "tedge service restart nginx (sudo = true)"
         );
+    }
+
+    fn workflow_with_state(state: &str) -> String {
+        format!(
+            r#"
+operation = "sudo-test"
+
+[init]
+action = "proceed"
+on_success = "test"
+
+[test]
+{state}
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#
+        )
+    }
+
+    fn try_workflow_with_state(state: &str) -> Result<OperationWorkflows, WorkflowDefinitionError> {
+        let input: TomlOperationWorkflow = toml::from_str(&workflow_with_state(state)).unwrap();
+        OperationWorkflows::try_from(input)
     }
 }
