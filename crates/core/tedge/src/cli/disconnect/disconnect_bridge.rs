@@ -11,7 +11,6 @@ use camino::Utf8PathBuf;
 use std::sync::Arc;
 use tedge_config::TEdgeConfig;
 use tedge_system_services::*;
-use which::which;
 
 const TEDGE_BRIDGE_CONF_DIR_PATH: &str = "mosquitto-conf";
 
@@ -96,7 +95,7 @@ impl DisconnectBridgeCommand {
                 "Info: {} runs inside {RUN_ALL_SERVICE} (tedge run all); not disabling it.",
                 self.cloud.mapper_service()
             );
-        } else if which("tedge-mapper").is_ok() {
+        } else if self.service_manager.has_executable("tedge-mapper").await {
             let spinner = Spinner::start(format!("Disabling {}", self.cloud.mapper_service()));
             spinner.finish(self.stop_and_disable_mapper().await)?;
         }
