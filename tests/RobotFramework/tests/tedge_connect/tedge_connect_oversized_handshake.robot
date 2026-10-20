@@ -53,8 +53,8 @@ Connect To Oversized Handshake Server
     Start Oversized Handshake Server    ${mode}
     ${stderr}=    Execute Command    sudo tedge connect c8y
     ...    exp_exit_code=!0    stdout=${False}    stderr=${True}    timeout=120
-    [Teardown]    Stop Oversized Handshake Server
     RETURN    ${stderr}
+    [Teardown]    Stop Oversized Handshake Server
 
 Start Oversized Handshake Server
     [Arguments]    ${mode}

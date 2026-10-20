@@ -148,7 +148,13 @@ def lint_tests(c, threshold="W"):
         # Run linting and include Info level messages
     """
     print("Checking formatting of RobotFramework tests...", file=sys.stderr)
+    c.run(f"{sys.executable} -m robocop format --check --diff")
+
+    print("Checking linting of RobotFramework tests...", file=sys.stderr)
     c.run(f"{sys.executable} -m robocop check --threshold {threshold}")
+
+    print("Checking formatting of RobotFramework libraries...", file=sys.stderr)
+    c.run(f"{sys.executable} -m black --check --diff .")
 
     print("Checking linting of RobotFramework libraries...", file=sys.stderr)
     c.run(f"{sys.executable} -m pylint libraries")
