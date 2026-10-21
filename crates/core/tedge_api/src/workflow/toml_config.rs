@@ -1250,6 +1250,30 @@ on_exec = "successful"
         );
     }
 
+    #[test]
+    fn get_action_injects_the_payload_into_an_elevated_background_script() {
+        let workflow = OperationWorkflow::from_toml(&workflow_with_state(
+            r#"
+background_script = "systemctl restart ${.payload.serviceName}"
+sudo = true
+on_exec = "successful"
+"#,
+        ));
+        let state = GenericCommandState::new(
+            "te/device/main///cmd/sudo-test/1".try_into().unwrap(),
+            "test".to_string(),
+            json!({"status": "test", "serviceName": "nginx"}),
+        );
+
+        let action = workflow.get_action(&state).unwrap();
+
+        assert_matches!(
+            action,
+            OperationAction::BgScript(script, Elevation::Sudo, _)
+                if script.to_string() == "systemctl restart nginx"
+        );
+    }
+
     #[test_case("sudo = false")]
     #[test_case("")]
     fn a_script_is_not_elevated_by_default(sudo: &str) {
