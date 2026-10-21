@@ -804,7 +804,7 @@ timeout_second = 15
     }
 
     fn script_from_toml(file: &str) -> (ShellScript, ExitHandlers) {
-        if let OperationAction::Script(script, handlers) =
+        if let OperationAction::Script(script, _, handlers) =
             toml::from_str(file).expect("Expect TOML input")
         {
             return (script, handlers);
@@ -835,7 +835,7 @@ script = "some-script"
 "#
         );
         let workflow = OperationWorkflow::from_toml(&file);
-        if let Some(OperationAction::Script(_, handlers)) = workflow.states.get("init") {
+        if let Some(OperationAction::Script(_, _, handlers)) = workflow.states.get("init") {
             return handlers.clone();
         }
 

@@ -1,6 +1,7 @@
 mod sudo;
 pub use sudo::SudoCommandBuilder;
 pub use sudo::SudoError;
+pub use sudo::SudoResolution;
 pub mod cli;
 mod system_toml;
 pub use system_toml::*;
