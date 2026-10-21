@@ -14,6 +14,9 @@ CARGO := `command -V cargo-zigbuild >/dev/null 2>&1 && printf "cargo-zigbuild" |
 # Available values: [release, dev-stripped, debug]
 BUILD_PROFILE := env("BUILD_PROFILE", "release")
 
+# Default name of the PR device container, derived from the current branch (or commit when detached)
+PR_DEVICE := `(git symbolic-ref --short -q HEAD || git rev-parse --short HEAD) | tr -c 'a-zA-Z0-9\n' '-'`
+
 # Print project and host machine info
 info:
     @echo "OS:             {{os()}}"
@@ -199,6 +202,37 @@ integration-test *ARGS: build-integration-test
     cd tests/RobotFramework
     source .venv/bin/activate
     invoke tests {{ARGS}}
+
+# Start an isolated tedge container running the current checkout (e.g. to try out a PR)
+pr-device-up NAME=PR_DEVICE: build-integration-test
+    docker run -d --tty --privileged --tmpfs /tmp:size=64m --tmpfs /run:size=64m --name "tedge-pr-{{NAME}}" --hostname "{{NAME}}" debian-systemd
+    docker exec -w /setup "tedge-pr-{{NAME}}" ./bootstrap.sh
+    docker exec "tedge-pr-{{NAME}}" systemctl enable --now tedge-agent
+    @echo "Open a shell with: just pr-device-shell {{NAME}}"
+
+# Register a PR device with Cumulocity using the current go-c8y-cli session
+pr-device-c8y NAME=PR_DEVICE:
+    c8y tedge bootstrap-container "tedge-pr-{{NAME}}" "tedge-pr-{{NAME}}"
+
+# Switch a PR device to a single `tedge` service running `tedge run all`
+pr-device-run-all NAME=PR_DEVICE:
+    docker exec "tedge-pr-{{NAME}}" /setup/use-tedge-run-all.sh
+
+# Open a shell in a PR device
+pr-device-shell NAME=PR_DEVICE:
+    docker exec -it "tedge-pr-{{NAME}}" bash
+
+# Remove a PR device
+pr-device-down NAME=PR_DEVICE:
+    docker rm -f "tedge-pr-{{NAME}}"
+
+# List all PR devices
+pr-device-list:
+    docker ps -a --filter "name=^tedge-pr-" --format "table {{{{.Names}}\t{{{{.Status}}\t{{{{.CreatedAt}}"
+
+# Remove all PR devices
+pr-device-prune:
+    docker ps -aq --filter "name=^tedge-pr-" | xargs -r docker rm -f
 
 # All arguments are forwarded as-is to the `invoke flake-finder` task.
 # See `invoke --help flake-finder` (from tests/RobotFramework) for the full list of options.
