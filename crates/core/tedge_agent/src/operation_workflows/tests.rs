@@ -1139,7 +1139,7 @@ async fn an_elevated_script_is_launched_through_sudo() {
     let SudoResolution::Sudo(echo) = SudoCommandBuilder::with_program("echo").resolve() else {
         panic!("echo expected in $PATH");
     };
-    assert_eq!(request.command, echo.to_string_lossy());
+    assert_eq!(request.command, echo.as_str());
     assert_eq!(request.args, ["-n", "tedge", "service", "restart", "nginx"]);
     assert_eq!(
         request.timeouts.map(|(graceful, _)| graceful),
@@ -1170,10 +1170,7 @@ async fn an_elevated_script_is_launched_through_sudo() {
         "{log}"
     );
     assert!(
-        log.contains(&format!(
-            "----- $ {} -n tedge service restart nginx",
-            echo.display()
-        )),
+        log.contains(&format!("----- $ {echo} -n tedge service restart nginx")),
         "{log}"
     );
 }
@@ -1299,12 +1296,12 @@ async fn the_failure_reason_names_sudo_when_sudo_refuses_the_script() {
     .await;
     assert_eq!(
         payload["reason"],
-        json!(format!("{} returned exit code 1", sudo_program.display()))
+        json!(format!("{sudo_program} returned exit code 1"))
     );
 
     let log = std::fs::read_to_string(tmp_dir.path().join("workflow-elevated-1.log")).unwrap();
     assert!(
-        log.contains("ERROR: sudo refused to run 'tedge': not allowed by the sudoers rules"),
+        log.contains("ERROR: sudo refused to run 'tedge': the command is not found, or not allowed by the sudoers rules"),
         "{log}"
     );
 }
@@ -1444,13 +1441,14 @@ async fn a_missing_sudo_is_reported_in_the_operation_log() {
 
 #[tokio::test]
 async fn an_elevated_background_script_moves_on_before_being_launched() {
+    let tmp_dir = Arc::new(TempTedgeDir::new());
     let TestHandler {
         mut mqtt_box,
         mut script_box,
         mut actor_handle,
         ..
     } = spawn_elevated_workflow(
-        Arc::new(TempTedgeDir::new()),
+        tmp_dir.clone(),
         ELEVATED_BACKGROUND_SCRIPT_WORKFLOW,
         SudoCommandBuilder::with_program("echo"),
     )
@@ -1472,11 +1470,100 @@ async fn an_elevated_background_script_moves_on_before_being_launched() {
     )
     .await;
 
-    let RequestEnvelope { request, .. } =
+    let RequestEnvelope {
+        request,
+        mut reply_to,
+    } = recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
+        .await
+        .expect("script request expected");
+    assert_eq!(request.args, ["-n", "reboot"]);
+    reply_to.send(Ok(script_output(0, ""))).await.unwrap();
+
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/elevated/1",
+        "successful",
+    )
+    .await;
+
+    let SudoResolution::Sudo(echo) = SudoCommandBuilder::with_program("echo").resolve() else {
+        panic!("echo expected in $PATH");
+    };
+    let log = std::fs::read_to_string(tmp_dir.path().join("workflow-elevated-1.log")).unwrap();
+    assert!(log.contains(&format!("----- $ {echo} -n reboot")), "{log}");
+}
+
+#[tokio::test]
+async fn the_command_line_of_an_input_script_is_logged() {
+    let workflow = r#"
+operation = "outer"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+operation = "inner"
+input_script = "/some/input.sh ${.payload.x}"
+on_exec = "awaiting"
+
+[awaiting]
+action = "await-operation-completion"
+on_success = "successful"
+on_error = "failed"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+    let tmp_dir = Arc::new(TempTedgeDir::new());
+    let TestHandler {
+        mut mqtt_box,
+        mut script_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        tmp_dir.clone(),
+        "device/main//",
+        vec![("outer.toml".to_string(), workflow.to_string())],
+        FakeEntityStore::Entities(vec![]),
+    )
+    .await
+    .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/outer/1"),
+            r#"{"status":"init","x":"42"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let RequestEnvelope { mut reply_to, .. } =
         recv_or_fail_on_actor_exit(&mut script_box, &mut actor_handle, "script request")
             .await
             .expect("script request expected");
-    assert_eq!(request.args, ["-n", "reboot"]);
+    reply_to
+        .send(Ok(script_output(
+            0,
+            ":::begin-tedge:::\n{}\n:::end-tedge:::\n",
+        )))
+        .await
+        .unwrap();
+
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/outer/1",
+        "awaiting",
+    )
+    .await;
+
+    let log = std::fs::read_to_string(tmp_dir.path().join("workflow-outer-1.log")).unwrap();
+    assert!(log.contains("----- $ /some/input.sh 42"), "{log}");
 }
 
 #[tokio::test]

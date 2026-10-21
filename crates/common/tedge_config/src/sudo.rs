@@ -1,5 +1,5 @@
+use camino::Utf8PathBuf;
 use std::ffi::OsStr;
-use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -54,9 +54,9 @@ impl SudoCommandBuilder {
             return SudoResolution::Disabled;
         }
 
-        match which::which(self.sudo_program.as_ref()) {
-            Ok(sudo) => SudoResolution::Sudo(sudo),
-            Err(_) => SudoResolution::NotFound,
+        match which::which(self.sudo_program.as_ref()).map(Utf8PathBuf::from_path_buf) {
+            Ok(Ok(sudo)) => SudoResolution::Sudo(sudo),
+            _ => SudoResolution::NotFound,
         }
     }
 
@@ -99,7 +99,7 @@ impl SudoCommandBuilder {
                 let mut args = vec![NON_INTERACTIVE.to_string(), script.command];
                 args.extend(script.args);
                 ShellScript {
-                    command: sudo.to_string_lossy().into_owned(),
+                    command: sudo.to_string(),
                     args,
                 }
             }
@@ -166,7 +166,7 @@ impl SudoCommandBuilder {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SudoResolution {
     /// Prepend the command with this sudo program and `-n`
-    Sudo(PathBuf),
+    Sudo(Utf8PathBuf),
 
     /// `sudo.enable` is false: run the command directly
     Disabled,
@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn sudo_is_used_when_enabled_and_found() {
         let sudo = SudoCommandBuilder::with_program("echo");
-        let echo = which::which("echo").unwrap();
+        let echo = Utf8PathBuf::from_path_buf(which::which("echo").unwrap()).unwrap();
         assert_eq!(sudo.resolve(), SudoResolution::Sudo(echo));
     }
 
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn an_installed_sudo_prefixes_the_script() {
         let sudo = SudoCommandBuilder::with_program("echo");
-        let echo = which::which("echo").unwrap();
+        let echo = Utf8PathBuf::from_path_buf(which::which("echo").unwrap()).unwrap();
         let script: ShellScript = "tedge service restart nginx".parse().unwrap();
 
         let (elevated, resolution) = sudo.script(script);
@@ -254,7 +254,7 @@ mod tests {
         assert_eq!(resolution, SudoResolution::Sudo(echo.clone()));
         assert_eq!(
             elevated.to_string(),
-            format!("{} -n tedge service restart nginx", echo.display())
+            format!("{echo} -n tedge service restart nginx")
         );
     }
 

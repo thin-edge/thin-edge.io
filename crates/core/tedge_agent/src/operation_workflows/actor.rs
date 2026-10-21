@@ -574,7 +574,7 @@ impl WorkflowActor {
                 let script_name = if refused_by_sudo {
                     log_file
                         .log_error(&format!(
-                            "sudo refused to run '{}': not allowed by the sudoers rules",
+                            "sudo refused to run '{}': the command is not found, or not allowed by the sudoers rules",
                             original.command
                         ))
                         .await;
