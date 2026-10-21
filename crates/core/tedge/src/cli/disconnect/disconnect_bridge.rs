@@ -208,6 +208,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stops_and_disables_the_mapper_service_when_tedge_mapper_is_installed() {
+        let manager =
+            Arc::new(RecordingServiceManager::with_active(&[]).with_installed(&["tedge-mapper"]));
+        let cmd = DisconnectBridgeCommand {
+            config_dir: Utf8PathBuf::from("/etc/tedge"),
+            cloud: Cloud::c8y(None),
+            use_mapper: true,
+            service_manager: manager.clone(),
+        };
+
+        cmd.disable_mapper().await.unwrap();
+
+        assert_eq!(
+            manager.actions(),
+            ["stop tedge-mapper-c8y", "disable tedge-mapper-c8y"]
+        );
+    }
+
+    #[tokio::test]
+    async fn leaves_the_mapper_service_alone_when_tedge_mapper_is_not_installed() {
+        let manager = Arc::new(RecordingServiceManager::with_active(&[]));
+        let cmd = DisconnectBridgeCommand {
+            config_dir: Utf8PathBuf::from("/etc/tedge"),
+            cloud: Cloud::c8y(None),
+            use_mapper: true,
+            service_manager: manager.clone(),
+        };
+
+        cmd.disable_mapper().await.unwrap();
+
+        assert!(manager.actions().is_empty());
+    }
+
+    #[tokio::test]
     async fn disconnecting_under_run_all_removes_the_bridge_and_restarts_only_mosquitto() {
         let ttd = TempTedgeDir::new();
         let bridge_file = ttd.dir("mosquitto-conf").file("c8y-bridge.conf");

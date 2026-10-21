@@ -1395,8 +1395,84 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn starts_and_enables_the_mapper_service_when_tedge_mapper_is_installed() {
+            let manager = Arc::new(
+                RecordingServiceManager::with_active(&[]).with_installed(&["tedge-mapper"]),
+            );
+            let cmd = connect_command(manager.clone());
+
+            cmd.start_mapper(false).await;
+
+            assert_eq!(
+                manager.actions(),
+                ["start tedge-mapper-c8y", "enable tedge-mapper-c8y"]
+            );
+        }
+
+        #[tokio::test]
+        async fn leaves_the_mapper_service_alone_when_tedge_mapper_is_not_installed() {
+            let manager = Arc::new(RecordingServiceManager::with_active(&[]));
+            let cmd = connect_command(manager.clone());
+
+            cmd.start_mapper(false).await;
+
+            assert!(manager.actions().is_empty());
+        }
+
+        #[tokio::test]
         async fn connecting_under_run_all_restarts_tedge_instead_of_the_component_services() {
             let ttd = TempTedgeDir::new();
+            let config = c8y_config(&ttd).await;
+            let manager = Arc::new(
+                RecordingServiceManager::with_active(&["tedge"]).with_installed(&["tedge-agent"]),
+            );
+            let mut cmd = connect_command(manager.clone());
+            cmd.offline_mode = true;
+            let bridge_config = bridge_config(&config, &cmd.cloud).await.unwrap();
+
+            cmd.connect_bridge(&config, &bridge_config).await.unwrap();
+
+            assert_eq!(
+                manager.actions(),
+                [
+                    "stop mosquitto",
+                    "restart mosquitto",
+                    "enable mosquitto",
+                    "restart tedge",
+                    "enable tedge"
+                ]
+            );
+        }
+
+        #[tokio::test]
+        async fn connecting_without_run_all_starts_and_enables_the_mapper_and_the_agent() {
+            let ttd = TempTedgeDir::new();
+            let config = c8y_config(&ttd).await;
+            let manager = Arc::new(
+                RecordingServiceManager::with_active(&[])
+                    .with_installed(&["tedge-mapper", "tedge-agent"]),
+            );
+            let mut cmd = connect_command(manager.clone());
+            cmd.offline_mode = true;
+            let bridge_config = bridge_config(&config, &cmd.cloud).await.unwrap();
+
+            cmd.connect_bridge(&config, &bridge_config).await.unwrap();
+
+            assert_eq!(
+                manager.actions(),
+                [
+                    "stop mosquitto",
+                    "restart mosquitto",
+                    "enable mosquitto",
+                    "start tedge-mapper-c8y",
+                    "enable tedge-mapper-c8y",
+                    "start tedge-agent",
+                    "enable tedge-agent"
+                ]
+            );
+        }
+
+        async fn c8y_config(ttd: &TempTedgeDir) -> TEdgeConfig {
             let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
             let cert_path = ttd
                 .file("test.crt")
@@ -1414,24 +1490,7 @@ mod tests {
                 c8y.device.cert_path = \"{cert_path}\"
                 c8y.device.key_path = \"{key_path}\""
             ));
-            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
-            let manager = Arc::new(RecordingServiceManager::with_active(&["tedge"]));
-            let mut cmd = connect_command(manager.clone());
-            cmd.offline_mode = true;
-            let bridge_config = bridge_config(&config, &cmd.cloud).await.unwrap();
-
-            cmd.connect_bridge(&config, &bridge_config).await.unwrap();
-
-            assert_eq!(
-                manager.actions(),
-                [
-                    "stop mosquitto",
-                    "restart mosquitto",
-                    "enable mosquitto",
-                    "restart tedge",
-                    "enable tedge"
-                ]
-            );
+            TEdgeConfig::load(ttd.path()).await.unwrap()
         }
 
         fn connect_command(service_manager: Arc<RecordingServiceManager>) -> ConnectCommand {
