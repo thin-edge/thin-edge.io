@@ -80,6 +80,32 @@ impl Transformer for AddTimestamp {
 
         let transformed_topic = message.topic.to_owned();
         let transformed_payload = serde_json::Value::Object(json_message).to_string();
-        Ok(vec![Message::new(transformed_topic, transformed_payload)])
+        let mut transformed_message = Message::new(transformed_topic, transformed_payload);
+        // Keep the file where the message is written, when the flow output is a directory
+        transformed_message.file = message.file.clone();
+        Ok(vec![transformed_message])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::MessageFile;
+
+    #[test]
+    fn keeps_the_file_of_a_transformed_message() {
+        let mut step = AddTimestamp::default();
+        let mut message = Message::new("te/device/main///m/env", r#"{"temperature": 23}"#);
+        message.file = Some(MessageFile {
+            name: "date=2026-09-14/env.jsonl".to_string(),
+        });
+
+        let output = step
+            .on_message(SystemTime::now(), &message, &FlowContextHandle::default())
+            .unwrap();
+
+        assert_eq!(output.len(), 1);
+        assert!(output[0].payload_str().unwrap().contains("\"time\""));
+        assert_eq!(output[0].file, message.file);
     }
 }

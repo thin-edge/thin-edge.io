@@ -740,6 +740,199 @@ async fn onstartup_before_onmessage_in_two_step_flow() {
     let _ = actor_handle.await;
 }
 
+#[tokio::test]
+async fn raw_file_output_writes_the_binary_payload_of_the_last_message() {
+    let config_dir = create_test_flow_dir();
+    let output_file = config_dir.path().join("output.bin");
+    std::fs::write(&output_file, "previous content\n").expect("Failed to write file");
+
+    write_file(
+        &config_dir,
+        "binary.js",
+        r#"
+        export function onMessage(message, config) {
+            return [
+                { topic: "test/output", payload: new Uint8Array([0x01, 0x02]) },
+                { topic: "test/output", payload: new Uint8Array([0x00, 0xff, 0x0a, 0xc3]) },
+            ];
+        }
+    "#,
+    );
+
+    write_file(
+        &config_dir,
+        "binary.toml",
+        &format!(
+            r#"
+        input.mqtt.topics = ["test/input"]
+
+        [[steps]]
+        script = "binary.js"
+
+        [output.file]
+        path = "{}"
+        format = "raw"
+    "#,
+            output_file.display()
+        ),
+    );
+
+    let captured_messages = CapturedMessages::default();
+    let mut mqtt = MockMqtt::new(captured_messages.clone());
+    let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
+
+    mqtt.publish("test/input", "hello").await;
+
+    let expected = vec![0x00, 0xff, 0x0a, 0xc3];
+    let mut content = vec![];
+    for _ in 0..100 {
+        content = tokio::fs::read(&output_file).await.unwrap_or_default();
+        if content == expected {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    assert_eq!(
+        content, expected,
+        "The file content should be replaced by the raw payload of the last message"
+    );
+
+    actor_handle.abort();
+    let _ = actor_handle.await;
+}
+
+#[tokio::test]
+async fn directory_output_writes_messages_to_the_files_they_name() {
+    let config_dir = create_test_flow_dir();
+    let output_dir = config_dir.path().join("output");
+    std::fs::create_dir(&output_dir).expect("Failed to create directory");
+
+    // Invalid messages come first, so they have been processed once the last file is written
+    write_file(
+        &config_dir,
+        "partition.js",
+        r#"
+        export function onMessage(message, config) {
+            return [
+                { topic: "test/output", payload: "unnamed" },
+                { topic: "test/output", payload: "escaped", file: { name: "../escaped.txt" } },
+                { topic: "test/output", payload: "first", file: { name: "date=2026-09-14/first.txt" } },
+                { topic: "test/output", payload: new Uint8Array([0x00, 0xff]), file: { name: "second.bin" } },
+            ];
+        }
+    "#,
+    );
+
+    write_file(
+        &config_dir,
+        "partition.toml",
+        &format!(
+            r#"
+        input.mqtt.topics = ["test/input"]
+
+        [[steps]]
+        script = "partition.js"
+
+        [output.file]
+        dir = "{}"
+        format = "raw"
+    "#,
+            output_dir.display()
+        ),
+    );
+
+    let captured_messages = CapturedMessages::default();
+    let mut mqtt = MockMqtt::new(captured_messages.clone());
+    let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
+
+    mqtt.publish("test/input", "hello").await;
+
+    let second = output_dir.join("second.bin");
+    for _ in 0..100 {
+        if second.exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    assert_eq!(std::fs::read(&second).unwrap(), vec![0x00, 0xff]);
+    assert_eq!(
+        std::fs::read(output_dir.join("date=2026-09-14/first.txt")).unwrap(),
+        b"first"
+    );
+    assert!(
+        !config_dir.path().join("escaped.txt").exists(),
+        "No file should be written outside of the output directory"
+    );
+    let mut entries: Vec<String> = std::fs::read_dir(&output_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+        .collect();
+    entries.sort();
+    assert_eq!(entries, vec!["date=2026-09-14", "second.bin"]);
+
+    actor_handle.abort();
+    let _ = actor_handle.await;
+}
+
+#[tokio::test]
+async fn directory_output_appends_lines_to_the_files_they_name() {
+    let config_dir = create_test_flow_dir();
+    let output_dir = config_dir.path().join("output");
+    std::fs::create_dir(&output_dir).expect("Failed to create directory");
+
+    write_file(
+        &config_dir,
+        "lines.js",
+        r#"
+        export function onMessage(message, config) {
+            return [{ topic: "test/output", payload: message.payload, file: { name: "logs/events.log" } }];
+        }
+    "#,
+    );
+
+    write_file(
+        &config_dir,
+        "lines.toml",
+        &format!(
+            r#"
+        input.mqtt.topics = ["test/input"]
+
+        [[steps]]
+        script = "lines.js"
+
+        [output.file]
+        dir = "{}"
+    "#,
+            output_dir.display()
+        ),
+    );
+
+    let captured_messages = CapturedMessages::default();
+    let mut mqtt = MockMqtt::new(captured_messages.clone());
+    let actor_handle = spawn_flows_actor(&config_dir, &mut mqtt).await;
+
+    mqtt.publish("test/input", "one").await;
+    mqtt.publish("test/input", "two").await;
+
+    let output_file = output_dir.join("logs/events.log");
+    let expected = "[test/output] one\n[test/output] two\n";
+    let mut content = String::new();
+    for _ in 0..100 {
+        content = std::fs::read_to_string(&output_file).unwrap_or_default();
+        if content == expected {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    assert_eq!(content, expected);
+
+    actor_handle.abort();
+    let _ = actor_handle.await;
+}
+
 fn create_test_flow_dir() -> TempDir {
     tempfile::tempdir().unwrap()
 }
