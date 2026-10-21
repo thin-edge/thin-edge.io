@@ -306,20 +306,20 @@ mod tests {
     #[tokio::test]
     async fn access_is_denied_if_request_resolves_through_a_symlink(method: Method, path: &str) {
         let (ttd, mut app) = app();
-        let file_transfer_dir = ttd.path().join("file-transfer");
-        std::fs::create_dir_all(&file_transfer_dir).unwrap();
+        let file_transfer_dir = ttd.dir("file-transfer");
 
-        let outside = ttd.path().join("outside");
-        std::fs::create_dir_all(&outside).unwrap();
-        let secret = outside.join("secret.txt");
-        std::fs::write(&secret, "secret contents").unwrap();
-        std::os::unix::fs::symlink(&outside, file_transfer_dir.join("escape")).unwrap();
+        let outside = ttd.dir("outside");
+        let secret = outside
+            .file("secret.txt")
+            .with_raw_content("secret contents");
+        std::os::unix::fs::symlink(outside.path(), file_transfer_dir.path().join("escape"))
+            .unwrap();
 
         let response = request_with(method, &mut app, path, "overwritten").await;
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         assert_eq!(
-            std::fs::read_to_string(&secret).unwrap(),
+            std::fs::read_to_string(secret.path()).unwrap(),
             "secret contents",
             "the file outside the file transfer directory was modified"
         );
@@ -331,18 +331,15 @@ mod tests {
     #[tokio::test]
     async fn access_is_denied_if_the_target_itself_is_an_escaping_symlink(method: Method) {
         let (ttd, mut app) = app();
-        let file_transfer_dir = ttd.path().join("file-transfer");
-        std::fs::create_dir_all(&file_transfer_dir).unwrap();
-
-        let secret = ttd.path().join("secret.txt");
-        std::fs::write(&secret, "secret contents").unwrap();
-        std::os::unix::fs::symlink(&secret, file_transfer_dir.join("escape")).unwrap();
+        let file_transfer_dir = ttd.dir("file-transfer");
+        let secret = ttd.file("secret.txt").with_raw_content("secret contents");
+        std::os::unix::fs::symlink(secret.path(), file_transfer_dir.path().join("escape")).unwrap();
 
         let response = request_with(method, &mut app, "escape", "overwritten").await;
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         assert_eq!(
-            std::fs::read_to_string(&secret).unwrap(),
+            std::fs::read_to_string(secret.path()).unwrap(),
             "secret contents",
             "the file outside the file transfer directory was modified"
         );
@@ -355,13 +352,9 @@ mod tests {
     #[tokio::test]
     async fn access_is_denied_if_the_target_is_a_dangling_escaping_symlink(method: Method) {
         let (ttd, mut app) = app();
-        let file_transfer_dir = ttd.path().join("file-transfer");
-        std::fs::create_dir_all(&file_transfer_dir).unwrap();
-
-        let outside = ttd.path().join("outside");
-        std::fs::create_dir_all(&outside).unwrap();
-        let target = outside.join("planted.txt");
-        std::os::unix::fs::symlink(&target, file_transfer_dir.join("escape")).unwrap();
+        let file_transfer_dir = ttd.dir("file-transfer");
+        let target = ttd.dir("outside").path().join("planted.txt");
+        std::os::unix::fs::symlink(&target, file_transfer_dir.path().join("escape")).unwrap();
 
         let response = request_with(method, &mut app, "escape", "planted contents").await;
 
@@ -379,13 +372,9 @@ mod tests {
     #[tokio::test]
     async fn access_is_denied_if_the_target_is_a_symlink_loop(method: Method) {
         let (ttd, mut app) = app();
-        let file_transfer_dir = ttd.path().join("file-transfer");
-        std::fs::create_dir_all(&file_transfer_dir).unwrap();
-
-        std::os::unix::fs::symlink(file_transfer_dir.join("b"), file_transfer_dir.join("a"))
-            .unwrap();
-        std::os::unix::fs::symlink(file_transfer_dir.join("a"), file_transfer_dir.join("b"))
-            .unwrap();
+        let dir = ttd.dir("file-transfer").path_buf();
+        std::os::unix::fs::symlink(dir.join("b"), dir.join("a")).unwrap();
+        std::os::unix::fs::symlink(dir.join("a"), dir.join("b")).unwrap();
 
         let response = request_with(method, &mut app, "a", "some content").await;
 
@@ -398,14 +387,16 @@ mod tests {
     #[tokio::test]
     async fn a_symlink_into_the_cache_directory_can_still_be_downloaded() {
         let (ttd, mut app) = app();
-        let file_transfer_dir = ttd.path().join("file-transfer");
-        std::fs::create_dir_all(&file_transfer_dir).unwrap();
-
-        let cache_dir = ttd.path().join("cache");
-        std::fs::create_dir_all(&cache_dir).unwrap();
-        let cached_file = cache_dir.join("d3b07384d113edec49eaa6238ad5ff00");
-        std::fs::write(&cached_file, "cached config").unwrap();
-        std::os::unix::fs::symlink(&cached_file, file_transfer_dir.join("config-link")).unwrap();
+        let file_transfer_dir = ttd.dir("file-transfer");
+        let cached_file = ttd
+            .dir("cache")
+            .file("d3b07384d113edec49eaa6238ad5ff00")
+            .with_raw_content("cached config");
+        std::os::unix::fs::symlink(
+            cached_file.path(),
+            file_transfer_dir.path().join("config-link"),
+        )
+        .unwrap();
 
         let response = download_file(&mut app, "config-link").await;
 

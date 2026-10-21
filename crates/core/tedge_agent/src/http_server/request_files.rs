@@ -124,7 +124,7 @@ fn is_within_permitted_roots(
     file_transfer_dir: &ManagedDir,
     data_dir: &DataDir,
 ) -> bool {
-    let Some(resolved) = resolve_symlinks(path) else {
+    let Some(resolved) = resolve_path(path) else {
         return false;
     };
 
@@ -133,7 +133,7 @@ fn is_within_permitted_roots(
     // symlink, or has yet to be created.
     [file_transfer_dir.path(), data_dir.cache_dir().path()]
         .into_iter()
-        .filter_map(resolve_symlinks)
+        .filter_map(resolve_path)
         .any(|root| resolved.starts_with(root))
 }
 
@@ -147,7 +147,7 @@ fn is_within_permitted_roots(
 ///
 /// Returns [None] if no ancestor can be resolved at all, or if a component exists
 /// but cannot be resolved.
-fn resolve_symlinks(path: &Utf8Path) -> Option<Utf8PathBuf> {
+fn resolve_path(path: &Utf8Path) -> Option<Utf8PathBuf> {
     let mut not_yet_created = Vec::new();
     let mut ancestor = path;
 
