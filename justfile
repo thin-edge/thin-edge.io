@@ -182,7 +182,7 @@ setup-integration-test *ARGS:
     tests/RobotFramework/bin/setup.sh {{ARGS}}
 
 # Build the integration test image
-build-integration-test: build
+build-integration-test *ARGS: (build ARGS)
     #!/usr/bin/env bash
     set -e
     if [ ! -d tests/RobotFramework/.venv ]; then
@@ -203,12 +203,21 @@ integration-test *ARGS: build-integration-test
     source .venv/bin/activate
     invoke tests {{ARGS}}
 
-# Start an isolated tedge container running the current checkout (e.g. to try out a PR)
-pr-device-up NAME=PR_DEVICE: build-integration-test
-    docker run -d --tty --privileged --tmpfs /tmp:size=64m --tmpfs /run:size=64m --name "tedge-pr-{{NAME}}" --hostname "{{NAME}}" debian-systemd
-    docker exec -w /setup "tedge-pr-{{NAME}}" ./bootstrap.sh
-    docker exec "tedge-pr-{{NAME}}" systemctl enable --now tedge-agent
-    @echo "Open a shell with: just pr-device-shell {{NAME}}"
+# Start an isolated tedge container running the current checkout; args starting with `-` go to the build
+pr-device-up *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    set -- {{ARGS}}
+    name="{{PR_DEVICE}}"
+    if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
+        name="$1"
+        shift
+    fi
+    just -f {{justfile()}} build-integration-test "$@"
+    docker run -d --tty --privileged --tmpfs /tmp:size=64m --tmpfs /run:size=64m --name "tedge-pr-$name" --hostname "$name" debian-systemd
+    docker exec -w /setup "tedge-pr-$name" ./bootstrap.sh
+    docker exec "tedge-pr-$name" systemctl enable --now tedge-agent
+    echo "Open a shell with: just pr-device-shell $name"
 
 # Register a PR device with Cumulocity using the current go-c8y-cli session
 pr-device-c8y NAME=PR_DEVICE:
