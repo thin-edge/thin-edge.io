@@ -439,12 +439,12 @@ and on one where the agent runs as root without sudo installed.
 
 Note that:
 - `sudo` is a boolean and defaults to `false`.
-  It cannot be derived from the command state: `sudo = "${.payload.x}"` is rejected.
 - `sudo = true` is only accepted on `script` and `background_script` states.
   A workflow setting it on any other state, including an `operation` state with an `input_script`, is rejected.
 - `sudo` is invoked with `-n`, so it fails instead of prompting for a password.
-  What can be run is decided by the sudoers rules alone:
-  a command these rules do not allow fails, and is handled as any failing script, using the state's `on_exit` handlers.
+  The sudoers rules decide which commands can be run.
+  A command that these rules do not allow fails,
+  and the state's `on_exit` handlers decide the next state, as for any failing script.
   When sudo refuses a command, the operation log shows the error `sudo refused to run '<command>'`,
   and the failure reason is, for example, `/usr/bin/sudo returned exit code 1`.
 - The `sudo -n` prefix is added after the `${...}` values are substituted,
