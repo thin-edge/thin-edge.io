@@ -559,7 +559,7 @@ impl ConnectCommand {
                 )
                 .await,
             );
-        } else if which_async("tedge-mapper").await.is_err() {
+        } else if !self.service_manager.has_executable("tedge-mapper").await {
             warning!("tedge-mapper is not installed.");
         } else {
             let spinner = Spinner::start(format!("Enabling {}", self.cloud.mapper_service()));
@@ -1248,7 +1248,7 @@ async fn enable_software_management(
     service_manager: &dyn SystemServiceManager,
 ) {
     if bridge_config.use_agent {
-        if which_async("tedge-agent").await.is_ok() {
+        if service_manager.has_executable("tedge-agent").await {
             let spinner = Spinner::start("Enabling tedge-agent");
             let _ = spinner.finish(
                 start_and_enable_service(service_manager, SystemService::new("tedge-agent")).await,
@@ -1257,12 +1257,6 @@ async fn enable_software_management(
             println!("Info: Software management is not installed. So, skipping enabling related components.\n");
         }
     }
-}
-
-async fn which_async(name: &'static str) -> Result<std::path::PathBuf, which::Error> {
-    tokio::task::spawn_blocking(move || ::which::which(name))
-        .await
-        .unwrap()
 }
 
 async fn start_and_enable_service(
@@ -1401,6 +1395,31 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn starts_and_enables_the_mapper_service_when_tedge_mapper_is_installed() {
+            let manager = Arc::new(
+                RecordingServiceManager::with_active(&[]).with_installed(&["tedge-mapper"]),
+            );
+            let cmd = connect_command(manager.clone());
+
+            cmd.start_mapper(false).await;
+
+            assert_eq!(
+                manager.actions(),
+                ["start tedge-mapper-c8y", "enable tedge-mapper-c8y"]
+            );
+        }
+
+        #[tokio::test]
+        async fn leaves_the_mapper_service_alone_when_tedge_mapper_is_not_installed() {
+            let manager = Arc::new(RecordingServiceManager::with_active(&[]));
+            let cmd = connect_command(manager.clone());
+
+            cmd.start_mapper(false).await;
+
+            assert!(manager.actions().is_empty());
+        }
+
+        #[tokio::test]
         async fn connecting_under_run_all_restarts_tedge_instead_of_the_component_services() {
             let ttd = TempTedgeDir::new();
             let cert = rcgen::generate_simple_self_signed(["test-device".into()]).unwrap();
@@ -1421,7 +1440,9 @@ mod tests {
                 c8y.device.key_path = \"{key_path}\""
             ));
             let config = TEdgeConfig::load(ttd.path()).await.unwrap();
-            let manager = Arc::new(RecordingServiceManager::with_active(&["tedge"]));
+            let manager = Arc::new(
+                RecordingServiceManager::with_active(&["tedge"]).with_installed(&["tedge-agent"]),
+            );
             let mut cmd = connect_command(manager.clone());
             cmd.offline_mode = true;
             let bridge_config = bridge_config(&config, &cmd.cloud).await.unwrap();

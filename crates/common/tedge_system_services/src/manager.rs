@@ -90,6 +90,14 @@ pub trait SystemServiceManager: Debug + Send + Sync {
         &self,
         service: SystemService<'_>,
     ) -> Result<bool, SystemServiceError>;
+
+    /// Returns true when the given executable is found on the `PATH`
+    async fn has_executable(&self, executable: &str) -> bool {
+        let executable = executable.to_owned();
+        tokio::task::spawn_blocking(move || which::which(executable).is_ok())
+            .await
+            .unwrap_or(false)
+    }
 }
 
 pub fn service_manager(
