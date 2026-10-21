@@ -719,6 +719,11 @@ Transform a [%%te%% alarm](../../../understand/thin-edge-json/#alarms) into a [C
 - If the source that is sending alarms is not registered yet in the mapper context,
   then this transformer discards the alarm. If this is not the desired behavior an approach is to add upstream a step
   using the [`cache-early-messages`](#cache-early-messages) transformer.
+- This transformer also publishes a retained copy of each alarm on `c8y-internal/alarms/<alarm topic>`.
+  When the flow subscribes to `c8y-internal/alarms/#`,
+  these copies are used on startup to detect alarms raised or cleared while the mapper was not running.
+  Such a flow must set `expect_loop = true`,
+  otherwise these copies are dropped by the flow loop detection.
 - Even if designed after Cumulocity requirements, this transformer can be used by any mappers.
 
 ### `cache-early-messages`
