@@ -72,6 +72,7 @@ use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::script::ShellScript;
+use tedge_api::service_command::SERVICE_ACTION_TYPE;
 use tedge_api::workflow::log::log_dir::OperationLogsError;
 use tedge_api::workflow::GenericCommandState;
 use tedge_api::DownloadInfo;
@@ -1148,11 +1149,26 @@ impl CumulocityConverter {
             }
 
             Channel::CommandMetadata { operation } => {
-                // Service commands are considered as actions of the service
+                let mut messages = vec![];
                 if entity_type == EntityType::Service {
-                    return self
-                        .convert_service_command_metadata(&source, operation, message)
-                        .await;
+                    let is_service_action =
+                        serde_json::from_slice::<Value>(message.payload_bytes())
+                            .is_ok_and(|capability| capability["@type"] == SERVICE_ACTION_TYPE);
+                    if is_service_action {
+                        return self
+                            .declare_service_action(&source, operation, message)
+                            .await;
+                    }
+
+                    // Clearing the topic of an action, or declaring it without the service action type,
+                    // removes that action
+                    if let Some(update) = self.remove_service_action(&source, operation)? {
+                        if message.payload_bytes().is_empty() {
+                            // Returned here, because a cleared capability is ignored below
+                            return Ok(vec![update]);
+                        }
+                        messages.push(update);
+                    }
                 }
 
                 // https://github.com/thin-edge/thin-edge.io/issues/2739
@@ -1160,7 +1176,7 @@ impl CumulocityConverter {
                     warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing device capabilities is not currently supported");
                     return Ok(vec![]);
                 }
-                match operation {
+                let registration = match operation {
                     OperationType::Restart => self.register_restart_operation(&source).await,
                     OperationType::SoftwareList => {
                         self.register_software_list_operation(&source, message)
@@ -1187,25 +1203,29 @@ impl CumulocityConverter {
                         self.register_custom_operation(&source, command_name).await
                     }
                     _ => Ok(vec![]),
-                }
+                }?;
+                messages.extend(registration);
+                Ok(messages)
             }
 
-            Channel::Command { cmd_id, .. } if self.command_id.is_generator_of(cmd_id) => {
+            Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
                 // Keep track of operation if we've received it through a retain message
                 // If we've already got the operation in `active_commands`, set the insertion
                 // time to `None` to disable the time-based expiry
                 self.active_commands.insert(cmd_id.clone(), None);
 
                 let entity = self.entity_cache.try_get(&source)?;
+                let command_mapping = self.command_mapping(entity, operation);
                 let entity = operations::EntityTarget {
                     topic_id: entity.topic_id().clone(),
                     external_id: entity.external_id.clone(),
-                    entity_type: entity.r#type(),
                     smartrest_publish_topic: self
                         .smartrest_publish_topic_for_entity(entity.topic_id())?,
                 };
 
-                self.operation_handler.handle(entity, message.clone()).await;
+                self.operation_handler
+                    .handle(entity, message.clone(), command_mapping)
+                    .await;
                 Ok(vec![])
             }
 
@@ -3113,7 +3133,7 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn a_restart_capability_of_a_service_registers_a_service_command() {
+    async fn a_restart_action_of_a_service_registers_a_service_command() {
         let tmp_dir = TempTedgeDir::new();
         let config = c8y_converter_config(&tmp_dir);
         let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
@@ -3141,7 +3161,7 @@ pub(crate) mod tests {
                 operation: OperationType::Restart,
             },
         );
-        let operation_msg = MqttMessage::new(&operation_topic, "{}");
+        let operation_msg = MqttMessage::new(&operation_topic, r#"{"@type": "service-action"}"#);
 
         let msgs = converter.convert(&operation_msg).await;
         assert_messages_matching(

@@ -45,8 +45,9 @@ or when the user wants to handle any of the inbuilt operations differently than 
 
 A service running on an IoT device can support commands such as start, stop and restart.
 
-The Cumulocity mapper maps every command targeting a service entity
+The Cumulocity mapper maps a command on an action of a service
 to the `c8y_ServiceCommand` operation.
+The service declares such an action with `{"@type": "service-action"}`.
 Examples:
 
 | Cumulocity Service Command | Tedge Command |
@@ -58,12 +59,19 @@ Examples:
 Any action name maps the same way:
 `cmd/<action>` on a service topic becomes the `<ACTION>` service command.
 
-:::note
-On a **service** entity, every `cmd/<action>` capability is a
-[service command](../service-commands),
-so a service declaring `cmd/restart` gets `RESTART` in `c8y_SupportedServiceCommands`,
-not the `c8y_Restart` operation.
-:::
+See [service commands](../service-commands).
+
+A service can also support the operations of a device, such as `log_upload` or a custom operation.
+Such a capability is declared without the `@type` of a service action,
+and is mapped to its Cumulocity operation in the same way as for a device.
+
+```sh
+tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/restart' '{"@type": "service-action"}'
+tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/log_upload' '{"types": ["collectd"]}'
+```
+
+With these capabilities, the `collectd` service gets `RESTART` in `c8y_SupportedServiceCommands`
+and the `c8y_LogfileRequest` operation.
 
 ### Supported Operations API
 
@@ -368,7 +376,7 @@ tedge mqtt pub -r 'te/device/<name>///cmd/command' '{}'
 If the workflow file with the same command name is defined, capability message will be sent automatically.
 :::
 
-On receiving, mapper creates a symlink at `/etc/tedge/operations/c8y/c8y_Command` (for main device) or `/etc/tedge/operations/c8y/<external_id>/c8y_Command` (for child device) to operation template file.
+On receiving, mapper creates a symlink at `/etc/tedge/operations/c8y/c8y_Command` (for main device) or `/etc/tedge/operations/c8y/<external_id>/c8y_Command` (for a child device or a service) to operation template file.
 
 The mapper detects the change in the `/etc/tedge/operations/c8y` directory except for `.template` file. When the change is detected, the SmartREST `114` (supported operation) message is sent to Cumulocity.
 

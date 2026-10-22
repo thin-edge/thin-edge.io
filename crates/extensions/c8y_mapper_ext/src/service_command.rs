@@ -1,11 +1,14 @@
 use crate::converter::CumulocityConverter;
 use crate::entity_cache::CloudEntityMetadata;
 use crate::error::ConversionError;
+use crate::operations::to_c8y_operation;
+use crate::operations::CommandMapping;
 use c8y_api::json_c8y_deserializer::C8yServiceCommand;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_id;
 use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
+use c8y_api::smartrest::smartrest_serializer::C8yOperation;
 use c8y_api::smartrest::topic::C8yTopic;
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -67,7 +70,7 @@ impl ServiceCommands {
 }
 
 impl CumulocityConverter {
-    pub(crate) async fn convert_service_command_metadata(
+    pub(crate) async fn declare_service_action(
         &mut self,
         service: &EntityTopicId,
         operation: &OperationType,
@@ -91,37 +94,79 @@ impl CumulocityConverter {
             }
         };
 
-        let cleared = message.payload_bytes().is_empty();
-        let changed = if cleared {
-            self.service_commands
-                .remove_action(service, action.as_str())
-        } else {
-            self.service_commands.add_action(service, action.as_str())
-        };
-        if !changed {
+        if !self.service_commands.add_action(service, action.as_str()) {
             return Ok(vec![]);
         }
 
         let mut messages = vec![];
 
-        if !cleared {
-            // The operation directory of a service is not watched,
-            // so the operation is registered here
-            match self.register_operation(service, C8Y_SERVICE_COMMAND).await {
-                Ok(mut registration) => messages.append(&mut registration),
-                Err(err) => error!(
-                    "Failed to register the `{C8Y_SERVICE_COMMAND}` operation of {service}: {err}"
-                ),
-            }
+        // The operation directory of a service is not watched,
+        // so the operation is registered here
+        match self.register_operation(service, C8Y_SERVICE_COMMAND).await {
+            Ok(mut registration) => messages.append(&mut registration),
+            Err(err) => error!(
+                "Failed to register the `{C8Y_SERVICE_COMMAND}` operation of {service}: {err}"
+            ),
         }
 
-        let supported_commands = self.service_commands.c8y_names(service);
-        messages.push(self.inventory_update_message(
-            service,
-            json!({ C8Y_SUPPORTED_SERVICE_COMMANDS: supported_commands }),
-        )?);
+        messages.push(self.supported_service_commands_message(service)?);
 
         Ok(messages)
+    }
+
+    /// A command of a service is a service command,
+    /// unless the service has registered the Cumulocity operation of that command.
+    pub(crate) fn command_mapping(
+        &self,
+        target: &CloudEntityMetadata,
+        operation: &OperationType,
+    ) -> CommandMapping {
+        if target.r#type() != EntityType::Service {
+            return CommandMapping::Operation;
+        }
+
+        let c8y_operation = match operation {
+            OperationType::Custom(command) => self
+                .supported_operations
+                .get_operation_name_by_workflow_operation(command),
+            _ => to_c8y_operation(operation).map(|operation| operation.name().to_string()),
+        };
+        let registered = c8y_operation.is_some_and(|c8y_operation| {
+            self.supported_operations
+                .contains_operation(target.external_id.as_ref(), &c8y_operation)
+        });
+        if registered {
+            CommandMapping::Operation
+        } else {
+            CommandMapping::ServiceCommand
+        }
+    }
+
+    /// Returns `None` if the service has not declared this action
+    pub(crate) fn remove_service_action(
+        &mut self,
+        service: &EntityTopicId,
+        operation: &OperationType,
+    ) -> Result<Option<MqttMessage>, ConversionError> {
+        if !self
+            .service_commands
+            .remove_action(service, &operation.name())
+        {
+            return Ok(None);
+        }
+
+        self.supported_service_commands_message(service).map(Some)
+    }
+
+    fn supported_service_commands_message(
+        &self,
+        service: &EntityTopicId,
+    ) -> Result<MqttMessage, ConversionError> {
+        let supported_commands = self.service_commands.c8y_names(service);
+        self.inventory_update_message(
+            service,
+            json!({ C8Y_SUPPORTED_SERVICE_COMMANDS: supported_commands }),
+        )
     }
 
     pub(crate) fn convert_service_command_request(
@@ -274,6 +319,15 @@ mod tests {
     const OPERATION_ID: &str = "1234";
     const RESTART_CMD_TOPIC: &str = "te/device/main/service/collectd/cmd/restart/c8y-mapper-1234";
 
+    const SERVICE_ACTION: &str = r#"{"@type": "service-action"}"#;
+    const DUMP_STATE_TEMPLATE: &str = r#"
+        [exec]
+        on_fragment = "c8y_DumpState"
+
+        [exec.workflow]
+        operation = "dump_state"
+        "#;
+
     #[tokio::test]
     async fn the_first_declared_action_registers_the_service_command_operation() {
         let tmp_dir = TempTedgeDir::new();
@@ -284,7 +338,7 @@ mod tests {
             &converter
                 .convert(&MqttMessage::new(
                     &Topic::new_unchecked("te/device/main/service/collectd/cmd/start"),
-                    "{}",
+                    SERVICE_ACTION,
                 ))
                 .await,
             [
@@ -306,7 +360,7 @@ mod tests {
             converter
                 .convert(&MqttMessage::new(
                     &Topic::new_unchecked(&format!("te/device/main/service/collectd/cmd/{action}")),
-                    "{}",
+                    SERVICE_ACTION,
                 ))
                 .await;
         }
@@ -315,7 +369,7 @@ mod tests {
             &converter
                 .convert(&MqttMessage::new(
                     &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-                    "{}",
+                    SERVICE_ACTION,
                 ))
                 .await,
             [(
@@ -332,7 +386,7 @@ mod tests {
         register_source_entities("te/device/main/service/collectd", &mut converter).await;
         let restart = MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-            "{}",
+            SERVICE_ACTION,
         );
         converter.convert(&restart).await;
 
@@ -348,13 +402,13 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/start"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/stop"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 
@@ -371,7 +425,7 @@ mod tests {
             &converter
                 .convert(&MqttMessage::new(
                     &Topic::new_unchecked("te/device/main/service/collectd/cmd/start"),
-                    "{}",
+                    SERVICE_ACTION,
                 ))
                 .await,
             [(
@@ -390,7 +444,7 @@ mod tests {
         assert!(converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/doSomething"),
-                "{}"
+                SERVICE_ACTION
             ))
             .await
             .is_empty());
@@ -405,13 +459,13 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/start"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/pause"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 
@@ -446,7 +500,7 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/start"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 
@@ -461,6 +515,81 @@ mod tests {
                 INVENTORY_TOPIC,
                 json!({"c8y_SupportedServiceCommands": []}).into(),
             )],
+        );
+    }
+
+    #[test_case("dump_state", "{}", &["114,c8y_DumpState"]; "a custom operation")]
+    #[test_case(
+        "log_upload",
+        r#"{"types": ["collectd"]}"#,
+        &["114,c8y_LogfileRequest", "118,collectd"];
+        "a log upload"
+    )]
+    #[tokio::test]
+    async fn a_capability_without_the_service_action_type_is_mapped_to_a_cumulocity_operation(
+        operation: &str,
+        capability: &str,
+        smartrest_messages: &[&'static str],
+    ) {
+        let tmp_dir = TempTedgeDir::new();
+        tmp_dir
+            .dir("operations")
+            .dir("c8y")
+            .file("c8y_DumpState.template")
+            .with_raw_content(DUMP_STATE_TEMPLATE);
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_source_entities("te/device/main/service/collectd", &mut converter).await;
+
+        assert_messages_matching(
+            &converter
+                .convert(&MqttMessage::new(
+                    &Topic::new_unchecked(&format!(
+                        "te/device/main/service/collectd/cmd/{operation}"
+                    )),
+                    capability,
+                ))
+                .await,
+            smartrest_messages
+                .iter()
+                .map(|payload| (SMARTREST_TOPIC, (*payload).into())),
+        );
+    }
+
+    #[tokio::test]
+    async fn an_action_declared_again_without_the_service_action_type_is_removed_from_c8y_supported_service_commands(
+    ) {
+        let tmp_dir = TempTedgeDir::new();
+        tmp_dir
+            .dir("operations")
+            .dir("c8y")
+            .file("c8y_DumpState.template")
+            .with_raw_content(DUMP_STATE_TEMPLATE);
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_source_entities("te/device/main/service/collectd", &mut converter).await;
+        converter
+            .convert(&MqttMessage::new(
+                &Topic::new_unchecked("te/device/main/service/collectd/cmd/dump_state"),
+                SERVICE_ACTION,
+            ))
+            .await;
+
+        assert_messages_matching(
+            &converter
+                .convert(&MqttMessage::new(
+                    &Topic::new_unchecked("te/device/main/service/collectd/cmd/dump_state"),
+                    "{}",
+                ))
+                .await,
+            [
+                (
+                    INVENTORY_TOPIC,
+                    json!({"c8y_SupportedServiceCommands": []}).into(),
+                ),
+                (
+                    SMARTREST_TOPIC,
+                    "114,c8y_DumpState,c8y_ServiceCommand".into(),
+                ),
+            ],
         );
     }
 
@@ -483,7 +612,7 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked(&format!("te/device/main/service/collectd/cmd/{action}")),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 
@@ -551,7 +680,7 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 
@@ -603,7 +732,7 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 
@@ -651,7 +780,7 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 
@@ -747,7 +876,7 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 
@@ -814,7 +943,7 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 
@@ -857,7 +986,7 @@ mod tests {
         assert!(converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-                "{}"
+                SERVICE_ACTION
             ))
             .await
             .is_empty());
@@ -873,7 +1002,7 @@ mod tests {
         converter
             .convert(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-                "{}",
+                SERVICE_ACTION,
             ))
             .await;
 

@@ -1,3 +1,4 @@
+use super::handlers::CommandMapping;
 use super::handlers::EntityTarget;
 use super::handlers::OperationContext;
 use super::handlers::OperationMessage;
@@ -116,7 +117,12 @@ impl OperationHandler {
     // they can't be sent over MQTT because of a panic, they won't be handled, won't be joined, so
     // we will not see that an exception has occurred.
     // FIXME(marcel): ensure panics are always propagated without the caller having to ask for them
-    pub async fn handle(&mut self, entity: EntityTarget, message: MqttMessage) {
+    pub async fn handle(
+        &mut self,
+        entity: EntityTarget,
+        message: MqttMessage,
+        command_mapping: CommandMapping,
+    ) {
         let Ok((_, channel)) = self.context.mqtt_schema.entity_channel_of(&message.topic) else {
             return;
         };
@@ -139,6 +145,7 @@ impl OperationHandler {
             entity,
             cmd_id: cmd_id.into(),
             message,
+            command_mapping,
         };
 
         let topic = Arc::from(message.message.topic.name.as_str());
@@ -315,7 +322,6 @@ mod tests {
     use tedge_api::commands::ConfigSnapshotCmd;
     use tedge_api::commands::ConfigSnapshotCmdPayload;
     use tedge_api::entity::EntityExternalId;
-    use tedge_api::entity::EntityType;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::OperationType;
     use tedge_api::CommandStatus;
@@ -341,13 +347,16 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
-            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
         let message_wrong_entity = MqttMessage::new(&Topic::new("asdf").unwrap(), []);
-        sut.handle(entity_target.clone(), message_wrong_entity)
-            .await;
+        sut.handle(
+            entity_target.clone(),
+            message_wrong_entity,
+            CommandMapping::Operation,
+        )
+        .await;
 
         assert_eq!(sut.running_operations.len(), 0);
 
@@ -358,7 +367,12 @@ mod tests {
             },
         );
         let message_wrong_channel = MqttMessage::new(&topic, []);
-        sut.handle(entity_target, message_wrong_channel).await;
+        sut.handle(
+            entity_target,
+            message_wrong_channel,
+            CommandMapping::Operation,
+        )
+        .await;
 
         assert_eq!(sut.running_operations.len(), 0);
     }
@@ -374,7 +388,6 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
-            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -389,8 +402,12 @@ mod tests {
         let different_mapper_message =
             MqttMessage::new(&different_mapper_topic, r#"{"status":"executing"}"#);
 
-        sut.handle(entity_target.clone(), different_mapper_message)
-            .await;
+        sut.handle(
+            entity_target.clone(),
+            different_mapper_message,
+            CommandMapping::Operation,
+        )
+        .await;
 
         assert_eq!(sut.running_operations.len(), 0);
     }
@@ -408,7 +425,6 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
-            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -423,8 +439,12 @@ mod tests {
         let sub_workflow_message =
             MqttMessage::new(&sub_workflow_topic, r#"{"status":"executing"}"#);
 
-        sut.handle(entity_target.clone(), sub_workflow_message)
-            .await;
+        sut.handle(
+            entity_target.clone(),
+            sub_workflow_message,
+            CommandMapping::Operation,
+        )
+        .await;
 
         assert_eq!(sut.running_operations.len(), 0);
 
@@ -435,7 +455,12 @@ mod tests {
             },
         );
         let message_wrong_channel = MqttMessage::new(&topic, []);
-        sut.handle(entity_target, message_wrong_channel).await;
+        sut.handle(
+            entity_target,
+            message_wrong_channel,
+            CommandMapping::Operation,
+        )
+        .await;
 
         assert_eq!(
             sut.running_operations.len(),
@@ -468,7 +493,6 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
-            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -491,6 +515,7 @@ mod tests {
         sut.handle(
             entity_target.clone(),
             config_snapshot_operation.command_message(&mqtt_schema),
+            CommandMapping::Operation,
         )
         .await;
         assert_eq!(sut.running_operations.len(), 1);
@@ -537,7 +562,8 @@ mod tests {
         assert_eq!(sut.running_operations.len(), 1);
 
         // finally, check that after handling clearing message, operation was joined
-        sut.handle(entity_target, clearing_message).await;
+        sut.handle(entity_target, clearing_message, CommandMapping::Operation)
+            .await;
 
         assert_eq!(sut.running_operations.len(), 0);
     }
@@ -556,7 +582,6 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
-            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -570,7 +595,12 @@ mod tests {
 
         let invalid_command_message = MqttMessage::new(&command_topic, "invalid command payload");
 
-        sut.handle(entity_target, invalid_command_message).await;
+        sut.handle(
+            entity_target,
+            invalid_command_message,
+            CommandMapping::Operation,
+        )
+        .await;
 
         assert!(!sut
             .running_operations
@@ -591,7 +621,6 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
-            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -609,7 +638,8 @@ mod tests {
         let clearing_message = config_snapshot_operation.clearing_message(&mqtt_schema);
         let clearing_message_topic = clearing_message.topic.name.clone();
 
-        sut.handle(entity_target, clearing_message).await;
+        sut.handle(entity_target, clearing_message, CommandMapping::Operation)
+            .await;
 
         assert!(!sut
             .running_operations
@@ -633,7 +663,6 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
-            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -654,6 +683,7 @@ mod tests {
             sut.handle(
                 entity_target.clone(),
                 config_snapshot_operation.command_message(&mqtt_schema),
+                CommandMapping::Operation,
             )
             .await;
         }
@@ -685,7 +715,6 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
-            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -717,8 +746,12 @@ mod tests {
 
         let failed_message_mqtt = failed_message.command_message(&mqtt_schema);
         let failed_topic = failed_message_mqtt.topic.name.as_str();
-        sut.handle(entity_target.clone(), failed_message_mqtt.clone())
-            .await;
+        sut.handle(
+            entity_target.clone(),
+            failed_message_mqtt.clone(),
+            CommandMapping::Operation,
+        )
+        .await;
         assert_eq!(
             &sut.running_operations.get(failed_topic).unwrap().status,
             "failed"
@@ -726,8 +759,12 @@ mod tests {
 
         let successful_message_mqtt = successful_message.command_message(&mqtt_schema);
         let successful_topic = successful_message_mqtt.topic.name.as_str();
-        sut.handle(entity_target.clone(), successful_message_mqtt.clone())
-            .await;
+        sut.handle(
+            entity_target.clone(),
+            successful_message_mqtt.clone(),
+            CommandMapping::Operation,
+        )
+        .await;
         assert_eq!(
             &sut.running_operations
                 .get(successful_message_mqtt.topic.name.as_str())
@@ -741,6 +778,7 @@ mod tests {
         sut.handle(
             entity_target.clone(),
             executing_message.command_message(&mqtt_schema),
+            CommandMapping::Operation,
         )
         .await;
         assert_eq!(
@@ -755,6 +793,7 @@ mod tests {
         sut.handle(
             entity_target.clone(),
             executing_message.command_message(&mqtt_schema),
+            CommandMapping::Operation,
         )
         .await;
         assert_eq!(
@@ -779,7 +818,6 @@ mod tests {
         let entity_target = EntityTarget {
             topic_id: entity_topic_id.clone(),
             external_id: EntityExternalId::from("anything"),
-            entity_type: EntityType::MainDevice,
             smartrest_publish_topic: Topic::new("anything").unwrap(),
         };
 
@@ -802,6 +840,7 @@ mod tests {
         sut.handle(
             entity_target.clone(),
             config_snapshot_operation.command_message(&mqtt_schema),
+            CommandMapping::Operation,
         )
         .await;
         assert_eq!(sut.running_operations.len(), 1);
@@ -815,6 +854,7 @@ mod tests {
         sut.handle(
             entity_target.clone(),
             config_snapshot_operation.clearing_message(&mqtt_schema),
+            CommandMapping::Operation,
         )
         .await;
     }

@@ -2981,7 +2981,7 @@ async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service
     .unwrap();
     mqtt.send(MqttMessage::new(
         &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-        "{}",
+        r#"{"@type": "service-action"}"#,
     ))
     .await
     .unwrap();
@@ -3032,6 +3032,92 @@ async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service
         [(
             "c8y/s/us/test-device:device:main:service:collectd",
             smartrest,
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn a_custom_operation_of_a_service_is_not_reported_as_a_service_command() {
+    let ttd = TempTedgeDir::new();
+    let template = r#"
+        [exec]
+        on_fragment = "c8y_DumpState"
+
+        [exec.workflow]
+        operation = "dump_state"
+        "#;
+    let ops_dir = ttd.dir("operations").dir("c8y");
+    ops_dir
+        .file("c8y_DumpState.template")
+        .with_raw_content(template);
+    ops_dir
+        .dir("test-device:device:main:service:collectd")
+        .file("c8y_DumpState")
+        .with_raw_content(template);
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/dump_state/c8y-mapper-1234"),
+        json!({
+            "status": "successful",
+            "result": "active",
+            "c8y-mapper": {
+                "on_fragment": "c8y_DumpState",
+                "output": "${.payload.result}"
+            }
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:main:service:collectd",
+            "503,c8y_DumpState,active",
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn the_status_of_a_service_command_received_before_the_action_declaration_is_reported_as_a_service_command(
+) {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/freeze/c8y-mapper-1234"),
+        json!({"status": "successful"}).to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:main:service:collectd",
+            "503,c8y_ServiceCommand",
         )],
     )
     .await;
