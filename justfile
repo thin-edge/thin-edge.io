@@ -182,7 +182,7 @@ setup-integration-test *ARGS:
     tests/RobotFramework/bin/setup.sh {{ARGS}}
 
 # Build the integration test image
-build-integration-test *ARGS: (build ARGS)
+build-integration-test *ARGS: (build "--package-types deb" ARGS)
     #!/usr/bin/env bash
     set -e
     if [ ! -d tests/RobotFramework/.venv ]; then
@@ -213,9 +213,14 @@ dev-device-up *ARGS:
         name="$1"
         shift
     fi
+    # Default to dev-stripped. `release` is also the justfile's default, so only honour it when set in the environment
+    profile="{{BUILD_PROFILE}}"
+    if [ "$profile" = release ] && [ -z "${BUILD_PROFILE:-}" ]; then
+        profile=dev-stripped
+    fi
     # A per-device image, so a parallel build in another worktree can't retag the image before `docker run`
     image="tedge-dev-${name,,}"
-    INTTEST_IMAGE="$image" just -f {{justfile()}} build-integration-test "$@"
+    BUILD_PROFILE="$profile" INTTEST_IMAGE="$image" just -f {{justfile()}} build-integration-test "$@"
     docker run -d --tty --privileged --tmpfs /tmp:size=64m --tmpfs /run:size=64m --name "tedge-dev-$name" --hostname "$name" "$image"
     docker exec -w /setup "tedge-dev-$name" ./bootstrap.sh
     docker exec "tedge-dev-$name" systemctl enable --now tedge-agent
