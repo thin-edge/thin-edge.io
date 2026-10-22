@@ -408,31 +408,15 @@ where
 
 /// Does this request target the Cumulocity frontend UI?
 ///
-/// Cumulocity revokes the device token when the frontend UI is accessed, so these
-/// requests are denied before they are proxied.
-///
-/// The check runs on the parsed URL rather than on the raw request path, because the
-/// raw path does not show what will ultimately be acted on.
-///
-/// [reqwest::Url] resolves `.` and `..` segments before the request is sent, so a raw
-/// path of `../../apps/x` leaves this proxy as `/apps/x`. That much is guaranteed here
-/// and is what makes checking the raw path unsound.
-///
-/// The path is then percent-decoded and resolved a second time. This is a defensive
-/// assumption rather than something this crate can observe: a server that decodes the
-/// path before routing would see `app%73/x` as `apps/x`, and decoding can itself
-/// re-introduce separators and dot segments that the first resolution already removed
-/// (`..%2Fapps/x` decodes to `../apps/x`). Normalizing only once would leave exactly
-/// the bypass this function exists to prevent.
-///
-/// Only one round of decoding is applied, which is what a server that decodes before
-/// routing performs. A doubly encoded path (`%252Fapps/x`) is therefore out of scope.
-///
-/// Matching is case-insensitive as a further precaution. No Cumulocity REST endpoint
-/// the proxy is expected to carry begins with `apps/` or ends in `.js` in any casing.
-/// A path whose *encoded* form does not match but whose decoded form does — an external
-/// id of `dev%2Ejs`, say — is denied as well. That is the intended direction: the guard
-/// protects the device token, and the shapes it rejects are not ones the REST API uses.
+/// Cumulocity revokes the device token when the frontend UI is accessed, so
+/// these requests are denied before they are proxied.
+//
+/// We can't just allow API requests and deny everything else, because there is
+/// no sensible common API prefix for the different endpoints like
+/// `https://<TENANT_DOMAIN>/event`, `<TENANT_DOMAIN>/inventory`,
+/// `TENANT_DOMAIN/devicecontrol`, etc. and new APIs can get added so we can
+/// only try to deny frontend requests by checking the request path after
+/// canonicalizing it.
 fn targets_frontend_ui(destination: &reqwest::Url) -> bool {
     let decoded = percent_encoding::percent_decode_str(destination.path()).decode_utf8_lossy();
 
