@@ -1466,6 +1466,160 @@ async fn restarting_the_agent_restarts_the_process_once() {
 }
 
 #[tokio::test]
+async fn software_list_interrupted_by_an_agent_restart_is_run_again_on_resume() {
+    let TestHandler {
+        tmp_dir,
+        mut mqtt_box,
+        mut software_box,
+        mut actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter("device/main//", vec![])
+        .await
+        .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/software_list/1"),
+            json!({"status": "init"}).to_string(),
+        ))
+        .await
+        .unwrap();
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/software_list/1",
+        "executing",
+    )
+    .await;
+
+    // The request reaches the software manager, which is stopped before responding,
+    // as when the agent restarts after updating itself
+    assert!(matches!(
+        software_box.recv().await,
+        Some(SoftwareCommand::SoftwareListCommand(_))
+    ));
+    actor_handle.abort();
+    let _ = actor_handle.await;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut software_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        tmp_dir,
+        "device/main//",
+        vec![],
+        FakeEntityStore::Entities(vec![]),
+    )
+    .await
+    .unwrap();
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/software_list/1",
+        "executing",
+    )
+    .await;
+
+    let resumed = software_box.recv().await;
+    assert!(
+        matches!(&resumed, Some(SoftwareCommand::SoftwareListCommand(cmd)) if cmd.cmd_id == "1"),
+        "Expected the interrupted software_list request to be sent again to the software manager, got {resumed:?}"
+    );
+}
+
+#[tokio::test]
+async fn software_list_of_a_legacy_builtin_workflow_interrupted_by_an_agent_restart_is_run_again_on_resume(
+) {
+    let workflow = r#"
+operation = "software_list"
+
+[init]
+action = "proceed"
+on_success = "scheduled"
+
+[scheduled]
+action = "builtin"
+on_success = "executing"
+
+[executing]
+action = "builtin"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+    let workflows = vec![("software_list.toml".to_string(), workflow.to_string())];
+    let TestHandler {
+        tmp_dir,
+        mut mqtt_box,
+        mut software_box,
+        actor_handle,
+        ..
+    } = spawn_mqtt_operation_converter("device/main//", workflows.clone())
+        .await
+        .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/software_list/1"),
+            json!({"status": "init"}).to_string(),
+        ))
+        .await
+        .unwrap();
+
+    // The software manager starts the request, then is stopped before completing it,
+    // as when the agent restarts after updating itself
+    let Some(SoftwareCommand::SoftwareListCommand(request)) = software_box.recv().await else {
+        panic!("Expected a software_list request");
+    };
+    software_box
+        .send(request.with_status(CommandStatus::Executing).into())
+        .await
+        .unwrap();
+    let executing = software_box.recv().await;
+    assert!(
+        matches!(&executing, Some(SoftwareCommand::SoftwareListCommand(cmd)) if cmd.status() == CommandStatus::Executing),
+        "Expected the executing state to be forwarded to the software manager, got {executing:?}"
+    );
+    actor_handle.abort();
+    let _ = actor_handle.await;
+
+    let TestHandler {
+        mut mqtt_box,
+        mut software_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        tmp_dir,
+        "device/main//",
+        workflows,
+        FakeEntityStore::Entities(vec![]),
+    )
+    .await
+    .unwrap();
+
+    recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/software_list/1",
+        "scheduled",
+    )
+    .await;
+
+    // Only a scheduled request is processed by the software manager
+    let resumed = software_box.recv().await;
+    assert!(
+        matches!(&resumed, Some(SoftwareCommand::SoftwareListCommand(cmd)) if cmd.cmd_id == "1" && cmd.status() == CommandStatus::Scheduled),
+        "Expected the interrupted software_list request to be scheduled again on the software manager, got {resumed:?}"
+    );
+}
+
+#[tokio::test]
 async fn each_operation_of_an_array_is_declared_and_cleared_when_removed_from_the_file() {
     let TestHandler {
         tmp_dir,
