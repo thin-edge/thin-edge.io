@@ -39,7 +39,6 @@ use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::entity::EntityExternalId;
-use tedge_api::entity::EntityType;
 use tedge_api::file_transfer_url::FileTransferUrls;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
@@ -81,6 +80,7 @@ impl OperationContext {
             cmd_id,
             message,
             operation,
+            command_mapping,
         } = message;
         let external_id = entity.external_id.clone();
 
@@ -92,11 +92,16 @@ impl OperationContext {
             }
         };
 
-        let mut c8y_operation = to_c8y_operation(&operation, &entity.entity_type);
+        let mut c8y_operation = match command_mapping {
+            CommandMapping::ServiceCommand => {
+                Some(CumulocitySupportedOperations::C8yServiceCommand)
+            }
+            CommandMapping::Operation => to_c8y_operation(&operation),
+        };
 
         let operation_result = match operation {
             // Service commands do not have a specific thin-edge internal operation type.
-            _ if entity.entity_type == EntityType::Service => {
+            _ if command_mapping == CommandMapping::ServiceCommand => {
                 self.handle_service_command_state_change(&entity, &cmd_id, &message)
                     .await
             }
@@ -340,14 +345,9 @@ pub(super) enum OperationOutcome {
 /// For a given `OperationType`, obtain a matching `C8ySupportedOperations`.
 ///
 /// For `OperationType`s that don't have C8y operation equivalent, `None` is returned.
-fn to_c8y_operation(
+pub(crate) fn to_c8y_operation(
     operation_type: &OperationType,
-    entity_type: &EntityType,
 ) -> Option<CumulocitySupportedOperations> {
-    if entity_type == &EntityType::Service {
-        return Some(CumulocitySupportedOperations::C8yServiceCommand);
-    }
-
     match operation_type {
         OperationType::LogUpload => Some(CumulocitySupportedOperations::C8yLogFileRequest),
         OperationType::Restart => Some(CumulocitySupportedOperations::C8yRestartRequest),
@@ -375,6 +375,13 @@ pub(super) struct OperationMessage {
     pub(super) entity: EntityTarget,
     pub(super) cmd_id: Arc<str>,
     pub(super) message: MqttMessage,
+    pub(super) command_mapping: CommandMapping,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommandMapping {
+    Operation,
+    ServiceCommand,
 }
 
 /// A subset of entity-related information necessary to handle an operation.
@@ -385,7 +392,6 @@ pub(super) struct OperationMessage {
 pub struct EntityTarget {
     pub topic_id: EntityTopicId,
     pub external_id: EntityExternalId,
-    pub entity_type: EntityType,
     pub smartrest_publish_topic: Topic,
 }
 

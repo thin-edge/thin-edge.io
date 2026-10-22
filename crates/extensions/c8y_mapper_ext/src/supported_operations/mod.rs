@@ -279,6 +279,16 @@ impl SupportedOperations {
         Ok(MqttMessage::new(&topic, payload.into_inner()))
     }
 
+    pub fn contains_operation(
+        &self,
+        device_xid: &ExternalIdRef,
+        c8y_operation_name: &OperationNameRef,
+    ) -> bool {
+        self.operations_by_xid
+            .get(device_xid)
+            .is_some_and(|operations| operations.operations.contains_key(c8y_operation_name))
+    }
+
     pub fn get_operation_handlers(
         &self,
         device_xid: &ExternalIdRef,

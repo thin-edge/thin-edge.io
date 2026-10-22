@@ -111,12 +111,12 @@ async fn a_service_declaring_actions_publishes_their_capability() {
         .assert_received([
             MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/test/cmd/restart"),
-                "{}",
+                r#"{"@type":"service-action"}"#,
             )
             .with_retain(),
             MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/test/cmd/enable"),
-                "{}",
+                r#"{"@type":"service-action"}"#,
             )
             .with_retain(),
         ])
@@ -139,7 +139,7 @@ async fn a_service_clearing_actions_publishes_an_empty_capability() {
         .assert_received([
             MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/test/cmd/restart"),
-                "{}",
+                r#"{"@type":"service-action"}"#,
             )
             .with_retain(),
             MqttMessage::new(

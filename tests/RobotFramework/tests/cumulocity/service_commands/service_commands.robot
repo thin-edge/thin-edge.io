@@ -19,7 +19,8 @@ ${MAPPER_XID}       ${EMPTY}
 
 *** Test Cases ***
 Declares and clears an action of a service
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/pause '{}'
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/pause '{"@type":"service-action"}'
     Supported Service Commands Should Be    ${SERVICE_XID}    PAUSE    RESTART
     Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
     ThinEdgeIO.File Should Exist    /etc/tedge/operations/c8y/${SERVICE_XID}/c8y_ServiceCommand
@@ -83,7 +84,8 @@ Custom Setup
     Execute Command
     ...    tedge mqtt pub --retain te/device/main/service/${SERVICE_NAME} '{"name":"${SERVICE_NAME}","@type":"service"}'
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/restart '{}'
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/restart '{"@type":"service-action"}'
 
 Supported Service Commands Should Be
     [Arguments]    ${external_id}    @{expected}

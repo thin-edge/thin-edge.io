@@ -73,8 +73,10 @@ Custom Setup
     ...    tedge mqtt pub --retain te/device/main/service/${SERVICE_NAME} '{"@type":"service","name":"${SERVICE_NAME}","type":"${SERVICE_TYPE}"}'
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
 
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/restart '{}'
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/freeze '{}'
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/restart '{"@type":"service-action"}'
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/freeze '{"@type":"service-action"}'
 
 Create Service Command Operation
     [Arguments]    ${fragment}

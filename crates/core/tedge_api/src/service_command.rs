@@ -190,10 +190,15 @@ pub struct InvalidServiceType {
     pub reason: String,
 }
 
+/// The `@type` of a capability on `te/<service-topic-id>/cmd/<action>`
+/// that declares an action of the service
+pub const SERVICE_ACTION_TYPE: &str = "service-action";
+
 /// The actions a service declares as its own capabilities when it starts
 ///
 /// Each action is published as a retained message on `te/<service-topic-id>/cmd/<action>`,
-/// `{}` to declare the action and an empty message to clear a previously declared one.
+/// a payload with the `@type` [`SERVICE_ACTION_TYPE`] to declare the action
+/// and an empty message to clear a previously declared one.
 ///
 /// Clearing is required because a capability is retained:
 /// a mapper declares `restart` when it runs standalone,
