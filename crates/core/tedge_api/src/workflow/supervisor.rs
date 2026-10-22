@@ -238,6 +238,33 @@ impl WorkflowSupervisor {
             .and_then(|workflow| workflow.get_action(command_state))
     }
 
+    /// Return the builtin operation triggered just before the current state of a command,
+    /// along with the state triggering this builtin operation
+    fn builtin_operation_trigger_state(
+        &self,
+        command_state: &GenericCommandState,
+    ) -> Option<(&OperationName, &StateName)> {
+        let operation_name = command_state.operation()?;
+        let version = command_state.workflow_version()?;
+        let entry = self.commands.entry(&command_state.topic.name)?;
+        let workflow = self
+            .workflows
+            .get(&(entry.entity_type, operation_name.as_str().into()))?
+            .get(version)
+            .ok()?;
+        workflow
+            .states
+            .iter()
+            .find_map(|(state, action)| match action {
+                OperationAction::BuiltInOperation(operation, handlers)
+                    if handlers.on_exec.status == command_state.status =>
+                {
+                    Some((operation, state))
+                }
+                _ => None,
+            })
+    }
+
     /// Return the current state of a command (identified by its topic)
     pub fn get_state(&self, command: &str) -> Option<&GenericCommandState> {
         self.commands.entry(command).map(|entry| &entry.state)
@@ -334,6 +361,21 @@ impl WorkflowSupervisor {
         match action {
             OperationAction::AwaitingAgentRestart(handlers) => {
                 Some(command.update(handlers.on_success))
+            }
+
+            // A builtin operation is awaited, but its request was only held in memory by the builtin actor
+            // and has been lost on restart. A software list request is safe to be sent again.
+            OperationAction::AwaitOperationCompletion(_, _)
+                if self.sub_command_state(&command).is_none() =>
+            {
+                match self.builtin_operation_trigger_state(&command) {
+                    Some((operation, trigger_state))
+                        if operation == &OperationType::SoftwareList.to_string() =>
+                    {
+                        Some(command.move_to(trigger_state.as_str().into()))
+                    }
+                    _ => Some(command),
+                }
             }
 
             _ => {

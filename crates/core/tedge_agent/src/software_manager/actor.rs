@@ -215,10 +215,12 @@ impl SoftwareManagerActor {
                 self.output_sender.send(response.into()).await?;
             }
             Ok(Some(SoftwareCommand::SoftwareListCommand(request))) => {
-                let response = request.with_error(
-                    "Software List request cancelled due to unexpected agent restart".to_string(),
+                // Not reported as failed: the workflow actor sends the request again when resuming the command,
+                // and a failure would complete the command before the result of that new request is published
+                info!(
+                    "Software list request {} interrupted by an agent restart, it will be run again when the workflow resumes",
+                    request.cmd_id
                 );
-                self.output_sender.send(response.into()).await?;
             }
             Ok(Some(SoftwareCommand::SoftwareCommandMetadata(_))) => (), // not used in state repository
             Err(StateError::LoadingFromFileFailed { source, .. })
