@@ -35,14 +35,16 @@ applied to a service topic identifier such as `device/main/service/nodered`.
 
 ### Declaring an action
 
-A service declares an action by publishing a retained empty JSON object `{}`
+A service declares an action by publishing a retained `{"@type": "service-action"}` message
 on `te/<service-topic-id>/cmd/<cmd_type>`, one topic per action.
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/pause' '{}'
+tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/pause' '{"@type": "service-action"}'
 ```
 
 One topic per action gives each action its own workflow.
+A capability without `"@type": "service-action"` declares a regular operation of the service, such as `log_upload`,
+in the same way as a capability of a device.
 
 ### Clearing an action
 

@@ -1573,14 +1573,16 @@ Where the `<c8y-url>` fields from Cumulocity are rewritten by the mapper to `<c8
 
 #### Capabilities
 
-A `cmd/<action>` capability of a service is mapped to an entry of the `c8y_SupportedServiceCommands` fragment
-of the service managed object.
+A `cmd/<action>` capability of a service with the payload `{"@type": "service-action"}`
+is mapped to an entry of the `c8y_SupportedServiceCommands` fragment of the service managed object.
+Any other capability of a service is mapped in the same way as a capability of a device,
+as described in [Supported Operations/Capabilities](#supported-operationscapabilities).
 
 These retained capability messages of the `collectd` service:
 
 ```text
-[te/device/main/service/collectd/cmd/start] {}
-[te/device/main/service/collectd/cmd/restart] {}
+[te/device/main/service/collectd/cmd/start] {"@type": "service-action"}
+[te/device/main/service/collectd/cmd/restart] {"@type": "service-action"}
 ```
 
 are mapped to the following messages:
@@ -1592,7 +1594,8 @@ are mapped to the following messages:
 
 The action names are uppercased and sorted.
 The whole list is published again on every change.
-When a capability topic is cleared, the action is removed from the list,
+When a capability topic is cleared, or declared again without `"@type": "service-action"`,
+the action is removed from the list,
 and an empty list is published when no action is left.
 A capability whose action name breaks the
 [action name rule](../../agent/service-commands#actions) is not mapped.
