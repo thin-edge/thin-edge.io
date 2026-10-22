@@ -294,7 +294,10 @@ mkdir -p "$ARTIFACT_DIR"
 
 if [ "$BUILD_PROFILE" = "release" ]; then
     COMMON_BUILD_OPTIONS+=("--release")
-elif [ "$BUILD_PROFILE" != "debug" ]; then
+elif [ "$BUILD_PROFILE" = "debug" ]; then
+    # The unstripped binaries are hundreds of MB, so the (uncompressed) packages are large and slow to install
+    echo "WARNING: The 'debug' profile keeps debug info in the packaged binaries. Use 'dev-stripped' for much smaller packages unless you need it" >&2
+else
     COMMON_BUILD_OPTIONS+=("--profile" "$BUILD_PROFILE")
 fi
 
