@@ -9,6 +9,7 @@ use tedge_config_engine::ops::ConfigOps;
 use tedge_config_engine::ops::TypedConfigOps;
 use tedge_config_engine::ConfigManager;
 use tedge_config_engine::EnvOverrides;
+use tedge_utils::paths::TedgePaths;
 
 mod schemas {
     use tedge_config_engine::*;
@@ -300,7 +301,10 @@ mod broken {
 
 fn typed_source<T>(manager: ConfigManager) -> Box<dyn ConfigOps>
 where
-    T: for<'a> facet::Facet<'a> + Default + 'static,
+    T: for<'a> facet::Facet<'a> + Default + Send + Sync + 'static,
 {
-    Box::new(TypedConfigOps::<T>::new(manager, "/nonexistent/tedge/config.toml".into()).unwrap())
+    let file = TedgePaths::from_root_with_defaults("/nonexistent/tedge", "", "")
+        .file("config.toml")
+        .unwrap();
+    Box::new(TypedConfigOps::<T>::empty(manager, file))
 }

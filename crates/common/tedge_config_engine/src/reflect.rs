@@ -12,7 +12,7 @@ use facet_reflect::Peek;
 use facet_reflect::Poke;
 
 /// Errors produced while navigating or mutating Facet-backed config DTOs.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum ConfigError {
     #[error("Unknown config key: '{0}'")]
     UnknownKey(String),
@@ -26,6 +26,8 @@ pub enum ConfigError {
     NotAStruct { key: String, segment: String },
     #[error("Failed to parse value: {0}")]
     ParseError(String),
+    #[error("Invalid value for '{key}': {reason}")]
+    InvalidKeyValue { key: String, reason: String },
     #[error("{}", format_invalid_value(key, source_key, origin, value, reason))]
     InvalidValue {
         /// The key that was read
@@ -56,8 +58,29 @@ pub enum ConfigError {
     UnknownRootKey { key: String, root_key: String },
     #[error("'{key}' uses a from_root default ('{root_key}'), which is not allowed in the root config itself")]
     FromRootInRootConfig { key: String, root_key: String },
+    #[error("Mapper directories mappers/{first} and mappers/{second} both use the environment variable prefix {prefix}; rename one of them")]
+    EnvPrefixCollision {
+        first: String,
+        second: String,
+        prefix: String,
+    },
     #[error("A config source is already mounted at prefix '{0}'")]
     DuplicatePrefix(String),
+    #[error("Not writing {path}, as it has keys this schema doesn't know: {}", keys.join(", "))]
+    UnknownKeysInFile {
+        path: camino::Utf8PathBuf,
+        keys: Vec<String>,
+    },
+    #[error("Failed to write {path}: {reason}")]
+    WriteFile {
+        path: camino::Utf8PathBuf,
+        reason: String,
+    },
+    #[error("Failed to load {path}: {reason}")]
+    InvalidFile {
+        path: camino::Utf8PathBuf,
+        reason: String,
+    },
     #[error("I/O error: {0}")]
     IoError(String),
 }
@@ -415,9 +438,27 @@ fn parse_to_value(
             .parse_from_str(value)
             // The value is parsed on its own, so the reflection path is always the
             // root of that value and adds nothing to the message
-            .map_err(|e| ConfigError::ParseError(format!("{}", e.kind)))?
+            .map_err(|e| {
+                let reason = e.kind.to_string();
+                ConfigError::ParseError(match enum_values(shape) {
+                    Some(values) => format!("{reason}, expected one of: {}", values.join(", ")),
+                    None => reason,
+                })
+            })?
             .build(),
     ))
+}
+
+/// The values a fieldless enum accepts, which facet's parse error doesn't list
+fn enum_values(shape: &Shape) -> Option<Vec<&'static str>> {
+    let facet::Type::User(facet::UserType::Enum(enum_type)) = shape.ty else {
+        return None;
+    };
+    let variants = enum_type.variants;
+    variants
+        .iter()
+        .all(|v| v.data.fields.is_empty())
+        .then(|| variants.iter().map(|v| v.effective_name()).collect())
 }
 
 /// Builds an all-unset group so a nested key has somewhere to live.

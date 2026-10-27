@@ -266,6 +266,29 @@ impl ManagedDir {
         .template_file(relative_from_root)
     }
 
+    /// Lists the names of the directories inside this one, following symlinks,
+    /// or nothing if this directory doesn't exist
+    pub async fn subdirectories(&self) -> Result<Vec<String>, PathsError> {
+        let mut entries = match tokio::fs::read_dir(self.path()).await {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e.into()),
+        };
+        let mut names = Vec::new();
+        while let Some(entry) = entries.next_entry().await? {
+            if !tokio::fs::metadata(entry.path())
+                .await
+                .is_ok_and(|m| m.is_dir())
+            {
+                continue;
+            }
+            if let Ok(name) = entry.file_name().into_string() {
+                names.push(name);
+            }
+        }
+        Ok(names)
+    }
+
     pub async fn ensure(&self) -> Result<(), PathsError> {
         if self.warn_and_ignore_permission_errors {
             self.ensure_without_strict_permissions().await
@@ -442,6 +465,15 @@ impl ManagedFile {
             }
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
             Err(err) => Err(err.into()),
+        }
+    }
+
+    /// Reads the file's content, or `None` if it doesn't exist
+    pub async fn read_to_string(&self) -> Result<Option<String>, PathsError> {
+        match tokio::fs::read_to_string(self.path()).await {
+            Ok(content) => Ok(Some(content)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -931,6 +963,74 @@ mod tests {
         assert!(err.contains("Failed to change owner"));
         assert!(err.contains("missing-parent/managed-root"));
         assert!(ttd.path().join("missing-parent").is_dir());
+    }
+
+    #[tokio::test]
+    async fn reading_a_file_returns_its_content() {
+        let ttd = TempTedgeDir::new();
+        ttd.file("tedge.toml")
+            .with_raw_content("url = \"example.com\"");
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), "", "");
+
+        let content = config_root
+            .file("tedge.toml")
+            .unwrap()
+            .read_to_string()
+            .await
+            .unwrap();
+
+        assert_eq!(content.as_deref(), Some("url = \"example.com\""));
+    }
+
+    #[tokio::test]
+    async fn reading_a_missing_file_returns_none() {
+        let ttd = TempTedgeDir::new();
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), "", "");
+
+        let content = config_root
+            .file("missing.toml")
+            .unwrap()
+            .read_to_string()
+            .await
+            .unwrap();
+
+        assert_eq!(content, None);
+    }
+
+    #[tokio::test]
+    async fn subdirectories_lists_directories_and_symlinks_to_them_but_not_files() {
+        let ttd = TempTedgeDir::new();
+        let mappers = ttd.dir("mappers");
+        mappers.dir("c8y");
+        mappers.file("notes.txt");
+        let elsewhere = ttd.dir("elsewhere");
+        std::os::unix::fs::symlink(elsewhere.path(), mappers.path().join("linked")).unwrap();
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), "", "");
+
+        let mut names = config_root
+            .dir("mappers")
+            .unwrap()
+            .subdirectories()
+            .await
+            .unwrap();
+        names.sort();
+
+        assert_eq!(names, ["c8y", "linked"]);
+    }
+
+    #[tokio::test]
+    async fn a_missing_directory_has_no_subdirectories() {
+        let ttd = TempTedgeDir::new();
+        let config_root = TedgePaths::from_root_with_defaults(ttd.path(), "", "");
+
+        let names = config_root
+            .dir("mappers")
+            .unwrap()
+            .subdirectories()
+            .await
+            .unwrap();
+
+        assert!(names.is_empty());
     }
 
     #[tokio::test]

@@ -52,7 +52,10 @@ yansi = { workspace = true }
 
 [dev-dependencies]
 rcgen = { workspace = true }
+rstest = { workspace = true }
 tedge_config = { workspace = true, features = ["test"] }
+tedge_config_engine = { workspace = true }
+tedge_mapper_config = { workspace = true }
 tedge_test_utils = { workspace = true }
 tracing-subscriber = { workspace = true }
 
