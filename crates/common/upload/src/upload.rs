@@ -637,20 +637,32 @@ mod tests {
 
         let mut server = mockito::Server::new_async().await;
         for status in statuses {
-            let mock = server
-                .mock("PUT", format!("/{}", status.as_u16()).as_str())
-                .with_status(status.as_u16().into());
-            let mock = if retryable.contains(&status) {
-                mock.expect(2)
+            let path = format!("/{}", status.as_u16());
+            // mockito serves the failure until its expected hit is used up,
+            // then falls through to the success mock, so a retry succeeds
+            let failure = server
+                .mock("PUT", path.as_str())
+                .with_status(status.as_u16().into())
+                .expect(1)
+                .create_async()
+                .await;
+            let is_retryable = retryable.contains(&status);
+            let success = server
+                .mock("PUT", path.as_str())
+                .with_status(201)
+                .expect(usize::from(is_retryable))
+                .create_async()
+                .await;
+
+            let res = attempt_upload(&server, path.as_str()).await;
+            if is_retryable {
+                assert!(res.is_ok(), "{status}: {res:?}");
             } else {
-                mock.expect(1)
-            };
-            let mock = mock.create_async().await;
+                assert!(matches!(res, Err(UploadError::Network(_))), "{res:?}");
+            }
 
-            let res = attempt_upload(&server, format!("/{}", status.as_u16()).as_str()).await;
-            assert!(matches!(res, Err(UploadError::Network(_))), "{res:?}");
-
-            mock.assert_async().await;
+            failure.assert_async().await;
+            success.assert_async().await;
         }
     }
 
@@ -661,6 +673,12 @@ mod tests {
             .mock("PUT", "/te/v1/files/test")
             .with_status(500)
             .expect(1)
+            .create_async()
+            .await;
+        let _success = server
+            .mock("PUT", "/te/v1/files/test")
+            .with_status(201)
+            .expect(0)
             .create_async()
             .await;
         let UploadError::Network(err) = attempt_upload(&server, "/te/v1/files/test")
@@ -687,14 +705,13 @@ mod tests {
         let url = UploadInfo::new(&target_url).set_method(UploadMethod::PUT);
 
         let mut uploader = Uploader::new(file.path_buf(), None, CloudHttpConfig::test_value());
-        // tweaked to exactly 1 retry
-        uploader.set_backoff(ExponentialBackoff {
-            initial_interval: Duration::from_millis(5),
-            multiplier: 10.0,
-            randomization_factor: f64::EPSILON,
-            max_elapsed_time: Some(Duration::from_millis(50)),
-            ..Default::default()
-        });
+        // The time limit is only a safety net, the mocks decide how many attempts are made
+        uploader.set_backoff(
+            ExponentialBackoffBuilder::new()
+                .with_initial_interval(Duration::from_millis(5))
+                .with_max_elapsed_time(Some(Duration::from_secs(10)))
+                .build(),
+        );
         uploader.upload(&url).await
     }
 
