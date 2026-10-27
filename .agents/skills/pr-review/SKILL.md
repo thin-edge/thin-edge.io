@@ -94,7 +94,8 @@ Every prompt includes: the scratch directory path, where to read files from (hea
 **Spec** prompt (only when a spec was found):
 
 - The spec contents, or the paths to read.
-- "Report: (a) requirements the spec asks for that are missing or partial; (b) behaviour in the diff that the spec did not ask for; (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding."
+- "Report: (a) requirements the spec asks for that are missing or partial; (b) behaviour in the diff that the spec did not ask for; (c) requirements that look implemented but where the implementation looks wrong; (d) requirements the spec asks for that are the wrong solution for the user, where a simpler or safer one does the same job: name the alternative. Quote the spec line for each finding."
+- "When the change replaces a pattern (a call, a config form, a command line), search the repository for the old pattern outside the diff, including docs and the doc comments on config keys. Each remaining use is a finding under (a)."
 - Spec also owns places where the PR description or a commit message says something the code does not do.
   When such a mismatch also leaves code untested, Correctness reports the missing test and Spec reports the mismatch.
 
