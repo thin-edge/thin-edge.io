@@ -1327,7 +1327,7 @@ mod tests {
                         (CloseConnection::WithReset, _) => {
                             let mut tcp_stream = tcp_stream;
                             answer_requests_until_second(&mut tcp_stream, &counter).await;
-                            tcp_stream.set_linger(Some(Duration::ZERO)).unwrap();
+                            tcp_stream.set_zero_linger().unwrap();
                         }
                         (CloseConnection::TlsWithCloseNotify, Some(acceptor)) => {
                             let mut tls_stream = acceptor.accept(tcp_stream).await.unwrap();
