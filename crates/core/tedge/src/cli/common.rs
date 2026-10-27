@@ -457,6 +457,8 @@ pub(crate) mod test_service_manager {
         pub active: Option<Vec<String>>,
         /// The actions run so far, formatted as `<action> <service>`
         pub actions: Mutex<Vec<String>>,
+        /// Executables reported as installed
+        pub installed: Vec<String>,
     }
 
     impl RecordingServiceManager {
@@ -473,6 +475,13 @@ pub(crate) mod test_service_manager {
 
         pub fn actions(&self) -> Vec<String> {
             self.actions.lock().unwrap().clone()
+        }
+
+        pub fn with_installed(self, executables: &[&str]) -> Self {
+            Self {
+                installed: executables.iter().map(|e| e.to_string()).collect(),
+                ..self
+            }
         }
     }
 
@@ -523,6 +532,10 @@ pub(crate) mod test_service_manager {
                     name: "test".to_string(),
                 }),
             }
+        }
+
+        async fn has_executable(&self, executable: &str) -> bool {
+            self.installed.iter().any(|e| e == executable)
         }
     }
 }
