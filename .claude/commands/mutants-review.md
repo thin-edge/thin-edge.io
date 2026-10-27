@@ -77,7 +77,7 @@ Done when every gap test is either in `caught.txt` or explicitly marked unverifi
 
 Show the user a summary table (mutant, verdict, verified?) and the comment bodies. Under it, name the changed logic no mutant touched: cargo-mutants leaves macro arguments (e.g. the arms of a `matches!`) and most `if` conditions unmutated, so "all caught" says nothing about them. Posting is outward-facing: post only after the user approves.
 
-Each untested behaviour becomes one comment, anchored on a mutated line (always inside the diff, since `--in-diff` produced it), `side: RIGHT`. Mutants killed by the same test share one comment.
+Each untested behaviour becomes one comment, anchored on a changed line of `pr.diff` that lies inside the mutated function, `side: RIGHT`. Mutants killed by the same test share one comment.
 
 Write each comment following [Writing PR comments](../../.agents/skills/pr-review/SKILL.md#writing-pr-comments) in the pr-review skill. For a gap, that means:
 
