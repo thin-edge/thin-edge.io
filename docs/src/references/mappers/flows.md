@@ -25,7 +25,7 @@ which rule how to consume, transform and produce MQTT messages.
   - The focus is on message transformation, format conversion, content extraction and completion as well as filtering and redacting.
 - A *connector* is used by the mapper to consume messages from a source and produce messages to a sink.
   - Messages can be consumed from MQTT, files and background processes.
-  - Transformed messages can be published over MQTT or appended to files.
+  - Transformed messages can be published over MQTT or written to files.
 - A *flow* applies a chain of transformation *steps* to input messages producing fully processed output messages.
   - The *flows* put things in motion, actually interacting with the system, consuming and producing messages.
   - Messages received on a flow are passed to the first step; and the transformed messages, if any,
@@ -455,7 +455,7 @@ path = "/var/log/some-app.log"
 
 ### Output connectors
 
-Transformed messages and errors can be published over MQTT or appended to files.
+Transformed messages and errors can be published over MQTT or written to files.
 
 The default is to publish the transformed messages over MQTT on the topics specified by each message.
 And to direct all the errors to a specific topic, the `te/error` topic.
@@ -479,6 +479,27 @@ accept_topics = "c8y/#"
 [errors.file]
 path = "/var/run/tedge/flows.log"
 ```
+
+By default, messages are appended to the output file as lines of text, using the format `[topic] payload`.
+The `format` of a file output can be set to `raw` to write the message payload as-is, without the topic or a trailing newline.
+This is useful to produce binary files, such as images or parquet files, from the output of a flow.
+In that case, each message replaces the content of the file. The file is written atomically,
+so other processes never read a partially written file.
+
+```toml
+[output.file]
+path = "/var/tedge/export/measurements.parquet"
+format = "raw"
+```
+
+As the file is replaced by writing a temporary file in the same directory and renaming it:
+- the directory containing the file must already exist, and the mapper user (e.g. `tedge`) requires write permission on that directory, and not only on the file itself
+- the file is re-created on each write, so any custom ownership or permissions applied to an existing file are not preserved
+- processes which keep the file open (e.g. `tail -F`) continue to read the previous version of the file
+- only the last message of a batch of transformed messages is written
+
+The `raw` format is intended for outputs which are written occasionally, such as periodic exports,
+rather than for high-rate message outputs.
 
 ## %%te%% flow mapper
 
