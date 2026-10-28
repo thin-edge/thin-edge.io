@@ -69,7 +69,7 @@ impl CustomMapper {
 ///
 /// This is the single authoritative description of what a mapper directory
 /// contains and what components should be started. Produced by
-/// [`validate_and_load`], then used directly to drive [`start`].
+/// [`validate_and_load`], then used directly to drive [`CustomMapper::build`].
 #[derive(Debug)]
 pub enum MapperStartup {
     /// The mapper directory has no `bridge/` subdirectory.

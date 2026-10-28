@@ -294,7 +294,7 @@ impl EffectiveMapperConfig {
     /// Looks up a key in the TOML tables, falling back to the schema to
     /// distinguish `NotSet` from `UnknownKey`.
     ///
-    /// Used both by the catch-all branch of [`get`] and as the fallback when
+    /// Used both by the catch-all branch of [`Self::get`] and as the fallback when
     /// a typed schema-level field is `None` (the value may still be present
     /// in the overlay from `tedge.toml`).
     fn get_from_tables(&self, key: &str) -> ConfigGetResult {
@@ -479,7 +479,7 @@ struct BridgeSchema<'a> {
 
 /// Returns all known schema-level key paths for a custom mapper config (e.g. `"device.cert_path"`).
 ///
-/// Keys are derived from the [`CustomMapperSchema`] struct by serialising an empty schema and
+/// Keys are derived from the `CustomMapperSchema` struct by serialising an empty schema and
 /// collecting all dotted leaf paths, so this stays in sync with the schema automatically.
 pub fn custom_mapper_schema_keys() -> Vec<String> {
     let schema = build_custom_mapper_schema(&CustomMapperConfig {
@@ -574,7 +574,7 @@ pub fn reader_to_toml_table(reader: &impl serde::Serialize) -> anyhow::Result<to
 /// Built-in mappers (e.g. c8y) should pass `serde_json::to_value(reader)?` so that
 /// `OptionalConfig::Empty` fields appear as `null` in the schema rather than being omitted as
 /// they would be under TOML serialisation. When `None`, the schema is derived from `config`
-/// via [`build_custom_mapper_schema`].
+/// via `build_custom_mapper_schema`.
 pub async fn resolve_effective_config(
     config: &CustomMapperConfig,
     tedge_config: &TEdgeConfig,
