@@ -1,6 +1,6 @@
 use camino::Utf8PathBuf;
 use std::sync::Arc;
-use tedge_api::file_transfer_url::FileTransferUrls;
+use tedge_api::http_url::FileTransferUrls;
 use tedge_api::mqtt_topics::ChannelFilter;
 use tedge_api::mqtt_topics::EntityFilter;
 use tedge_api::mqtt_topics::EntityTopicId;
