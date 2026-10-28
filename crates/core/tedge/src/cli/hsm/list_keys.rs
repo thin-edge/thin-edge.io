@@ -7,9 +7,10 @@ use tedge_p11::CryptokiConfig;
 use tedge_p11::SecretString;
 
 use super::create_key::parse_id;
+use super::uri_scope::matches_uri;
+use super::uri_scope::warn_filtered;
 use crate::command::Command;
 use crate::log::MaybeFancy;
-use crate::warning;
 use crate::ConfigError;
 
 /// Arguments of the key-listing command.
@@ -75,10 +76,10 @@ impl Command for ListKeysCmd {
             .uri
             .as_deref()
             .map(|uri| Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
-            .transpose()?;
-        let (uri_object, uri_id) = uri_attributes
-            .map(|uri| (uri.object.map(|o| o.into_owned()), uri.id))
+            .transpose()?
             .unwrap_or_default();
+        let uri_object = uri_attributes.object.as_ref().map(|o| o.to_string());
+        let uri_id = uri_attributes.id.clone();
 
         if self.label.is_some() && uri_object.is_some() {
             return Err(anyhow::anyhow!(
@@ -123,16 +124,15 @@ impl Command for ListKeysCmd {
             .filter(|key| id_filter.as_deref().is_none_or(|id| key.id == id))
             .collect();
 
-        let filter = Pkcs11Uri::parse(self.uri.as_deref().unwrap_or("pkcs11:")).unwrap();
+        // tedge-p11-server may list the keys of another token than requested (see `uri_scope`).
         let matching_keys: Vec<_> = keys
             .iter()
-            .filter(|k| Pkcs11Uri::parse(&k.uri).is_ok_and(|u| filter.matches(&u)))
+            .filter(|k| matches_uri(&uri_attributes, &k.uri))
             .collect();
 
         let keys_not_shown = keys.len() - matching_keys.len();
         if keys_not_shown > 0 {
-            warning!("{keys_not_shown} results were not shown because tedge-p11-server filters objects using `device.cryptoki.uri` option.
-    If you want `tedge hsm` command to access all the keys, unset `device.cryptoki.uri` for tedge-p11-server and restart it.\n");
+            warn_filtered(keys_not_shown);
         }
 
         if matching_keys.is_empty() {

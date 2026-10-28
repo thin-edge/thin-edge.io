@@ -3,6 +3,7 @@ use std::io::Write;
 use anyhow::Context;
 use tedge_config::tedge_toml::CloudConfig;
 use tedge_config::TEdgeConfig;
+use tedge_p11::pkcs11::uri::Pkcs11Uri;
 use tedge_p11::service::DeleteKeyRequest;
 use tedge_p11::CryptokiConfig;
 use tedge_p11::SecretString;
@@ -10,6 +11,9 @@ use tedge_p11::SecretString;
 use super::create_key::encode_id_attr;
 use super::create_key::encode_uri_attr;
 use super::create_key::parse_id;
+use super::uri_scope::matches_uri;
+use super::uri_scope::other_token_selected;
+use super::uri_scope::UNSET_CONFIG_URI_HINT;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::ConfigError;
@@ -105,6 +109,16 @@ impl Command for DeleteKeyCmd {
             }
         }
 
+        let selector = Pkcs11Uri::parse(&uri).context("Failed to parse PKCS #11 URI")?;
+        let cryptoki = tedge_p11::tedge_p11_service(self.cryptoki_config.clone())?;
+        let pin = self.pin.clone().map(SecretString::from);
+
+        // Refuse, even with --force, if tedge-p11-server would delete keys from another token than
+        // requested because of its `device.cryptoki.uri` (see `uri_scope`).
+        if let Some(other) = other_token_selected(&*cryptoki, &uri, pin.clone())? {
+            return Err(other.into_error("delete keys").into());
+        }
+
         // Confirm before the destructive action unless --force was given.
         if !self.force
             && !confirm(&format!(
@@ -115,10 +129,9 @@ impl Command for DeleteKeyCmd {
             return Ok(());
         }
 
-        let cryptoki = tedge_p11::tedge_p11_service(self.cryptoki_config.clone())?;
         let response = cryptoki.delete_key(DeleteKeyRequest {
-            uri,
-            pin: self.pin.clone().map(SecretString::from),
+            uri: uri.clone(),
+            pin,
         })?;
 
         // Deleting a key that does not exist is not an error: the command is idempotent, so this
@@ -130,6 +143,28 @@ impl Command for DeleteKeyCmd {
             for uri in &response.deleted {
                 eprintln!("  {uri}");
             }
+        }
+
+        // The pre-check above can't detect `object`/`id` attributes of `device.cryptoki.uri`
+        // overriding the requested ones, so the server may have deleted other keys than requested.
+        // They can't be restored, but the user must know about it.
+        let unexpected: Vec<_> = response
+            .deleted
+            .iter()
+            .filter(|deleted| !matches_uri(&selector, deleted))
+            .collect();
+        if !unexpected.is_empty() {
+            return Err(anyhow::anyhow!(
+                "tedge-p11-server deleted {} object(s) not matching '{uri}', because \
+                 `device.cryptoki.uri` overrides the requested attributes:\n  {}\n{UNSET_CONFIG_URI_HINT}",
+                unexpected.len(),
+                unexpected
+                    .iter()
+                    .map(|uri| uri.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n  "),
+            )
+            .into());
         }
 
         Ok(())

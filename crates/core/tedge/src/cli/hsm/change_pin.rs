@@ -2,12 +2,17 @@ use anyhow::Context;
 use tedge_config::tedge_toml::CloudConfig;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfig;
+use tedge_p11::pkcs11::uri::Pkcs11Uri;
 use tedge_p11::service::ChangePinRequest;
 use tedge_p11::CryptokiConfig;
 use tedge_p11::SecretString;
 
+use super::uri_scope::matches_uri;
+use super::uri_scope::other_token_selected;
+use super::uri_scope::UNSET_CONFIG_URI_HINT;
 use crate::command::Command;
 use crate::log::MaybeFancy;
+use crate::warning;
 use crate::ConfigError;
 
 /// Arguments of the PIN-change command.
@@ -98,6 +103,22 @@ impl Command for ChangePinCmd {
         };
 
         let cryptoki = tedge_p11::tedge_p11_service(self.cryptoki_config.clone())?;
+
+        // Refuse if tedge-p11-server would change the PIN of another token than requested because
+        // of its `device.cryptoki.uri` (see `uri_scope`). Listing keys logs in with the current
+        // PIN, so this is skipped for a reset, where the current PIN is unknown and a failed login
+        // could lock the token.
+        let requested = match self.uri.as_deref() {
+            Some(uri) => Some(Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI")?),
+            None => None,
+        };
+        if let Some(uri) = self.uri.as_deref().filter(|_| !self.reset) {
+            let pin = self.current_pin.clone().map(SecretString::from);
+            if let Some(other) = other_token_selected(&*cryptoki, uri, pin)? {
+                return Err(other.into_error("change the PIN").into());
+            }
+        }
+
         let response = cryptoki.change_pin(ChangePinRequest {
             uri: self.uri.clone(),
             new_pin: SecretString::from(new_pin.clone()),
@@ -110,6 +131,16 @@ impl Command for ChangePinCmd {
             eprintln!("The user PIN of token '{}' was reset.", response.uri);
         } else {
             eprintln!("The user PIN of token '{}' was changed.", response.uri);
+        }
+
+        // The pre-check can't identify the selected token if it holds no keys, and is skipped for a
+        // reset, so the server may still have changed the PIN of another token.
+        if requested.is_some_and(|requested| !matches_uri(&requested, &response.uri)) {
+            warning!(
+                "tedge-p11-server changed the PIN of '{}' instead of the requested token, because \
+                 `device.cryptoki.uri` restricts the tokens it can use.\n    {UNSET_CONFIG_URI_HINT}",
+                response.uri
+            );
         }
 
         // Keep tedge-p11-server's configured PIN in sync so signing keeps working with the new PIN.

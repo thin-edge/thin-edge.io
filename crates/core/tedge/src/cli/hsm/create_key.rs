@@ -4,14 +4,20 @@ use clap::ValueEnum;
 use tedge_config::tedge_toml::ReadableKey;
 use tedge_config::tedge_toml::WritableKey;
 use tedge_config::TEdgeConfig;
+use tedge_p11::pkcs11::uri::Pkcs11Uri;
 use tedge_p11::pkcs11::CreateKeyParams;
 use tedge_p11::pkcs11::KeyTypeParams;
 use tedge_p11::service::CreateKeyRequest;
 use tedge_p11::service::InitTokenRequest;
 use tedge_p11::CryptokiConfig;
 use tedge_p11::SecretString;
+use tracing::debug;
 use tracing::warn;
 
+use super::uri_scope::matches_uri;
+use super::uri_scope::other_token_selected;
+use super::uri_scope::token_filter;
+use super::uri_scope::UNSET_CONFIG_URI_HINT;
 use crate::cli::common::Cloud;
 use crate::cli::common::CloudArg;
 use crate::command::Command;
@@ -263,6 +269,20 @@ impl CreateKeyHsmCmd {
             }
         };
 
+        // Refuse if tedge-p11-server would use another token than requested because of its
+        // `device.cryptoki.uri` (see `uri_scope`). Released versions of tedge-p11-server can't list
+        // keys, so if listing fails, carry on without the check.
+        match other_token_selected(&*cryptoki, &token, self.pin.clone().map(SecretString::from)) {
+            Ok(Some(other)) => return Err(other.into_error("create the key")),
+            Ok(None) => {}
+            Err(e) => debug!(
+                error = format!("{e:#}"),
+                "Can't check which token tedge-p11-server selects"
+            ),
+        }
+        let requested_token =
+            token_filter(&Pkcs11Uri::parse(&token).context("Failed to parse PKCS #11 URI")?);
+
         // Unless --force-new is given, reuse an existing key with the same label (and id, if
         // provided) instead of creating a duplicate, keeping the command idempotent.
         let existing = if self.force_new {
@@ -293,10 +313,22 @@ impl CreateKeyHsmCmd {
                 // generate a keypair
                 // should probably verify the keys before using them
                 let key = cryptoki.create_key(CreateKeyRequest {
-                    uri: token,
+                    uri: token.clone(),
                     params,
                     pin: self.pin.clone().map(SecretString::from),
                 })?;
+
+                // The pre-check can't identify the selected token if it holds no keys, so the key
+                // may still have been created on another token. Don't save it as the device key.
+                anyhow::ensure!(
+                    matches_uri(&requested_token, &key.uri),
+                    "tedge-p11-server created the key '{}' on a different token than requested, \
+                     because `device.cryptoki.uri` restricts the tokens it can use. The key was not \
+                     saved to tedge config; delete it with `tedge hsm delete-key \"{}\"` if it is \
+                     not needed.\n{UNSET_CONFIG_URI_HINT}",
+                    key.uri,
+                    key.uri,
+                );
                 eprintln!("New keypair was successfully created.");
                 (key.pem, key.uri)
             }
