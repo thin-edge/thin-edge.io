@@ -345,7 +345,7 @@ input.mqtt.topics = ["sensor/#"]
 
 [config]
 cloud.url = "${mapper.url}"
-device.id = "${mapper.device.id}"     # derived from the content of mapper.device.cert_path
+device.id = "${mapper.device.id}"     # mapper.device.id if set, else the CN of mapper.device.cert_path
 device.arch = "${mapper.device.arch}" # user defined value
 
 [[steps]]

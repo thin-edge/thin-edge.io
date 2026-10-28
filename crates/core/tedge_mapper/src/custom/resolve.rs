@@ -130,9 +130,9 @@ impl ConfigGetResult {
 /// Produced by [`resolve_effective_config`]. All path fields are absolute and all
 /// fallbacks from the root `tedge.toml` have been applied.
 ///
-/// `device_id` is `None` when cert auth is in use but the certificate cannot be
-/// read — the mapper also cannot start in that state, so there is no honest value
-/// to display.
+/// `device_id` is `None` when cert auth is in use, `device.id` is not set and the
+/// certificate cannot be read — the mapper also cannot start in that state, so there
+/// is no honest value to display.
 #[derive(Debug)]
 pub struct EffectiveMapperConfig {
     /// Contents of `mapper.toml` before any overlay is applied. Used by `get()` to
@@ -152,8 +152,7 @@ pub struct EffectiveMapperConfig {
     schema: serde_json::Value,
     /// Cloud broker URL (from `mapper.toml`), if configured.
     pub url: Option<Sourced<HostPort<MQTT_TLS_PORT>>>,
-    /// Effective MQTT client ID. `None` when cert auth is in use but the cert is
-    /// unreadable.
+    /// Effective MQTT client ID, resolved as described on [`resolve_effective_config`]
     pub device_id: Option<Sourced<String>>,
     /// TLS client certificate path (`mapper.toml` → `tedge.toml` fallback).
     pub cert_path: Option<Sourced<Utf8PathBuf>>,
@@ -563,8 +562,9 @@ pub fn reader_to_toml_table(reader: &impl serde::Serialize) -> anyhow::Result<to
 /// Resolution order per field:
 /// - `cert_path` / `key_path`: `mapper.toml` → root `tedge.toml`
 /// - `root_cert_path`: `mapper.toml` → `/etc/ssl/certs` (default)
-/// - `device_id` (cert auth): cert CN → explicit `device.id` → root `tedge.toml`
-/// - `device_id` (cert auth, unreadable cert): `None` (no fallback — avoids misleading output)
+/// - `device_id` (cert auth): explicit `device.id` → cert CN → root `tedge.toml`
+/// - `device_id` (cert auth, unreadable cert, no explicit `device.id`): `None`
+///   (no fallback — avoids misleading output)
 /// - `device_id` (password auth): explicit `device.id` → root `tedge.toml`
 ///
 /// Missing path values are returned as `None`; callers are responsible for failing
@@ -781,23 +781,34 @@ fn resolve_path_sourced(
 /// Resolves the effective MQTT client ID with source annotation.
 ///
 /// For certificate auth:
-/// - Cert readable with non-empty CN → use CN (source: `CertificateCN`)
-/// - Cert readable but no CN → fall through to explicit `device.id` or `tedge.toml`
+/// - Explicit `device.id` set → use it (source: [`ConfigSource::MapperToml`]), so mappers whose
+///   certificates share a CN can still connect with distinct client IDs
+/// - Cert readable with non-empty CN → use CN (source: [`ConfigSource::CertificateCN`])
+/// - Cert readable but no CN → `tedge.toml` `device.id`
 /// - Cert unreadable → `None` (mapper will also fail at runtime; don't show a
 ///   misleading value)
 ///
-/// For password auth: explicit `device.id` → `tedge.toml` device_id → `None`
+/// For password auth: explicit `device.id` → `tedge.toml` `device.id` → `None`
 async fn resolve_device_id(
     config: &CustomMapperConfig,
     tedge_config: &TEdgeConfig,
     effective_auth: &AuthMethod,
     cert_path: Option<&Sourced<Utf8PathBuf>>,
 ) -> Option<Sourced<String>> {
-    let explicit_id = config.device.as_ref().and_then(|d| d.id.clone());
+    if let Some(id) = config.device.as_ref().and_then(|d| d.id.clone()) {
+        return Some(Sourced {
+            value: id,
+            source: ConfigSource::MapperToml,
+        });
+    }
     let tedge_id = tedge_config
         .device_id(None::<Cloud<'_>>)
         .ok()
-        .filter(|id| !id.is_empty());
+        .filter(|id| !id.is_empty())
+        .map(|id| Sourced {
+            value: id,
+            source: ConfigSource::TedgeToml,
+        });
 
     match effective_auth {
         AuthMethod::Certificate => {
@@ -809,20 +820,7 @@ async fn resolve_device_id(
                         cert_path: cert.clone(),
                     },
                 }),
-                Ok(_) => {
-                    // Cert readable but no CN — fall through to explicit id / tedge.toml
-                    explicit_id
-                        .map(|id| Sourced {
-                            value: id,
-                            source: ConfigSource::MapperToml,
-                        })
-                        .or_else(|| {
-                            tedge_id.map(|id| Sourced {
-                                value: id,
-                                source: ConfigSource::TedgeToml,
-                            })
-                        })
-                }
+                Ok(_) => tedge_id,
                 Err(_) => {
                     // Cert unreadable — return None so callers don't show a misleading
                     // value. The mapper cannot start without a readable cert either.
@@ -830,17 +828,7 @@ async fn resolve_device_id(
                 }
             }
         }
-        AuthMethod::Password => explicit_id
-            .map(|id| Sourced {
-                value: id,
-                source: ConfigSource::MapperToml,
-            })
-            .or_else(|| {
-                tedge_id.map(|id| Sourced {
-                    value: id,
-                    source: ConfigSource::TedgeToml,
-                })
-            }),
+        AuthMethod::Password => tedge_id,
     }
 }
 
@@ -850,6 +838,7 @@ mod tests {
     use crate::custom::config::load_mapper_config;
     use crate::custom::config::BridgeConfig;
     use crate::custom::config::DeviceConfig;
+    use assert_matches::assert_matches;
     use camino::Utf8PathBuf;
     use tedge_config::models::MQTT_MAX_PAYLOAD_SIZE;
     use tedge_config::TEdgeConfig;
@@ -971,7 +960,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     }
 
     #[tokio::test]
-    async fn explicit_device_id_overridden_by_cert_cn() {
+    async fn explicit_device_id_overrides_cert_cn() {
         let ttd = TempTedgeDir::new();
         let mapper_dir = ttd.path().join("mappers/tb");
         tokio::fs::create_dir_all(&mapper_dir).await.unwrap();
@@ -982,17 +971,16 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         let mut config = make_config(Some("mqtt.example.com:1883"));
         config.device = Some(DeviceConfig {
             id: Some("explicit-id".to_string()),
-            cert_path: None,
-            key_path: None,
-            root_cert_path: None,
+            ..Default::default()
         });
 
         let effective = resolve_effective_config(&config, &tedge_config, None, None)
             .await
             .unwrap();
 
-        // CN takes precedence over explicit id
-        assert_eq!(effective.device_id.unwrap().value, "localhost");
+        let id = effective.device_id.unwrap();
+        assert_eq!(id.value, "explicit-id");
+        assert_matches!(id.source, ConfigSource::MapperToml);
     }
 
     #[tokio::test]
@@ -1007,9 +995,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         let mut config = make_config(Some("mqtt.example.com:1883"));
         config.device = Some(DeviceConfig {
             id: Some("fallback-device".to_string()),
-            cert_path: None,
-            key_path: None,
-            root_cert_path: None,
+            ..Default::default()
         });
 
         let effective = resolve_effective_config(&config, &tedge_config, None, None)
@@ -1043,6 +1029,25 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
     }
 
     #[tokio::test]
+    async fn unreadable_cert_with_explicit_device_id_uses_explicit_device_id() {
+        let tedge_config = TEdgeConfig::load_toml_str(
+            "device.cert_path = \"/nonexistent/cert.pem\"\n\
+             device.key_path = \"/nonexistent/key.pem\"\n",
+        );
+        let mut config = make_config(Some("mqtt.example.com:1883"));
+        config.device = Some(DeviceConfig {
+            id: Some("explicit-id".to_string()),
+            ..Default::default()
+        });
+
+        let effective = resolve_effective_config(&config, &tedge_config, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(effective.device_id.unwrap().value, "explicit-id");
+    }
+
+    #[tokio::test]
     async fn password_auth_uses_explicit_device_id() {
         let ttd = TempTedgeDir::new();
         let mapper_dir = ttd.path().join("mappers/tb");
@@ -1059,9 +1064,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         config.credentials_path = Some(creds_path);
         config.device = Some(DeviceConfig {
             id: Some("my-device".to_string()),
-            cert_path: None,
-            key_path: None,
-            root_cert_path: None,
+            ..Default::default()
         });
 
         let effective = resolve_effective_config(&config, &tedge_config, None, None)
@@ -1917,9 +1920,7 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
             config.table = "device.id = \"explicit-from-mapper\"\n".parse().unwrap();
             config.device = Some(crate::custom::config::DeviceConfig {
                 id: Some("explicit-from-mapper".into()),
-                cert_path: None,
-                key_path: None,
-                root_cert_path: None,
+                ..Default::default()
             });
             let effective = resolve_custom(&config, &tedge_config).await;
 
