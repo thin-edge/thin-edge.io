@@ -1,3 +1,4 @@
+use c8y_api::domain_names::DomainNames;
 use c8y_api::proxy_url::ProxyUrlGenerator;
 
 mod actor;
@@ -14,6 +15,7 @@ pub struct C8YHttpConfig {
     pub c8y_mqtt_host: String,
     pub device_id: String,
     proxy: ProxyUrlGenerator,
+    domain_names: DomainNames,
 }
 
 impl C8YHttpConfig {
@@ -28,6 +30,15 @@ impl C8YHttpConfig {
             c8y_mqtt_host,
             device_id,
             proxy,
+            domain_names: DomainNames::default(),
+        }
+    }
+
+    /// Routes URLs on these domains through the local proxy, like `c8y.http`
+    pub fn with_domain_names(self, domain_names: DomainNames) -> Self {
+        C8YHttpConfig {
+            domain_names,
+            ..self
         }
     }
 }

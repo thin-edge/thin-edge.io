@@ -2,6 +2,7 @@ use crate::server::AppData;
 use crate::server::Server;
 use crate::tokens::C8yTokenManager;
 use async_trait::async_trait;
+use c8y_api::domain_names::CertificateMonitor;
 use c8y_api::http_proxy::C8yAuthRetriever;
 use camino::Utf8PathBuf;
 use futures::channel::mpsc;
@@ -36,6 +37,7 @@ impl C8yAuthProxyBuilder {
     pub async fn try_from_config(
         config: &TEdgeConfig,
         c8y: &C8yMapperConfig,
+        certificate_monitor: CertificateMonitor,
     ) -> anyhow::Result<Self> {
         let reqwest_client =
             super::server::remote_reqwest_client(&config.cloud_root_certs().await?);
@@ -45,6 +47,7 @@ impl C8yAuthProxyBuilder {
             host: c8y.http().or_config_not_set()?.to_string(),
             token_manager: C8yTokenManager::new(auth_retriever).shared(),
             client: reqwest_client,
+            certificate_monitor,
         };
         let c8y = &c8y.cloud_specific;
         let bind = &c8y.proxy.bind;

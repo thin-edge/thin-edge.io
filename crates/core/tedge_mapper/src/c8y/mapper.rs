@@ -4,6 +4,7 @@ use crate::core::mqtt::configure_proxy;
 use crate::flows_config;
 use anyhow::Context;
 use async_trait::async_trait;
+use c8y_api::domain_names::CertificateMonitor;
 use c8y_api::http_proxy::read_c8y_credentials;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
@@ -12,6 +13,7 @@ use c8y_mapper_ext::availability::AvailabilityConfig;
 use c8y_mapper_ext::bridge_readiness::BridgeMonitorBuilder;
 use c8y_mapper_ext::config::C8yMapperConfig;
 use c8y_mapper_ext::converter::CumulocityConverter;
+use c8y_mapper_ext::domain_name_refresh::DomainNameRefreshBuilder;
 use mqtt_channel::Config;
 use tedge_actors::Runtime;
 use tedge_api::entity::EntityExternalId;
@@ -134,8 +136,6 @@ impl TEdgeComponent for CumulocityMapper {
         }
 
         let mut http_actor = HttpActor::new(tedge_config.http.client_tls_config()?).builder();
-        let c8y_auth_proxy_actor =
-            C8yAuthProxyBuilder::try_from_config(&tedge_config, &c8y_config).await?;
 
         let mut fs_watch_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
@@ -145,6 +145,17 @@ impl TEdgeComponent for CumulocityMapper {
         let cloud_root_certs = tedge_config.cloud_root_certs().await?;
         let mut uploader_actor =
             UploaderActor::new(identity.clone(), cloud_root_certs.clone()).builder();
+        let domain_name_refresh = c8y_api::domain_names::spawn_detection(
+            &c8y_mapper_config.c8y_host,
+            &cloud_root_certs,
+            c8y_mapper_config.domain_names.clone(),
+        );
+        let c8y_auth_proxy_actor = C8yAuthProxyBuilder::try_from_config(
+            &tedge_config,
+            &c8y_config,
+            CertificateMonitor::new(domain_name_refresh.clone()),
+        )
+        .await?;
         let mut downloader_actor = DownloaderActor::new(identity, cloud_root_certs).builder();
 
         // MQTT client dedicated to monitor the c8y-bridge client status and also
@@ -167,6 +178,12 @@ impl TEdgeComponent for CumulocityMapper {
                 &mut mqtt_actor,
             ),
         };
+
+        let domain_name_refresh = DomainNameRefreshBuilder::new(
+            &mut service_monitor_actor,
+            &c8y_mapper_config,
+            domain_name_refresh,
+        );
 
         C8yMapperBuilder::init(&c8y_mapper_config).await?;
         let mut c8y_mapper_actor = C8yMapperBuilder::try_new(
@@ -200,6 +217,7 @@ impl TEdgeComponent for CumulocityMapper {
         c8y_mapper_actor.set_flow_context(flows_mapper.context_handle());
 
         runtime.spawn(bridge_monitor).await?;
+        runtime.spawn(domain_name_refresh).await?;
         runtime.spawn(flows_mapper).await?;
         runtime.spawn(cmd_watcher_actor).await?;
         runtime.spawn(mqtt_actor).await?;
