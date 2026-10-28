@@ -766,6 +766,76 @@ async fn c8y_mapper_alarm_empty_payload() {
 }
 
 #[tokio::test]
+async fn c8y_mapper_alarm_is_persisted_to_internal_topic() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///a/temperature_alarm"),
+        r#"{ "severity": "major", "text": "Temperature high" }"#,
+    ))
+    .await
+    .unwrap();
+
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "302,temperature_alarm,Temperature high")],
+    )
+    .await;
+
+    // The alarms flow subscribes to its own internal topic to reconcile alarms on restart,
+    // so the retained copy of the alarm must not be dropped by the flow loop detection
+    assert_received_retained(
+        &mut mqtt,
+        "c8y-internal/alarms/te/device/main///a/temperature_alarm",
+        |payload| {
+            let alarm: serde_json::Value = serde_json::from_slice(payload).unwrap();
+            alarm["severity"] == "major" && alarm["text"] == "Temperature high"
+        },
+    )
+    .await;
+
+    // Clearing the alarm must also clear its internal copy,
+    // otherwise the mapper would clear the alarm again on every restart
+    mqtt.send(
+        MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///a/temperature_alarm"),
+            "",
+        )
+        .with_retain(),
+    )
+    .await
+    .unwrap();
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "306,temperature_alarm")]).await;
+    assert_received_retained(
+        &mut mqtt,
+        "c8y-internal/alarms/te/device/main///a/temperature_alarm",
+        |payload| payload.is_empty(),
+    )
+    .await;
+}
+
+/// Wait for a retained message on the given topic, with a payload matching the given predicate
+async fn assert_received_retained<M>(
+    mqtt: &mut TestMqttBox<M>,
+    topic: &str,
+    payload_matches: impl Fn(&[u8]) -> bool,
+) where
+    M: MessageReceiver<MqttMessage> + Send,
+{
+    // Messages might have already been buffered by a previous assertion
+    while !mqtt.any(|m| m.topic.name == topic && m.retain && payload_matches(m.payload_bytes())) {
+        if mqtt.recv().await.is_none() {
+            panic!("Didn't receive the expected retained message on {topic}");
+        }
+    }
+}
+
+#[tokio::test]
 async fn c8y_mapper_alarm_empty_json_payload() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;

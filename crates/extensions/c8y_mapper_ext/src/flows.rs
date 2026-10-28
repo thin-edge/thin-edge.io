@@ -148,6 +148,10 @@ topic = "{errors_topic}"
 
 input.mqtt.topics = {input_topics:?}
 
+# The alarms published to {internal_alarms} are consumed back by this flow
+# to reconcile the alarms on restart, so this loop is expected
+expect_loop = true
+
 config = {{ topic_root = "{topic_prefix}", c8y_prefix = "{c8y_prefix}" }}
 
 steps = [
