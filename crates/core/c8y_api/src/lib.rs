@@ -1,3 +1,4 @@
+pub mod domain_names;
 pub mod http_proxy;
 pub mod json_c8y;
 pub mod json_c8y_deserializer;

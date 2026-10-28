@@ -6,6 +6,7 @@ pub mod availability;
 pub mod bridge_readiness;
 pub mod config;
 pub mod converter;
+pub mod domain_name_refresh;
 pub mod dynamic_discovery;
 pub mod entity_cache;
 pub mod error;
