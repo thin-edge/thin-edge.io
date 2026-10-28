@@ -140,10 +140,17 @@ impl<'a> Pkcs11Uri<'a> {
     /// specify the attribute.
     ///
     /// Attributes like pin-value that don't identify a slot/token/key don't count.
+    ///
+    /// The slot id is only compared when both URIs carry it, because URIs exported by
+    /// tedge-p11-server identify tokens by label and serial and never include a slot id.
     pub fn matches(&self, other: &Self) -> bool {
+        let matching_slot = match (self.slot_id, other.slot_id) {
+            (Some(wanted), Some(actual)) => wanted == actual,
+            _ => true,
+        };
         let matching_token = (self.token.is_none() || self.token == other.token)
             && (self.serial.is_none() || self.serial == other.serial)
-            && (self.slot_id.is_none() || self.slot_id == other.slot_id);
+            && matching_slot;
         let matching_object = (self.object.is_none() || self.object == other.object)
             && (self.id.is_none() || self.id == other.id);
 
@@ -294,5 +301,60 @@ mod tests {
         )
         .unwrap();
         assert_eq!(uri.pin_value.unwrap().expose(), "the-pin");
+    }
+
+    fn matches(filter: &str, uri: &str) -> bool {
+        Pkcs11Uri::parse(filter)
+            .unwrap()
+            .matches(&Pkcs11Uri::parse(uri).unwrap())
+    }
+
+    #[test]
+    fn empty_filter_matches_anything() {
+        assert!(matches(
+            "pkcs11:",
+            "pkcs11:token=t1;serial=s1;object=k1;id=%01"
+        ));
+        assert!(matches("pkcs11:", "pkcs11:"));
+    }
+
+    #[test]
+    fn matches_on_equal_identifying_attributes() {
+        let key = "pkcs11:model=m;serial=s1;token=t1;id=%01;object=k1";
+        assert!(matches("pkcs11:token=t1", key));
+        assert!(matches("pkcs11:serial=s1", key));
+        assert!(matches("pkcs11:token=t1;object=k1", key));
+        assert!(matches("pkcs11:token=t1;id=%01", key));
+        assert!(matches("pkcs11:token=t1;serial=s1;object=k1;id=%01", key));
+    }
+
+    #[test]
+    fn does_not_match_on_different_identifying_attributes() {
+        let key = "pkcs11:serial=s1;token=t1;id=%01;object=k1";
+        assert!(!matches("pkcs11:token=t2", key));
+        assert!(!matches("pkcs11:serial=s2", key));
+        assert!(!matches("pkcs11:token=t1;object=k2", key));
+        assert!(!matches("pkcs11:token=t1;id=%02", key));
+    }
+
+    #[test]
+    fn attribute_missing_from_matched_uri_does_not_match() {
+        assert!(!matches("pkcs11:token=t1;object=k1", "pkcs11:token=t1"));
+    }
+
+    #[test]
+    fn non_identifying_attributes_are_ignored() {
+        assert!(matches(
+            "pkcs11:token=t1;model=other?pin-value=1234",
+            "pkcs11:model=m;token=t1"
+        ));
+    }
+
+    #[test]
+    fn slot_id_is_only_compared_when_both_uris_have_it() {
+        assert!(matches("pkcs11:slot-id=1", "pkcs11:token=t1"));
+        assert!(matches("pkcs11:token=t1", "pkcs11:slot-id=1;token=t1"));
+        assert!(matches("pkcs11:slot-id=1", "pkcs11:slot-id=1;token=t1"));
+        assert!(!matches("pkcs11:slot-id=1", "pkcs11:slot-id=2;token=t1"));
     }
 }
