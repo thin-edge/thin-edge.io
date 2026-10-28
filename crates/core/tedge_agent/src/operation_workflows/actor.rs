@@ -27,10 +27,12 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::SignalType;
+use tedge_api::script::ShellScript;
 use tedge_api::workflow::extract_json_output;
 use tedge_api::workflow::log::log_dir::OperationLogs;
 use tedge_api::workflow::CommandBoard;
 use tedge_api::workflow::CommandId;
+use tedge_api::workflow::Elevation;
 use tedge_api::workflow::GenericCommandData;
 use tedge_api::workflow::GenericCommandMetadata;
 use tedge_api::workflow::GenericCommandState;
@@ -42,6 +44,8 @@ use tedge_api::workflow::OperationStepRequest;
 use tedge_api::workflow::OperationStepResponse;
 use tedge_api::workflow::WorkflowExecutionError;
 use tedge_api::CommandLog;
+use tedge_config::SudoCommandBuilder;
+use tedge_config::SudoResolution;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
 use tedge_file_system_ext::FsWatchEvent;
@@ -103,6 +107,7 @@ pub struct WorkflowActor {
     pub(crate) entity_store: EntityStoreClient,
     pub(crate) pending_lookups: HashMap<String, CommandAwaitingLookup>,
     pub(crate) tmp_dir: Utf8PathBuf,
+    pub(crate) sudo: SudoCommandBuilder,
 }
 
 #[async_trait]
@@ -155,6 +160,37 @@ impl Actor for WorkflowActor {
 }
 
 impl WorkflowActor {
+    /// The script to launch for a workflow step, through sudo when the step asks for it
+    ///
+    /// Also returns whether the script is actually launched through sudo.
+    async fn launched_script(
+        &self,
+        script: ShellScript,
+        elevation: Elevation,
+        log_file: &mut CommandLog,
+    ) -> (ShellScript, bool) {
+        if elevation == Elevation::None {
+            return (script, false);
+        }
+        let (launched, sudo) = self.sudo.script(script);
+        if let Some(warning) = sudo.warning(&launched.command) {
+            log_file.log_warning(&warning).await;
+        }
+        (launched, matches!(sudo, SudoResolution::Sudo(_)))
+    }
+
+    /// Check that the sudoers rules allow a script to be run through sudo
+    async fn sudo_authorizes(&self, script: &ShellScript) -> bool {
+        let sudo = self.sudo.clone();
+        let listed = script.clone();
+        tokio::task::spawn_blocking(move || sudo.is_authorized(&listed.command, &listed.args))
+            .await
+            .unwrap_or_else(|err| {
+                warn!("Cannot check if sudo allows '{}': {err}", script.command);
+                true
+            })
+    }
+
     async fn publish_operation_capabilities(&mut self) -> Result<(), RuntimeError> {
         for capability in self
             .workflow_repository
@@ -500,13 +536,17 @@ impl WorkflowActor {
                 let new_state = state.update(handlers.on_timeout);
                 self.publish_command_state(new_state, &mut log_file).await
             }
-            OperationAction::Script(script, handlers) => {
+            OperationAction::Script(script, elevation, handlers) => {
                 let step = &state.status;
                 info!("Processing {operation} operation {step} step with script: {script}");
 
-                let script_name = script.command.clone();
+                let original = script.clone();
+                let (script, through_sudo) =
+                    self.launched_script(script, elevation, &mut log_file).await;
+                let launched_program = script.command.clone();
+                let command_line = script.to_string();
                 let command = {
-                    let command = Execute::new(script_name.clone(), script.args);
+                    let command = Execute::new(script.command, script.args);
                     match (
                         handlers.graceful_timeout(),
                         handlers.forceful_timeout_extension(),
@@ -519,12 +559,33 @@ impl WorkflowActor {
                     }
                 };
                 let output = self.script_runner.await_response(command).await?;
-                log_file.log_script_output(output.as_ref()).await;
+                log_file
+                    .log_command_and_output(&command_line, output.as_ref())
+                    .await;
 
+                // sudo exits with 1 when it refuses to run a command,
+                // which cannot be told apart from the script itself exiting with 1
+                // without asking sudo whether the script is allowed.
+                let refused_by_sudo = through_sudo
+                    && matches!(&output, Ok(output) if output.status.code() == Some(1))
+                    && !self.sudo_authorizes(&original).await;
+
+                // Failure reasons name the script, unless sudo refused to run it
+                let script_name = if refused_by_sudo {
+                    log_file
+                        .log_error(&format!(
+                            "sudo refused to run '{}': the command is not found, or not allowed by the sudoers rules",
+                            original.command
+                        ))
+                        .await;
+                    launched_program
+                } else {
+                    original.command
+                };
                 let new_state = state.update_with_script_output(script_name, output, handlers);
                 self.publish_command_state(new_state, &mut log_file).await
             }
-            OperationAction::BgScript(script, handlers) => {
+            OperationAction::BgScript(script, elevation, handlers) => {
                 let next_state = &handlers.on_exec.status;
                 info!(
                     "Moving {operation} operation to {next_state} state before running: {script}"
@@ -533,9 +594,13 @@ impl WorkflowActor {
                 self.publish_command_state(new_state, &mut log_file).await?;
 
                 // Run the command, but ignore its result
+                let (script, _) = self.launched_script(script, elevation, &mut log_file).await;
+                let command_line = script.to_string();
                 let command = Execute::new(script.command, script.args);
                 let output = self.script_runner.await_response(command).await?;
-                log_file.log_script_output(output.as_ref()).await;
+                log_file
+                    .log_command_and_output(&command_line, output.as_ref())
+                    .await;
                 Ok(())
             }
             OperationAction::Download(input_excerpt, handlers) => {
@@ -722,9 +787,12 @@ impl WorkflowActor {
                 let generated_init_state = match input_script {
                     None => GenericStateUpdate::empty_payload(),
                     Some(script) => {
+                        let command_line = script.to_string();
                         let command = Execute::new(script.command.clone(), script.args);
                         let output = self.script_runner.await_response(command).await?;
-                        log_file.log_script_output(output.as_ref()).await;
+                        log_file
+                            .log_command_and_output(&command_line, output.as_ref())
+                            .await;
                         match extract_json_output(&script.command, output) {
                             Ok(init_state) => init_state,
                             Err(reason) => {
