@@ -218,6 +218,8 @@ i.e. `te/+/+/+/+/cmd/+/+`.
 - If no workflow has been defined by the user for this operation, then the builtin workflow is used.
 - If there is no workflow or no defined action for the current state,
   then the __tedge_agent__ simply waits for another component to take over the command.
+- If the workflow file of an operation cannot be parsed,
+  every command of this operation moves to `failed`, with the parse error as reason.
 
 ### Scoping a workflow to an entity type {#workflow-entity-type}
 
@@ -346,8 +348,8 @@ on_kill = { status = "failed", reason = "killed"}         # next status when kil
 - `on_success` is syntactic sugar for `on_exit.0`
 - `on_error` is syntactic sugar for `on_exit._`
 - This is an error to provide more than one handler for an exit code (overlapping ranges).
-- If no reason is provided for an exit code, the default reason is `"${program} exited with ${code}"`.
-- If no reason is provided for the on kill handler, the reason is `"${program} killed by ${code}"`.
+- If no reason is provided for an exit code, the default reason is `"${program} returned exit code ${code}"`.
+- If no reason is provided for the on kill handler, the reason is `"${program} killed by signal ${signal}"`.
 - The default for the `on-error` and `on-kill` status is `"failed"`.
 - There is no default for the `on-success` status.
   In such a case the output of the script is used to determine the next status.

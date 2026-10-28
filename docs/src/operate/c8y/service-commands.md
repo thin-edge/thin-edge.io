@@ -38,6 +38,8 @@ Each declared action is added, uppercased,
 to the `c8y_SupportedServiceCommands` fragment of the service managed object.
 A custom action is declared the same way.
 A service declaring `cmd/pause` gets `PAUSE` in the list.
+A custom action also needs a [workflow](../../../references/agent/service-commands#shipped-workflows) on the device.
+Without one, the operation stays `PENDING`.
 
 An action whose name breaks the
 [action name rule](../../../references/agent/service-commands#actions)
