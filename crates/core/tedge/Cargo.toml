@@ -76,7 +76,13 @@ tedge_system_services = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "signal", "time"] }
+tokio = { workspace = true, features = [
+    "io-std",
+    "macros",
+    "rt",
+    "signal",
+    "time",
+] }
 toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

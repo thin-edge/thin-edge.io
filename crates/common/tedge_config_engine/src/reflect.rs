@@ -572,7 +572,7 @@ fn field_examples(field: &facet::Field) -> Vec<&'static str> {
     field
         .attributes
         .iter()
-        .filter(|a| a.ns == Some(attrs::NS) && a.key == "example")
+        .filter(|a| a.ns() == Some(attrs::NS) && a.key() == "example")
         .filter_map(|a| a.get_as::<&str>().copied())
         .collect()
 }
@@ -636,7 +636,7 @@ fn is_schema_root(shape: &Shape) -> bool {
     shape
         .attributes
         .iter()
-        .any(|a| a.ns == Some(attrs::NS) && a.key == "schema_root")
+        .any(|a| a.ns() == Some(attrs::NS) && a.key() == "schema_root")
 }
 
 fn list_keys_recursive(shape: &'static Shape, prefix: &str, entries: &mut Vec<KeyEntry>) {

@@ -109,9 +109,8 @@ fn conversion_from_longer_integer_fails() {
     assert_eq!(
         "18446744073709551616"
             .parse::<SecondsOrHumanTime>()
-            .unwrap_err()
-            .to_string(),
-        "number is too large"
+            .unwrap_err(),
+        humantime::DurationError::NumberOverflow
     );
 }
 

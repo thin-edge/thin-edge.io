@@ -481,7 +481,8 @@ impl ConfigManagerWorker {
         let download_response =
             download_result.context("config-manager failed downloading a file")?;
 
-        let from = tempfile::TempPath::from_path(download_response.file_path);
+        let from = tempfile::TempPath::try_from_path(download_response.file_path)
+            .context("config-manager failed to take ownership of the downloaded file")?;
 
         let from_path = Utf8Path::from_path(&from)
             .with_context(|| format!("path is not utf-8: '{}'", from.to_string_lossy()))?;
