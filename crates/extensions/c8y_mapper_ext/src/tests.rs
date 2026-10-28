@@ -41,7 +41,7 @@ use tedge_actors::RuntimeRequestSink;
 use tedge_actors::Sender;
 use tedge_actors::SimpleMessageBox;
 use tedge_actors::SimpleMessageBoxBuilder;
-use tedge_api::file_transfer_url::FileTransferUrls;
+use tedge_api::http_url::FileTransferUrls;
 use tedge_api::mqtt_topics::ChannelFilter::AnySignal;
 use tedge_api::mqtt_topics::EntityFilter::AnyEntity;
 use tedge_api::mqtt_topics::EntityTopicId;

@@ -1551,7 +1551,7 @@ pub(crate) mod tests {
     use tedge_actors::CloneSender;
     use tedge_actors::LoggingSender;
     use tedge_actors::SimpleMessageBoxBuilder;
-    use tedge_api::file_transfer_url::FileTransferUrls;
+    use tedge_api::http_url::FileTransferUrls;
     use tedge_api::mqtt_topics::default_topic_schema;
     use tedge_api::mqtt_topics::Channel;
     use tedge_api::mqtt_topics::ChannelFilter;

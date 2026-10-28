@@ -40,7 +40,7 @@ use tedge_actors::LoggingSender;
 use tedge_actors::Sender;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityType;
-use tedge_api::file_transfer_url::FileTransferUrls;
+use tedge_api::http_url::FileTransferUrls;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
