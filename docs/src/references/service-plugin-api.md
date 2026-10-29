@@ -25,7 +25,7 @@ The request to restart the service will be handled by the plugin `container`.
 
 The runner of service plugins is the `tedge service` command,
 called either by an operator or by the
-[service command workflows](../agent/service-commands) of `tedge-agent`.
+[service control workflow](../agent/service-control) of `tedge-agent`.
 
 ### Backends
 
@@ -108,7 +108,7 @@ and all execution is argv-based: no argument is ever interpolated into a shell c
 
 | Argument     | Rule                                                    |
 |--------------|-------------------------------------------------------------|
-| action       | `[a-z][a-z0-9_-]*`. Neither a space nor a leading `-`   |
+| action       | `[A-Za-z][A-Za-z0-9_-]*`. Neither a space nor a leading `-` |
 | service name | Non-empty and not starting with `-`                     |
 | service type | `[a-z0-9_-]+`, so it cannot escape the plugin directory |
 
@@ -120,9 +120,8 @@ A rejected argument fails the command without any backend being invoked.
   named exactly after the service type it handles, with no extension.
 * It is invoked as `<plugin> <action> <service-name>`,
   where `<action>` is `start`, `stop`, `restart`, or any action the plugin defines itself.
-* An action name is a single lowercase token, matching `[a-z][a-z0-9_-]*`.
-  The plugin receives the name exactly as the service declared it on its
-  [`cmd/<action>` topic](../agent/service-commands#actions),
+* An action name is a single token, matching `[A-Za-z][A-Za-z0-9_-]*`.
+  The plugin receives the name exactly as the service [declared it](../agent/service-control#actions),
   and never has to accept another spelling of it.
 * The plugin decides which actions it supports.
   Nothing declares them to the runner.

@@ -7,7 +7,7 @@ sidebar_position: 12
 # The tedge service command
 
 ```text command="tedge service --help" title="tedge service"
-Execute a service command
+Run a control action on a service
 
 Usage: tedge service [OPTIONS] <ACTION> <SERVICE_NAME>
 
