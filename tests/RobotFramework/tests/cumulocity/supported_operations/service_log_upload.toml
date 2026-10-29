@@ -1,0 +1,16 @@
+operation = "log_upload"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "sh -c 'sudo -n /usr/share/tedge/log-plugins/journald get ${.payload.type} | tail -n ${.payload.lines} | curl -sSf -X PUT --data-binary @- ${.payload.tedgeUrl}'"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

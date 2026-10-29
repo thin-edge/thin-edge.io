@@ -23,6 +23,8 @@ mod handler;
 pub use handler::OperationHandler;
 
 mod handlers;
+pub(crate) use handlers::to_c8y_operation;
+pub use handlers::CommandMapping;
 pub use handlers::EntityTarget;
 
 mod upload;

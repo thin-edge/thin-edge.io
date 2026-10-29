@@ -28,16 +28,19 @@ a service that is not registered yet is registered with the default type `servic
 when it declares its first action.
 
 A service declares each action that it supports
-by publishing a retained message to its `cmd/<action>` topic, one per action.
+by publishing a retained `{"@type": "service-action"}` message to its `cmd/<action>` topic, one per action.
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/restart' '{}'
+tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/restart' '{"@type": "service-action"}'
 ```
 
 Each declared action is added, uppercased,
 to the `c8y_SupportedServiceCommands` fragment of the service managed object.
 A custom action is declared the same way.
 A service declaring `cmd/pause` gets `PAUSE` in the list.
+
+A capability without `"@type": "service-action"` is mapped to a regular operation of the service instead,
+as described in [service operations](../supported-operations#service-operations).
 
 An action whose name breaks the
 [action name rule](../../../references/agent/service-commands#actions)
@@ -90,7 +93,7 @@ tedge config set c8y.enable.service_commands false
 sudo systemctl restart tedge-mapper-c8y
 ```
 
-The mapper then ignores the `cmd/<action>` capabilities of the services and the `c8y_ServiceCommand` operations.
+The mapper then ignores the actions declared by the services and the `c8y_ServiceCommand` operations.
 
 :::note
 Disabling service commands keeps what the mapper created while they were enabled:

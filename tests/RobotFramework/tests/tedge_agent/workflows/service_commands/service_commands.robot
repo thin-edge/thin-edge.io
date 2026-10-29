@@ -12,8 +12,10 @@ Test Tags           theme:tedge_agent    theme:services
 thin-edge services declare their restart action
     ${capabilities}=    Execute Command
     ...    tedge mqtt sub te/device/main/service/+/cmd/restart --retained-only --duration 2s
-    Should Contain    ${capabilities}    [te/device/main/service/tedge-agent/cmd/restart] {}
-    Should Contain    ${capabilities}    [te/device/main/service/tedge-mapper-c8y/cmd/restart] {}
+    Should Contain    ${capabilities}    [te/device/main/service/tedge-agent/cmd/restart] {"@type":"service-action"}
+    Should Contain
+    ...    ${capabilities}
+    ...    [te/device/main/service/tedge-mapper-c8y/cmd/restart] {"@type":"service-action"}
 
 Only the workflow for type device declares a capability
     ${capabilities}=    Execute Command    tedge mqtt sub te/+/+/+/+/cmd/probe --retained-only --duration 2s

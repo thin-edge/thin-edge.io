@@ -32,6 +32,25 @@ Runs a custom freeze workflow through the plugin of the service type
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Plugin Should Have Been Called With    freeze ${SERVICE_NAME}
 
+Reports a custom service command that finished while the mapper was stopped
+    ThinEdgeIO.Stop Service    tedge-agent
+    ${operation}=    Create Service Command Operation
+    ...    {"command":"FREEZE","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
+    ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
+    ${command_topic}=    Set Variable    te/device/main/service/${SERVICE_NAME}/cmd/freeze/c8y-mapper-${operation_id}
+    Should Have MQTT Messages    ${command_topic}    message_contains="status":"init"
+
+    ThinEdgeIO.Stop Service    tedge-mapper-c8y
+    ThinEdgeIO.Start Service    tedge-agent
+    Should Have MQTT Messages    ${command_topic}    message_contains="status":"successful"
+
+    ThinEdgeIO.Start Service    tedge-mapper-c8y
+    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=60
+    [Teardown]    Run Keywords
+    ...    ThinEdgeIO.Start Service    tedge-agent
+    ...    AND    ThinEdgeIO.Start Service    tedge-mapper-c8y
+    ...    AND    Get Logs
+
 Takes the service name from the operation
     ${operation}=    Create Service Command Operation
     ...    {"command":"RESTART","serviceName":"Node-RED","serviceType":"${SERVICE_TYPE}"}
@@ -73,8 +92,10 @@ Custom Setup
     ...    tedge mqtt pub --retain te/device/main/service/${SERVICE_NAME} '{"@type":"service","name":"${SERVICE_NAME}","type":"${SERVICE_TYPE}"}'
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
 
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/restart '{}'
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/freeze '{}'
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/restart '{"@type":"service-action"}'
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/freeze '{"@type":"service-action"}'
 
 Create Service Command Operation
     [Arguments]    ${fragment}
