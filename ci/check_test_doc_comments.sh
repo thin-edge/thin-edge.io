@@ -15,10 +15,13 @@ while IFS= read -r file; do
     added=$(git diff -U0 "$BASE" -- "$file" | sed -nE 's/^@@ -[0-9,]+ \+([0-9]+)(,([0-9]+))? @@.*/\1 \3/p' | awk '{ print $1, ($2 == "" ? 1 : $2) }')
 
     # Walks each run of doc comments and attributes in front of a `fn`,
-    # tracking bracket depth so multi-line attributes like `#[test_case(...)]` stay in the run
-    awk -v added="$added" '
+    # tracking bracket depth so multi-line attributes like `#[test_case(...)]` stay in the run.
+    # The ranges are passed as the first operand rather than with -v, because macOS awk
+    # rejects a newline in a -v value; clearing ARGV[1] stops awk reading it as a file
+    awk '
         BEGIN {
-            n = split(added, a, /[ \n]+/)
+            n = split(ARGV[1], a, /[ \n]+/)
+            ARGV[1] = ""
             for (i = 1; i < n; i += 2) for (l = a[i]; l < a[i] + a[i + 1]; l++) changed[l] = 1
         }
         function brackets(s,   opening, closing) {
@@ -43,7 +46,7 @@ while IFS= read -r file; do
             run = doc = test = 0
         }
         END { exit found }
-    ' "$file" || status=1
+    ' "$added" "$file" || status=1
 done < <(git diff --name-only --diff-filter=AMR "$BASE" -- '*.rs')
 
 exit "$status"
