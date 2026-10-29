@@ -222,12 +222,12 @@ i.e. `te/+/+/+/+/cmd/+/+`.
 ### Scoping a workflow to an entity type {#workflow-entity-type}
 
 The same operation name can need two different workflows depending on what it is addressed to.
-Restarting a device is not restarting one of its services.
+Uploading the logs of a device is not uploading the logs of one of its services.
 
 A workflow therefore declares the type of entity it applies to, with a `type` field:
 
-```toml title="file: service_restart_example.toml"
-operation = "restart"
+```toml title="file: service_log_upload_example.toml"
+operation = "log_upload"
 type = "service"
 
 [init]
@@ -239,31 +239,29 @@ type = "service"
 It defaults to `device`.
 
 A workflow applies to a command only if the target entity has the declared type.
-`restart` can therefore have two workflows:
+`log_upload` can therefore have two workflows:
 one with `type = "service"` for the service entity, and one without `type` for the device entity.
 
 An operation name comes from the `operation` field inside the file, never from the file name,
 so two workflows for the same operation only have to be in two files with different names.
 
 A workflow with `type = "service"` publishes no capability.
-Each service [declares its own actions](../service-commands#declaring-an-action).
+Each service publishes the capability itself.
 
 ### One workflow for several operations {#workflow-operation-array}
 
 The `operation` field can be an array of operation names,
 when several operations go through the same steps:
 
-```toml title="file: service_commands.toml"
-operation = ["start", "stop", "restart", "enable", "disable"]
-type = "service"
+```toml title="file: lock_unlock.toml"
+operation = ["lock", "unlock"]
 
 [init]
   action = "proceed"
   on_success = "executing"
 
 [executing]
-  script = "tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
-  sudo = true
+  script = "/etc/tedge/operations/lock.sh ${.topic.operation}"
   on_success = "successful"
 ```
 
@@ -420,7 +418,7 @@ rather than starting the command line with `sudo`:
 
 ```toml
 [execute]
-script = "tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
+script = "tedge service ${.payload.action} ${.payload.serviceName} --type ${.payload.serviceType}"
 sudo = true
 on_success = "successful"
 ```

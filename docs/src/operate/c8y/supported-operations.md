@@ -45,25 +45,21 @@ or when the user wants to handle any of the inbuilt operations differently than 
 
 A service running on an IoT device can support commands such as start, stop and restart.
 
-The Cumulocity mapper maps every command targeting a service entity
-to the `c8y_ServiceCommand` operation.
+The Cumulocity mapper maps the `control` command of a service entity
+to the `c8y_ServiceCommand` operation,
+and each action the service declares to the Cumulocity service command of the same name.
 Examples:
 
 | Cumulocity Service Command | Tedge Command |
 | ----------|---------------|
-| `RESTART` | `te/<service-topic-id>/cmd/restart` |
-| `START` | `te/<service-topic-id>/cmd/start` |
-| `STOP` | `te/<service-topic-id>/cmd/stop` |
+| `restart` | `te/<service-topic-id>/cmd/control` with `"action": "restart"` |
+| `start` | `te/<service-topic-id>/cmd/control` with `"action": "start"` |
+| `stop` | `te/<service-topic-id>/cmd/control` with `"action": "stop"` |
 
-Any action name maps the same way:
-`cmd/<action>` on a service topic becomes the `<ACTION>` service command.
+See [service commands](../service-commands).
 
-:::note
-On a **service** entity, every `cmd/<action>` capability is a
-[service command](../service-commands),
-so a service declaring `cmd/restart` gets `RESTART` in `c8y_SupportedServiceCommands`,
-not the `c8y_Restart` operation.
-:::
+The other commands of a service are mapped as they are for a device,
+so a service declaring `cmd/log_upload` gets the `c8y_LogfileRequest` operation.
 
 ### Supported Operations API
 

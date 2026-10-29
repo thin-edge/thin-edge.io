@@ -90,8 +90,8 @@ reload = ["/bin/systemctl", "reload", "{}"]
 sudo tedge service reload nginx
 ```
 
-An action name is a single lowercase token, matching `[a-z][a-z0-9_-]*`:
-lowercase letters, digits, `_` and `-`, starting with a letter.
+An action name is a single token, matching `[A-Za-z][A-Za-z0-9_-]*`:
+letters, digits, `_` and `-`, starting with a letter.
 
 :::caution
 `[init]` accepts any key, so a misspelled key is read as a custom action rather than rejected.
