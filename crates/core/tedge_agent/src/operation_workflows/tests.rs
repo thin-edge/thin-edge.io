@@ -1097,10 +1097,7 @@ fn builtin_workflows_are_valid_operation_workflows() {
             "shell_execute.toml",
             include_str!("../resources/shell_execute.toml"),
         ),
-        (
-            "service_commands.toml",
-            include_str!("../resources/service_commands.toml"),
-        ),
+        ("control.toml", include_str!("../resources/control.toml")),
     ] {
         toml::from_str::<OperationWorkflows>(definition)
             .unwrap_or_else(|err| panic!("{name} is not a valid workflow definition: {err}"));
