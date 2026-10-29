@@ -1,47 +1,51 @@
 ## ADDED Requirements
 
-### Requirement: A service declares each supported action as a per-action capability
+### Requirement: A service declares its supported actions in its `control` capability
 
-A service entity SHALL declare a supported action by publishing a retained capability message
-on `te/device/<device>/service/<service>/cmd/<action>` with an empty JSON object `{}` as payload.
-One topic SHALL be used per action, so that each action can have its own workflow.
+A service entity SHALL declare the actions it supports by publishing a retained capability message
+on `te/device/<device>/service/<service>/cmd/control`,
+with the action names in an `actions` array:
 
-`<action>` SHALL be one of the standard actions
+```json
+{"actions": ["start", "stop", "restart"]}
+```
+
+An action SHALL be one of the standard actions
 `start`, `stop`, `restart`, `enable` and `disable`,
 the five an init system defines in `system.toml`,
 or any custom action name chosen by the service owner.
 
-An action name SHALL match `[a-z][a-z0-9_-]*`:
-lowercase letters, digits, `_` and `-`, starting with a letter.
-MQTT topic names are case-sensitive and do accept spaces,
-so this is a restriction thin-edge puts on itself, not one the protocol imposes.
-A name carrying spaces or mixed case, such as `do something` or `doSomething`,
+An action name SHALL match `[A-Za-z][A-Za-z0-9_-]*`:
+letters, digits, `_` and `-`, starting with a letter.
+Action names are case-sensitive, so `requestLog` and `requestlog` are two actions.
+A name carrying spaces, such as `do something`,
 is deliberately left out of scope, and SHALL be rejected wherever it enters the system.
-The names then survive every conversion on the way to the cloud and back,
-and stay usable as the argument of a command line.
+The names then stay usable as the argument of a command line.
 
-A declared action SHALL be withdrawn by clearing its capability topic with a retained empty message.
+An action SHALL be removed by publishing the `control` capability again without that action.
+Clearing the `control` capability topic with a retained empty message
+SHALL remove every action of the service.
 
 #### Scenario: Standard actions are declared
-- **WHEN** a service publishes retained `{}` on its `cmd/start`, `cmd/stop`, `cmd/restart`, `cmd/enable` and `cmd/disable` topics
+- **WHEN** a service publishes retained `{"actions": ["start", "stop", "restart", "enable", "disable"]}` on its `cmd/control` topic
 - **THEN** those five actions SHALL be the actions supported by that service
 
 #### Scenario: A custom action is declared
-- **WHEN** a service publishes retained `{}` on `te/device/main/service/nodered/cmd/pause`
+- **WHEN** a service publishes retained `{"actions": ["pause"]}` on `te/device/main/service/nodered/cmd/control`
 - **THEN** `pause` SHALL be a supported action of the `nodered` service
 
-#### Scenario: An action is withdrawn
-- **WHEN** a service clears one of its `cmd/<action>` topics with a retained empty message
-- **THEN** that action SHALL no longer be a supported action of that service
+#### Scenario: An action name keeps its case
+- **WHEN** a service declares `{"actions": ["requestLog"]}`
+- **THEN** `requestLog` SHALL be a supported action of that service, and `requestlog` SHALL NOT
 
-#### Scenario: Capabilities survive a restart of a consumer
-- **WHEN** a component subscribes to a service's `cmd/+` topics after the capabilities were published
-- **THEN** it SHALL receive the retained capability messages and rebuild the full set of supported actions
+#### Scenario: All actions are removed
+- **WHEN** a service clears its `cmd/control` topic with a retained empty message
+- **THEN** that service SHALL have no supported action
 
 ### Requirement: thin-edge's own services declare their own actions
 
 `tedge-agent` and every mapper SHALL declare their own actions when they start,
-publishing the capabilities where they publish their service registration.
+publishing their `control` capability where they publish their service registration.
 Which actions are declared depends on how the service is deployed.
 
 A service managed by an init unit of its own SHALL declare `restart` and nothing else.
@@ -51,18 +55,12 @@ A mapper declares the same one:
 each mapper has a `mapper.toml` of its own,
 which is where the actions it supports are to be decided, one mapper at a time.
 
-Leaving an action out of the list does not prevent it from being commanded:
-a capability is a plain retained message, so anyone can publish one,
-and a command can be issued on MQTT with no capability declared at all.
-What refuses an action SHALL therefore be the guards of the shipped workflows.
-
 Under `tedge run all`, the agent and the mappers are hosted in a single process.
 Such a hosted service has no init unit of its own,
 so an action reaching an init system would act on a unit which is not what runs.
 A hosted service SHALL declare `restart` if it is `tedge-agent`, that being the one action
 which reaches no init system, and SHALL declare nothing otherwise.
-A hosted mapper SHALL withdraw the `restart` it declares as a service of its own,
-and nothing else,
+A hosted mapper SHALL clear the `control` capability it declares as a service of its own,
 a capability being retained and outliving the deployment which published it.
 
 A capability lives as long as the registration of the service which published it.
@@ -71,8 +69,7 @@ deregistering the service SHALL clear both.
 
 #### Scenario: The agent declares its action at startup
 - **WHEN** `tedge-agent` starts as a service of its own
-- **THEN** `restart` SHALL be the only action it declares,
-  with nothing else having been published
+- **THEN** it SHALL publish `{"actions": ["restart"]}` on its `cmd/control` topic
 
 #### Scenario: A mapper declares the same action
 - **WHEN** a mapper starts as a service of its own
@@ -83,47 +80,40 @@ deregistering the service SHALL clear both.
 - **THEN** `restart` SHALL be the only action declared by the agent,
   and the mappers SHALL declare no action
 
-#### Scenario: Moving to `tedge run all` withdraws the action of the previous deployment
+#### Scenario: Moving to `tedge run all` clears the action of the previous deployment
 - **WHEN** a device whose services declared their action as services of their own
   is moved to a single process
-- **THEN** the `restart` of every hosted mapper SHALL be withdrawn
+- **THEN** the `control` capability of every hosted mapper SHALL be cleared
 
-#### Scenario: An action declared by hand is still refused
-- **WHEN** `stop` is declared by hand on the capability topic of `tedge-agent`
-  and a `stop` command is issued for it
-- **THEN** the command SHALL be refused by the guard of the shipped workflow,
-  the declaration deciding what is offered and not what is allowed
-
-### Requirement: A service command is issued on the per-action topic
+### Requirement: A service command is issued as a `control` command
 
 A service command SHALL be issued as a command message on
-`te/device/<device>/service/<service>/cmd/<action>/<cmd-id>`,
+`te/device/<device>/service/<service>/cmd/control/<cmd-id>`,
 following the standard thin-edge command state machine (`init` → `executing` → `successful` | `failed`).
 
 The command payload SHALL carry:
 
 - `status`: the command state
+- `action`: the action to run
 - `serviceName`: the name of the target service, as the execution backend knows it
 - `serviceType`: the type of the target service, used to select the execution backend
 
-The payload SHALL NOT repeat the action name.
-The topic is the only place the action is named,
-as it is for every other thin-edge command.
+A command SHALL only be issued for an action the target service has declared in its `control` capability.
 
-A command SHALL only be issued for an action the target service has declared as a capability.
+#### Scenario: A restart is requested for a service
+- **WHEN** the `restart` action is requested for the `collectd` service of the main device
+- **THEN** the command SHALL be published on `te/device/main/service/collectd/cmd/control/<cmd-id>`
+  with `status` `init`, `action` `restart`, `serviceName` `collectd`
+  and the service's type as `serviceType`
 
-#### Scenario: A restart command is issued for a service
-- **WHEN** a `restart` command is issued for the `collectd` service of the main device
-- **THEN** the command SHALL be published on `te/device/main/service/collectd/cmd/restart/<cmd-id>`
-  with `status` `init`, `serviceName` `collectd` and the service's type as `serviceType`
-
-#### Scenario: The action is read from the topic
+#### Scenario: The action is read from the payload
 - **WHEN** a workflow or an executor needs the action name of a service command
-- **THEN** it SHALL take it from the command topic, since the payload does not carry it
+- **THEN** it SHALL take it from the `action` field of the command payload
 
-#### Scenario: Each command has its own channel
-- **WHEN** a `restart` and a `pause` command are issued for the same service
-- **THEN** they SHALL be published on distinct command topics and SHALL be driven by distinct workflows
+#### Scenario: All actions of a service share one channel
+- **WHEN** a `restart` and a `pause` action are requested for the same service
+- **THEN** both commands SHALL be published on the `cmd/control` topic of that service
+  with distinct command ids, and SHALL be driven by the same workflow
 
 ### Requirement: Workflow definitions are scoped by target entity type
 
@@ -139,11 +129,11 @@ An agent running on a child device reports itself as `child-device`,
 so matching it on its reported type would leave it unable to find its own workflows.
 
 This makes an operation name reusable across entity types:
-a `restart` workflow for a device and a `restart` workflow for a service are distinct workflows.
+a `log_upload` workflow for a device and a `log_upload` workflow for a service are distinct workflows.
 
-#### Scenario: A service command does not trigger the device workflow
-- **WHEN** a `restart` command is addressed to a service entity
-  and both a device `restart` workflow and a `restart` workflow with `type = "service"` are installed
+#### Scenario: A command for a service does not trigger the device workflow
+- **WHEN** a `log_upload` command is addressed to a service entity
+  and both a device `log_upload` workflow and a `log_upload` workflow with `type = "service"` are installed
 - **THEN** only the workflow with `type = "service"` SHALL drive the command
 
 #### Scenario: Existing device workflows are unaffected
@@ -192,10 +182,11 @@ as a process executed by tedge-agent, and never as a competing MQTT subscriber.
 
 ### Requirement: Service command workflows delegate execution to the tedge service CLI
 
-The workflows shipped for service commands SHALL execute the command by invoking
+The workflow shipped for the `control` command of services SHALL execute the command by invoking
 `tedge service <action> <serviceName> --type <serviceType>` from a script state with `sudo = true`,
 so that it is run through `sudo -n` when `sudo.enable` is set and sudo is installed,
-taking the action name from the command topic and the service name and type from the command payload.
+taking the action name, the service name and the service type from the command payload.
+This one workflow SHALL run every action, custom actions included.
 
 A zero exit code SHALL move the command to `successful`;
 a non-zero exit code SHALL move it to `failed` with the failure reason.
@@ -203,6 +194,10 @@ a non-zero exit code SHALL move it to `failed` with the failure reason.
 The workflow SHALL carry a timeout,
 so that a command whose backend never returns moves to `failed`
 rather than staying in progress.
+
+#### Scenario: A custom action needs no workflow of its own
+- **WHEN** the `pause` action is requested for a service
+- **THEN** the shipped workflow SHALL run `tedge service pause <serviceName> --type <serviceType>`
 
 #### Scenario: A successful execution completes the command
 - **WHEN** the execution step of a service command workflow exits with code `0`
@@ -218,7 +213,7 @@ rather than staying in progress.
 
 ### Requirement: Service commands targeting thin-edge's own services are handled safely
 
-A `restart` addressed to **tedge-agent** itself SHALL NOT be run as a plain synchronous step,
+A `restart` action addressed to **tedge-agent** itself SHALL NOT be run as a plain synchronous step,
 since the agent is killed mid-workflow and the step would re-execute on resume, causing a restart loop.
 The shipped workflow SHALL use the existing self-restart pattern instead:
 the agent persists the state awaiting its own restart, asks its runtime to stop,
@@ -227,37 +222,7 @@ No backend is asked to restart the agent,
 so this holds whether the agent runs as a service of its own
 or is co-hosted with the mappers in a single process.
 
-A `stop` addressed to **tedge-agent** or to a **cloud mapper** SHALL be rejected with a clear reason.
-A stopped agent cannot report the completion of the command,
-and a stopped mapper loses the cloud connection,
-so in both cases the requester would never learn the outcome.
-
-A mapper is recognized by its name, which is always `tedge-mapper-<x>`,
-whatever its cloud, topic prefix and profile.
-`tedge-mapper-collectd` and `tedge-mapper-local` are the exception, being connected to no cloud.
-The requester still learns the outcome when one of them is stopped,
-so both SHALL be stopped as any other service.
-Neither takes a cloud profile, so these are always their exact names.
-
 #### Scenario: Restarting the agent itself completes the command
-- **WHEN** a `restart` command is issued for the tedge-agent service
+- **WHEN** the `restart` action is requested for the tedge-agent service
 - **THEN** the agent SHALL stop, resume the workflow once it is started again,
   and move the command to `successful` exactly once
-
-#### Scenario: Stopping the agent is rejected
-- **WHEN** a `stop` command is issued for the tedge-agent service
-- **THEN** the command SHALL move to `failed` with a reason explaining that the executor cannot be stopped
-
-#### Scenario: Stopping the agent named as its unit is rejected
-- **WHEN** a `stop` command is issued for the tedge-agent service,
-  naming it `tedge-agent.service`
-- **THEN** the command SHALL move to `failed` for the same reason
-
-#### Scenario: Stopping a cloud mapper is rejected
-- **WHEN** a `stop` command is issued for a cloud mapper service
-- **THEN** the command SHALL move to `failed` with a reason explaining that the cloud connection cannot be stopped this way
-
-#### Scenario: Stopping a mapper connected to no cloud is allowed
-- **WHEN** a `stop` command is issued for the `tedge-mapper-collectd`
-  or the `tedge-mapper-local` service
-- **THEN** the action SHALL be run as it is for any other service
