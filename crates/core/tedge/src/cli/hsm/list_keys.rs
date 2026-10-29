@@ -7,6 +7,8 @@ use tedge_p11::CryptokiConfig;
 use tedge_p11::SecretString;
 
 use super::create_key::parse_id;
+use super::uri_scope::matches_uri;
+use super::uri_scope::warn_filtered;
 use crate::command::Command;
 use crate::log::MaybeFancy;
 use crate::ConfigError;
@@ -74,10 +76,10 @@ impl Command for ListKeysCmd {
             .uri
             .as_deref()
             .map(|uri| Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
-            .transpose()?;
-        let (uri_object, uri_id) = uri_attributes
-            .map(|uri| (uri.object.map(|o| o.into_owned()), uri.id))
+            .transpose()?
             .unwrap_or_default();
+        let uri_object = uri_attributes.object.as_ref().map(|o| o.to_string());
+        let uri_id = uri_attributes.id.clone();
 
         if self.label.is_some() && uri_object.is_some() {
             return Err(anyhow::anyhow!(
@@ -122,7 +124,18 @@ impl Command for ListKeysCmd {
             .filter(|key| id_filter.as_deref().is_none_or(|id| key.id == id))
             .collect();
 
-        if keys.is_empty() {
+        // tedge-p11-server may list the keys of another token than requested (see `uri_scope`).
+        let matching_keys: Vec<_> = keys
+            .iter()
+            .filter(|k| matches_uri(&uri_attributes, &k.uri))
+            .collect();
+
+        let keys_not_shown = keys.len() - matching_keys.len();
+        if keys_not_shown > 0 {
+            warn_filtered(keys_not_shown);
+        }
+
+        if matching_keys.is_empty() {
             if label_filter.is_some() || id_filter.is_some() {
                 eprintln!("No keys matching the given filters were found on the token.");
             } else {
@@ -131,7 +144,7 @@ impl Command for ListKeysCmd {
             return Ok(());
         }
 
-        for (i, key) in keys.iter().enumerate() {
+        for (i, key) in matching_keys.iter().enumerate() {
             if i > 0 {
                 println!();
             }
