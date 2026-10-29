@@ -91,6 +91,8 @@ A %%te%% service managed by an init unit of its own declares `restart` when it s
 in `/etc/tedge/operations/service_commands.toml`.
 It declares `type = "service"`, so it applies to service entities.
 See [scoping a workflow by entity type](../operation-workflow#workflow-entity-type).
+Any other action, such as `reload`, needs a workflow of its own with `type = "service"`.
+See [one workflow for several operations](../operation-workflow#workflow-operation-array) for an example.
 
 ## From the cloud
 

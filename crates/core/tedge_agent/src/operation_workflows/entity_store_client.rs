@@ -11,7 +11,7 @@ use tedge_actors::ChannelError;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::Service;
 use tedge_api::entity::EntityMetadata;
-use tedge_api::file_transfer_url::EntityStoreUrls;
+use tedge_api::http_url::EntityStoreUrls;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_http_ext::HttpError;
 use tedge_http_ext::HttpRequest;
@@ -151,7 +151,7 @@ mod tests {
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
     use tedge_api::entity::EntityType;
-    use tedge_api::file_transfer_url::Protocol;
+    use tedge_api::http_url::Protocol;
     use tedge_http_ext::test_helpers::HttpResponseBuilder;
 
     #[tokio::test]
