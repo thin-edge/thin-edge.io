@@ -15,6 +15,8 @@ use tedge_actors::NoConfig;
 use tedge_actors::RuntimeRequest;
 use tedge_actors::RuntimeRequestSink;
 use tedge_actors::SimpleMessageBoxBuilder;
+use tedge_api::commands::ControlCmdMetadata;
+use tedge_api::commands::Jsonify;
 use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::health::ServiceHealthTopic;
@@ -23,7 +25,7 @@ use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::mqtt_topics::ServiceTopicId;
-use tedge_api::service_command::ActionCapabilities;
+use tedge_api::service_command::ControlCapability;
 use tedge_config::tedge_toml::TEdgeConfigReaderService;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_mqtt_ext::MqttMessage;
@@ -36,7 +38,7 @@ pub struct HealthMonitorBuilder {
     box_builder: SimpleMessageBoxBuilder<MqttMessage, MqttMessage>,
     service_topic_id: ServiceTopicId,
     mqtt_schema: MqttSchema,
-    action_capabilities: Vec<MqttMessage>,
+    control_capability: Option<MqttMessage>,
 }
 
 impl HealthMonitorBuilder {
@@ -112,7 +114,7 @@ impl HealthMonitorBuilder {
             box_builder,
             service_topic_id: service.service_topic_id.clone(),
             mqtt_schema: mqtt_schema.clone(),
-            action_capabilities: Vec::new(),
+            control_capability: None,
         };
 
         // Update the MQTT config
@@ -125,27 +127,22 @@ impl HealthMonitorBuilder {
         builder
     }
 
-    pub fn with_action_capabilities(mut self, capabilities: ActionCapabilities) -> Self {
-        let capability = |action: &&str, payload: &'static str| {
-            let topic = self
-                .mqtt_schema
-                .capability_topic_for(self.service_topic_id.entity(), OperationType::from(*action));
+    pub fn with_control_capability(mut self, capability: ControlCapability) -> Self {
+        let payload = match capability {
+            ControlCapability::Declaring(actions) => ControlCmdMetadata {
+                actions: actions.iter().map(|action| action.to_string()).collect(),
+            }
+            .to_json(),
+            ControlCapability::Clearing => String::new(),
+        };
+        let topic = self
+            .mqtt_schema
+            .capability_topic_for(self.service_topic_id.entity(), OperationType::Control);
+        self.control_capability = Some(
             MqttMessage::new(&topic, payload)
                 .with_retain()
-                .with_qos(QoS::AtLeastOnce)
-        };
-
-        self.action_capabilities = capabilities
-            .declared
-            .iter()
-            .map(|action| capability(action, "{}"))
-            .chain(
-                capabilities
-                    .cleared
-                    .iter()
-                    .map(|action| capability(action, "")),
-            )
-            .collect();
+                .with_qos(QoS::AtLeastOnce),
+        );
         self
     }
 
@@ -174,7 +171,7 @@ impl Builder<HealthMonitorActor> for HealthMonitorBuilder {
             self.registration_message,
             self.health_topic,
             message_box,
-            self.action_capabilities,
+            self.control_capability,
         );
 
         Ok(actor)

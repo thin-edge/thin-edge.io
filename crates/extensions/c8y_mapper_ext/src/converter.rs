@@ -1148,10 +1148,9 @@ impl CumulocityConverter {
             }
 
             Channel::CommandMetadata { operation } => {
-                // Service commands are considered as actions of the service
-                if entity_type == EntityType::Service {
+                if entity_type == EntityType::Service && operation == &OperationType::Control {
                     return self
-                        .convert_service_command_metadata(&source, operation, message)
+                        .convert_service_control_metadata(&source, message)
                         .await;
                 }
 
@@ -1200,7 +1199,6 @@ impl CumulocityConverter {
                 let entity = operations::EntityTarget {
                     topic_id: entity.topic_id().clone(),
                     external_id: entity.external_id.clone(),
-                    entity_type: entity.r#type(),
                     smartrest_publish_topic: self
                         .smartrest_publish_topic_for_entity(entity.topic_id())?,
                 };
@@ -3110,50 +3108,6 @@ pub(crate) mod tests {
 
         let msgs = converter.convert(&operation_msg).await;
         assert_messages_matching(&msgs, [("c8y/s/us/child0", "114,c8y_Operation".into())]);
-    }
-
-    #[tokio::test]
-    async fn a_restart_capability_of_a_service_registers_a_service_command() {
-        let tmp_dir = TempTedgeDir::new();
-        let config = c8y_converter_config(&tmp_dir);
-        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
-
-        let reg_message = MqttMessage::new(
-            &Topic::new_unchecked("te/device/main/service/service0"),
-            json!({
-                "@type": "service",
-                "@id": "service0",
-                "name": "service0",
-                "@parent": "device/main//",
-            })
-            .to_string(),
-        );
-
-        converter
-            .process_entity_metadata_message(&reg_message)
-            .await
-            .unwrap();
-
-        let service = EntityTopicId::default_main_service("service0").unwrap();
-        let operation_topic = converter.mqtt_schema.topic_for(
-            &service,
-            &Channel::CommandMetadata {
-                operation: OperationType::Restart,
-            },
-        );
-        let operation_msg = MqttMessage::new(&operation_topic, "{}");
-
-        let msgs = converter.convert(&operation_msg).await;
-        assert_messages_matching(
-            &msgs,
-            [
-                ("c8y/s/us/service0", "114,c8y_ServiceCommand".into()),
-                (
-                    "c8y/inventory/managedObjects/update/service0",
-                    json!({"c8y_SupportedServiceCommands": ["RESTART"]}).into(),
-                ),
-            ],
-        );
     }
 
     fn registered_entities_into_mqtt_messages(
