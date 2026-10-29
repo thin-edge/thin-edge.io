@@ -428,8 +428,8 @@ pub struct EnableConfig {
     /// Enable shell_execute feature
     pub shell_execute: bool,
 
-    /// Enable service_commands feature
-    pub service_commands: bool,
+    /// Enable service_control feature
+    pub service_control: bool,
 }
 
 /// Bridge include configuration

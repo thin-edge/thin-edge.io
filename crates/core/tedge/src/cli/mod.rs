@@ -174,7 +174,7 @@ pub enum TEdgeOpt {
     #[clap(subcommand)]
     Mapper(mapper::MapperCli),
 
-    /// Execute a service command
+    /// Run a control action on a service
     Service(service::TEdgeServiceOpt),
 
     /// Run thin-edge services and plugins
