@@ -11,9 +11,11 @@ Test Tags           theme:tedge_agent    theme:services
 *** Test Cases ***
 thin-edge services declare their restart action
     ${capabilities}=    Execute Command
-    ...    tedge mqtt sub te/device/main/service/+/cmd/restart --retained-only --duration 2s
-    Should Contain    ${capabilities}    [te/device/main/service/tedge-agent/cmd/restart] {}
-    Should Contain    ${capabilities}    [te/device/main/service/tedge-mapper-c8y/cmd/restart] {}
+    ...    tedge mqtt sub te/device/main/service/+/cmd/control --retained-only --duration 2s
+    Should Contain    ${capabilities}    [te/device/main/service/tedge-agent/cmd/control] {"actions":["restart"]}
+    Should Contain
+    ...    ${capabilities}
+    ...    [te/device/main/service/tedge-mapper-c8y/cmd/control] {"actions":["restart"]}
 
 Only the workflow for type device declares a capability
     ${capabilities}=    Execute Command    tedge mqtt sub te/+/+/+/+/cmd/probe --retained-only --duration 2s
@@ -23,14 +25,14 @@ Only the workflow for type device declares a capability
 Agent restarts a service of its own device
     ${pid_before}=    Get Service PID    sleeper
     Execute Command
-    ...    tedge mqtt pub --retain te/device/main/service/sleeper/cmd/restart/robot-1 '{"status":"init","serviceName":"sleeper","serviceType":"service"}'
+    ...    tedge mqtt pub --retain te/device/main/service/sleeper/cmd/control/robot-1 '{"status":"init","action":"restart","serviceName":"sleeper","serviceType":"service"}'
     Should Have MQTT Messages
-    ...    te/device/main/service/sleeper/cmd/restart/robot-1
+    ...    te/device/main/service/sleeper/cmd/control/robot-1
     ...    message_pattern=.*successful.*
     ...    maximum=1
     ${pid_after}=    Get Service PID    sleeper
     Should Not Be Equal    ${pid_before}    ${pid_after}
-    Execute Command    tedge mqtt pub --retain te/device/main/service/sleeper/cmd/restart/robot-1 ''
+    Execute Command    tedge mqtt pub --retain te/device/main/service/sleeper/cmd/control/robot-1 ''
 
 A command targeting a service runs a service workflow
     Execute Command    tedge mqtt pub --retain te/device/main/service/sleeper/cmd/probe/robot-2 '{"status":"init"}'
@@ -48,18 +50,18 @@ A command targeting a device runs a device workflow
     ...    maximum=1
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/probe/robot-3 ''
 
-A service restart workflow can restart tedge-agent
+The control workflow can restart tedge-agent
     ${pid_before}=    Get Service PID    tedge-agent
     Execute Command
-    ...    tedge mqtt pub --retain te/device/main/service/tedge-agent/cmd/restart/robot-4 '{"status":"init","serviceName":"tedge-agent","serviceType":"service"}'
+    ...    tedge mqtt pub --retain te/device/main/service/tedge-agent/cmd/control/robot-4 '{"status":"init","action":"restart","serviceName":"tedge-agent","serviceType":"service"}'
     Should Have MQTT Messages
-    ...    te/device/main/service/tedge-agent/cmd/restart/robot-4
+    ...    te/device/main/service/tedge-agent/cmd/control/robot-4
     ...    message_pattern=.*successful.*
     ...    maximum=1
     ...    timeout=120
     ${pid_after}=    Get Service PID    tedge-agent
     Should Not Be Equal    ${pid_before}    ${pid_after}
-    Execute Command    tedge mqtt pub --retain te/device/main/service/tedge-agent/cmd/restart/robot-4 ''
+    Execute Command    tedge mqtt pub --retain te/device/main/service/tedge-agent/cmd/control/robot-4 ''
 
 
 *** Keywords ***

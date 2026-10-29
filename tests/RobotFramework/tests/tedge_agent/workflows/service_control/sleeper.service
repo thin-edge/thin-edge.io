@@ -1,5 +1,5 @@
 [Unit]
-Description=A service the service command tests can restart
+Description=A service the service control tests can restart
 
 [Service]
 Type=exec

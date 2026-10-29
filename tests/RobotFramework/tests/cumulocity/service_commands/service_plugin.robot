@@ -22,35 +22,35 @@ ${PLUGIN_LOG}       /tmp/container-test-plugin.log
 *** Test Cases ***
 Runs the shipped restart workflow through the plugin of the service type
     ${operation}=    Create Service Command Operation
-    ...    {"command":"RESTART","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
+    ...    {"command":"restart","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Plugin Should Have Been Called With    restart ${SERVICE_NAME}
 
-Runs a custom freeze workflow through the plugin of the service type
+Runs a custom action through the shipped workflow and the plugin of the service type
     ${operation}=    Create Service Command Operation
-    ...    {"command":"FREEZE","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
+    ...    {"command":"freeze","serviceName":"${SERVICE_NAME}","serviceType":"${SERVICE_TYPE}"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
     Plugin Should Have Been Called With    freeze ${SERVICE_NAME}
 
 Takes the service name from the operation
     ${operation}=    Create Service Command Operation
-    ...    {"command":"RESTART","serviceName":"Node-RED","serviceType":"${SERVICE_TYPE}"}
+    ...    {"command":"restart","serviceName":"Node-RED","serviceType":"${SERVICE_TYPE}"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
 
     ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
     Should Have MQTT Messages
-    ...    te/device/main/service/${SERVICE_NAME}/cmd/restart/c8y-mapper-${operation_id}
+    ...    te/device/main/service/${SERVICE_NAME}/cmd/control/c8y-mapper-${operation_id}
     ...    message_contains="serviceName":"Node-RED"
     Plugin Should Have Been Called With    restart Node-RED
 
 Takes the service name and type from the registered entity when the operation gives none
     ${operation}=    Create Service Command Operation
-    ...    {"command":"RESTART"}
+    ...    {"command":"restart"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
 
     ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
     Should Have MQTT Messages
-    ...    te/device/main/service/${SERVICE_NAME}/cmd/restart/c8y-mapper-${operation_id}
+    ...    te/device/main/service/${SERVICE_NAME}/cmd/control/c8y-mapper-${operation_id}
     ...    message_contains="serviceType":"${SERVICE_TYPE}"
     Plugin Should Have Been Called With    restart ${SERVICE_NAME}
 
@@ -67,14 +67,12 @@ Custom Setup
     ThinEdgeIO.Transfer To Device    ${CURDIR}/${SERVICE_TYPE}    ${PLUGIN_DIR}/
     Execute Command    chown root:root ${PLUGIN_DIR}/${SERVICE_TYPE} && chmod 755 ${PLUGIN_DIR}/${SERVICE_TYPE}
 
-    ThinEdgeIO.Transfer To Device    ${CURDIR}/service_freeze.toml    /etc/tedge/operations/
-
     Execute Command
     ...    tedge mqtt pub --retain te/device/main/service/${SERVICE_NAME} '{"@type":"service","name":"${SERVICE_NAME}","type":"${SERVICE_TYPE}"}'
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
 
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/restart '{}'
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/freeze '{}'
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/control '{"actions":["restart","freeze"]}'
 
 Create Service Command Operation
     [Arguments]    ${fragment}
