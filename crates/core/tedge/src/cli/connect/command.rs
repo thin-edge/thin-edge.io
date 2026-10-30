@@ -26,6 +26,8 @@ use crate::ConfigError;
 use anyhow::anyhow;
 use anyhow::bail;
 #[cfg(feature = "c8y")]
+use c8y_api::domain_names::DomainNames;
+#[cfg(feature = "c8y")]
 use c8y_api::http_proxy::read_c8y_credentials;
 use camino::Utf8PathBuf;
 use certificate::parse_root_certificate::CryptokiConfig;
@@ -1356,10 +1358,23 @@ async fn tenant_matches_configured_url(
 ) -> Result<bool, Fancy<ConnectError>> {
     let spinner = Spinner::start("Checking Cumulocity is connected to intended tenant");
     let c8y_config = tedge_config.mapper_config::<C8yMapperSpecificConfig>(&profile_name)?;
-    let res = get_connected_c8y_url(tedge_config, &c8y_config).await;
+    let res = async {
+        let url = get_connected_c8y_url(tedge_config, &c8y_config).await?;
+        let matches = url == configured_mqtt_url
+            || url == configured_http_url
+            || is_configured_tenant_on_another_domain(
+                tedge_config,
+                &c8y_config,
+                configured_http_url,
+                &url,
+            )
+            .await;
+        Ok((url, matches))
+    }
+    .await;
     match spinner.finish(res) {
-        Ok(url) if url == configured_mqtt_url || url == configured_http_url => Ok(true),
-        Ok(url) => {
+        Ok((_, true)) => Ok(true),
+        Ok((url, false)) => {
             warning!(
             "The device is connected to {}, but the configured URL is (mqtt={}, http={}).\
             \n    To connect the device to the intended tenant, remove the device certificate from {url}, and then run `tedge reconnect c8y`", 
@@ -1370,6 +1385,33 @@ async fn tenant_matches_configured_url(
             Ok(false)
         }
         Err(e) => Err(e),
+    }
+}
+
+// The tenant can be reachable under several domains, e.g. while a dedicated instance is renamed,
+// in which case the device is connected to the configured tenant under its new domain.
+#[cfg(feature = "c8y")]
+async fn is_configured_tenant_on_another_domain(
+    tedge_config: &TEdgeConfig,
+    c8y_config: &MapperConfig<C8yMapperSpecificConfig>,
+    configured_http_url: &str,
+    connected_url: &str,
+) -> bool {
+    let domain_names = async {
+        let c8y_http = c8y_config.http().or_config_not_set()?;
+        let http_config = tedge_config.cloud_root_certs().await?;
+        anyhow::Ok(DomainNames::detect(&c8y_http.to_string(), &http_config).await?)
+    };
+    match domain_names.await {
+        Ok(domain_names) => {
+            domain_names.is_same_tenant_on_another_domain(configured_http_url, connected_url)
+        }
+        Err(err) => {
+            tracing::debug!(
+                "Failed to detect the Cumulocity tenant domain names for the tenant check: {err:#}"
+            );
+            false
+        }
     }
 }
 

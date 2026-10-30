@@ -260,6 +260,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mapper_converts_firmware_op_to_firmware_update_cmd_when_remote_url_is_on_a_detected_domain(
+    ) {
+        let ttd = TempTedgeDir::new();
+        let config = test_mapper_config(&ttd);
+        config
+            .domain_names
+            .set(vec!["iot.new-domain.com".to_string()]);
+        let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+
+        let TestHandle { mqtt, .. } = test_handle;
+        let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+        // Simulate c8y_Firmware operation delivered via JSON over MQTT
+        mqtt.send(MqttMessage::new(
+            &C8yDeviceControlTopic::topic(&"c8y".try_into().unwrap()),
+            json!({
+                "id": "123456",
+                "c8y_Firmware": {
+                    "name": "myFirmware",
+                    "version": "1.0",
+                    "url": "https://iot.new-domain.com/inventory/binaries/51541"
+                },
+                "externalSource": {
+                    "externalId": "test-device",
+                    "type": "c8y_Serial"
+                }
+            })
+            .to_string(),
+        ))
+        .await
+        .expect("Send failed");
+
+        assert_received_includes_json(
+            &mut mqtt,
+            [(
+                "te/device/main///cmd/firmware_update/+",
+                json!({
+                    "status": "init",
+                    "name": "myFirmware",
+                    "version": "1.0",
+                    "remoteUrl": "https://iot.new-domain.com/inventory/binaries/51541",
+                    "tedgeUrl": "http://127.0.0.1:8001/c8y/inventory/binaries/51541"
+                }),
+            )],
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn mapper_converts_firmware_op_to_firmware_update_cmd_for_child_device() {
         let ttd = TempTedgeDir::new();
         let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;

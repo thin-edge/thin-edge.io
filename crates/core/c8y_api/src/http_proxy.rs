@@ -1,3 +1,4 @@
+use crate::domain_names::DomainNames;
 use crate::proxy_url::Protocol;
 use crate::proxy_url::ProxyUrlGenerator;
 use crate::smartrest::error::SmartRestDeserializerError;
@@ -39,6 +40,7 @@ pub struct C8yEndPoint {
     c8y_host: String,
     c8y_mqtt_host: String,
     proxy: ProxyUrlGenerator,
+    domain_names: DomainNames,
 }
 
 impl C8yEndPoint {
@@ -59,6 +61,7 @@ impl C8yEndPoint {
             c8y_host,
             c8y_mqtt_host,
             proxy,
+            domain_names: DomainNames::default(),
         })
     }
 
@@ -81,6 +84,7 @@ impl C8yEndPoint {
             c8y_host,
             c8y_mqtt_host,
             proxy,
+            domain_names: DomainNames::default(),
         })
     }
 
@@ -89,6 +93,15 @@ impl C8yEndPoint {
             c8y_host: c8y_host.into(),
             c8y_mqtt_host: c8y_mqtt_host.into(),
             proxy,
+            domain_names: DomainNames::default(),
+        }
+    }
+
+    /// Treats URLs on these domains as tenant URLs, like `c8y.http`
+    pub fn with_domain_names(self, domain_names: DomainNames) -> Self {
+        C8yEndPoint {
+            domain_names,
+            ..self
         }
     }
 
@@ -254,7 +267,12 @@ impl C8yEndPoint {
         // The configured `c8y.http` setting may have a port value specified,
         // but the incoming URL is less likely to have any port specified.
         // Hence just matching the host prefix.
-        (host == c8y_http_host || host == c8y_mqtt_host).then_some(url)
+        //
+        // The tenant might also be reachable under other domain names, e.g. during a domain rename.
+        (host == c8y_http_host
+            || host == c8y_mqtt_host
+            || self.domain_names.includes_domain_of(url_host))
+        .then_some(url)
     }
 }
 
@@ -477,6 +495,7 @@ pub enum JwtError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use test_case::test_case;
 
     #[test]
@@ -591,6 +610,61 @@ mod tests {
         );
         let url = "http://unrelated-domain/path";
         assert!(c8y.maybe_tenant_url(url).is_none());
+    }
+
+    #[rstest]
+    #[case::detected_domain(
+        "https://iot.new-domain.com/inventory/binaries/1234",
+        "https://127.0.0.1:1234/c8y/inventory/binaries/1234"
+    )]
+    #[case::tenant_id_on_detected_domain(
+        "https://t1124124.new-domain.com/path",
+        "https://127.0.0.1:1234/c8y/path"
+    )]
+    #[case::wildcard_domain(
+        "https://t1124124.wildcard-domain.com/path",
+        "https://127.0.0.1:1234/c8y/path"
+    )]
+    #[case::configured_domain("https://iot.old-domain.com/path", "https://127.0.0.1:1234/c8y/path")]
+    #[case::subdomain_of_detected_domain(
+        "https://a.iot.new-domain.com/path",
+        "https://a.iot.new-domain.com/path"
+    )]
+    #[case::unrelated_domain("https://iot.unrelated.com/path", "https://iot.unrelated.com/path")]
+    fn urls_on_detected_domains_are_routed_through_the_proxy(
+        #[case] url: &str,
+        #[case] proxy_url: &str,
+    ) {
+        let domain_names = DomainNames::default();
+        let c8y = C8yEndPoint::new(
+            "iot.old-domain.com",
+            "iot.old-domain.com",
+            ProxyUrlGenerator::new("127.0.0.1".into(), 1234, Protocol::Https),
+        )
+        .with_domain_names(domain_names.clone());
+        domain_names.set(vec![
+            "iot.old-domain.com".to_string(),
+            "IoT.New-Domain.com".to_string(),
+            "*.wildcard-domain.com".to_string(),
+        ]);
+
+        assert_eq!(c8y.local_proxy_url(url).unwrap().as_ref(), proxy_url);
+    }
+
+    #[test]
+    fn url_of_a_renamed_domain_is_not_my_tenant_until_domain_names_detected() {
+        let domain_names = DomainNames::default();
+        let c8y = C8yEndPoint::new(
+            "iot.old-domain.com",
+            "iot.old-domain.com",
+            ProxyUrlGenerator::default(),
+        )
+        .with_domain_names(domain_names.clone());
+        let url = "https://iot.new-domain.com/inventory/binaries/1234";
+        assert!(c8y.maybe_tenant_url(url).is_none());
+
+        domain_names.set(vec!["iot.new-domain.com".to_string()]);
+        assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
 
     #[ignore = "Until #2804 is fixed"]

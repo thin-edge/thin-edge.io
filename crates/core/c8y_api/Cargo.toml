@@ -10,8 +10,10 @@ repository = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+backoff = { workspace = true }
 base64 = { workspace = true }
 camino = { workspace = true }
+certificate = { workspace = true, features = ["reqwest"] }
 csv = { workspace = true }
 download = { workspace = true }
 mqtt_channel = { workspace = true }
@@ -23,17 +25,23 @@ tedge_config = { workspace = true }
 tedge_utils = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true, features = ["formatting"] }
-tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 toml = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+x509-parser = { workspace = true }
 
 [dev-dependencies]
 assert-json-diff = { workspace = true }
 assert_matches = { workspace = true }
 maplit = { workspace = true }
+rcgen = { workspace = true }
+rstest = { workspace = true }
+rustls = { workspace = true }
 test-case = { workspace = true }
 time = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net"] }
+tokio-rustls = { workspace = true }
 
 [lints]
 workspace = true
