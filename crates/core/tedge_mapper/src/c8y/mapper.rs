@@ -4,6 +4,7 @@ use crate::core::mqtt::configure_proxy;
 use crate::flows_config;
 use anyhow::Context;
 use async_trait::async_trait;
+use c8y_api::domain_names::CertificateMonitor;
 use c8y_api::http_proxy::read_c8y_credentials;
 use c8y_auth_proxy::actor::C8yAuthProxyBuilder;
 use c8y_mapper_ext::actor::C8yMapperBuilder;
@@ -135,8 +136,6 @@ impl TEdgeComponent for CumulocityMapper {
         }
 
         let mut http_actor = HttpActor::new(tedge_config.http.client_tls_config()?).builder();
-        let c8y_auth_proxy_actor =
-            C8yAuthProxyBuilder::try_from_config(&tedge_config, &c8y_config).await?;
 
         let mut fs_watch_actor = FsWatchActorBuilder::new();
         let mut cmd_watcher_actor = WatchActorBuilder::new();
@@ -151,6 +150,12 @@ impl TEdgeComponent for CumulocityMapper {
             &cloud_root_certs,
             c8y_mapper_config.domain_names.clone(),
         );
+        let c8y_auth_proxy_actor = C8yAuthProxyBuilder::try_from_config(
+            &tedge_config,
+            &c8y_config,
+            CertificateMonitor::new(domain_name_refresh.clone()),
+        )
+        .await?;
         let mut downloader_actor = DownloaderActor::new(identity, cloud_root_certs).builder();
 
         // MQTT client dedicated to monitor the c8y-bridge client status and also

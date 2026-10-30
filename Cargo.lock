@@ -1051,6 +1051,7 @@ dependencies = [
  "mockito",
  "proptest",
  "rand 0.10.3",
+ "rstest",
  "serde",
  "serde_json",
  "tedge_actors",

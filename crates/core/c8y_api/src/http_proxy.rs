@@ -105,10 +105,6 @@ impl C8yEndPoint {
         }
     }
 
-    pub fn domain_names(&self) -> &DomainNames {
-        &self.domain_names
-    }
-
     pub fn get_base_url(&self) -> String {
         let c8y_host = &self.c8y_host;
         if c8y_host.starts_with("http") {
@@ -635,7 +631,10 @@ mod tests {
         "https://a.iot.new-domain.com/path"
     )]
     #[case::unrelated_domain("https://iot.unrelated.com/path", "https://iot.unrelated.com/path")]
-    fn local_proxy_url_with_domain_names(#[case] url: &str, #[case] proxy_url: &str) {
+    fn urls_on_detected_domains_are_routed_through_the_proxy(
+        #[case] url: &str,
+        #[case] proxy_url: &str,
+    ) {
         let domain_names = DomainNames::default();
         let c8y = C8yEndPoint::new(
             "iot.old-domain.com",
@@ -654,16 +653,17 @@ mod tests {
 
     #[test]
     fn url_of_a_renamed_domain_is_not_my_tenant_until_domain_names_detected() {
+        let domain_names = DomainNames::default();
         let c8y = C8yEndPoint::new(
             "iot.old-domain.com",
             "iot.old-domain.com",
             ProxyUrlGenerator::default(),
-        );
+        )
+        .with_domain_names(domain_names.clone());
         let url = "https://iot.new-domain.com/inventory/binaries/1234";
         assert!(c8y.maybe_tenant_url(url).is_none());
 
-        c8y.domain_names()
-            .set(vec!["iot.new-domain.com".to_string()]);
+        domain_names.set(vec!["iot.new-domain.com".to_string()]);
         assert_eq!(c8y.maybe_tenant_url(url), Some(url.parse().unwrap()));
     }
 

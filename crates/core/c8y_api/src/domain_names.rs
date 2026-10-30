@@ -14,6 +14,8 @@ use certificate::CloudHttpConfig;
 use reqwest::tls::TlsInfo;
 use reqwest::Url;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
 use std::time::Duration;
 use tokio::sync::watch;
 use tracing::info;
@@ -34,33 +36,22 @@ const REFRESH_INTERVAL: Duration = Duration::from_secs(24 * 3600);
 /// including `c8y.http` itself.
 /// Clones share the same names, so names detected in the background
 /// are seen by all the clones.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DomainNames {
-    names: Arc<watch::Sender<Arc<[String]>>>,
-}
-
-impl Default for DomainNames {
-    fn default() -> Self {
-        DomainNames {
-            names: Arc::new(watch::Sender::new(Arc::from(vec![]))),
-        }
-    }
+    names: Arc<RwLock<Arc<[String]>>>,
 }
 
 impl DomainNames {
     /// Replaces the names, which are stored in lowercase as URL hosts are
-    pub fn set(&self, names: Vec<String>) {
-        let names: Vec<_> = names.iter().map(|name| name.to_ascii_lowercase()).collect();
-        self.names.send_replace(names.into());
+    pub fn set(&self, mut names: Vec<String>) {
+        names
+            .iter_mut()
+            .for_each(|name| name.make_ascii_lowercase());
+        *self.names.write().unwrap() = names.into();
     }
 
-    pub fn names(&self) -> Arc<[String]> {
-        self.names.borrow().clone()
-    }
-
-    #[cfg(test)]
-    fn subscribe(&self) -> watch::Receiver<Arc<[String]>> {
-        self.names.subscribe()
+    fn names(&self) -> Arc<[String]> {
+        self.names.read().unwrap().clone()
     }
 
     /// Detects once the domain names of the Cumulocity tenant at `c8y_host` (i.e. `c8y.http`)
@@ -92,6 +83,8 @@ impl DomainNames {
     /// and the domain of the connected host is one of these domains, as during a domain rename.
     /// Unlike [`includes_domain_of`](Self::includes_domain_of), another tenant on the same
     /// domain does not match, even when a wildcard covers all the tenants of that domain.
+    /// A tenant with the same name on another Cumulocity instance does match
+    /// when one certificate lists the domains of both instances.
     pub fn is_same_tenant_on_another_domain(
         &self,
         configured_host: &str,
@@ -151,9 +144,10 @@ pub fn spawn_detection(
 
 /// Requests the domain names to be detected again, without waiting for the daily refresh
 ///
-/// The certificate of Cumulocity is only checked when connecting,
-/// so a reconnection is a good time to check whether it lists new domain names.
-#[derive(Debug)]
+/// A TLS client only receives the server certificate when it connects,
+/// so a new connection to Cumulocity, by the bridge or by the auth proxy,
+/// is the first chance to see a replaced certificate listing new domain names.
+#[derive(Clone, Debug)]
 pub struct DomainNameRefresh(watch::Sender<()>);
 
 impl DomainNameRefresh {
@@ -168,6 +162,35 @@ impl From<watch::Sender<()>> for DomainNameRefresh {
     }
 }
 
+/// Requests the domain names to be detected again when Cumulocity serves a new certificate
+///
+/// Every new HTTPS connection to `c8y.http` shows the certificate currently served,
+/// so a certificate replaced while the bridge stays connected is noticed
+/// on the next connection instead of at the daily refresh.
+#[derive(Clone, Debug)]
+pub struct CertificateMonitor {
+    refresh: DomainNameRefresh,
+    last_seen: Arc<Mutex<Option<Vec<u8>>>>,
+}
+
+impl CertificateMonitor {
+    pub fn new(refresh: DomainNameRefresh) -> Self {
+        CertificateMonitor {
+            refresh,
+            last_seen: Arc::default(),
+        }
+    }
+
+    /// Requests a refresh if `certificate` (DER) differs from the one last seen
+    pub fn seen(&self, certificate: &[u8]) {
+        let mut last_seen = self.last_seen.lock().unwrap();
+        if last_seen.as_deref() != Some(certificate) {
+            *last_seen = Some(certificate.to_vec());
+            self.refresh.request();
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum DomainNameError {
     #[error("Invalid Cumulocity host {host}: {source}")]
@@ -176,7 +199,7 @@ pub enum DomainNameError {
         source: url::ParseError,
     },
 
-    #[error("Failed to build an HTTP client: {0}")]
+    #[error("Failed to build the HTTP client detecting the Cumulocity domain names: {0}")]
     HttpClient(#[source] reqwest::Error),
 
     #[error("Failed to connect to {url}: {source}")]
@@ -212,11 +235,11 @@ struct DomainNameDetector {
     url: Url,
     domain_names: DomainNames,
     retry: ExponentialBackoff,
-    refresh_interval: Duration,
 }
 
-/// Retries after 30s, doubling up to 1h, with some randomization so that devices reconnecting
-/// at the same time, e.g. after a Cumulocity outage, don't all retry at the same time
+/// Retries after [`MIN_RETRY_DELAY`], doubling up to [`MAX_RETRY_DELAY`], with some randomization
+/// so that devices reconnecting at the same time, e.g. after a Cumulocity outage,
+/// don't all retry at the same time
 fn retry_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
         // The first delay is the current interval, which is only set to the initial one on reset
@@ -256,7 +279,6 @@ impl DomainNameDetector {
             url,
             domain_names,
             retry: retry_backoff(),
-            refresh_interval: REFRESH_INTERVAL,
         })
     }
 
@@ -292,10 +314,12 @@ impl DomainNameDetector {
                 Ok(()) => {
                     // The names have just been detected, so the requests received meanwhile are served
                     refresh_requests.mark_unchanged();
-                    self.refresh_interval
+                    REFRESH_INTERVAL
                 }
                 Err(retry_delay) => retry_delay,
             };
+            // A request also cuts short a retry delay: a reconnection or a new certificate
+            // is a sign that Cumulocity is reachable again
             tokio::select! {
                 _ = tokio::time::sleep(delay) => {}
                 // Once all the senders are dropped, only the delay is left
@@ -569,6 +593,22 @@ mod tests {
         assert_eq!(detector.refresh().await, Err(MIN_RETRY_DELAY));
     }
 
+    #[test]
+    fn certificate_monitor_requests_a_refresh_only_when_the_certificate_changes() {
+        let (refresh, mut requests) = watch::channel(());
+        let monitor = CertificateMonitor::new(refresh.into());
+
+        monitor.seen(b"old certificate");
+        assert!(requests.has_changed().unwrap());
+        requests.mark_unchanged();
+
+        monitor.seen(b"old certificate");
+        assert!(!requests.has_changed().unwrap());
+
+        monitor.seen(b"new certificate");
+        assert!(requests.has_changed().unwrap());
+    }
+
     const OK_RESPONSE: &str = "HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n";
 
     // A detector whose retry delays are not randomized, so they can be checked
@@ -588,14 +628,13 @@ mod tests {
     }
 
     async fn wait_for_names(domain_names: &DomainNames, expected: &[String]) {
-        let mut names = domain_names.subscribe();
-        tokio::time::timeout(
-            Duration::from_secs(5),
-            names.wait_for(|names| **names == *expected),
-        )
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while *domain_names.names() != *expected {
+                tokio::task::yield_now().await;
+            }
+        })
         .await
-        .unwrap_or_else(|_| panic!("Domain names should be detected: {expected:?}"))
-        .unwrap();
+        .unwrap_or_else(|_| panic!("Domain names should be detected: {expected:?}"));
     }
 
     fn trusting(certificates: &[&rcgen::CertifiedKey<rcgen::KeyPair>]) -> CloudHttpConfig {

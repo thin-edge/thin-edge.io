@@ -1,7 +1,8 @@
 //! Detects the domain names of the tenant again whenever the bridge connects to Cumulocity
 //!
-//! The certificate served by Cumulocity is only checked when connecting, so a reconnection is when
-//! a certificate listing new domain names, e.g. during a domain rename, is most likely to be seen.
+//! The bridge only receives the certificate served by Cumulocity when it connects,
+//! so a reconnection is when a replaced certificate listing new domain names,
+//! e.g. during a domain rename, is first seen by the device.
 //! Both a built-in bridge and a bridge running in the broker publish their health on the local
 //! broker, each time they connect.
 
@@ -108,12 +109,13 @@ fn is_bridge_up(message: &MqttMessage, mqtt_schema: &MqttSchema, health_topic: &
 mod tests {
     use super::*;
     use crate::tests::test_mapper_config;
+    use assert_matches::assert_matches;
+    use rstest::rstest;
     use serde_json::json;
     use std::time::Duration;
     use tedge_actors::test_helpers::WithTimeout;
     use tedge_actors::Sender;
     use tedge_test_utils::fs::TempTedgeDir;
-    use test_case::test_case;
     use tokio::sync::watch;
 
     const TEST_TIMEOUT: Duration = Duration::from_millis(500);
@@ -131,10 +133,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(matches!(
+        assert_matches!(
             requests.changed().with_timeout(TEST_TIMEOUT).await,
             Ok(Ok(()))
-        ));
+        );
     }
 
     #[tokio::test]
@@ -150,23 +152,24 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(matches!(
+        assert_matches!(
             requests.changed().with_timeout(TEST_TIMEOUT).await,
             Ok(Ok(()))
-        ));
+        );
     }
 
     // A bridge in the broker is a mosquitto bridge, whose health payload is 1 or 0
-    #[test_case(MOSQUITTO_BRIDGE, MOSQUITTO_BRIDGE, "1", true ; "bridge in broker up")]
-    #[test_case(MOSQUITTO_BRIDGE, MOSQUITTO_BRIDGE, "0", false ; "bridge in broker down")]
-    #[test_case(BUILT_IN_BRIDGE, BUILT_IN_BRIDGE, r#"{"status":"up"}"#, true ; "built in bridge up")]
-    #[test_case(BUILT_IN_BRIDGE, BUILT_IN_BRIDGE, r#"{"status":"down"}"#, false ; "built in bridge down")]
-    #[test_case(MOSQUITTO_BRIDGE, "tedge-agent", r#"{"status":"up"}"#, false ; "another service up")]
+    #[rstest]
+    #[case::bridge_in_broker_up(MOSQUITTO_BRIDGE, MOSQUITTO_BRIDGE, "1", true)]
+    #[case::bridge_in_broker_down(MOSQUITTO_BRIDGE, MOSQUITTO_BRIDGE, "0", false)]
+    #[case::built_in_bridge_up(BUILT_IN_BRIDGE, BUILT_IN_BRIDGE, r#"{"status":"up"}"#, true)]
+    #[case::built_in_bridge_down(BUILT_IN_BRIDGE, BUILT_IN_BRIDGE, r#"{"status":"down"}"#, false)]
+    #[case::another_service_up(MOSQUITTO_BRIDGE, "tedge-agent", r#"{"status":"up"}"#, false)]
     fn bridge_is_up_only_when_its_own_health_is_up(
-        bridge_service_name: &str,
-        service_name: &str,
-        payload: &str,
-        expected: bool,
+        #[case] bridge_service_name: &str,
+        #[case] service_name: &str,
+        #[case] payload: &str,
+        #[case] expected: bool,
     ) {
         let message = MqttMessage::new(&health_topic(service_name), payload);
 

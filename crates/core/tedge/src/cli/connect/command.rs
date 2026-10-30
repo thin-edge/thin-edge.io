@@ -1397,22 +1397,19 @@ async fn is_configured_tenant_on_another_domain(
     configured_http_url: &str,
     connected_url: &str,
 ) -> bool {
-    let Ok(c8y_http) = c8y_config.http().or_config_not_set() else {
-        return false;
+    let domain_names = async {
+        let c8y_http = c8y_config.http().or_config_not_set()?;
+        let http_config = tedge_config.cloud_root_certs().await?;
+        anyhow::Ok(DomainNames::detect(&c8y_http.to_string(), &http_config).await?)
     };
-    let domain_names = match tedge_config.cloud_root_certs().await {
-        Ok(http_config) => DomainNames::detect(&c8y_http.to_string(), &http_config).await,
-        Err(err) => {
-            tracing::debug!("Failed to load the cloud root certificates: {err:#}");
-            return false;
-        }
-    };
-    match domain_names {
+    match domain_names.await {
         Ok(domain_names) => {
             domain_names.is_same_tenant_on_another_domain(configured_http_url, connected_url)
         }
         Err(err) => {
-            tracing::debug!("{err}");
+            tracing::debug!(
+                "Failed to detect the Cumulocity tenant domain names for the tenant check: {err:#}"
+            );
             false
         }
     }
