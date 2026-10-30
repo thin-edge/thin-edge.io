@@ -120,7 +120,8 @@ async fn test_new_software_update_operation() -> Result<(), DynError> {
 }
 
 #[tokio::test]
-async fn test_pending_software_list_operation() -> Result<(), DynError> {
+async fn software_list_interrupted_by_a_restart_is_not_reported_as_failed() -> Result<(), DynError>
+{
     let temp_dir = TempTedgeDir::new();
     let content = json!({
         "SoftwareListCommand": {
@@ -137,13 +138,9 @@ async fn test_pending_software_list_operation() -> Result<(), DynError> {
 
     let mut converter_box = spawn_software_manager(&temp_dir).await?;
 
-    let software_request_response =
-        SoftwareListCommand::new(&EntityTopicId::default_main_device(), "1234".to_string())
-            .with_error(
-                "Software List request cancelled due to unexpected agent restart".to_string(),
-            );
+    // The request is run again by the workflow actor when resuming the command
     converter_box
-        .assert_received([software_request_response])
+        .assert_received([SoftwareCommandMetadata { types: vec![] }])
         .await;
 
     Ok(())

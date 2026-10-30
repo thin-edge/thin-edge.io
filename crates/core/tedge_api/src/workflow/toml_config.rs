@@ -947,6 +947,45 @@ on_success = "successful"
     }
 
     #[test]
+    fn a_builtin_operation_is_rejected_for_another_operation_awaited_from_a_shared_state() {
+        let file = r#"
+operation = "software_list"
+
+[init]
+script = "/etc/tedge/operations/pick-action.sh"
+on_stdout = ["list_first", "update_first"]
+
+[list_first]
+operation = "builtin:software_list"
+on_exec = "executing"
+
+[update_first]
+operation = "builtin:software_update"
+on_exec = "executing"
+
+[executing]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+        let input: TomlOperationWorkflow = toml::from_str(file).unwrap();
+        let error = OperationWorkflows::try_from(input).unwrap_err();
+        assert_eq!(
+            error,
+            WorkflowDefinitionError::InvalidBuiltinOperation {
+                main_operation: "software_list".to_string(),
+                builtin_operation: "software_update".to_string()
+            }
+        );
+    }
+
+    #[test]
     fn a_builtin_operation_is_rejected_for_the_other_operations_of_an_array() {
         let file = r#"
 operation = ["software_update", "software_check"]

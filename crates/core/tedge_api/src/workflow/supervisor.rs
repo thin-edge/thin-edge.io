@@ -238,6 +238,48 @@ impl WorkflowSupervisor {
             .and_then(|workflow| workflow.get_action(command_state))
     }
 
+    /// Returns the builtin operation triggered just before the current state of a command,
+    /// along with the state triggering this builtin operation,
+    /// unless another kind of step can also lead to the current state
+    fn builtin_operation_trigger_state(
+        &self,
+        command_state: &GenericCommandState,
+    ) -> Option<(&OperationName, &StateName)> {
+        let operation_name = command_state.operation()?;
+        let version = command_state.workflow_version()?;
+        let entry = self.commands.entry(&command_state.topic.name)?;
+        let workflow = self
+            .workflows
+            .get(&(entry.entity_type, operation_name.as_str().into()))?
+            .get(version)
+            .ok()?;
+        let mut trigger = None;
+        for (state, action) in &workflow.states {
+            let on_exec = match action {
+                OperationAction::BuiltInOperation(_, handlers)
+                | OperationAction::Operation(_, _, _, handlers)
+                | OperationAction::BgScript(_, _, handlers)
+                | OperationAction::RestartAgent(handlers)
+                | OperationAction::BuiltIn(handlers, _) => &handlers.on_exec,
+                _ => continue,
+            };
+            if on_exec.status != command_state.status {
+                continue;
+            }
+            match action {
+                // If several states match, which one is returned is arbitrary, but they are equivalent:
+                // each invokes this workflow's own builtin operation (other builtins are rejected when the workflow is loaded)
+                // and then waits for it in the current state, so resuming from any of them sends the same request.
+                OperationAction::BuiltInOperation(operation, _) => {
+                    trigger = Some((operation, state))
+                }
+                // The command might be awaiting this other step, e.g. a sub-operation not yet on the command board
+                _ => return None,
+            }
+        }
+        trigger
+    }
+
     /// Return the current state of a command (identified by its topic)
     pub fn get_state(&self, command: &str) -> Option<&GenericCommandState> {
         self.commands.entry(command).map(|entry| &entry.state)
@@ -334,6 +376,21 @@ impl WorkflowSupervisor {
         match action {
             OperationAction::AwaitingAgentRestart(handlers) => {
                 Some(command.update(handlers.on_success))
+            }
+
+            // A builtin operation is awaited, but its request was only held in memory by the builtin actor
+            // and has been lost on restart. A software list request is safe to be sent again.
+            OperationAction::AwaitOperationCompletion(_, _)
+                if self.sub_command_state(&command).is_none() =>
+            {
+                match self.builtin_operation_trigger_state(&command) {
+                    Some((operation, trigger_state))
+                        if operation == &OperationType::SoftwareList.to_string() =>
+                    {
+                        Some(command.move_to(trigger_state.as_str().into()))
+                    }
+                    _ => Some(command),
+                }
             }
 
             _ => {
@@ -581,6 +638,7 @@ impl CommandBoard {
 mod tests {
     use super::*;
     use mqtt_channel::Topic;
+    use std::collections::HashSet;
 
     #[test]
     fn a_device_and_a_service_workflow_share_an_operation_name() {
@@ -796,6 +854,116 @@ mod tests {
         );
     }
 
+    #[test]
+    fn software_list_awaited_from_several_builtin_steps_is_sent_again_on_resume() {
+        let cmd_topic = "te/device/main///cmd/software_list/robot-1";
+        let mut resumed_steps = HashSet::new();
+
+        // Each supervisor iterates over the workflow states in a different order
+        for _ in 0..20 {
+            let mut workflows = register_workflows(&[SEVERAL_SOFTWARE_LIST_STEPS_WORKFLOW]);
+            let board = command_board(vec![pending_command(cmd_topic, "executing")]);
+
+            let resumed = workflows.load_pending_commands(board);
+
+            assert_eq!(resumed.len(), 1);
+            let action = workflows.get_action(&resumed[0]).unwrap();
+            assert!(
+                matches!(
+                    &action,
+                    OperationAction::BuiltInOperation(operation, handlers)
+                        if operation == "software_list" && handlers.on_exec.status == "executing"
+                ),
+                "Expected {} to send a software_list request again, awaited from executing, got {action:?}",
+                resumed[0].status
+            );
+            resumed_steps.insert(resumed[0].status.clone());
+        }
+
+        // Whichever step is resumed, the same request is sent and awaited from the same step
+        println!("Resumed steps: {resumed_steps:?}");
+        assert!(resumed_steps.is_subset(&HashSet::from([
+            "list_first".to_string(),
+            "list_after_check".to_string()
+        ])));
+    }
+
+    #[test]
+    fn command_awaiting_a_state_shared_by_a_builtin_and_a_sub_operation_is_resumed_unchanged() {
+        let mut workflows = register_workflows(&[BUILTIN_AND_SUB_OPERATION_WORKFLOW]);
+        let cmd_topic = "te/device/main///cmd/software_list/robot-1";
+        // The agent stopped after persisting the command at `executing`,
+        // but before the sub-command was added to the board
+        let board = command_board(vec![pending_command(cmd_topic, "executing")]);
+
+        let resumed = workflows.load_pending_commands(board);
+
+        assert_eq!(resumed.len(), 1);
+        assert_eq!(
+            resumed[0].status, "executing",
+            "the command might have been awaiting the sub-operation, not the builtin software_list"
+        );
+    }
+
+    /// A software_list workflow awaiting from the same state either the builtin operation or a sub-operation
+    const BUILTIN_AND_SUB_OPERATION_WORKFLOW: &str = r#"
+operation = "software_list"
+
+[init]
+script = "/etc/tedge/operations/pick-action.sh"
+on_stdout = ["list_first", "via_sub_op"]
+
+[list_first]
+operation = "builtin:software_list"
+on_exec = "executing"
+
+[via_sub_op]
+operation = "some_custom_op"
+on_exec = "executing"
+
+[executing]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
+    /// A software_list workflow where two steps trigger the builtin operation
+    /// and await its completion from the same state
+    const SEVERAL_SOFTWARE_LIST_STEPS_WORKFLOW: &str = r#"
+operation = "software_list"
+
+[init]
+script = "/etc/tedge/operations/pick-action.sh"
+on_stdout = ["list_first", "check"]
+
+[check]
+script = "/etc/tedge/operations/check.sh"
+on_success = "list_after_check"
+
+[list_first]
+operation = "builtin:software_list"
+on_exec = "executing"
+
+[list_after_check]
+operation = "builtin:software_list"
+on_exec = "executing"
+
+[executing]
+action = "await-operation-completion"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+"#;
+
     /// A workflow awaiting the agent restart, moving on success to a state which is not a step
     /// of this workflow but the final state of a `cleanup` action.
     const RESTART_WORKFLOW: &str = r#"
@@ -847,8 +1015,12 @@ action = "cleanup"
     }
 
     fn restart_workflows() -> WorkflowSupervisor {
+        register_workflows(&[RESTART_WORKFLOW, WRAPPER_WORKFLOW])
+    }
+
+    fn register_workflows(definitions: &[&str]) -> WorkflowSupervisor {
         let mut workflows = WorkflowSupervisor::default();
-        for definition in [RESTART_WORKFLOW, WRAPPER_WORKFLOW] {
+        for definition in definitions {
             let workflow = OperationWorkflow::from_toml(definition);
             let operation = workflow.operation.to_string();
             let entity_type = workflow.entity_type;
