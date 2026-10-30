@@ -178,7 +178,7 @@ so no supported operation is deregistered and no operation file is deleted.
 
 ### thin-edge's own services declare their own actions
 
-`TEDGE_SERVICE_ACTIONS` (`crates/core/tedge_api/src/service_command.rs`) lists the actions each thin-edge service declares at startup:
+`TEDGE_SERVICE_ACTIONS` (`crates/core/tedge_api/src/control.rs`) lists the actions each thin-edge service declares at startup:
 `restart` alone, for the agent and for every `tedge-mapper-<x>`.
 
 Under `tedge run all` no init unit manages a component,
