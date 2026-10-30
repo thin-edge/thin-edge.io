@@ -45,9 +45,9 @@ or when the user wants to handle any of the inbuilt operations differently than 
 
 A service running on an IoT device can support commands such as start, stop and restart.
 
-The Cumulocity mapper maps the `control` command of a service entity
-to the `c8y_ServiceCommand` operation,
-and each action the service declares to the Cumulocity service command of the same name.
+All the `control` command `actions` supported by a service, published as a retained metadata message on `te/<service-topic-id>/cmd/control`, are mapped by the Cumulocity mapper to `c8y_SupportedServiceCommands` of that service managed object in Cumulocity.
+When these service commands are triggered from Cumulocity, they are published as `c8y_ServiceCommand` operations, and the mapper maps these into the corresponding service control action.
+
 Examples:
 
 | Cumulocity Service Command | Tedge Command |

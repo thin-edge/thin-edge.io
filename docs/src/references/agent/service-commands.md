@@ -20,9 +20,9 @@ or any other action that service supports.
 The [`restart` operation](../restart-operation) restarts a device;
 the `restart` action of a service restarts one service of that device.
 
-## Actions
+## Control actions {#actions}
 
-An action name matches `[A-Za-z][A-Za-z0-9_-]*`:
+A `control` command `action` name matches `[A-Za-z][A-Za-z0-9_-]*`:
 letters, digits, `_` and `-`, starting with a letter.
 Action names are case-sensitive, so `requestLog` and `requestlog` are two actions.
 
@@ -32,9 +32,9 @@ The service command API follows the [generic %%te%% rules for operations](../dev
 applied to a service topic identifier such as `device/main/service/nodered`
 and to the `control` operation.
 
-### Declaring the actions
+### Declaring the control actions
 
-A service declares its actions by publishing a retained message on `te/<service-topic-id>/cmd/control`,
+A service declares its control actions by publishing a retained message on `te/<service-topic-id>/cmd/control`,
 with the action names in an `actions` array.
 
 ```sh te2mqtt formats=v1
@@ -43,7 +43,7 @@ tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/control' '{"actions"
 
 To remove one action, the service publishes the message again without that action.
 
-### Clearing the actions
+### Clearing the control actions
 
 A service removes all its actions by publishing a retained empty message on the same topic.
 
@@ -51,10 +51,10 @@ A service removes all its actions by publishing a retained empty message on the 
 tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/control' ''
 ```
 
-### Triggering an action
+### Triggering a control action
 
-A command is published on `te/<service-topic-id>/cmd/control/<cmd_id>`,
-starting in the `init` state and ending in `successful` or `failed`.
+A `control` command is published on `te/<service-topic-id>/cmd/control/<cmd_id>`,
+with the `action`, starting in the `init` state and ending in `successful` or `failed`.
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/main/service/nodered/cmd/control/c8y-mapper-123' '{

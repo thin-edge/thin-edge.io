@@ -16,8 +16,9 @@ The mapping details are described in the
 
 ## Declaring the supported service commands
 
-A service is first registered with its service type in the `type` field.
-The service type selects whether the init system or a [service plugin](../../../references/service-plugin-api) runs the actions.
+The service commands are managed using the init system or [service plugins](../../../references/service-plugin-api) and different service types are managed by different plugins.
+Hence, when a service is registered with its service name and type in the `name` and `type` fields respectively, the `type` determines the init system or the plugin that would be used to manage that service.
+The `name` is used as the target service identifier when service commands are executed.
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/main/service/collectd' '{"@type":"service","@parent":"device/main//","type":"service","name":"collectd"}'
