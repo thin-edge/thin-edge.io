@@ -710,5 +710,34 @@ mqtt_service.topics = ["custom/topic"]
                 vec!["rcgen self signed cert/#"]
             );
         }
+
+        #[tokio::test]
+        async fn mapper_device_id_template_prefers_explicit_device_id_over_cert_cn() {
+            let (ttd, _config) = load_config("").await;
+            let mapper_dir = ttd.dir("mappers").dir("c8y");
+            let certificate = rcgen::generate_simple_self_signed(vec!["my-device".into()]).unwrap();
+            mapper_dir
+                .file("cert.pem")
+                .with_raw_content(&certificate.cert.pem());
+            mapper_dir
+                .file("key.pem")
+                .with_raw_content(&certificate.signing_key.serialize_pem());
+            mapper_dir.file("mapper.toml").with_raw_content(
+                "device.id = \"explicit-id\"\ndevice.cert_path = \"./cert.pem\"\ndevice.key_path = \"./key.pem\"\n",
+            );
+            mapper_dir.dir("bridge").file("mqtt-core.toml").with_raw_content(
+                "local_prefix = \"\"\nremote_prefix = \"\"\n\n[[rule]]\ntopic = \"${mapper.device.id}/#\"\ndirection = \"inbound\"\n",
+            );
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+
+            let rules = bridge_rules(&config, None, AuthMethod::Certificate)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                rules.remote_subscriptions().collect::<Vec<_>>(),
+                vec!["explicit-id/#"]
+            );
+        }
     }
 }

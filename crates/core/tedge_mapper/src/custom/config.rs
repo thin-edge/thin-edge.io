@@ -72,7 +72,7 @@ pub struct CustomMapperConfig {
 }
 
 /// Device identity and TLS settings.
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Default, Clone, serde::Deserialize)]
 pub struct DeviceConfig {
     /// Explicit MQTT client ID. Takes precedence over the certificate CN when both are set.
     pub id: Option<String>,
