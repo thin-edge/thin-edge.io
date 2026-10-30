@@ -592,7 +592,7 @@ impl CumulocityConverter {
             }
             C8yDeviceControlOperation::ServiceCommand(request) => {
                 if self.config.capabilities.service_commands {
-                    self.convert_service_command_request(device_xid, cmd_id, &operation_id, request)
+                    self.convert_control_request(device_xid, cmd_id, &operation_id, request)
                 } else {
                     warn!("Received a c8y_ServiceCommand operation, however, service_commands feature is disabled");
                     vec![]
@@ -1149,9 +1149,7 @@ impl CumulocityConverter {
 
             Channel::CommandMetadata { operation } => {
                 if entity_type == EntityType::Service && operation == &OperationType::Control {
-                    return self
-                        .convert_service_control_metadata(&source, message)
-                        .await;
+                    return self.convert_control_metadata(&source, message).await;
                 }
 
                 // https://github.com/thin-edge/thin-edge.io/issues/2739

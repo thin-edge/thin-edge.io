@@ -2,12 +2,12 @@
 
 mod config_snapshot;
 mod config_update;
+mod control;
 mod custom_operation;
 mod device_profile;
 mod firmware_update;
 mod log_upload;
 mod restart;
-mod service_command;
 mod software_list;
 mod software_update;
 
@@ -155,7 +155,7 @@ impl OperationContext {
                     .await
             }
             OperationType::Control => {
-                self.handle_service_command_state_change(&entity, &cmd_id, &message)
+                self.handle_control_state_change(&entity, &cmd_id, &message)
                     .await
             }
             OperationType::Custom(_) => {

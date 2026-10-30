@@ -46,7 +46,7 @@ impl ServiceCommands {
 }
 
 impl CumulocityConverter {
-    pub(crate) async fn convert_service_control_metadata(
+    pub(crate) async fn convert_control_metadata(
         &mut self,
         service: &EntityTopicId,
         message: &MqttMessage,
@@ -110,7 +110,7 @@ impl CumulocityConverter {
         Ok(messages)
     }
 
-    pub(crate) fn convert_service_command_request(
+    pub(crate) fn convert_control_request(
         &self,
         device_xid: String,
         cmd_id: String,
