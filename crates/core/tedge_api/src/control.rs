@@ -9,7 +9,7 @@ pub const DEFAULT_SERVICE_TYPE: &str = "service";
 /// A name is a single token: `[A-Za-z][A-Za-z0-9_-]*`.
 ///
 /// ```
-/// use tedge_api::service_command::ActionName;
+/// use tedge_api::control::ActionName;
 ///
 /// assert!("restart".parse::<ActionName>().is_ok());
 /// assert!("collect_measurements".parse::<ActionName>().is_ok());
@@ -76,7 +76,7 @@ pub struct InvalidActionName {
 /// `rc-service --now restart` would read as an option.
 ///
 /// ```
-/// use tedge_api::service_command::ServiceName;
+/// use tedge_api::control::ServiceName;
 ///
 /// assert!("collectd".parse::<ServiceName>().is_ok());
 /// assert!("getty@tty1".parse::<ServiceName>().is_ok());
@@ -134,7 +134,7 @@ pub struct InvalidServiceName {
 /// A service type names a file in the service plugin directory, so it must be a plain file name.
 ///
 /// ```
-/// use tedge_api::service_command::ServiceType;
+/// use tedge_api::control::ServiceType;
 ///
 /// assert!("container".parse::<ServiceType>().is_ok());
 ///

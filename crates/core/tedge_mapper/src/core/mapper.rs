@@ -1,12 +1,12 @@
 #[cfg(test)]
 use std::result::Result::Ok;
 use tedge_actors::Runtime;
+use tedge_api::control::ControlCapability;
+use tedge_api::control::TEDGE_SERVICE_ACTIONS;
 use tedge_api::mqtt_topics::DeviceTopicId;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::Service;
 use tedge_api::mqtt_topics::ServiceTopicId;
-use tedge_api::service_command::ControlCapability;
-use tedge_api::service_command::TEDGE_SERVICE_ACTIONS;
 use tedge_config::TEdgeConfig;
 use tedge_config_ext::ConfigPublisherBuilder;
 use tedge_health_ext::HealthMonitorBuilder;
