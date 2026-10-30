@@ -176,9 +176,9 @@ The pull-model, where the agent asks a plugin for the list, stays a future consi
 
 Nothing here needs to change now.
 
-- [ ] 15.1 Whether `disable` refuses the services `stop` refuses. `stop` refuses `tedge-agent` and any cloud mapper because the outcome of the command asking for it could not be reported. That reason does not hold for `disable`: a disabled service keeps running, so the outcome is reported. The risk is a different one — disabling `tedge-agent` leaves the device unmanaged after the next reboot, and nothing fails at the time of the command, so the operator learns of it only when the device stops reporting. Decide whether that deserves the same refusal, for that different reason
+- [x] 15.1 **Settled by 18.11.** Whether `disable` refuses the services `stop` refuses. `stop` refuses `tedge-agent` and any cloud mapper because the outcome of the command asking for it could not be reported. That reason does not hold for `disable`: a disabled service keeps running, so the outcome is reported. The risk is a different one — disabling `tedge-agent` leaves the device unmanaged after the next reboot, and nothing fails at the time of the command, so the operator learns of it only when the device stops reporting. Decide whether that deserves the same refusal, for that different reason
 
-- [ ] 15.2 Whether a service maps every `cmd/<action>` to `c8y_SupportedServiceCommands`, or only some of them.
+- [x] 15.2 **Settled by 18.** Whether a service maps every `cmd/<action>` to `c8y_SupportedServiceCommands`, or only some of them.
   The mapper takes every command capability of a service as an action of that service (`crates/extensions/c8y_mapper_ext/src/converter.rs:1144`),
   so no device operation is ever declared on a service,
   and it reports the outcome of every command of a service as `c8y_ServiceCommand`, deciding that from the entity type alone (`crates/extensions/c8y_mapper_ext/src/operations/handlers/mod.rs:95`).
@@ -217,4 +217,48 @@ Nothing here needs to change now.
   **Applied, the half which is a defect.** The init system path discarded the output: `ExecCommand::to_command` set both `stdout` and `stderr` to `Stdio::null()`, so a failure reached the operator as `failed with code: 5` and systemd's `Unit nginx.service not found.` was lost. The plugin path already forwarded both and took the last non-empty line of stderr as the reason, so the two backends of one command behaved differently. Both now capture the output; `ServiceCommandFailedWithCode` carries the reason, which every caller gains, `tedge connect` included. Forwarding stays the caller's decision, `run_action` returning a `ServiceCommandOutput` rather than printing: `tedge connect` and `tedge disconnect` print progress of their own and would have it corrupted. `failure_reason` moved from `crates/core/tedge/src/cli/service.rs` to `tedge_system_services`, one rule for both backends.
   **Deferred:** telling "no such service" from "the service is not running" through the exit code. Passing the backend's own code through was considered and rejected: the meaning would depend on the backend, so a workflow branching on it would be written for one init system, which is what `tedge service` exists to avoid, and it collides with the `2` already reserved for "not supported". The shape to design instead is a small set of codes with fixed meanings, each backend mapping into it, which for an init system means stating its exit codes in `system.toml`, since they differ between systemd, OpenRC and `service(8)`
 
-- [ ] 17.3 Which actions a mapper declares is to become the mapper's own to decide, written in `mapper.toml` rather than fixed in `service_actions`. 17.1 settles what this release offers; this is the shape the decision is to take afterwards
+- [ ] 17.3 Which actions a mapper declares is to become the mapper's own to decide, written in `mapper.toml` rather than fixed in `TEDGE_SERVICE_ACTIONS`. 17.1 settles what this release offers; this is the shape the decision is to take afterwards
+
+## 18. One `control` command per service
+
+- [x] 18.1 Widen `ActionName` to `[A-Za-z][A-Za-z0-9_-]*` (`crates/core/tedge_api/src/service_command.rs`), with its unit tests.
+  The service type rule stays lowercase.
+
+- [x] 18.2 thin-edge's own services publish `{"actions": [...]}` on `cmd/control` instead of `{}` on each `cmd/<action>`, and a hosted mapper under `tedge run all` clears its `cmd/control` (`ControlCapability` in `service_command.rs`, `with_control_capability` in `crates/extensions/tedge_health_ext/src/lib.rs`), with the tests of `tedge_health_ext`.
+
+- [x] 18.3 Replace the shipped `service_commands.toml` (`crates/core/tedge_agent/src/resources/`) with `control.toml`: `operation = "control"`, `type = "service"`, and the action taken from `${.payload.action}` in the `tedge service` call and in the self-restart branch.
+  The file is named after its operation, as `device_profile.toml` and `shell_execute.toml` are.
+  Update `shipped_workflows.rs` and `operation_workflows/tests.rs`.
+
+- [x] 18.4 c8y mapper, declaration: route only the `cmd/control` capability of a service to the service-command handling (`converter.rs:1152`), and publish its `actions` as `c8y_SupportedServiceCommands` as declared, with no uppercasing and no sorting (`service_command.rs:64`).
+  An empty payload or an empty `actions` array publishes an empty array.
+
+- [x] 18.5 c8y mapper, operation: convert `c8y_ServiceCommand` into `cmd/control/<cmd-id>` with the `command` value as `action`, unchanged, and match it exactly against the declared actions (`service_command.rs:184`).
+
+- [x] 18.6 c8y mapper, status: report `c8y_ServiceCommand` only for the `control` command of a service, and map every other command of a service as for a device (`operations/handlers/mod.rs:99` and `:347`).
+
+- [x] 18.7 Unit tests of the c8y mapper for 18.4 to 18.6 (`crates/extensions/c8y_mapper_ext/src/tests.rs` and the tests in `service_command.rs`), including a `restart` capability and a `restart` command on a service, both mapped as `c8y_Restart`: `restart` is the name of an action and of an operation.
+
+- [x] 18.8 Docs: `docs/src/references/agent/service-commands.md`, `docs/src/operate/c8y/service-commands.md`, the "Service operations" section of `docs/src/operate/c8y/supported-operations.md`, the "Service Command" section of `docs/src/references/mappers/c8y-mapper.md`, and the action name rule in `docs/src/references/service-plugin-api.md` and `docs/src/references/init-system-configuration.md`.
+  In `docs/src/references/agent/operation-workflow.md`, the example of an `operation` array uses device operations instead of service actions, and the `tedge service` example takes the action from `${.payload.action}`.
+
+- [x] 18.9 Update the Robot suites to `cmd/control`, with `action` in the command payload and every action name in its declared case.
+  `tedge_agent/workflows/service_commands/service_commands.robot`: the declaration of thin-edge's own services, the restart of a service and the restart of tedge-agent.
+  The `probe` cases stay as they are.
+  `tedge_agent/workflows/run_workflow_on_child_device.robot`: the two service command cases.
+  `cumulocity/service_commands/service_commands.robot`: the declaration in the setup.
+  "Declares and clears an action of a service" becomes "Declares and removes an action of a service", publishing the `control` capability again without `pause`.
+  The rejected action becomes `Collect_Measurements`, so the failure reason shows the name as Cumulocity sent it.
+  `Managed Object Service Commands Should Be` stops sorting, the declared order being kept.
+  `cumulocity/service_commands/service_plugin.robot`: one `control` declaration in the setup.
+  The freeze case runs `freeze` through the shipped workflow, and `service_freeze.toml` is deleted.
+  `cumulocity/supported_operations/mapper-publishing-agent-supported-ops.robot`: the service `foo` declares `cmd/control`, and the comment on the previous rule is deleted.
+
+- [x] 18.10 Restore `cumulocity/supported_operations/service-supported-ops.robot`, deleted in `e128feec5`, without its `robot:skip` tag and with only its case "Services Can Receive Operations": a service declaring `cmd/restart` gets `c8y_Restart`, and a `c8y_Restart` created on that service becomes a `restart` command of that service.
+  Its case "Services Can Register Supported Operations" is covered by that case and by the `log_upload` case below.
+  Add the two cases of the same suite in PR #4389: a custom operation and a `log_upload` on a service, created from Cumulocity and run to SUCCESSFUL, with `c8y_SupportedServiceCommands` expected as `["restart"]`.
+
+- [x] 18.11 Remove the `stop` guard from `specs/service-commands/spec.md`, `design.md` and `proposal.md`: the requirement rejecting `stop` of tedge-agent and of a cloud mapper, its four scenarios, and the scenario of an action declared by hand.
+  No guard was added when `service_commands.toml` shipped `stop`, because tedge-agent and the mappers never declare `stop`, and a user who declares it by hand does so on purpose.
+  With `control`, the c8y mapper refuses an action the service has not declared, so Cumulocity cannot request `stop` of tedge-agent or of a mapper.
+  5.4 records the guard as it was planned.

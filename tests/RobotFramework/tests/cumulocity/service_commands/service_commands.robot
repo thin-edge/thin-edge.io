@@ -18,27 +18,29 @@ ${MAPPER_XID}       ${EMPTY}
 
 
 *** Test Cases ***
-Declares and clears an action of a service
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/pause '{}'
-    Supported Service Commands Should Be    ${SERVICE_XID}    PAUSE    RESTART
+Declares and removes an action of a service
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/control '{"actions":["restart","pause"]}'
+    Supported Service Commands Should Be    ${SERVICE_XID}    restart    pause
     Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
     ThinEdgeIO.File Should Exist    /etc/tedge/operations/c8y/${SERVICE_XID}/c8y_ServiceCommand
 
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/pause ''
-    Supported Service Commands Should Be    ${SERVICE_XID}    RESTART
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/control '{"actions":["restart"]}'
+    Supported Service Commands Should Be    ${SERVICE_XID}    restart
 
 Declares the action of thin-edge's own services
-    Supported Service Commands Should Be    ${AGENT_XID}    RESTART
+    Supported Service Commands Should Be    ${AGENT_XID}    restart
     Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
 
-    Supported Service Commands Should Be    ${MAPPER_XID}    RESTART
+    Supported Service Commands Should Be    ${MAPPER_XID}    restart
     Cumulocity.Should Contain Supported Operations    c8y_ServiceCommand
 
 Restarts a service managed by the init system
     ${before}=    Get Service PID    ${SERVICE_NAME}
     ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
-    ...    {"command":"RESTART","serviceName":"${SERVICE_NAME}","serviceType":"service"}
+    ...    {"command":"restart","serviceName":"${SERVICE_NAME}","serviceType":"service"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
 
     ${after}=    Get Service PID    ${SERVICE_NAME}
@@ -47,10 +49,10 @@ Restarts a service managed by the init system
 Rejects an action the service has not declared
     ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
-    ...    {"command":"COLLECT_MEASUREMENTS","serviceName":"${SERVICE_NAME}","serviceType":"service"}
+    ...    {"command":"Collect_Measurements","serviceName":"${SERVICE_NAME}","serviceType":"service"}
     Cumulocity.Operation Should Be FAILED
     ...    ${operation}
-    ...    failure_reason=.*has not declared the 'collect_measurements' action.*
+    ...    failure_reason=.*has not declared the 'Collect_Measurements' action.*
     ...    timeout=60
 
 Restarts tedge-agent itself
@@ -58,7 +60,7 @@ Restarts tedge-agent itself
 
     ${operation}=    Create Service Command Operation
     ...    ${AGENT_XID}
-    ...    {"command":"RESTART","serviceName":"tedge-agent","serviceType":"service"}
+    ...    {"command":"restart","serviceName":"tedge-agent","serviceType":"service"}
     Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=180
 
     ThinEdgeIO.Service Health Status Should Be Up    tedge-agent
@@ -83,7 +85,8 @@ Custom Setup
     Execute Command
     ...    tedge mqtt pub --retain te/device/main/service/${SERVICE_NAME} '{"name":"${SERVICE_NAME}","@type":"service"}'
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
-    Execute Command    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/restart '{}'
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/control '{"actions":["restart"]}'
 
 Supported Service Commands Should Be
     [Arguments]    ${external_id}    @{expected}
@@ -93,9 +96,8 @@ Supported Service Commands Should Be
 Managed Object Service Commands Should Be
     [Arguments]    @{expected}
     ${mo}=    Cumulocity.Managed Object Should Have Fragments    c8y_SupportedServiceCommands
-    ${actual}=    Evaluate    sorted($mo["c8y_SupportedServiceCommands"])
-    ${wanted}=    Evaluate    sorted($expected)
-    Should Be Equal    ${actual}    ${wanted}
+    ${actual}=    Evaluate    $mo["c8y_SupportedServiceCommands"]
+    Should Be Equal    ${actual}    ${expected}
 
 Create Service Command Operation
     [Arguments]    ${external_id}    ${fragment}

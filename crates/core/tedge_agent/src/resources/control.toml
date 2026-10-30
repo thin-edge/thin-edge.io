@@ -1,4 +1,4 @@
-operation = ["start", "stop", "restart", "enable", "disable"]
+operation = "control"
 type = "service"
 
 [init]
@@ -10,7 +10,7 @@ action = "proceed"
 on_success = "evaluate-restart"
 
 [evaluate-restart]
-script = "test ${.topic.operation} = restart"
+script = "test ${.payload.action} = restart"
 on_exit.0 = "evaluate-agent-restart"
 on_exit.1-255 = "execute"
 
@@ -33,7 +33,7 @@ on_success = "successful"
 on_timeout = { status = "failed", reason = "tedge-agent did not restart in time" }
 
 [execute]
-script = "tedge service ${.topic.operation} ${.payload.serviceName} --type ${.payload.serviceType}"
+script = "tedge service ${.payload.action} ${.payload.serviceName} --type ${.payload.serviceType}"
 sudo = true
 # Longer than tedge service takes at most to terminate an action on timeout,
 # 240 seconds with its default --timeout and --forceful-timeout,

@@ -16,8 +16,9 @@ The mapping details are described in the
 
 ## Declaring the supported service commands
 
-A service is first registered with its service type in the `type` field.
-The service type selects whether the init system or a [service plugin](../../../references/service-plugin-api) runs the actions.
+The service commands are managed using the init system or [service plugins](../../../references/service-plugin-api) and different service types are managed by different plugins.
+Hence, when a service is registered with its service name and type in the `name` and `type` fields respectively, the `type` determines the init system or the plugin that would be used to manage that service.
+The `name` is used as the target service identifier when service commands are executed.
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub --retain 'te/device/main/service/collectd' '{"@type":"service","@parent":"device/main//","type":"service","name":"collectd"}'
@@ -25,19 +26,18 @@ tedge mqtt pub --retain 'te/device/main/service/collectd' '{"@type":"service","@
 
 If [auto-registration](../../entity-management/auto-registration) is enabled,
 a service that is not registered yet is registered with the default type `service`
-when it declares its first action.
+when it declares its actions.
 
-A service declares each action that it supports
-by publishing a retained message to its `cmd/<action>` topic, one per action.
+A service declares the actions that it supports
+in the `actions` array of a retained message on its `cmd/control` topic.
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/restart' '{}'
+tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/control' '{"actions":["restart","pause"]}'
 ```
 
-Each declared action is added, uppercased,
+The declared actions are copied, with their case and order,
 to the `c8y_SupportedServiceCommands` fragment of the service managed object.
-A custom action is declared the same way.
-A service declaring `cmd/pause` gets `PAUSE` in the list.
+A custom action such as `pause` is declared the same way as a standard one.
 
 An action whose name breaks the
 [action name rule](../../../references/agent/service-commands#actions)
@@ -54,7 +54,7 @@ Create a service command operation from **Services** > *service name* > **Comman
 </BrowserWindow>
 
 The operation is sent to the device,
-where `tedge-agent` runs the [workflow](../../../references/agent/service-commands) of that action on the service.
+where `tedge-agent` runs the action on the service with the [`control` workflow](../../../references/agent/service-commands#shipped-workflow).
 The operation moves to `SUCCESSFUL` or `FAILED` when the workflow ends.
 
 ### Rejected operations
@@ -63,19 +63,25 @@ An operation is failed straight away, with no %%te%% command published, when:
 
 - the target service cannot be resolved.
 - the action is not one the service has declared.
-  The action name is compared case-insensitively, so `RESTART` matches a declared `restart`.
+  The action name is compared with its case, so `RESTART` does not match a declared `restart`.
 - the operation's `serviceName` or `serviceType` breaks the
   [rule for that argument](../../../references/service-plugin-api#validating-the-arguments).
 
 ## Removing an action
 
-An action can be removed by publishing a retained empty message to its capability topic.
+An action is removed by publishing the `cmd/control` message again without that action.
 
 ```sh te2mqtt formats=v1
-tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/restart' ''
+tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/control' '{"actions":["restart"]}'
 ```
 
 The action is removed from the `c8y_SupportedServiceCommands` fragment of the service managed object.
+
+Clearing the `cmd/control` topic with a retained empty message removes all the actions.
+
+```sh te2mqtt formats=v1
+tedge mqtt pub --retain 'te/device/main/service/collectd/cmd/control' ''
+```
 
 ## Disabling service commands
 
@@ -90,7 +96,7 @@ tedge config set c8y.enable.service_commands false
 sudo systemctl restart tedge-mapper-c8y
 ```
 
-The mapper then ignores the `cmd/<action>` capabilities of the services and the `c8y_ServiceCommand` operations.
+The mapper then ignores the `cmd/control` capabilities of the services and the `c8y_ServiceCommand` operations.
 
 :::note
 Disabling service commands keeps what the mapper created while they were enabled:

@@ -954,6 +954,41 @@ impl CommandPayload for FirmwareUpdateCmdPayload {
     }
 }
 
+pub type ControlCmd = Command<ControlCmdPayload>;
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct ControlCmdMetadata {
+    pub actions: Vec<String>,
+}
+
+impl Jsonify for ControlCmdMetadata {}
+
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlCmdPayload {
+    #[serde(flatten)]
+    pub status: CommandStatus,
+    pub action: String,
+    pub service_name: String,
+    pub service_type: String,
+}
+
+impl Jsonify for ControlCmdPayload {}
+
+impl CommandPayload for ControlCmdPayload {
+    fn operation_type() -> OperationType {
+        OperationType::Control
+    }
+
+    fn status(&self) -> CommandStatus {
+        self.status.clone()
+    }
+
+    fn set_status(&mut self, status: CommandStatus) {
+        self.status = status
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

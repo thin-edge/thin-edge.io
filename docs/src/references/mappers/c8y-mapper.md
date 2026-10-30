@@ -1573,29 +1573,29 @@ Where the `<c8y-url>` fields from Cumulocity are rewritten by the mapper to `<c8
 
 #### Capabilities
 
-A `cmd/<action>` capability of a service is mapped to an entry of the `c8y_SupportedServiceCommands` fragment
-of the service managed object.
+The `actions` of the `cmd/control` capability of a service are mapped
+to the `c8y_SupportedServiceCommands` fragment of the service managed object.
 
-These retained capability messages of the `collectd` service:
+This retained capability message of the `collectd` service:
 
 ```text
-[te/device/main/service/collectd/cmd/start] {}
-[te/device/main/service/collectd/cmd/restart] {}
+[te/device/main/service/collectd/cmd/control] {"actions":["start","restart"]}
 ```
 
-are mapped to the following messages:
+is mapped to the following messages:
 
 ```text
 [c8y/s/us/<main-device-id>:device:main:service:collectd] 114,c8y_ServiceCommand
-[c8y/inventory/managedObjects/update/<main-device-id>:device:main:service:collectd] {"c8y_SupportedServiceCommands":["RESTART","START"]}
+[c8y/inventory/managedObjects/update/<main-device-id>:device:main:service:collectd] {"c8y_SupportedServiceCommands":["start","restart"]}
 ```
 
-The action names are uppercased and sorted.
-The whole list is published again on every change.
-When a capability topic is cleared, the action is removed from the list,
-and an empty list is published when no action is left.
-A capability whose action name breaks the
-[action name rule](../../agent/service-commands#actions) is not mapped.
+The action names are published as declared, with their case and order.
+The whole list is published again on every new capability message.
+When the capability topic is cleared, an empty list is published.
+An action whose name breaks the
+[action name rule](../../agent/service-commands#actions) is left out of the list.
+
+The other command capabilities of a service are mapped as they are for a device.
 
 #### Request
 
@@ -1612,7 +1612,7 @@ c8y/devicecontrol/notifications
   "id": "<c8y-operation-id>",
   "status": "PENDING",
   "c8y_ServiceCommand": {
-    "command": "RESTART",
+    "command": "restart",
     "serviceName": "collectd",
     "serviceType": "service"
   },
@@ -1630,12 +1630,13 @@ c8y/devicecontrol/notifications
 **%%te%% (output)**
 
 ```text title="Topic"
-te/device/main/service/collectd/cmd/restart/c8y-mapper-<c8y-operation-id>
+te/device/main/service/collectd/cmd/control/c8y-mapper-<c8y-operation-id>
 ```
 
 ```json5 title="Payload"
 {
   "status": "init",
+  "action": "restart",
   "serviceName": "collectd",
   "serviceType": "service"
 }
@@ -1643,7 +1644,7 @@ te/device/main/service/collectd/cmd/restart/c8y-mapper-<c8y-operation-id>
 
 </div>
 
-- The **action** is the lowercased `command` value, and it names the topic.
+- The **action** is the `command` value, unchanged.
 - The **service name** is the first of these that is set:
   1. the `serviceName` of the operation,
      which is the service name %%te%% published when registering it

@@ -17,7 +17,7 @@ Ignoring the operation is logged as a warning.
 
 #### Scenario: No action is declared while the feature is disabled
 - **WHEN** `c8y.enable.service_commands` is `false`
-  and a service publishes a `cmd/<action>` capability
+  and a service publishes its `cmd/control` capability
 - **THEN** the mapper SHALL NOT register `c8y_ServiceCommand` for that service
   and SHALL NOT publish `c8y_SupportedServiceCommands`
 
@@ -28,7 +28,7 @@ Ignoring the operation is logged as a warning.
 
 ### Requirement: The mapper registers c8y_ServiceCommand as a supported operation of a service
 
-When the c8y mapper sees a service declaring at least one `cmd/<action>` capability,
+When the c8y mapper receives the `cmd/control` capability of a service,
 it SHALL register `c8y_ServiceCommand` as a supported operation of that service,
 using the same supported-operation mechanism it uses today (SmartREST `114`).
 
@@ -40,7 +40,7 @@ and SHALL reload that service's operations,
 since the operation directory of a service is not watched for changes.
 
 #### Scenario: A service declaring an action becomes actionable in the cloud
-- **WHEN** a service publishes its first `cmd/<action>` capability
+- **WHEN** a service publishes its `cmd/control` capability
 - **THEN** the mapper SHALL declare `c8y_ServiceCommand` among that service's supported operations
 
 #### Scenario: No operation file has to be provided
@@ -48,54 +48,52 @@ since the operation directory of a service is not watched for changes.
 - **THEN** the mapper SHALL register the supported operation on its own,
   with nothing to install beforehand
 
-### Requirement: The mapper aggregates declared actions into c8y_SupportedServiceCommands
+### Requirement: The mapper publishes the declared actions as c8y_SupportedServiceCommands
 
-The c8y mapper SHALL collect all `cmd/<action>` capabilities declared by a service
-and SHALL publish them as a single `c8y_SupportedServiceCommands` array
-on the service's managed object, through an inventory update over the JSON over MQTT API.
+The c8y mapper SHALL publish the `actions` of the `cmd/control` capability of a service
+as the `c8y_SupportedServiceCommands` array on the service's managed object,
+through an inventory update over the JSON over MQTT API.
 
-Action names SHALL be uppercased, following the Cumulocity convention.
-Custom action names SHALL be passed through unchanged apart from the case mapping.
-The array SHALL be sorted, so that the same set of actions always gives the same array.
+Action names SHALL be published as declared, keeping their case and their order.
 
-A capability whose action name does not match the action name rule `[a-z][a-z0-9_-]*`
-SHALL NOT be declared at all, and SHALL only be logged.
-Cumulocity would otherwise offer a command whose lowercased name
-matches no capability topic of that service,
-so the action could never be routed back to it.
+An action whose name does not match the action name rule `[A-Za-z][A-Za-z0-9_-]*`
+SHALL NOT be published, and SHALL only be logged.
+Cumulocity would otherwise offer a command which the mapper refuses
+when an operator triggers it.
 
-The array SHALL be re-published whenever the set of declared actions changes.
-When a capability topic is cleared, the mapper SHALL drop that action from the set
-and publish the reduced array.
-On mapper restart, the retained capability messages replay,
-so the mapper SHALL rebuild the full set and SHALL NOT lose a previously declared action.
+The array SHALL be re-published whenever the `control` capability changes.
+When the `control` capability topic is cleared, or its `actions` array is empty,
+the mapper SHALL publish an empty `c8y_SupportedServiceCommands` array.
 
-#### Scenario: Standard actions are published in uppercase
-- **WHEN** a service declares `cmd/start`, `cmd/stop` and `cmd/restart`
-- **THEN** the mapper SHALL set `{"c8y_SupportedServiceCommands": ["RESTART", "START", "STOP"]}`
+#### Scenario: Actions are published as declared
+- **WHEN** a service declares `{"actions": ["start", "stop", "requestLog"]}`
+- **THEN** the mapper SHALL set `{"c8y_SupportedServiceCommands": ["start", "stop", "requestLog"]}`
   on that service's managed object
 
-#### Scenario: A custom action is passed through
-- **WHEN** a service declares `cmd/pause`
-- **THEN** `PAUSE` SHALL appear in that service's `c8y_SupportedServiceCommands`
+#### Scenario: An action name breaking the rule is not published
+- **WHEN** a service declares `{"actions": ["restart", "do something"]}`
+- **THEN** only `restart` SHALL appear in that service's `c8y_SupportedServiceCommands`,
+  and `do something` SHALL be logged as dropped
 
-#### Scenario: An action name the cloud could not send back is not declared
-- **WHEN** a service declares `cmd/doSomething`
-- **THEN** `DOSOMETHING` SHALL NOT appear in that service's `c8y_SupportedServiceCommands`,
-  and the capability SHALL be logged as dropped
-
-#### Scenario: A withdrawn action is removed
-- **WHEN** a service clears its `cmd/pause` capability topic
-- **THEN** the mapper SHALL re-publish `c8y_SupportedServiceCommands` without `PAUSE`
-
-#### Scenario: All actions are withdrawn
-- **WHEN** a service clears every one of its `cmd/<action>` capability topics
+#### Scenario: All actions are removed
+- **WHEN** a service clears its `cmd/control` capability topic
 - **THEN** the mapper SHALL publish an empty `c8y_SupportedServiceCommands` array,
   so that Cumulocity stops offering actions for that service
 
-#### Scenario: The set is rebuilt after a mapper restart
-- **WHEN** the mapper restarts and receives the retained capability messages again
-- **THEN** it SHALL publish the same complete set of actions, losing none
+### Requirement: The other commands of a service are mapped as they are for a device
+
+The c8y mapper SHALL map every command capability of a service other than `cmd/control`
+as it maps the same capability of a device,
+and SHALL map the operations and the command states of those commands the same way.
+
+#### Scenario: A service declares an operation
+- **WHEN** a service publishes `{"types": ["journald"]}` on its `cmd/log_upload` topic
+- **THEN** the mapper SHALL register `c8y_LogfileRequest` among the supported operations of that service,
+  and SHALL NOT add `log_upload` to its `c8y_SupportedServiceCommands`
+
+#### Scenario: An operation on a service becomes a command of that service
+- **WHEN** the mapper receives a `c8y_LogfileRequest` operation for that service
+- **THEN** it SHALL publish a `log_upload` command on the `cmd/log_upload` topic of that service
 
 ### Requirement: The mapper converts a c8y_ServiceCommand operation into a thin-edge command
 
@@ -106,12 +104,8 @@ It SHALL NOT rely on a shipped custom operation handler file.
 For a valid operation, the mapper SHALL publish a thin-edge command with:
 
 - the target entity resolved from `externalSource.externalId`;
-- the command topic built from the lowercased `command` value,
-  as `te/device/<device>/service/<service>/cmd/<action>/<cmd-id>`.
-  Cumulocity uppercases a command name by convention,
-  so lowercasing the value it sends gives back the action name the service declared.
-  The action is named by the topic only;
-  the mapper SHALL NOT copy the cloud's `command` value into the thin-edge payload;
+- the command topic `te/device/<device>/service/<service>/cmd/control/<cmd-id>`;
+- `action` taken from the `command` value of the operation, unchanged;
 - `serviceName` taken from the `serviceName` value of the operation payload,
   which is the name `tedge service` passes to the backend,
   falling back to the `name` of the service's registration data;
@@ -120,11 +114,11 @@ For a valid operation, the mapper SHALL publish a thin-edge command with:
   and to the default type `service` when neither gives a type;
 - `status` set to `init`.
 
-#### Scenario: A RESTART operation becomes a restart command
-- **WHEN** the mapper receives a `c8y_ServiceCommand` operation with `command` `RESTART`,
+#### Scenario: A restart operation becomes a control command
+- **WHEN** the mapper receives a `c8y_ServiceCommand` operation with `command` `restart`,
   whose external id resolves to the `collectd` service of the main device
-- **THEN** it SHALL publish `te/device/main/service/collectd/cmd/restart/<cmd-id>`
-  with `status` `init` and `serviceName` `collectd`, and no action name in the payload
+- **THEN** it SHALL publish `te/device/main/service/collectd/cmd/control/<cmd-id>`
+  with `status` `init`, `action` `restart` and `serviceName` `collectd`
 
 #### Scenario: The service type of the operation comes first
 - **WHEN** the operation payload carries `serviceType` `systemd`
@@ -148,9 +142,8 @@ The c8y mapper SHALL fail the cloud operation, with a reason explaining why,
 and SHALL NOT publish any thin-edge command, when:
 
 - the target entity cannot be resolved from `externalSource.externalId`;
-- the requested action, compared case-insensitively,
-  is not among the actions the target service has declared;
-- the lowercased `command` value does not match the action name rule `[a-z][a-z0-9_-]*`,
+- the `command` value is not exactly one of the actions the target service has declared;
+- the `command` value does not match the action name rule `[A-Za-z][A-Za-z0-9_-]*`,
   which is what `tedge service` accepts;
 - neither the operation nor the registration data gives a service name,
   or the name does not match the service name rule of `tedge service`:
@@ -176,13 +169,13 @@ Nothing SHALL be published when that external id names no valid topic.
 - **WHEN** the operation requests an action the target service has not declared
 - **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
 
-#### Scenario: The action is matched case-insensitively
-- **WHEN** the operation requests `RESTART` and the service declares `cmd/restart`
-- **THEN** the mapper SHALL accept it and publish a `restart` command
+#### Scenario: The action is matched with its case
+- **WHEN** the operation requests `RESTART` and the service declares `restart`
+- **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
 
 #### Scenario: A malformed command value is refused
 - **WHEN** the operation's `command` is empty, carries a space,
-  or once lowercased contains a character outside `[a-z0-9_-]`
+  or contains a character outside `[A-Za-z0-9_-]`
 - **THEN** the mapper SHALL fail the operation and SHALL NOT publish a command
 
 #### Scenario: A service name a backend could misread is refused
@@ -197,14 +190,10 @@ Nothing SHALL be published when that external id names no valid topic.
 
 ### Requirement: The mapper reports the service command status back to Cumulocity
 
-The c8y mapper SHALL report the state of a service command to Cumulocity
+The c8y mapper SHALL report the state of the `control` command of a service to Cumulocity
 with the existing command status mapping (SmartREST `501` to `506`),
 on the SmartREST topic of the service.
-
-The operation reported SHALL be `c8y_ServiceCommand`,
-chosen from the target being a service and not from the name of the action.
-Reporting a service's `restart` as `c8y_Restart`
-would name an operation Cumulocity never created.
+The operation reported SHALL be `c8y_ServiceCommand`.
 
 #### Scenario: A successful command is reported
 - **WHEN** the service command reaches `successful`
@@ -213,7 +202,3 @@ would name an operation Cumulocity never created.
 #### Scenario: A failed command is reported with its reason
 - **WHEN** the service command reaches `failed` with a reason
 - **THEN** the mapper SHALL mark the Cumulocity operation as failed and SHALL include that reason
-
-#### Scenario: An action named as a device operation stays a service command
-- **WHEN** the `restart` command of a service reaches `executing`
-- **THEN** the mapper SHALL report `c8y_ServiceCommand` as executing, and not `c8y_Restart`

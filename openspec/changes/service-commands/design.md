@@ -26,8 +26,8 @@ The current state constraining them:
 
 - One executor per device: `tedge-agent` drives every service command,
   and a third party supplies the plugin it runs rather than driving the command itself.
-- A workflow can be selected by target entity type, so `restart` for a device
-  and `restart` for a service are separate workflows.
+- A workflow can be selected by target entity type, so `log_upload` for a device
+  and `log_upload` for a service are separate workflows.
 - The c8y mapper handles `c8y_ServiceCommand` natively,
   creating the supported operation entry itself, with nothing to install beforehand.
 - `tedge service` is usable on its own, as an init-system-agnostic service wrapper.
@@ -74,7 +74,7 @@ so a deleted service workflow file clears nothing on the device's topics.
 For the same reason `capability_messages` is filtered on the entity type of the target.
 
 The operation name comes from the `operation` field of the definition, not from the file name,
-so a device `restart` and a service `restart` live in `/etc/tedge/operations/` under any two names.
+so a device `log_upload` and a service `log_upload` live in `/etc/tedge/operations/` under any two names.
 The only thing a user has to do is set `type = "service"` in the definition.
 
 Alternative considered: a naming convention such as `service-restart.toml`,
@@ -143,87 +143,87 @@ and adding a subscription per service through `DynSubscriptions`.
 Rejected — it keeps a second copy of a relation the entity store already owns,
 and it makes the agent's behaviour depend on the order in which retained messages replay.
 
-### Treat every command capability of a service entity as a service command
+### Map only the `control` command of a service to service commands
 
 In `try_convert_data_message` (`converter.rs`),
-a `Channel::CommandMetadata` message whose target entity is an `EntityType::Service`
-is routed to the new service-command handling
-instead of the existing per-operation mapping.
-So a service declaring `cmd/restart` declares the service command `RESTART`,
-not the device operation `c8y_Restart`.
+a `Channel::CommandMetadata` message for the `control` operation of an `EntityType::Service`
+is routed to the new service-command handling.
+Every other command capability of a service goes through the existing per-operation mapping,
+as it does for a device.
 
-The mapper keeps the declared command names per service in memory
-and republishes the whole `c8y_SupportedServiceCommands` array on every change,
+The `control` command of a service maps one to one to the `c8y_ServiceCommand` operation:
+the `actions` of its capability are the `c8y_SupportedServiceCommands` of the service,
+and one `c8y_ServiceCommand` operation is one `control` command.
+So the mapper neither collects actions from several topics
+nor decides per topic whether a command is an operation or a service command.
+
+The mapper keeps the declared actions per service in memory,
+to check an incoming operation against them,
+and publishes `c8y_SupportedServiceCommands` on every `control` capability it receives,
 using the existing inventory helper `inventory_update_message`
 (`crates/extensions/c8y_mapper_ext/src/inventory.rs`).
 `c8y_ServiceCommand` itself is registered once per service through the existing
 `register_operation` path (`converter.rs`), which emits SmartREST `114`.
 
-This changes today's behaviour for a service that declares a command capability.
-No thin-edge service declares one before this change,
-so what is affected is a service someone else wrote.
-It is still a behaviour change, and is called out as a risk.
-
-**Withdrawal is implemented, narrowly.**
+**Clearing is implemented, narrowly.**
 An empty capability payload is ignored today with a warning (`converter.rs`).
-For command metadata on a service entity it is handled:
-the command is dropped from the service's set and the reduced
+For the `control` capability of a service it is handled:
+the actions of the service are dropped and an empty
 `c8y_SupportedServiceCommands` array is published.
-Services appear and disappear at runtime — a container is the obvious case —
+Services appear and disappear at runtime, a container being the obvious case,
 so without this the fragment drifts away from what the device can actually do.
 
-Nothing outside the service-command set is removed on an empty payload,
+Nothing else is removed on an empty payload,
 so no supported operation is deregistered and no operation file is deleted.
 
 ### thin-edge's own services declare their own actions
 
-`service_actions` (`crates/core/tedge_api/src/service_command.rs`) decides what each
-thin-edge service publishes on its own service topic at startup:
+`TEDGE_SERVICE_ACTIONS` (`crates/core/tedge_api/src/control.rs`) lists the actions each thin-edge service declares at startup:
 `restart` alone, for the agent and for every `tedge-mapper-<x>`.
 
 Under `tedge run all` no init unit manages a component,
 so the agent declares `restart` alone — the one action which never reaches an init system —
 and a mapper declares nothing.
-There, and only there, a mapper withdraws its `restart` by clearing the capability topic:
+There, and only there, a mapper clears its `control` capability:
 a capability is retained, so it outlives the service that published it,
 and moving a device to `tedge run all` would otherwise leave the action of the
 previous deployment on show.
 
-A declaration says what is offered, never what is enforced.
-Anyone can publish a capability, and a command can be posted with none declared at all,
-so the guards of the shipped workflows stay the only thing that refuses an action.
+### One `control` command per service, with the action in the payload
 
-### The command payload does not name the action
-
-The command payload as 0011 first gave it was
+A service declares its actions in the metadata of one command, `control`,
+as `{"actions": [...]}` on `te/<service>/cmd/control`.
+An action is requested as a `control` command whose payload names it,
 `{"status", "action", "serviceName", "serviceType"}`.
-The `action` field is dropped.
 
-thin-edge names an operation in the topic, not in the payload.
-`RestartCommandPayload` (`crates/core/tedge_api/src/commands.rs`) carries
-`status` and `log_path`;
-`SoftwareUpdateCommandPayload` (`commands.rs`) carries
-`status`, `update_list`, `failures` and `log_path`.
-Neither repeats its own operation name, and no other command payload does either.
-0011's own workflow example already reads the action from `${.topic.operation}`,
-never from the payload, so the field has no reader.
-Keeping it would also raise a question with no useful answer:
-which one wins when the topic says `restart` and the payload says `pause`.
+This is how thin-edge commands already take a parameter.
+The `log_upload` capability lists `{"types": [...]}`,
+and a `log_upload` command names one of them in its `type` field.
+`actions` and `action` follow the same pattern,
+so the feature adds no new concept to the command metadata.
 
-The payload is therefore `{"status", "serviceName", "serviceType"}`.
-`serviceName` stays because it is the name the execution backend knows,
+`serviceName` is the name the execution backend knows,
 which is not derivable from the topic under a custom topic scheme.
-`serviceType` stays because it selects the backend.
-
-The field was there because it mirrors Cumulocity's `c8y_ServiceCommand`
-fragment, which carries `serviceType`, `serviceName` and `command`.
-thin-edge does not need to follow Cumulocity's shape;
+`serviceType` selects the backend.
+The field is named `action`, not `command` as in Cumulocity's `c8y_ServiceCommand`:
 `command` is the cloud's word and stays inside the mapper.
 
-Nothing is lost with the field.
-An action name survives lowercasing unchanged, by the rule below,
-so the value Cumulocity sends gives back the declared name exactly
-and there is no original spelling left to carry.
+The cost is that every action of every service of the device runs through one workflow,
+the `control` workflow for services.
+The shipped one runs any action through `tedge service`, custom actions included.
+A different flow for one action is a branch on `${.payload.action}`
+inside that workflow, not a workflow of its own.
+
+Alternative considered: one command per action,
+each declared with `{}` on `te/<service>/cmd/<action>`.
+Rejected.
+On a service, a `cmd/<action>` topic is then either an action of the service
+or an ordinary operation such as `log_upload`,
+and the mapper has to tell the two apart.
+PR #4389 told them apart with a type in the capability payload, `{"@type": "service-action"}`.
+A capability payload deciding what its command is would be a new concept in thin-edge,
+and the distinction it draws is the one Cumulocity draws between operations and service commands,
+so the thin-edge interface would follow the model of one cloud.
 
 ### Handle `c8y_ServiceCommand` as a native fragment
 
@@ -235,11 +235,11 @@ resolve the entity with `EntityCache::try_get_by_external_id`
 (`crates/extensions/c8y_mapper_ext/src/entity_cache.rs`),
 build the command, publish it.
 
-The difference from the existing operations is that the thin-edge operation name is not fixed:
-it comes from the lowercased `command` value in the payload.
-So the name is validated against the action name rule `[a-z][a-z0-9_-]*`,
-the same rule `tedge service` applies, before it is used to build a topic,
-and it is checked against the set of commands the service has declared.
+The thin-edge operation is always `control`,
+and the `command` value of the operation becomes the `action` of the command, unchanged.
+The value is validated against the action name rule `[A-Za-z][A-Za-z0-9_-]*`,
+the same rule `tedge service` applies,
+and it is checked against the actions the service has declared, case included.
 
 The `serviceName` of the operation is taken as it comes.
 Cumulocity holds one name per service:
@@ -273,6 +273,8 @@ already publishes `501`-`506` on a topic derived from the entity,
 and `C8yTopic::smartrest_response_topic`
 (`crates/core/c8y_api/src/smartrest/topic.rs`) already maps a service to `c8y/s/us/<service-xid>`.
 A status handler for service commands is added alongside the existing ones.
+It is selected from the topic alone, the `control` operation of a service,
+so reporting a status needs no state kept by the mapper.
 
 Alternative considered: a shipped custom operation handler file with `on_fragment = "c8y_ServiceCommand"`.
 Rejected in 0011: the feature also needs the `c8y_SupportedServiceCommands` fragment,
@@ -280,13 +282,10 @@ and operation files for services are not reloaded dynamically.
 
 ### Take each naming rule from how the name is used
 
-An action name is `[a-z][a-z0-9_-]*`:
-lowercase letters, digits, `_` and `-`, starting with a letter.
+An action name is `[A-Za-z][A-Za-z0-9_-]*`:
+letters, digits, `_` and `-`, starting with a letter.
 It is the largest set of characters left once every step a name takes has had its say:
 
-- the c8y mapper lowercases the command name the cloud sends,
-  so a name must be unchanged by lowercasing → no uppercase letter;
-- the name is a segment of the `cmd/<action>` topic → no `/`, `+`, `#` and no space;
 - the name is passed as one argument to an init tool or to a service plugin
   → no leading `-`, and no shell metacharacter;
 - the name is a key of `[init]` in `system.toml`, so it has to be a TOML bare key,
@@ -294,7 +293,8 @@ It is the largest set of characters left once every step a name takes has had it
 
 A service type has one constraint of its own:
 it names a file under the plugin directory, so it holds no `/` and is neither `.` nor `..`.
-The rest of its rule follows the action name's, so that one spelling of a type names one plugin.
+The rest of its rule is lowercase letters, digits, `_` and `-`,
+so that one spelling of a type names one plugin.
 
 A service name is derived the same way, and two steps have something to say about it:
 
@@ -324,7 +324,7 @@ Quoting is the backend's job.
 ### Add custom actions as plain keys of `[init]`
 
 The templates in `system.toml` are called **actions**, not commands,
-to keep them apart from the thin-edge commands carried on `cmd/<action>` topics.
+to keep them apart from thin-edge commands.
 
 A custom action is written as a plain key of the existing `[init]` table:
 
@@ -395,29 +395,14 @@ and `/usr/bin/tedge` is already covered by the shipped rule.
 
 ## Risks / Trade-offs
 
-- Handling an empty capability payload for service entities only means the mapper treats
-  the same message differently depending on the target entity type
-  → the difference is deliberate and sits in one place, the `EntityType::Service` branch of
+- The mapper handles an empty payload on the `control` capability of a service,
+  and ignores it on every other capability
+  → the difference is deliberate and sits in one place, the `control` branch of
   `try_convert_data_message`.
-- A service can withdraw every command it declared, leaving an empty set
+- A service can clear its `control` capability, leaving no action
   → `c8y_ServiceCommand` stays registered as a supported operation, so Cumulocity still
   offers the operation with no action to pick.
   Deregistering a supported operation is out of scope here.
-- A service that declares `cmd/restart` today would get `c8y_Restart`, and will now get
-  `c8y_ServiceCommand` with `RESTART`
-  → called out in the release notes. The old mapping is not kept in parallel:
-  a service declaring both `c8y_Restart` and `c8y_ServiceCommand` would show two buttons
-  for one action, which helps nobody migrate.
-- Every `cmd/<action>` topic of a service becomes an action offered in the cloud,
-  and a service owner has no way to declare an action locally without exposing it.
-  A service declaring both `cmd/restart` and `cmd/collect_measurements` gets both
-  `RESTART` and `COLLECT_MEASUREMENTS` in `c8y_SupportedServiceCommands`,
-  even if only `restart` was meant for the cloud
-  → this is the filtering gap 0011 records as future work, and it is a Non-Goal here.
-  The change makes it more visible, because before this change a service's `cmd/*` topics
-  reached the cloud only through the fixed set of known operations.
-  Whatever the filter turns out to be, it belongs in the mapper, not in the thin-edge
-  interface, so the capability declaration in `service-commands` does not need to change.
 - Keying the workflow registry by `(EntityType, OperationType)` touches every call site in
   `supervisor.rs` and the agent's routing
   → the default is `device`, so every existing workflow keeps its current key and behaviour;

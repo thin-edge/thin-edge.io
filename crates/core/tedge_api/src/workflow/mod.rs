@@ -477,6 +477,8 @@ impl OperationWorkflow {
             | OperationType::ConfigSnapshot
             | OperationType::ConfigUpdate
             | OperationType::Health => None,
+            // An entity declares the actions of its control command itself
+            OperationType::Control => None,
         }
     }
 

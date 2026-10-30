@@ -1,8 +1,9 @@
 use anyhow::Context;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
-use tedge_api::workflow::GenericCommandState;
+use tedge_api::commands::ControlCmd;
 use tedge_api::CommandStatus;
 use tedge_mqtt_ext::MqttMessage;
+use tracing::warn;
 
 use super::error::OperationError;
 use super::EntityTarget;
@@ -10,16 +11,32 @@ use super::OperationContext;
 use super::OperationOutcome;
 
 impl OperationContext {
-    pub async fn handle_service_command_state_change(
+    pub async fn handle_control_state_change(
         &self,
         target: &EntityTarget,
         cmd_id: &str,
         message: &MqttMessage,
     ) -> Result<OperationOutcome, OperationError> {
-        let command = GenericCommandState::from_command_message(message)
-            .context("Could not parse the payload of a service command")?;
+        if !self.capabilities.service_commands {
+            warn!("Received a control command, however, service_commands feature is disabled");
+            return Ok(OperationOutcome::Ignored);
+        }
 
-        match command.get_command_status() {
+        let command = match ControlCmd::try_from_bytes(
+            target.topic_id.clone(),
+            cmd_id.to_owned(),
+            message.payload_bytes(),
+        )
+        .context("Could not parse the payload of a service command")?
+        {
+            Some(command) => command,
+            None => {
+                // The command has been fully processed
+                return Ok(OperationOutcome::Ignored);
+            }
+        };
+
+        match command.status() {
             CommandStatus::Executing => Ok(OperationOutcome::Executing {
                 extra_messages: vec![],
             }),
@@ -37,7 +54,7 @@ impl OperationContext {
                 })
             }
             CommandStatus::Failed { reason } => {
-                let action = command.operation().unwrap_or_default();
+                let action = &command.payload.action;
                 Err(anyhow::anyhow!("The '{action}' action failed: {reason}").into())
             }
             _ => {

@@ -3026,9 +3026,13 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_Restart")]).await;
 }
 
-#[test_case(json!({"status": "successful"}), "503,c8y_ServiceCommand"; "successful")]
 #[test_case(
-    json!({"status": "failed", "reason": "failed with reason"}),
+    json!({"status": "successful", "action": "restart", "serviceName": "collectd", "serviceType": "service"}),
+    "503,c8y_ServiceCommand";
+    "successful"
+)]
+#[test_case(
+    json!({"status": "failed", "action": "restart", "serviceName": "collectd", "serviceType": "service", "reason": "failed with reason"}),
     "502,c8y_ServiceCommand,The 'restart' action failed: failed with reason";
     "failed"
 )]
@@ -3050,8 +3054,8 @@ async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service
     .await
     .unwrap();
     mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart"),
-        "{}",
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/control"),
+        r#"{"actions":["restart"]}"#,
     ))
     .await
     .unwrap();
@@ -3062,7 +3066,7 @@ async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service
             "id": "1234",
             "status": "PENDING",
             "c8y_ServiceCommand": {
-                "command": "RESTART",
+                "command": "restart",
                 "serviceName": "collectd",
                 "serviceType": "service"
             },
@@ -3076,12 +3080,13 @@ async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service
     .await
     .unwrap();
 
-    let topic = Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/c8y-mapper-1234");
+    let topic = Topic::new_unchecked("te/device/main/service/collectd/cmd/control/c8y-mapper-1234");
     assert_received_contains_str(&mut mqtt, [(topic.name.as_str(), r#""status":"init""#)]).await;
 
     mqtt.send(MqttMessage::new(
         &topic,
-        json!({"status": "executing"}).to_string(),
+        json!({"status": "executing", "action": "restart", "serviceName": "collectd", "serviceType": "service"})
+            .to_string(),
     ))
     .await
     .unwrap();
@@ -3102,6 +3107,69 @@ async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service
         [(
             "c8y/s/us/test-device:device:main:service:collectd",
             smartrest,
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn a_control_command_status_is_ignored_when_service_commands_are_disabled() {
+    let ttd = TempTedgeDir::new();
+    let mut config = test_mapper_config(&ttd);
+    config.capabilities.service_commands = false;
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/control/c8y-mapper-1234"),
+        json!({"status": "executing", "action": "restart", "serviceName": "collectd", "serviceType": "service"})
+            .to_string(),
+    ))
+    .await
+    .unwrap();
+
+    while let Some(message) = mqtt.recv().await {
+        assert_ne!(
+            message.topic.name, "c8y/s/us/test-device:device:main:service:collectd",
+            "{message:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_restart_command_of_a_service_is_reported_as_c8y_restart() {
+    let ttd = TempTedgeDir::new();
+    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/c8y-mapper-1234"),
+        json!({"status": "successful"}).to_string(),
+    ))
+    .await
+    .unwrap();
+
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us/test-device:device:main:service:collectd",
+            "503,c8y_Restart",
         )],
     )
     .await;

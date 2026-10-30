@@ -40,16 +40,16 @@ Run service command on child device
     Set Device Context    ${PARENT_SN}
     Register Entity    device/${CHILD_SN}/service/sleeper    service    device/${CHILD_SN}//
     Execute Command
-    ...    tedge mqtt pub --retain te/device/${CHILD_SN}/service/sleeper/cmd/restart/child-service-1 '{"status":"init","serviceName":"sleeper","serviceType":"service"}'
+    ...    tedge mqtt pub --retain te/device/${CHILD_SN}/service/sleeper/cmd/control/child-service-1 '{"status":"init","action":"restart","serviceName":"sleeper","serviceType":"service"}'
     Should Have MQTT Messages
-    ...    te/device/${CHILD_SN}/service/sleeper/cmd/restart/child-service-1
+    ...    te/device/${CHILD_SN}/service/sleeper/cmd/control/child-service-1
     ...    message_pattern=.*successful.*
     ...    maximum=1
 
     Set Device Context    ${CHILD_SN}
     ${pid_after}=    Get Service PID    sleeper
     Should Not Be Equal    ${pid_before}    ${pid_after}
-    Execute Command    tedge mqtt pub --retain te/device/${CHILD_SN}/service/sleeper/cmd/restart/child-service-1 ''
+    Execute Command    tedge mqtt pub --retain te/device/${CHILD_SN}/service/sleeper/cmd/control/child-service-1 ''
 
 Run service command on nested child device
     Service Health Status Should Be Up    tedge-agent    device=${NESTED_SN}
@@ -60,16 +60,16 @@ Run service command on nested child device
     Set Device Context    ${PARENT_SN}
     Register Entity    device/${NESTED_SN}/service/sleeper    service    device/${NESTED_SN}//
     Execute Command
-    ...    tedge mqtt pub --retain te/device/${NESTED_SN}/service/sleeper/cmd/restart/nested-service-1 '{"status":"init","serviceName":"sleeper","serviceType":"service"}'
+    ...    tedge mqtt pub --retain te/device/${NESTED_SN}/service/sleeper/cmd/control/nested-service-1 '{"status":"init","action":"restart","serviceName":"sleeper","serviceType":"service"}'
     Should Have MQTT Messages
-    ...    te/device/${NESTED_SN}/service/sleeper/cmd/restart/nested-service-1
+    ...    te/device/${NESTED_SN}/service/sleeper/cmd/control/nested-service-1
     ...    message_pattern=.*successful.*
     ...    maximum=1
 
     Set Device Context    ${NESTED_SN}
     ${pid_after}=    Get Service PID    sleeper
     Should Not Be Equal    ${pid_before}    ${pid_after}
-    Execute Command    tedge mqtt pub --retain te/device/${NESTED_SN}/service/sleeper/cmd/restart/nested-service-1 ''
+    Execute Command    tedge mqtt pub --retain te/device/${NESTED_SN}/service/sleeper/cmd/control/nested-service-1 ''
 
 
 *** Keywords ***
