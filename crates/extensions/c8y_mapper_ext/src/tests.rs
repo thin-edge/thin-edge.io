@@ -3113,6 +3113,37 @@ async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service
 }
 
 #[tokio::test]
+async fn a_control_command_status_is_ignored_when_service_commands_are_disabled() {
+    let ttd = TempTedgeDir::new();
+    let mut config = test_mapper_config(&ttd);
+    config.capabilities.service_commands = false;
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, .. } = test_handle;
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/collectd/cmd/control/c8y-mapper-1234"),
+        json!({"status": "executing", "action": "restart", "serviceName": "collectd", "serviceType": "service"})
+            .to_string(),
+    ))
+    .await
+    .unwrap();
+
+    while let Some(message) = mqtt.recv().await {
+        assert_ne!(
+            message.topic.name, "c8y/s/us/test-device:device:main:service:collectd",
+            "{message:?}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn the_restart_command_of_a_service_is_reported_as_c8y_restart() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
