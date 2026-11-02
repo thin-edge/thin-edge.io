@@ -34,6 +34,15 @@ Install software via Cumulocity
     Operation Should Be SUCCESSFUL    ${OPERATION}    timeout=60
     Device Should Have Installed Software    rolldice
 
+Software update with an invalid action fails the operation of the child device
+    ${OPERATION}=    Cumulocity.Create Operation
+    ...    fragments={"c8y_SoftwareUpdate":[{"name":"rolldice","version":"latest","action":"remove"}]}
+    ...    description=Remove rolldice
+    Operation Should Be FAILED
+    ...    ${OPERATION}
+    ...    failure_reason=Parameter remove is not recognized. It must be install or delete.
+    ...    timeout=60
+
 
 *** Keywords ***
 Setup Child Device

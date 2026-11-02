@@ -498,13 +498,17 @@ impl CumulocityConverter {
 
             let result = self
                 .process_json_over_mqtt(
-                    device_xid,
+                    device_xid.clone(),
                     operation.op_id.clone(),
                     &operation.extras,
                     &operation_message,
                 )
                 .await;
-            let result = self.handle_c8y_operation_result(&result, Some(operation.op_id.clone()));
+            let result = self.handle_c8y_operation_result(
+                &result,
+                &device_xid,
+                Some(operation.op_id.clone()),
+            );
             self.active_commands.insert(cmd_id, Some(Instant::now()));
             output.extend(result);
         }
@@ -631,13 +635,13 @@ impl CumulocityConverter {
             .process_json_custom_operation(
                 operation.op_id.clone(),
                 cmd_id.clone(),
-                device_xid,
+                device_xid.clone(),
                 &operation.extras,
                 message,
             )
             .await;
 
-        let output = self.handle_c8y_operation_result(&result, Some(operation.op_id));
+        let output = self.handle_c8y_operation_result(&result, &device_xid, Some(operation.op_id));
         self.active_commands.insert(cmd_id, Some(Instant::now()));
 
         Ok(output)
@@ -734,15 +738,20 @@ impl CumulocityConverter {
         let mut output: Vec<MqttMessage> = Vec::new();
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
             let result = self.process_smartrest(smartrest_message.as_str()).await;
-            let mut msgs = self.handle_c8y_operation_result(&result, None);
+            let mut msgs = self.handle_c8y_operation_result(
+                &result,
+                self.entity_cache.main_device_external_id().as_ref(),
+                None,
+            );
             output.append(&mut msgs)
         }
         Ok(output)
     }
 
     fn handle_c8y_operation_result(
-        &mut self,
+        &self,
         result: &Result<Vec<MqttMessage>, CumulocityMapperError>,
+        target_xid: &str,
         op_id: Option<String>,
     ) -> Vec<MqttMessage> {
         match result {
@@ -758,9 +767,18 @@ impl CumulocityConverter {
                     ..
                 },
             ) => {
-                let topic = C8yTopic::SmartRestResponse
-                    .to_topic(&self.config.bridge_config.c8y_prefix)
-                    .unwrap();
+                error!("{err}");
+
+                let prefix = &self.config.bridge_config.c8y_prefix;
+                let topic = if target_xid == self.entity_cache.main_device_external_id().as_ref() {
+                    Ok(C8yTopic::upstream_topic(prefix))
+                } else {
+                    C8yTopic::ChildSmartRestResponse(target_xid.to_string()).to_topic(prefix)
+                };
+                let Ok(topic) = topic else {
+                    error!("Not reporting the failure to Cumulocity: '{target_xid}' names no SmartREST topic");
+                    return vec![];
+                };
 
                 let (payload1, payload2) =
                     if let (Some(op_id), true) = (op_id, self.config.smartrest_use_operation_id) {
@@ -777,7 +795,6 @@ impl CumulocityConverter {
 
                 let msg1 = MqttMessage::new(&topic, payload1);
                 let msg2 = MqttMessage::new(&topic, payload2);
-                error!("{err}");
                 vec![msg1, msg2]
             }
             Err(err) => {
@@ -2751,6 +2768,40 @@ pub(crate) mod tests {
                       ]}
                 ]
             })
+        );
+    }
+
+    #[tokio::test]
+    async fn an_invalid_operation_of_a_child_device_is_failed_on_the_smartrest_topic_of_the_child_device(
+    ) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        register_source_entities("te/device/childId//", &mut converter).await;
+
+        assert_messages_matching(
+            &converter
+                .convert(&MqttMessage::new(
+                    &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+                    json!({
+                        "id": "123456",
+                        "c8y_SoftwareUpdate": [
+                            {"name": "nodered", "action": "remove", "version": "1.0.0::debian"}
+                        ],
+                        "externalSource": {"externalId": "test-device:device:childId", "type": "c8y_Serial"},
+                    })
+                    .to_string(),
+                ))
+                .await,
+            [
+                (
+                    "c8y/s/us/test-device:device:childId",
+                    "501,c8y_SoftwareUpdate".into(),
+                ),
+                (
+                    "c8y/s/us/test-device:device:childId",
+                    "502,c8y_SoftwareUpdate,Parameter remove is not recognized. It must be install or delete.".into(),
+                ),
+            ],
         );
     }
 
