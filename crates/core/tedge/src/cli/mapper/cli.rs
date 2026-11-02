@@ -327,6 +327,26 @@ AwEHoUQDQgAEdklRDw9+AAMRbpNMWJutKe4QO/tUlvrBR2swUYN9onxXdKNjJ/k3\n\
         }
 
         #[tokio::test]
+        async fn explicit_device_id_shown_with_mapper_toml_tag_instead_of_cert_cn() {
+            let ttd = TempTedgeDir::new();
+            let mappers_root = ttd.path().join("mappers");
+            let mapper_dir = ttd.dir("mappers").dir("tb");
+            mapper_dir.file("cert.pem").with_raw_content(TEST_CERT_PEM);
+            mapper_dir.file("key.pem").with_raw_content(TEST_KEY_PEM);
+            mapper_dir.file("mapper.toml").with_raw_content(
+                "url = \"mqtt.example.com:8883\"\n\
+                 [device]\nid = \"explicit-id\"\ncert_path = \"cert.pem\"\nkey_path = \"key.pem\"\n",
+            );
+
+            let mappers = scan_mappers_shallow(&mappers_root).await;
+            let tedge_config = tedge_config::TEdgeConfig::load_toml_str("");
+            let rows = build_mapper_rows(&mappers_root, &mappers, &tedge_config).await;
+
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].device_id, "explicit-id [mapper.toml]");
+        }
+
+        #[tokio::test]
         async fn tedge_toml_device_id_shown_with_tag() {
             let ttd = TempTedgeDir::new();
             let mappers_root = ttd.path().join("mappers");

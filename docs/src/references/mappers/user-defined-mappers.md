@@ -64,7 +64,11 @@ auth_method = "auto"
 # credentials_path = "credentials.toml"
 
 [device]
-# MQTT client ID (defaults to the certificate CN if not set)
+# MQTT client ID.
+# Overrides the certificate CN, so mappers whose certificates share a CN
+# can connect to the same broker with distinct client IDs.
+# When not set, certificate auth uses the certificate CN, then tedge.toml device.id,
+# and password auth uses tedge.toml device.id.
 # id = "my-device"
 
 # Client certificate for mutual TLS.
