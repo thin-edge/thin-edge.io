@@ -1,8 +1,8 @@
 use tedge_utils::paths::ManagedDir;
 
 const SHIPPED_WORKFLOWS: [(&str, &str); 1] = [(
-    "service_commands.toml",
-    include_str!("../resources/service_commands.toml"),
+    "service_control.toml",
+    include_str!("../resources/service_control.toml"),
 )];
 
 pub async fn install_service_workflows(ops_dir: &ManagedDir) -> Result<(), anyhow::Error> {

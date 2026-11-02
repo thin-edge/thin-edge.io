@@ -1,5 +1,6 @@
 pub mod alarm;
 pub mod commands;
+pub mod control;
 pub mod device_profile;
 pub mod entity;
 pub mod entity_store;
@@ -11,7 +12,6 @@ pub mod measurement;
 pub mod mqtt_topics;
 pub mod path;
 pub mod script;
-pub mod service_command;
 mod software;
 pub mod store;
 pub mod substitution;

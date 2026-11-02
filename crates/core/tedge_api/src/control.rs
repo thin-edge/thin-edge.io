@@ -1,3 +1,4 @@
+use serde::Serialize;
 use std::fmt;
 use std::str::FromStr;
 
@@ -5,20 +6,21 @@ pub const DEFAULT_SERVICE_TYPE: &str = "service";
 
 /// The name of a service action, e.g, `restart`.
 ///
-/// A name is a single lowercase token: `[a-z][a-z0-9_-]*`.
+/// A name is a single token: `[A-Za-z][A-Za-z0-9_-]*`.
 ///
 /// ```
-/// use tedge_api::service_command::ActionName;
+/// use tedge_api::control::ActionName;
 ///
 /// assert!("restart".parse::<ActionName>().is_ok());
 /// assert!("collect_measurements".parse::<ActionName>().is_ok());
 /// assert!("is-active".parse::<ActionName>().is_ok());
+/// assert!("requestLog".parse::<ActionName>().is_ok());
 ///
-/// assert!("RESTART".parse::<ActionName>().is_err());
 /// assert!("do something".parse::<ActionName>().is_err());
 /// assert!("-restart".parse::<ActionName>().is_err());
 /// ```
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(transparent)]
 pub struct ActionName(String);
 
 impl FromStr for ActionName {
@@ -35,14 +37,14 @@ impl FromStr for ActionName {
         if name.is_empty() {
             return invalid("an action name cannot be empty");
         }
-        if !name.starts_with(|c: char| c.is_ascii_lowercase()) {
-            return invalid("an action name must start with a lowercase letter");
+        if !name.starts_with(|c: char| c.is_ascii_alphabetic()) {
+            return invalid("an action name must start with a letter");
         }
         if !name
             .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
         {
-            return invalid("an action name must only hold lowercase letters, digits, '_' and '-'");
+            return invalid("an action name must only hold letters, digits, '_' and '-'");
         }
 
         Ok(ActionName(name.to_string()))
@@ -74,7 +76,7 @@ pub struct InvalidActionName {
 /// `rc-service --now restart` would read as an option.
 ///
 /// ```
-/// use tedge_api::service_command::ServiceName;
+/// use tedge_api::control::ServiceName;
 ///
 /// assert!("collectd".parse::<ServiceName>().is_ok());
 /// assert!("getty@tty1".parse::<ServiceName>().is_ok());
@@ -132,7 +134,7 @@ pub struct InvalidServiceName {
 /// A service type names a file in the service plugin directory, so it must be a plain file name.
 ///
 /// ```
-/// use tedge_api::service_command::ServiceType;
+/// use tedge_api::control::ServiceType;
 ///
 /// assert!("container".parse::<ServiceType>().is_ok());
 ///
@@ -190,39 +192,11 @@ pub struct InvalidServiceType {
     pub reason: String,
 }
 
-/// The actions a service declares as its own capabilities when it starts
-///
-/// Each action is published as a retained message on `te/<service-topic-id>/cmd/<action>`,
-/// `{}` to declare the action and an empty message to clear a previously declared one.
-///
-/// Clearing is required because a capability is retained:
-/// a mapper declares `restart` when it runs standalone,
-/// and has to clear it when the same mapper runs under `tedge run all` with no init unit of its own.
+/// The capability a service publishes on its retained `cmd/control` topic when it starts
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ActionCapabilities {
-    pub declared: &'static [&'static str],
-    pub cleared: &'static [&'static str],
-}
-
-impl ActionCapabilities {
-    pub const NONE: ActionCapabilities = ActionCapabilities {
-        declared: &[],
-        cleared: &[],
-    };
-
-    pub const fn declaring(declared: &'static [&'static str]) -> Self {
-        ActionCapabilities {
-            declared,
-            cleared: &[],
-        }
-    }
-
-    pub const fn clearing(cleared: &'static [&'static str]) -> Self {
-        ActionCapabilities {
-            declared: &[],
-            cleared,
-        }
-    }
+pub enum ControlCapability {
+    Declaring(&'static [&'static str]),
+    Clearing,
 }
 
 // Keep this as array so that we can expand the actions later.
@@ -242,13 +216,14 @@ mod tests {
     #[test_case("ab")]
     #[test_case("is-active"; "with a dash")]
     #[test_case("r"; "single char")]
+    #[test_case("RESTART"; "uppercase")]
+    #[test_case("requestLog"; "mixed case")]
+    #[test_case("Collect_Measurements"; "mixed case with an underscore")]
     fn accepted_action_names(name: &str) {
         assert!(name.parse::<ActionName>().is_ok(), "{name}");
     }
 
     #[test_case(""; "empty")]
-    #[test_case("RESTART"; "uppercase")]
-    #[test_case("myCommand"; "mixed case")]
     #[test_case("do something"; "with a space")]
     #[test_case("restart "; "with a trailing space")]
     #[test_case("restart.now"; "with a dot")]
@@ -266,10 +241,10 @@ mod tests {
 
     #[test]
     fn the_reason_names_the_rejected_value() {
-        let err = "Restart".parse::<ActionName>().unwrap_err();
+        let err = "2restart".parse::<ActionName>().unwrap_err();
         assert_eq!(
             err.to_string(),
-            "Invalid action name 'Restart': an action name must start with a lowercase letter"
+            "Invalid action name '2restart': an action name must start with a letter"
         );
     }
 

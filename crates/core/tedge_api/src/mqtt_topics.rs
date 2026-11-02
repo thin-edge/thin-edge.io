@@ -751,6 +751,7 @@ pub enum OperationType {
     FirmwareUpdate,
     Health,
     DeviceProfile,
+    Control,
     Custom(String),
 }
 
@@ -793,6 +794,7 @@ impl<'a> From<&'a str> for OperationType {
             "config_update" => OperationType::ConfigUpdate,
             "firmware_update" => OperationType::FirmwareUpdate,
             "device_profile" => OperationType::DeviceProfile,
+            "control" => OperationType::Control,
             operation => OperationType::Custom(operation.to_string()),
         }
     }
@@ -810,6 +812,7 @@ impl Display for OperationType {
             OperationType::FirmwareUpdate => write!(f, "firmware_update"),
             OperationType::Health => write!(f, "health"),
             OperationType::DeviceProfile => write!(f, "device_profile"),
+            OperationType::Control => write!(f, "control"),
             OperationType::Custom(operation) => write!(f, "{operation}"),
         }
     }

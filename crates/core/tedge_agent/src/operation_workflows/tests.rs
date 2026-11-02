@@ -1098,8 +1098,8 @@ fn builtin_workflows_are_valid_operation_workflows() {
             include_str!("../resources/shell_execute.toml"),
         ),
         (
-            "service_commands.toml",
-            include_str!("../resources/service_commands.toml"),
+            "service_control.toml",
+            include_str!("../resources/service_control.toml"),
         ),
     ] {
         toml::from_str::<OperationWorkflows>(definition)
@@ -1820,7 +1820,7 @@ async fn a_service_workflow_declares_no_capability_of_the_device() {
 }
 
 #[tokio::test]
-async fn a_sub_command_of_a_service_command_is_addressed_to_the_same_service() {
+async fn a_sub_operation_is_triggered_on_the_same_entity_as_the_calling_command() {
     let TestHandler {
         mut mqtt_box,
         mut actor_handle,

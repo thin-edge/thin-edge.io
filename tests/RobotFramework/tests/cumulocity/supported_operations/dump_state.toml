@@ -1,0 +1,16 @@
+operation = "dump_state"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "/etc/tedge/operations/dump_state.sh ${.topic.target}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
