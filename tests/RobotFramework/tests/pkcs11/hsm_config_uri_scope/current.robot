@@ -1,6 +1,10 @@
 *** Settings ***
 Documentation       `tedge hsm` commands when `device.cryptoki.uri` restricts tedge-p11-server.
 ...
+...                 For create-key, delete-key and change-pin, tedge-p11-server only adds the attributes
+...                 of the configured URI that are missing in the request, and fails with a "key not
+...                 found" error if the two URIs set different values for the same attribute.
+...
 ...                 There is no `initial.robot` variant, as released tedge-p11-server versions can't
 ...                 list keys, delete keys, or change PINs.
 
@@ -36,45 +40,25 @@ delete-key refuses to delete a key from a token excluded by the configured URI
     Delete a key from a token excluded by the configured URI
 
 delete-key refuses to delete a key other than requested because of the configured URI
-    [Documentation]    Fails because the `object` attribute of the configured URI overrides the
-    ...    requested one (`Cryptoki::request_uri`), and listing keys ignores `object`/`id`
-    ...    (`Cryptoki::list_keys`), so the client only finds out after the key was deleted.
-    [Tags]    robot:skip    known-issue:p11-server-uri-override
     Delete a key overridden by the configured URI
 
-delete-key reports a key deleted because of the configured URI
-    Report a key deleted because of the configured URI
+delete-key uses the configured URI for attributes missing in the request
+    Delete a key selected by the configured URI
 
 create-key refuses to create a key on a token excluded by the configured URI
     Create a key on a token excluded by the configured URI
 
 create-key refuses to create a key when the configured URI selects an empty token
-    [Documentation]    Fails because the configured URI overrides the requested token
-    ...    (`Cryptoki::request_uri`) and the client can only identify the selected token by the
-    ...    keys on it, so the key is created before the mismatch is detected.
-    [Tags]    robot:skip    known-issue:p11-server-uri-override
     Create a key when the configured URI selects an empty token
 
-create-key creates a new key when the configured URI selects another key
-    [Documentation]    Fails because the `object` attribute of the configured URI overrides the
-    ...    requested label in the existing key check (`Cryptoki::request_uri`), so the configured
-    ...    key is reused instead.
-    [Tags]    robot:skip    known-issue:p11-server-uri-override
+create-key refuses to create a key when the configured URI selects another key
     Create a key whose label is overridden by the configured URI
 
 change-pin refuses to change the PIN of a token excluded by the configured URI
     Change the PIN of a token excluded by the configured URI
 
 change-pin refuses to change the PIN when the configured URI selects an empty token
-    [Documentation]    Fails because the configured URI overrides the requested token
-    ...    (`Cryptoki::request_uri`) and the client can only identify the selected token by the
-    ...    keys on it, so the PIN is changed before the mismatch is detected.
-    [Tags]    robot:skip    known-issue:p11-server-uri-override
     Change the PIN when the configured URI selects an empty token
 
 change-pin --reset refuses to reset the PIN of a token excluded by the configured URI
-    [Documentation]    Fails because the configured URI overrides the requested token
-    ...    (`Cryptoki::request_uri`), and the client skips its check for a reset, as listing keys
-    ...    would need a login with the unknown current PIN.
-    [Tags]    robot:skip    known-issue:p11-server-uri-override
     Reset the PIN of a token excluded by the configured URI
