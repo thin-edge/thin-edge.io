@@ -78,7 +78,7 @@ Delete a key from a token excluded by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2
     Command Should Fail With
     ...    tedge hsm delete-key --force --label token2-key "pkcs11:token=token1"
-    ...    Refusing to delete keys
+    ...    conflicts with the configured device.cryptoki.uri
     ${keys}=    List all keys on token    token2
     Should Contain    ${keys}    Label: token2-key
 
@@ -102,7 +102,7 @@ Create a key on a token excluded by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2
     Command Should Fail With
     ...    tedge hsm create-key --type ecdsa --label new-key "pkcs11:token=token1"
-    ...    Refusing to create the key
+    ...    conflicts with the configured device.cryptoki.uri
     ${keys}=    List all keys on token    token2
     Should Not Contain    ${keys}    Label: new-key
     Execute Command    cmd=tedge config get device.key_uri    exp_exit_code=!0
@@ -120,17 +120,19 @@ Create a key when the configured URI selects an empty token
 
 Create a key whose label is overridden by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2;object=token2-key
-    Command Should Fail With
-    ...    tedge hsm create-key --type ecdsa --label new-key "pkcs11:token=token2"
-    ...    conflicts with the configured device.cryptoki.uri
+    ${stderr}=    Execute Command
+    ...    cmd=tedge hsm create-key --type ecdsa --label new-key "pkcs11:token=token2"
+    ...    stdout=False
+    ...    stderr=True
+    Should Contain    ${stderr}    New keypair was successfully created
     ${keys}=    List all keys on token    token2
-    Should Not Contain    ${keys}    Label: new-key
+    Should Contain    ${keys}    Label: new-key
 
 Change the PIN of a token excluded by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2
     Command Should Fail With
     ...    tedge hsm change-pin --current-pin 123456 --new-pin 654321 "pkcs11:token=token1"
-    ...    Refusing to change the PIN
+    ...    conflicts with the configured device.cryptoki.uri
     List all keys on token    token2    pin=123456
 
 Change the PIN when the configured URI selects an empty token

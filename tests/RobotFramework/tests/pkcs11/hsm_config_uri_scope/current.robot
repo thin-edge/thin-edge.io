@@ -51,7 +51,7 @@ create-key refuses to create a key on a token excluded by the configured URI
 create-key refuses to create a key when the configured URI selects an empty token
     Create a key when the configured URI selects an empty token
 
-create-key refuses to create a key when the configured URI selects another key
+create-key creates a new key when the configured URI selects another key
     Create a key whose label is overridden by the configured URI
 
 change-pin refuses to change the PIN of a token excluded by the configured URI
