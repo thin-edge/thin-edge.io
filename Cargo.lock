@@ -686,16 +686,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
-name = "batcher"
-version = "2.0.1"
-dependencies = [
- "async-trait",
- "tedge_actors",
- "time",
- "tokio",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1265,24 +1255,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
 dependencies = [
  "thiserror 2.0.21",
-]
-
-[[package]]
-name = "collectd_ext"
-version = "2.0.1"
-dependencies = [
- "anyhow",
- "assert_matches",
- "async-trait",
- "batcher",
- "clock",
- "tedge_actors",
- "tedge_api",
- "tedge_mqtt_ext",
- "thiserror 2.0.21",
- "time",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -5536,15 +5508,12 @@ dependencies = [
  "async-trait",
  "aws_mapper_ext",
  "az_mapper_ext",
- "batcher",
  "c8y_api",
  "c8y_auth_proxy",
  "c8y_mapper_ext",
  "camino",
  "certificate",
  "clap",
- "clock",
- "collectd_ext",
  "flockfile",
  "futures",
  "mqtt_channel",
