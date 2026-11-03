@@ -871,12 +871,17 @@ impl CumulocityConverter {
                 info!("Skipping software list request for {target}: command {cmd_id} is still pending");
                 continue;
             }
-            let cmd_id = self.command_id.new_id();
-            let request = SoftwareListCommand::new(&target, cmd_id.clone());
-            requests.push(request.command_message(&self.mqtt_schema));
-            self.pending_software_list_requests.insert(cmd_id, target);
+            requests.push(self.request_software_list(&target));
         }
         requests
+    }
+
+    fn request_software_list(&mut self, target: &EntityTopicId) -> MqttMessage {
+        let cmd_id = self.command_id.new_id();
+        let request = SoftwareListCommand::new(target, cmd_id.clone());
+        self.pending_software_list_requests
+            .insert(cmd_id, target.clone());
+        request.command_message(&self.mqtt_schema)
     }
 
     async fn forward_operation_request(
@@ -1200,7 +1205,8 @@ impl CumulocityConverter {
                             .await
                     }
                     OperationType::SoftwareUpdate => {
-                        self.register_software_update_operation(&source).await
+                        self.register_software_update_operation(&source, message)
+                            .await
                     }
                     OperationType::LogUpload => self.convert_log_metadata(&source, message).await,
                     OperationType::ConfigSnapshot => {
@@ -1517,6 +1523,7 @@ impl CumulocityConverter {
     async fn register_software_update_operation(
         &mut self,
         target: &EntityTopicId,
+        message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         if !self.config.capabilities.software_update {
             warn!(
@@ -1524,7 +1531,7 @@ impl CumulocityConverter {
             );
             return Ok(vec![]);
         }
-        let registration = match self.register_operation(target, "c8y_SoftwareUpdate").await {
+        let mut registration = match self.register_operation(target, "c8y_SoftwareUpdate").await {
             Err(_) => {
                 error!("Fail to register `software-list` operation for unknown device: {target}");
                 return Ok(vec![]);
@@ -1532,7 +1539,17 @@ impl CumulocityConverter {
             Ok(messages) => messages,
         };
 
-        self.deferred_software_list_requests.insert(target.clone());
+        if message.retain {
+            self.deferred_software_list_requests.insert(target.clone());
+        } else {
+            // A live capability message is published by an agent that has just (re)started.
+            // The requests pending since before are not reliable anymore:
+            // some might never be completed or cleared, e.g. a cleared request resumed by the agent.
+            self.pending_software_list_requests
+                .retain(|_, pending_target| pending_target != target);
+            self.deferred_software_list_requests.remove(target);
+            registration.push(self.request_software_list(target));
+        }
         Ok(registration)
     }
 }
@@ -2807,6 +2824,64 @@ pub(crate) mod tests {
         let capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
         converter.try_convert(&capability).await.unwrap();
         let messages = converter.take_software_list_requests();
+
+        assert_eq!(
+            software_list_requests(&converter, &device, &messages).len(),
+            1,
+            "Expected a software list request in {messages:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn software_list_is_requested_when_the_agent_restarts_with_a_request_still_pending() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mqtt_schema = converter.mqtt_schema.clone();
+        let device = EntityTopicId::default_main_device();
+
+        let previous_request = SoftwareListCommand::new(&device, "c8y-mapper-1234".into())
+            .command_message(&mqtt_schema);
+        converter.try_convert(&previous_request).await.unwrap();
+
+        let mut capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
+        capability.retain = false;
+        let mut messages = converter.try_convert(&capability).await.unwrap();
+        messages.extend(converter.take_software_list_requests());
+
+        assert_eq!(
+            software_list_requests(&converter, &device, &messages).len(),
+            1,
+            "Expected a software list request in {messages:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn software_list_is_requested_when_the_agent_restarts_and_resumes_a_cleared_request() {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mqtt_schema = converter.mqtt_schema.clone();
+        let device = EntityTopicId::default_main_device();
+
+        let previous_request = SoftwareListCommand::new(&device, "c8y-mapper-1234".into())
+            .with_status(CommandStatus::Successful);
+        converter
+            .try_convert(&previous_request.command_message(&mqtt_schema))
+            .await
+            .unwrap();
+        converter
+            .try_convert(&previous_request.clearing_message(&mqtt_schema))
+            .await
+            .unwrap();
+        // Republished by an agent restarted before having seen the clearing message
+        converter
+            .try_convert(&previous_request.command_message(&mqtt_schema))
+            .await
+            .unwrap();
+
+        let mut capability = SoftwareUpdateCommand::capability_message(&mqtt_schema, &device);
+        capability.retain = false;
+        let mut messages = converter.try_convert(&capability).await.unwrap();
+        messages.extend(converter.take_software_list_requests());
 
         assert_eq!(
             software_list_requests(&converter, &device, &messages).len(),
