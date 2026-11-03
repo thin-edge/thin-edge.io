@@ -871,9 +871,6 @@ impl Cryptoki {
     ) -> anyhow::Result<CryptokiSession<'a>> {
         let uri_attributes = self.request_uri(params.uri.as_deref())?;
 
-        let wanted_label = uri_attributes.token.as_ref();
-        let wanted_serial = uri_attributes.serial.as_ref();
-
         let context = match self.context.lock() {
             Ok(c) => c,
             Err(e) => e.into_inner(),
@@ -893,14 +890,11 @@ impl Cryptoki {
             .collect();
         let tokens = tokens?;
 
-        // if token/serial attributes are passed, find a token that has these attributes, otherwise any token will do
+        // if slot-id/token/serial attributes are passed, find a token that has these attributes, otherwise any token will do
         let mut tokens = slots_with_tokens
             .into_iter()
             .zip(tokens)
-            .filter(|(_, t)| wanted_label.is_none() || wanted_label.is_some_and(|l| t.label() == l))
-            .filter(|(_, t)| {
-                wanted_serial.is_none() || wanted_serial.is_some_and(|s| t.serial_number() == s)
-            });
+            .filter(|(slot, t)| token_matches_uri(&uri_attributes, *slot, t));
         let (slot, _) = tokens
             .next()
             .context("Didn't find a slot to use. The device may be disconnected.")?;
