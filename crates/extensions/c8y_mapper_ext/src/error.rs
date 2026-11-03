@@ -1,5 +1,6 @@
 use crate::entity_cache::InvalidExternalIdError;
 use crate::supported_operations::OperationsError;
+use c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError;
 use c8y_api::smartrest::error::SMCumulocityMapperError;
 use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::error::SmartRestSerializerError;
@@ -167,9 +168,7 @@ pub enum CumulocityMapperError {
     FromSmartRestDeserializer(#[from] SmartRestDeserializerError),
 
     #[error(transparent)]
-    FromC8yJsonOverMqttDeserializerError(
-        #[from] c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError,
-    ),
+    FromC8yJsonOverMqttDeserializerError(#[from] C8yJsonOverMqttDeserializerError),
 
     #[error(transparent)]
     FromSmCumulocityMapperError(#[from] SMCumulocityMapperError),
@@ -216,4 +215,28 @@ pub enum CumulocityMapperError {
 
     #[error("Error occurred while preprocessing custom operation handler {operation}. Reason: {err_msg}")]
     JsonCustomOperationHandlerError { operation: String, err_msg: String },
+
+    #[error("{reason}")]
+    ServiceCommandRejected { reason: String },
+}
+
+impl CumulocityMapperError {
+    /// Returns the name of the Cumulocity operation that failed with this error, such as `c8y_ServiceCommand`,
+    /// or `None` if the error is not related to a Cumulocity operation.
+    pub(crate) fn failed_operation_name(&self) -> Option<&str> {
+        match self {
+            CumulocityMapperError::FromSmartRestDeserializer(
+                SmartRestDeserializerError::InvalidParameter { operation, .. },
+            )
+            | CumulocityMapperError::FromC8yJsonOverMqttDeserializerError(
+                C8yJsonOverMqttDeserializerError::InvalidParameter { operation, .. },
+            )
+            | CumulocityMapperError::ExecuteFailed {
+                operation_name: operation,
+                ..
+            } => Some(operation),
+            CumulocityMapperError::ServiceCommandRejected { .. } => Some("c8y_ServiceCommand"),
+            _ => None,
+        }
+    }
 }
