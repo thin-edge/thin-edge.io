@@ -180,6 +180,7 @@ async fn get_internal_id_retry_fails_after_exceeding_attempts_threshold() {
         c8y_mqtt_host: target_url,
         device_id: external_id.into(),
         proxy,
+        domain_names: Default::default(),
     };
     let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
 
@@ -241,6 +242,7 @@ async fn get_internal_id_retries_until_the_device_is_created() {
         c8y_mqtt_host: target_url,
         device_id: external_id.into(),
         proxy,
+        domain_names: Default::default(),
     };
     let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
 
@@ -287,6 +289,7 @@ async fn get_internal_id_with_mock() {
         c8y_mqtt_host: target_url.clone(),
         device_id: external_id.into(),
         proxy,
+        domain_names: Default::default(),
     };
     let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
 
@@ -351,6 +354,7 @@ async fn request_internal_id_before_posting_new_event() {
         c8y_mqtt_host: target_url.clone(),
         device_id: external_id.into(),
         proxy,
+        domain_names: Default::default(),
     };
     let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
 
@@ -455,6 +459,7 @@ async fn get_internal_id_retries_depending_on_response_status(status: usize, ret
         c8y_mqtt_host: target_url,
         device_id: external_id.into(),
         proxy,
+        domain_names: Default::default(),
     };
     let mut proxy = C8YHttpProxy::new(config, &mut http_actor);
 
@@ -483,6 +488,7 @@ async fn spawn_c8y_http_proxy(
         c8y_mqtt_host: c8y_host,
         device_id,
         proxy: ProxyUrlGenerator::default(),
+        domain_names: Default::default(),
     };
     let proxy = C8YHttpProxy::new(config, &mut http);
 

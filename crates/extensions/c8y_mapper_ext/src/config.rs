@@ -3,6 +3,7 @@ use crate::supported_operations::C8yPrefix;
 use crate::supported_operations::Operations;
 use crate::supported_operations::OperationsError;
 use crate::Capabilities;
+use c8y_api::domain_names::DomainNames;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::proxy_url::Protocol;
 use c8y_api::proxy_url::ProxyUrlGenerator;
@@ -53,6 +54,8 @@ pub struct C8yMapperConfig {
     pub service: TEdgeConfigReaderService,
     pub c8y_host: String,
     pub c8y_mqtt: String,
+    /// All the domain names of the tenant, detected at runtime from its certificate
+    pub domain_names: DomainNames,
     pub file_transfer_urls: FileTransferUrls,
     pub topics: TopicFilter,
     pub capabilities: Capabilities,
@@ -133,6 +136,7 @@ impl C8yMapperConfig {
             service,
             c8y_host,
             c8y_mqtt,
+            domain_names: DomainNames::default(),
             file_transfer_urls,
             topics,
             capabilities,
@@ -349,6 +353,7 @@ impl From<&C8yMapperConfig> for C8YHttpConfig {
                 config.auth_proxy_protocol,
             ),
         )
+        .with_domain_names(config.domain_names.clone())
     }
 }
 

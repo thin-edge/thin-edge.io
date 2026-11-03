@@ -27,7 +27,8 @@ pub struct C8YHttpProxyActor {
 impl C8YHttpProxyActor {
     pub fn new(config: C8YHttpConfig, http: ClientMessageBox<HttpRequest, HttpResult>) -> Self {
         let end_point =
-            C8yEndPoint::new(&config.c8y_http_host, &config.c8y_mqtt_host, config.proxy);
+            C8yEndPoint::new(&config.c8y_http_host, &config.c8y_mqtt_host, config.proxy)
+                .with_domain_names(config.domain_names);
         C8YHttpProxyActor { end_point, http }
     }
 

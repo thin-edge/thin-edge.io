@@ -14,6 +14,7 @@ use axum_tls::config::load_ssl_config;
 use axum_tls::config::PemReader;
 use axum_tls::config::TrustStoreLoader;
 use axum_tls::start_tls_server;
+use c8y_api::domain_names::CertificateMonitor;
 use certificate::CloudHttpConfig;
 use futures::future::BoxFuture;
 use futures::FutureExt;
@@ -27,6 +28,7 @@ use http_body_util::StreamBody;
 use hyper::header::AUTHORIZATION;
 use hyper::header::HOST;
 use hyper::HeaderMap;
+use reqwest::tls::TlsInfo;
 use reqwest::Method;
 use reqwest::StatusCode;
 use std::error::Error;
@@ -147,6 +149,7 @@ pub(crate) struct AppData {
     pub host: String,
     pub token_manager: SharedTokenManager,
     pub client: reqwest::Client,
+    pub certificate_monitor: CertificateMonitor,
 }
 
 #[derive(Clone)]
@@ -154,6 +157,7 @@ struct AppState {
     target_host: TargetHost,
     client: reqwest::Client,
     token_manager: SharedTokenManager,
+    certificate_monitor: CertificateMonitor,
 }
 
 impl From<AppData> for AppState {
@@ -172,6 +176,7 @@ impl From<AppData> for AppState {
             },
             token_manager: value.token_manager,
             client: value.client,
+            certificate_monitor: value.certificate_monitor,
         }
     }
 }
@@ -191,6 +196,12 @@ impl FromRef<AppState> for SharedTokenManager {
 impl FromRef<AppState> for reqwest::Client {
     fn from_ref(input: &AppState) -> Self {
         input.client.clone()
+    }
+}
+
+impl FromRef<AppState> for CertificateMonitor {
+    fn from_ref(input: &AppState) -> Self {
+        input.certificate_monitor.clone()
     }
 }
 
@@ -411,6 +422,7 @@ where
 async fn respond_to(
     State(host): State<TargetHost>,
     State(client): State<reqwest::Client>,
+    State(certificate_monitor): State<CertificateMonitor>,
     retrieve_token: State<SharedTokenManager>,
     uri: hyper::Uri,
     method: Method,
@@ -509,6 +521,13 @@ async fn respond_to(
             .with_context(|| format!("making proxied request to {destination}"))?;
         }
     }
+    if let Some(certificate) = res
+        .extensions()
+        .get::<TlsInfo>()
+        .and_then(TlsInfo::peer_certificate)
+    {
+        certificate_monitor.seen(certificate);
+    }
     let te_header = res.headers_mut().remove("transfer-encoding");
     let status = res.status();
     let headers = std::mem::take(res.headers_mut());
@@ -570,6 +589,7 @@ fn is_connection_closed(err: &reqwest::Error) -> bool {
 pub fn remote_reqwest_client(config: &CloudHttpConfig) -> reqwest::Client {
     config
         .client_builder()
+        .tls_info(true)
         .set_user_agent(false)
         .pool_idle_timeout(POOL_IDLE_TIMEOUT)
         .build()
@@ -609,6 +629,7 @@ mod tests {
     use tokio::io::AsyncWrite;
     use tokio::io::AsyncWriteExt;
     use tokio::net::TcpStream;
+    use tokio::sync::watch;
     use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
     use tokio_tungstenite::tungstenite::protocol::CloseFrame;
     use tokio_tungstenite::tungstenite::Message;
@@ -1212,6 +1233,49 @@ mod tests {
         assert_eq!(res.bytes().await.unwrap(), Bytes::from("Some response"));
     }
 
+    #[tokio::test]
+    async fn requests_domain_name_detection_when_it_sees_the_cumulocity_certificate() {
+        let target_certificate =
+            rcgen::generate_simple_self_signed(["127.0.0.1".to_owned()]).unwrap();
+        let config = axum_tls::ssl_config(
+            vec![target_certificate.cert.der().clone()],
+            PrivateKeyDer::from_pem_slice(
+                target_certificate.signing_key.serialize_pem().as_bytes(),
+            )
+            .unwrap(),
+            None,
+        )
+        .unwrap();
+        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target_port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (tcp_stream, _) = listener.accept().await.unwrap();
+            let mut tls_stream = acceptor.accept(tcp_stream).await.unwrap();
+            answer_requests_until_second(&mut tls_stream, &AtomicUsize::new(0)).await;
+        });
+        let (refresh, refresh_requests) = watch::channel(());
+        let port = start_proxy_with_certificate_monitor(
+            &format!("127.0.0.1:{target_port}"),
+            vec!["test-token"],
+            rcgen::generate_simple_self_signed(["localhost".to_owned()]).unwrap(),
+            None,
+            Some(reqwest::Certificate::from_der(target_certificate.cert.der()).unwrap()),
+            CertificateMonitor::new(refresh.into()),
+        );
+
+        let res = reqwest_client()
+            .get(format!(
+                "https://localhost:{port}/c8y/inventory/managedObjects"
+            ))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), 200);
+        assert!(refresh_requests.has_changed().unwrap());
+    }
+
     #[rstest::rstest]
     #[case::closed_gracefully(CloseConnection::Gracefully)]
     #[case::reset(CloseConnection::WithReset)]
@@ -1507,13 +1571,32 @@ mod tests {
         start_proxy_to_url(host, tokens, certificate, ca_dir, None)
     }
 
-    #[allow(clippy::disallowed_methods)]
     fn start_proxy_to_url(
         target_host: &str,
         tokens: Vec<impl Into<Cow<'static, str>>>,
         certificate: rcgen::CertifiedKey<rcgen::KeyPair>,
         ca_dir: Option<Utf8PathBuf>,
         target_ca: Option<reqwest::Certificate>,
+    ) -> u16 {
+        let (refresh, _) = watch::channel(());
+        start_proxy_with_certificate_monitor(
+            target_host,
+            tokens,
+            certificate,
+            ca_dir,
+            target_ca,
+            CertificateMonitor::new(refresh.into()),
+        )
+    }
+
+    #[allow(clippy::disallowed_methods)]
+    fn start_proxy_with_certificate_monitor(
+        target_host: &str,
+        tokens: Vec<impl Into<Cow<'static, str>>>,
+        certificate: rcgen::CertifiedKey<rcgen::KeyPair>,
+        ca_dir: Option<Utf8PathBuf>,
+        target_ca: Option<reqwest::Certificate>,
+        certificate_monitor: CertificateMonitor,
     ) -> u16 {
         let jwt_retriever = IterJwtRetriever::new(tokens).shared();
         let mut last_error = None;
@@ -1526,6 +1609,7 @@ mod tests {
                     target_ca.iter().cloned().collect::<Vec<_>>(),
                     None,
                 )),
+                certificate_monitor: certificate_monitor.clone(),
             };
             let trust_store = ca_dir
                 .as_ref()
