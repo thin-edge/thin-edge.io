@@ -635,10 +635,11 @@ on_exit._ = "oops"
 
     #[test]
     fn error_messages_capture_script_killing_signal() {
-        let script = ShellScript::from_str("sh -c 'kill -11 $$'").unwrap();
+        // SIGKILL, not a signal like SIGSEGV that dumps a core file in the crate directory
+        let script = ShellScript::from_str("sh -c 'kill -9 $$'").unwrap();
         assert_eq!(
             extract_json_output("user-script", script.output()),
-            Err("Program `user-script` has been killed by SIG11".to_string())
+            Err("Program `user-script` has been killed by SIG9".to_string())
         );
     }
 
