@@ -476,9 +476,6 @@ async fn effective_mapper_config(
     tedge_config: &TEdgeConfig,
     mapper_dir: impl AsRef<Utf8Path>,
 ) -> anyhow::Result<Option<EffectiveMapperConfig>> {
-    let Some(raw) = custom::config::load_mapper_config(mapper_dir.as_ref()).await? else {
-        return Ok(None);
-    };
     let Some(mapper_fullname) = mapper_dir.as_ref().file_name() else {
         bail!(
             "Cannot derive the mapper name from its directory: {}",
@@ -489,6 +486,8 @@ async fn effective_mapper_config(
         None => (mapper_fullname, None),
         Some((mapper_name, profile)) => (mapper_name, Some(ProfileName::from_str(profile)?)),
     };
+    // The built-in mappers fall back to tedge.toml when there is no mapper.toml,
+    // so their ${mapper.*} values are available to flows in both cases
     match mapper_name {
         #[cfg(feature = "c8y")]
         "c8y" => Ok(Some(
@@ -505,9 +504,14 @@ async fn effective_mapper_config(
             az::mapper::resolve_effective_mapper_config(tedge_config, profile.as_ref()).await?,
         )),
 
-        _ => Ok(Some(
-            custom::resolve::resolve_effective_config(&raw, tedge_config, None, None).await?,
-        )),
+        _ => {
+            let Some(raw) = custom::config::load_mapper_config(mapper_dir.as_ref()).await? else {
+                return Ok(None);
+            };
+            Ok(Some(
+                custom::resolve::resolve_effective_config(&raw, tedge_config, None, None).await?,
+            ))
+        }
     }
 }
 
@@ -700,6 +704,63 @@ mod tests {
         fn bridge_prefix_errors() {
             let err = validate_mapper_name("bridge-cloud").unwrap_err();
             assert!(format!("{err}").contains("bridge-"));
+        }
+    }
+
+    mod effective_mapper_config_tests {
+        use super::*;
+        use tedge_flows::MapperParams;
+        use tedge_test_utils::fs::TempTedgeDir;
+
+        async fn load_config(tedge_toml: &str) -> (TempTedgeDir, TEdgeConfig) {
+            let ttd = TempTedgeDir::new();
+            let (user, group) = crate::test_helpers::current_user_group();
+            ttd.file("system.toml")
+                .with_raw_content(&format!("user = '{user}'\ngroup = '{group}'\n"));
+            ttd.file("tedge.toml").with_raw_content(tedge_toml);
+            let config = TEdgeConfig::load(ttd.path()).await.unwrap();
+            (ttd, config)
+        }
+
+        #[cfg(feature = "c8y")]
+        #[tokio::test]
+        async fn builtin_mapper_params_are_resolved_from_tedge_toml_without_mapper_toml() {
+            let (ttd, config) = load_config(
+                r#"
+[c8y]
+url = "example.cumulocity.com"
+bridge.topic_prefix = "custom"
+"#,
+            )
+            .await;
+            let mapper_dir = ttd.dir("mappers").dir("c8y");
+            assert!(!mapper_dir.path().join("mapper.toml").exists());
+
+            let params = effective_mapper_config(&config, mapper_dir.path())
+                .await
+                .unwrap()
+                .expect("the c8y mapper params are resolved without a mapper.toml");
+
+            assert_eq!(
+                params.get_value("bridge.topic_prefix").as_deref(),
+                Some("custom")
+            );
+            assert_eq!(
+                params.get_value("url").as_deref(),
+                Some("example.cumulocity.com")
+            );
+        }
+
+        #[tokio::test]
+        async fn custom_mapper_without_mapper_toml_has_no_params() {
+            let (ttd, config) = load_config("").await;
+            let mapper_dir = ttd.dir("mappers").dir("thingsboard");
+
+            let params = effective_mapper_config(&config, mapper_dir.path())
+                .await
+                .unwrap();
+
+            assert!(params.is_none());
         }
     }
 }
