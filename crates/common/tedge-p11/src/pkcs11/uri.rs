@@ -132,6 +132,26 @@ impl<'a> Pkcs11Uri<'a> {
         }
     }
 
+    /// Whether `self` and `other` give different values for any attribute both of them have.
+    ///
+    /// Attributes present in only one of the URIs don't conflict. The PIN is not an attribute
+    /// identifying a slot/token/key, so it is ignored.
+    pub fn conflicts_with(&self, other: &Self) -> bool {
+        fn differs<T: PartialEq>(a: &Option<T>, b: &Option<T>) -> bool {
+            matches!((a, b), (Some(a), Some(b)) if a != b)
+        }
+
+        differs(&self.token, &other.token)
+            || differs(&self.serial, &other.serial)
+            || differs(&self.id, &other.id)
+            || differs(&self.object, &other.object)
+            || differs(&self.slot_id, &other.slot_id)
+            || self
+                .other
+                .iter()
+                .any(|(k, v)| other.other.get(k).is_some_and(|o| o != v))
+    }
+
     /// Check if a PKCS11 URIs matches the other URI.
     ///
     /// A PKCS11 URI can identify slots, tokens and keys depending on which attributes are present.
@@ -290,6 +310,18 @@ mod tests {
         assert_eq!(uri1.object.unwrap(), "object1");
         assert_eq!(uri1.other.get("key1").unwrap(), "value1");
         assert_eq!(uri1.other.get("key2").unwrap(), "value2");
+    }
+
+    #[test]
+    fn detects_conflicting_attributes() {
+        let parse = |s| Pkcs11Uri::parse(s).unwrap();
+
+        assert!(parse("pkcs11:token=a").conflicts_with(&parse("pkcs11:token=b")));
+        assert!(parse("pkcs11:slot-id=1").conflicts_with(&parse("pkcs11:slot-id=2")));
+        assert!(parse("pkcs11:model=a").conflicts_with(&parse("pkcs11:model=b")));
+        assert!(!parse("pkcs11:token=a").conflicts_with(&parse("pkcs11:token=a;serial=1")));
+        assert!(!parse("pkcs11:token=a").conflicts_with(&parse("pkcs11:serial=1")));
+        assert!(!parse("pkcs11:").conflicts_with(&parse("pkcs11:token=a")));
     }
 
     #[test]

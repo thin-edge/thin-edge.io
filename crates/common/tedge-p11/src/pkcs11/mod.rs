@@ -137,6 +137,13 @@ pub struct SessionParams {
     pub(crate) uri: Option<String>,
     /// User PIN value when logging in to the token.
     pub(crate) pin: Option<SecretString>,
+    /// Whether the request URI takes precedence over the configured URI.
+    ///
+    /// Set for requests that must not be served from another token or key than requested: reading
+    /// a public key and management commands (create/delete key, change PIN). The configured URI
+    /// then only fills in attributes missing from the request URI, and it is an error if the two
+    /// disagree on any attribute (see [`Cryptoki::request_uri`]).
+    pub(crate) strict: bool,
 }
 
 // oIDs for curves defined here: https://datatracker.ietf.org/doc/html/rfc5480#section-2.1.1.1
@@ -187,6 +194,7 @@ impl TedgeP11Service for Cryptoki {
         let signing_key = self.signing_key_retry(SessionParams {
             uri: request.uri,
             pin: request.pin,
+            strict: false,
         })?;
         let offered: Vec<_> = request.offered.into_iter().map(|s| s.0).collect();
         let signer = signing_key
@@ -204,6 +212,7 @@ impl TedgeP11Service for Cryptoki {
         let signing_key = self.signing_key_retry(SessionParams {
             uri: request.uri,
             pin: request.pin,
+            strict: false,
         })?;
         let signature = signing_key.sign(&request.to_sign, request.sigscheme)?;
         Ok(SignResponse(signature))
@@ -214,6 +223,7 @@ impl TedgeP11Service for Cryptoki {
             uri: uri.map(|s| s.to_string()),
             // PIN is not required when reading public objects like public keys
             pin: None,
+            strict: true,
         };
         // No extra context: callers match on the error message, e.g. "Failed to find a key"
         self.retry_after_reinit(None, is_module_failure, || {
@@ -263,6 +273,7 @@ impl TedgeP11Service for Cryptoki {
         let params = SessionParams {
             uri: request.uri,
             pin: request.pin,
+            strict: false,
         };
         let session = self.open_session_ro(&params)?;
 
@@ -332,7 +343,7 @@ impl TedgeP11Service for Cryptoki {
     fn change_pin(&self, request: ChangePinRequest) -> anyhow::Result<ChangePinResponse> {
         // Identify the token by its stable URI attributes (token label / serial) rather than a
         // library-defined slot index, which can be reordered between calls.
-        let uri_attributes = self.request_uri(request.uri.as_deref())?;
+        let uri_attributes = self.request_uri(request.uri.as_deref(), true)?;
         let wanted_label = uri_attributes.token.as_ref();
         let wanted_serial = uri_attributes.serial.as_ref();
 
@@ -441,6 +452,7 @@ impl TedgeP11Service for Cryptoki {
         let params = SessionParams {
             uri: Some(request.uri),
             pin: request.pin,
+            strict: true,
         };
         // Destroying objects requires a read-write session, and private objects require a login;
         // open_session_rw provides both.
@@ -501,6 +513,7 @@ impl TedgeP11Service for Cryptoki {
         let session_params = SessionParams {
             uri: Some(request.uri.to_string()),
             pin: request.pin,
+            strict: true,
         };
         // NOTE: when writing to HSM, session must always be rw
         let session = self.open_session_rw(&session_params)?;
@@ -869,7 +882,7 @@ impl Cryptoki {
         params: &'a SessionParams,
         session_type: CryptokiSessionType,
     ) -> anyhow::Result<CryptokiSession<'a>> {
-        let uri_attributes = self.request_uri(params.uri.as_deref())?;
+        let uri_attributes = self.request_uri(params.uri.as_deref(), params.strict)?;
 
         let context = match self.context.lock() {
             Ok(c) => c,
@@ -976,9 +989,16 @@ impl Cryptoki {
             .collect()
     }
 
+    /// Combines the configured URI with the one from a request.
+    ///
+    /// By default the configured attributes take precedence over the requested ones. For `strict`
+    /// requests the request takes precedence instead: configured attributes are only
+    /// added when the request doesn't have them, and a request that disagrees with the configured
+    /// URI on any attribute fails with a "key not found" error.
     fn request_uri<'a>(
         &'a self,
         request_uri: Option<&'a str>,
+        strict: bool,
     ) -> anyhow::Result<uri::Pkcs11Uri<'a>> {
         let mut config_uri = self
             .config
@@ -992,6 +1012,17 @@ impl Cryptoki {
             .map(|uri| uri::Pkcs11Uri::parse(uri).context("Failed to parse PKCS #11 URI"))
             .transpose()?
             .unwrap_or_default();
+
+        if strict {
+            anyhow::ensure!(
+                !request_uri.conflicts_with(&config_uri),
+                "Failed to find a key: the requested URI conflicts with the configured \
+                 device.cryptoki.uri"
+            );
+            let mut request_uri = request_uri;
+            request_uri.append_attributes(config_uri);
+            return Ok(request_uri);
+        }
 
         config_uri.append_attributes(request_uri);
         Ok(config_uri)

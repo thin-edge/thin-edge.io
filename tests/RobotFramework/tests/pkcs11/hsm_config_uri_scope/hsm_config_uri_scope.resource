@@ -2,11 +2,12 @@
 Documentation       Keywords for testing `tedge hsm` commands when `device.cryptoki.uri` restricts the
 ...                 tokens and keys tedge-p11-server can use.
 ...
-...                 tedge-p11-server uses its `device.cryptoki.uri` as a base for every request URI, and
-...                 when both set the same attribute, the server's value wins, so a request can be
-...                 silently served from another token or key than requested. The commands detect this
-...                 on the client side, which can't catch every case: tests asserting the correct
-...                 behavior in those cases are tagged `known-issue:p11-server-uri-override` and skipped.
+...                 tedge-p11-server uses its `device.cryptoki.uri` as a base for every request URI.
+...                 For read-only requests, when both set the same attribute, the server's value wins,
+...                 so the commands check on the client side that the request was not served from
+...                 another token.
+...                 For management requests (create-key, delete-key, change-pin) an attribute
+...                 conflict between the request and configured URI returns an error.
 
 Resource            ../pkcs11_common.resource
 Resource            ../create_key_hsm/create_key_hsm.resource
@@ -85,16 +86,17 @@ Delete a key overridden by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2;object=token2-key
     Command Should Fail With
     ...    tedge hsm delete-key --force --label other-key "pkcs11:token=token2"
-    ...    Refusing to delete keys
+    ...    conflicts with the configured device.cryptoki.uri
     ${keys}=    List all keys on token    token2
     Should Contain    ${keys}    Label: token2-key
 
-Report a key deleted because of the configured URI
-    Set tedge-p11-server Uri    pkcs11:token=token2;object=token2-key
-    ${stderr}=    Command Should Fail With
-    ...    tedge hsm delete-key --force --label other-key "pkcs11:token=token2"
-    ...    object(s) not matching
-    Should Contain    ${stderr}    object=token2-key
+Delete a key selected by the configured URI
+    Set tedge-p11-server Uri    pkcs11:token=token2
+    Execute Command    cmd=tedge hsm delete-key --force --label token2-key
+    ${keys}=    List all keys on token    token2
+    Should Not Contain    ${keys}    Label: token2-key
+    ${keys}=    List all keys on token    token1
+    Should Contain    ${keys}    Label: token1-key
 
 Create a key on a token excluded by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2
@@ -110,19 +112,19 @@ Create a key when the configured URI selects an empty token
     Set tedge-p11-server Uri    pkcs11:token=token3
     Command Should Fail With
     ...    tedge hsm create-key --type ecdsa --label new-key "pkcs11:token=token1"
-    ...    Refusing to create the key
+    ...    conflicts with the configured device.cryptoki.uri
     ${keys}=    List all keys on token    token3
+    Should Not Contain    ${keys}    Label: new-key
+    ${keys}=    List all keys on token    token1
     Should Not Contain    ${keys}    Label: new-key
 
 Create a key whose label is overridden by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2;object=token2-key
-    ${stderr}=    Execute Command
-    ...    cmd=tedge hsm create-key --type ecdsa --label new-key "pkcs11:token=token2"
-    ...    stdout=False
-    ...    stderr=True
-    Should Contain    ${stderr}    New keypair was successfully created
+    Command Should Fail With
+    ...    tedge hsm create-key --type ecdsa --label new-key "pkcs11:token=token2"
+    ...    conflicts with the configured device.cryptoki.uri
     ${keys}=    List all keys on token    token2
-    Should Contain    ${keys}    Label: new-key
+    Should Not Contain    ${keys}    Label: new-key
 
 Change the PIN of a token excluded by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2
@@ -136,12 +138,12 @@ Change the PIN when the configured URI selects an empty token
     Set tedge-p11-server Uri    pkcs11:token=token3
     Command Should Fail With
     ...    tedge hsm change-pin --current-pin 123456 --new-pin 654321 "pkcs11:token=token1"
-    ...    Refusing to change the PIN
+    ...    conflicts with the configured device.cryptoki.uri
     List all keys on token    token3    pin=123456
 
 Reset the PIN of a token excluded by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2
     Command Should Fail With
     ...    tedge hsm change-pin --reset --so-pin 123456 --new-pin 654321 "pkcs11:token=token1"
-    ...    Refusing to change the PIN
+    ...    conflicts with the configured device.cryptoki.uri
     List all keys on token    token2    pin=123456
