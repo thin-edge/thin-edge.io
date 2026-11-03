@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Duration;
 use tedge_actors::fan_in_message_type;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
@@ -43,6 +44,8 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::FileError;
 use tedge_utils::paths::PathsError;
+use tokio::time::timeout_at;
+use tokio::time::Instant;
 
 pub(crate) type CmdId = String;
 pub(crate) type IdUploadRequest = (CmdId, UploadRequest);
@@ -51,6 +54,9 @@ pub(crate) type IdDownloadResult = (CmdId, DownloadResult);
 pub(crate) type IdDownloadRequest = (CmdId, DownloadRequest);
 
 fan_in_message_type!(C8yMapperInput[MqttMessage, FsWatchEvent] : Debug);
+
+/// How long without retained messages before assuming all of them have been received
+const RETAINED_MESSAGES_QUIET_PERIOD: Duration = Duration::from_secs(1);
 
 type C8yMapperOutput = MqttMessage;
 
@@ -76,7 +82,25 @@ impl Actor for C8yMapperActor {
             self.mqtt_publisher.send(init_message).await?;
         }
 
-        while let Some(event) = self.messages.recv().await {
+        let mut software_list_deadline = None;
+        loop {
+            let event = match software_list_deadline {
+                Some(deadline) => match timeout_at(deadline, self.messages.recv()).await {
+                    Ok(event) => event,
+                    Err(_) => {
+                        software_list_deadline = None;
+                        let requests = self.converter.take_software_list_requests();
+                        self.publish_messages(requests).await?;
+                        continue;
+                    }
+                },
+                None => self.messages.recv().await,
+            };
+            let Some(event) = event else {
+                return Ok(());
+            };
+
+            let retained = matches!(&event, C8yMapperInput::MqttMessage(message) if message.retain);
             match event {
                 C8yMapperInput::MqttMessage(message) => {
                     self.process_mqtt_message(message).await?;
@@ -85,8 +109,16 @@ impl Actor for C8yMapperActor {
                     self.process_file_watch_event(event).await?;
                 }
             }
+
+            // Software lists are requested only once no more retained messages are received,
+            // so any request still pending since before a restart of the mapper is known.
+            // Live messages don't postpone the requests, which would never be sent on a busy broker.
+            if self.converter.has_deferred_software_list_requests()
+                && (retained || software_list_deadline.is_none())
+            {
+                software_list_deadline = Some(Instant::now() + RETAINED_MESSAGES_QUIET_PERIOD);
+            }
         }
-        Ok(())
     }
 }
 
