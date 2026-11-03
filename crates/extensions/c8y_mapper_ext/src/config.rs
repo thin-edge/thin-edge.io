@@ -12,7 +12,7 @@ use camino::Utf8Path;
 use serde_json::Value;
 use std::ops::Add;
 use std::sync::Arc;
-use tedge_api::file_transfer_url::FileTransferUrls;
+use tedge_api::http_url::FileTransferUrls;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommand;
 use tedge_api::mqtt_topics::ChannelFilter::AnyCommandMetadata;
 use tedge_api::mqtt_topics::ChannelFilter::AnySignal;
