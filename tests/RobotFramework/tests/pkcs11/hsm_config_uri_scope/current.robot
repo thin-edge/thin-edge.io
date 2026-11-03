@@ -30,9 +30,6 @@ list-keys does not list keys from a token excluded by the configured URI
     List keys from a token excluded by the configured URI
 
 list-keys lists keys of the token selected by slot id
-    [Documentation]    Fails because tedge-p11-server ignores `slot-id` when selecting a token
-    ...    (`Cryptoki::open_session`) and lists the keys of the first token instead.
-    [Tags]    robot:skip    known-issue:p11-server-uri-override
     List keys by slot id
 
 delete-key refuses to delete a key from a token excluded by the configured URI
