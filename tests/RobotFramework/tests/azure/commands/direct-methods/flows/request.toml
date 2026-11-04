@@ -1,0 +1,20 @@
+version = "1.0"
+description = "Turn Azure IoT Hub direct method requests into thin-edge commands"
+tags = ["az", "direct-methods"]
+
+# az/methods/POST/{method}/?$rid={rid}, bridged from $iothub/methods/POST/#
+input.mqtt.topics = ["az/methods/POST/+/#"]
+
+steps = [
+    { script = "request.js" },
+]
+
+# No fixed output topic: every message carries its own (command topic, or a rejection)
+[output.mqtt]
+
+[errors.mqtt]
+topic = "te/errors"
+
+[config]
+# The whole [methods.*] table from params.toml, unchanged.
+methods = "${params.methods}"
