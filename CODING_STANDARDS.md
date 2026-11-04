@@ -58,6 +58,9 @@ Untagged rules apply to every change.
 - Error messages start with a capital letter. **(polish)**
 - Watch `Option`/`Result` semantics:
   don't return `None` where a value must exist, and don't invent a default where absence is a real case.
+- Validate in the type's own constructor (`TryFrom`, `FromStr`, `new`),
+  not in a caller that loops over the values,
+  so every way to build the value is checked, including `#[serde(try_from)]` and tests.
 
 ### Async code
 
@@ -113,6 +116,13 @@ Test code may use literal topics.
   See `.agents/skills/add-actor` when creating actors.
 - Entity store registration and deregistration must be symmetric:
   anything added on registration is removed on deregistration.
+
+### Untrusted input
+
+Command payloads, MQTT messages and HTTP bodies come from the cloud or from other processes.
+Where such a value reaches a process spawn, `sudo`, a file path, a shell or a URL,
+the code rejects values it cannot handle safely.
+Documenting the hazard is not a substitute.
 
 ### Paths and logging
 
