@@ -180,6 +180,21 @@ Invoke sub-operation from a sub-operation
     ${expected_log}    Get File    ${CURDIR}/gp-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
 
+Fail operation after sub-operation timeout
+    # See https://github.com/thin-edge/thin-edge.io/issues/4397
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/issue-4397/test-sub-timeout '{"status":"init"}'
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397/test-sub-timeout
+    ...    message_pattern=.*waiting.*
+    ...    maximum=1
+    Execute Command    sleep 1
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397/test-sub-timeout
+    ...    message_pattern=.*No response from unknown_op.*
+    ...    maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-4397/test-sub-timeout ''
+
 Command steps should not be executed twice
     TRY
         Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-2896/test-1 '{"status":"init"}'
@@ -373,6 +388,7 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_device_profile.example.txt    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-2896.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-3079.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-4397.toml    /etc/tedge/operations/
 
 Execute Operation Workflow
     [Arguments]    ${operation}    ${cmd_id}
