@@ -984,6 +984,7 @@ impl WorkflowActor {
         new_state: GenericCommandState,
         log_file: &mut CommandLog,
     ) -> Result<(), RuntimeError> {
+        let new_state = new_state.with_timestamp();
         if let Err(err) = self
             .workflow_repository
             .apply_internal_update(new_state.clone())

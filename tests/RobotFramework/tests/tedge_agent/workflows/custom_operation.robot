@@ -136,7 +136,7 @@ Invoke sub-operation from a super-command operation
     ...    message_pattern=.*successful.*
     ...    maximum=1
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/super_command/test-42 ''
-    ${actual_log}    Execute Command    cat /tmp/test-42.json
+    ${actual_log}    Execute Command    jq -c 'del(.payload."@time")' /tmp/test-42.json
     ${expected_log}    Get File    ${CURDIR}/super-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
     ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-super_command-test-42.log
@@ -176,7 +176,7 @@ Invoke sub-operation from a sub-operation
     ...    message_pattern=.*successful.*
     ...    maximum=1
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/gp_command/test-sub-sub ''
-    ${actual_log}    Execute Command    cat /tmp/test-sub-sub.json
+    ${actual_log}    Execute Command    jq -c 'del(.payload."@time")' /tmp/test-sub-sub.json
     ${expected_log}    Get File    ${CURDIR}/gp-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
 

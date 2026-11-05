@@ -24,6 +24,7 @@ use std::fmt::Display;
 
 const OP_LOG_PATH_KEY: &str = "logPath";
 const OP_WORKFLOW_VERSION_KEY: &str = "@version";
+const OP_WORKFLOW_TIMESTAMP_KEY: &str = "@time";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GenericCommandData {
@@ -201,6 +202,17 @@ impl GenericCommandState {
         }
     }
 
+    pub fn without_key(mut self, key: &str) -> Self {
+        self.unset_key(key);
+        self
+    }
+
+    pub fn unset_key(&mut self, key: &str) {
+        if let Some(o) = self.payload.as_object_mut() {
+            o.remove(&key.to_string());
+        }
+    }
+
     pub fn get_log_path(&self) -> Option<Utf8PathBuf> {
         self.payload
             .get(OP_LOG_PATH_KEY)
@@ -230,6 +242,21 @@ impl GenericCommandState {
 
     pub fn set_workflow_version(&mut self, version: &str) {
         self.set_key_value(OP_WORKFLOW_VERSION_KEY, version)
+    }
+
+    /// Update the command state with the current timestamp
+    pub fn with_timestamp(mut self) -> Self {
+        self.set_timestamp();
+        self
+    }
+
+    pub fn set_timestamp(&mut self) {
+        if !self.is_cleared() {
+            let now = time::OffsetDateTime::now_utc()
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap();
+            self.set_key_value(OP_WORKFLOW_TIMESTAMP_KEY, &now);
+        }
     }
 
     /// Update the command state with the outcome of a script
