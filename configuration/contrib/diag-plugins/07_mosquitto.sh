@@ -12,6 +12,10 @@ while [ $# -gt 0 ]; do
             OUTPUT_DIR="$2"
             shift 2
             ;;
+        --config-dir)
+            TEDGE_CONFIG_DIR="$2"
+            shift 2
+            ;;
         collect)
             COMMAND="collect"
             shift

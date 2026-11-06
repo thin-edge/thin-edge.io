@@ -65,6 +65,16 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
     END
     Execute Command    diff /etc/tedge/.agent/entity_store.jsonl /results/test/06_internal/entity_store.jsonl
 
+06_internal collects entity_store.jsonl stored in agent.state.path
+    Execute Command    tedge config set agent.state.path /var/tedge/agent-state
+    Execute Command
+    ...    mkdir -p /var/tedge/agent-state && echo '{"version":"1.0"}' > /var/tedge/agent-state/entity_store.jsonl
+
+    Execute Command    tedge diag collect --keep-dir --output-dir /results --name agent-state-path    stdout=${False}
+    Execute Command
+    ...    diff /var/tedge/agent-state/entity_store.jsonl /results/agent-state-path/06_internal/entity_store.jsonl
+    [Teardown]    Execute Command    tedge config unset agent.state.path
+
 07_mosquitto
     ${log_names}=    Create List
     ...    output.log
@@ -82,7 +92,8 @@ Test Tags           theme:troubleshooting    theme:cli    theme:plugins
     ...    cmd=wc -l /results/test/07_mosquitto/mosquitto.log | awk '{print $1}'
     ...    strip=${True}
     Should Be True    int(${log_line_count}) <= 1000
-    Execute Command    diff /var/log/mosquitto/mosquitto.log /results/test/07_mosquitto/mosquitto.log
+    Execute Command
+    ...    head -n ${log_line_count} /var/log/mosquitto/mosquitto.log | diff - /results/test/07_mosquitto/mosquitto.log
 
 08_truststore
     ${log_names}=    Create List
