@@ -12,7 +12,6 @@ use crate::error::MessageConversionError;
 use crate::mea::events::EventConverter;
 use crate::operations;
 use crate::operations::OperationHandler;
-use crate::service_command::ServiceCommands;
 use crate::shell_execute::SHELL_EXECUTE_OPERATION;
 use crate::supported_operations::operation::get_child_ops;
 use crate::supported_operations::operation::Operation;
@@ -24,10 +23,8 @@ use anyhow::Context;
 use c8y_api::json_c8y::C8yCreateEvent;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlOperation;
 use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
-use c8y_api::json_c8y_deserializer::C8yJsonOverMqttDeserializerError;
 use c8y_api::json_c8y_deserializer::C8yOperation;
 use c8y_api::json_c8y_deserializer::C8ySoftwareUpdate;
-use c8y_api::smartrest::error::SmartRestDeserializerError;
 use c8y_api::smartrest::inventory::child_device_creation_message;
 use c8y_api::smartrest::inventory::service_creation_message;
 use c8y_api::smartrest::message::collect_smartrest_messages;
@@ -63,6 +60,7 @@ use tedge_actors::Sender;
 use tedge_api::commands::RestartCommand;
 use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
+use tedge_api::control::ActionName;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityRegistrationMessage;
@@ -188,7 +186,7 @@ pub struct CumulocityConverter {
     pub supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
     // Keep the service actions declared by the services of this device and its children
-    pub(crate) service_commands: ServiceCommands,
+    pub(crate) service_actions: HashMap<EntityTopicId, Vec<ActionName>>,
 }
 
 impl CumulocityConverter {
@@ -272,7 +270,7 @@ impl CumulocityConverter {
             pending_software_list_requests: HashMap::new(),
             deferred_software_list_requests: HashSet::new(),
             operation_handler,
-            service_commands: ServiceCommands::default(),
+            service_actions: HashMap::new(),
         })
     }
 
@@ -295,7 +293,7 @@ impl CumulocityConverter {
         if message.payload().is_empty() {
             // Clear cached entity
             self.entity_cache.delete(&topic_id);
-            self.service_commands.remove_service(&topic_id);
+            self.service_actions.remove(&topic_id);
             return Ok(UpdateOutcome::Deleted);
         }
 
@@ -604,7 +602,7 @@ impl CumulocityConverter {
             }
             C8yDeviceControlOperation::ServiceCommand(request) => {
                 if self.config.capabilities.service_control {
-                    self.convert_control_request(device_xid, cmd_id, &operation_id, request)
+                    self.convert_control_request(device_xid, cmd_id, request)?
                 } else {
                     warn!("Received a c8y_ServiceCommand operation, however, service_control feature is disabled");
                     vec![]
@@ -763,19 +761,11 @@ impl CumulocityConverter {
         op_id: Option<String>,
     ) -> Vec<MqttMessage> {
         match result {
-            Err(
-                err @ CumulocityMapperError::FromSmartRestDeserializer(
-                    SmartRestDeserializerError::InvalidParameter { operation, .. },
-                )
-                | err @ CumulocityMapperError::FromC8yJsonOverMqttDeserializerError(
-                    C8yJsonOverMqttDeserializerError::InvalidParameter { operation, .. },
-                )
-                | err @ CumulocityMapperError::ExecuteFailed {
-                    operation_name: operation,
-                    ..
-                },
-            ) => {
+            Err(err) => {
                 error!("{err}");
+                let Some(operation) = err.failed_operation_name() else {
+                    return vec![];
+                };
 
                 let prefix = &self.config.bridge_config.c8y_prefix;
                 let topic = if target_xid == self.entity_cache.main_device_external_id().as_ref() {
@@ -804,10 +794,6 @@ impl CumulocityConverter {
                 let msg1 = MqttMessage::new(&topic, payload1);
                 let msg2 = MqttMessage::new(&topic, payload2);
                 vec![msg1, msg2]
-            }
-            Err(err) => {
-                error!("{err}");
-                vec![]
             }
 
             Ok(msgs) => msgs.to_owned(),
