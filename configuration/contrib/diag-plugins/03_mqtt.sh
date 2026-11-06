@@ -2,6 +2,7 @@
 set -e
 
 OUTPUT_DIR=""
+TEDGE_CONFIG_DIR=${TEDGE_CONFIG_DIR:-/etc/tedge}
 COMMAND=""
 
 # Parse arguments
@@ -9,6 +10,10 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --output-dir)
             OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --config-dir)
+            TEDGE_CONFIG_DIR="$2"
             shift 2
             ;;
         collect)
@@ -30,10 +35,10 @@ fi
 
 collect() {
     if command -V tedge > /dev/null 2>&1; then
-        echo "tedge mqtt sub '#' --duration 5s" > "$OUTPUT_DIR"/tedge-mqtt-sub.log 2>&1
-        tedge mqtt sub '#' --duration 5s >> "$OUTPUT_DIR"/tedge-mqtt-sub.log 2>&1
-        echo "tedge mqtt sub '#' --duration 1s --retained-only" > "$OUTPUT_DIR"/tedge-mqtt-sub-retained-only.log 2>&1
-        tedge mqtt sub '#' --duration 1s --retained-only >> "$OUTPUT_DIR"/tedge-mqtt-sub-retained-only.log 2>&1
+        echo "tedge mqtt sub '#' --duration 5s --config-dir $TEDGE_CONFIG_DIR" > "$OUTPUT_DIR"/tedge-mqtt-sub.log 2>&1
+        tedge mqtt sub '#' --duration 5s --config-dir "$TEDGE_CONFIG_DIR" >> "$OUTPUT_DIR"/tedge-mqtt-sub.log 2>&1
+        echo "tedge mqtt sub '#' --duration 1s --retained-only --config-dir $TEDGE_CONFIG_DIR" > "$OUTPUT_DIR"/tedge-mqtt-sub-retained-only.log 2>&1
+        tedge mqtt sub '#' --duration 1s --retained-only --config-dir "$TEDGE_CONFIG_DIR" >> "$OUTPUT_DIR"/tedge-mqtt-sub-retained-only.log 2>&1
     fi
 }
 

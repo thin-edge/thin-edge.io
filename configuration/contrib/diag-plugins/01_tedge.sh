@@ -50,9 +50,9 @@ collect() {
     # Collect logs for each mapper
     CLOUDS="c8y az aws"
     for cloud in $CLOUDS; do
-        if tedge config get "${cloud}.url" >/dev/null 2>&1; then
+        if tedge config get "${cloud}.url" --config-dir "$TEDGE_CONFIG_DIR" >/dev/null 2>&1; then
             collect_logs "tedge-mapper-${cloud}"
-            tedge bridge inspect "${cloud}" > "$OUTPUT_DIR/tedge-bridge-inspect-${cloud}.log"
+            tedge bridge inspect "${cloud}" --config-dir "$TEDGE_CONFIG_DIR" > "$OUTPUT_DIR/tedge-bridge-inspect-${cloud}.log"
         fi
     done
 
@@ -70,7 +70,7 @@ collect() {
     fi
 
     # tedge config list
-    tedge config list --all > "$OUTPUT_DIR"/tedge-config-list.log
+    tedge config list --all --config-dir "$TEDGE_CONFIG_DIR" > "$OUTPUT_DIR"/tedge-config-list.log
 }
 
 # Execute the specified command
