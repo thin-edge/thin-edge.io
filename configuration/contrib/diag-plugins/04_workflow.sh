@@ -32,7 +32,7 @@ fi
 collect() {
     if [ -d "$LOGS_PATH"/agent ]; then
         find "$LOGS_PATH/agent" -type f -exec cp {} "$OUTPUT_DIR"/ \; ||:
-    else 
+    else
         echo "${LOGS_PATH} not found" >&2
     fi
 }
