@@ -191,12 +191,12 @@ jobs:
 
           - target: aarch64-apple-darwin
             build_with: clang
-            host_os: macos-14
+            host_os: macos-15
             cargo_options: --no-run
 
           - target: x86_64-apple-darwin
             build_with: clang
-            host_os: macos-14
+            host_os: macos-15
 
     steps:
       - if: ${{ contains(matrix.host_os, 'ubuntu') }}
