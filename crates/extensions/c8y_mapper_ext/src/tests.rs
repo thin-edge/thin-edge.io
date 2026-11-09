@@ -70,7 +70,6 @@ use tedge_mqtt_ext::TopicFilter;
 use tedge_test_utils::fs::with_exec_permission;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::paths::TedgePaths;
-use test_case::test_case;
 
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
 use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_includes_json;
@@ -3024,123 +3023,6 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
     .unwrap();
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_Restart")]).await;
-}
-
-#[test_case(
-    json!({"status": "successful", "action": "restart", "serviceName": "collectd", "serviceType": "service"}),
-    "503,c8y_ServiceCommand";
-    "successful"
-)]
-#[test_case(
-    json!({"status": "failed", "action": "restart", "serviceName": "collectd", "serviceType": "service", "reason": "failed with reason"}),
-    "502,c8y_ServiceCommand,The 'restart' action failed: failed with reason";
-    "failed"
-)]
-#[tokio::test]
-async fn the_status_of_a_service_command_is_reported_on_the_topic_of_the_service(
-    final_state: serde_json::Value,
-    smartrest: &str,
-) {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/collectd"),
-        r#"{ "@type": "service" }"#,
-    ))
-    .await
-    .unwrap();
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/collectd/cmd/control"),
-        r#"{"actions":["restart"]}"#,
-    ))
-    .await
-    .unwrap();
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
-        json!({
-            "id": "1234",
-            "status": "PENDING",
-            "c8y_ServiceCommand": {
-                "command": "restart",
-                "serviceName": "collectd",
-                "serviceType": "service"
-            },
-            "externalSource": {
-                "externalId": "test-device:device:main:service:collectd",
-                "type": "c8y_Serial"
-            }
-        })
-        .to_string(),
-    ))
-    .await
-    .unwrap();
-
-    let topic = Topic::new_unchecked("te/device/main/service/collectd/cmd/control/c8y-mapper-1234");
-    assert_received_contains_str(&mut mqtt, [(topic.name.as_str(), r#""status":"init""#)]).await;
-
-    mqtt.send(MqttMessage::new(
-        &topic,
-        json!({"status": "executing", "action": "restart", "serviceName": "collectd", "serviceType": "service"})
-            .to_string(),
-    ))
-    .await
-    .unwrap();
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:main:service:collectd",
-            "501,c8y_ServiceCommand",
-        )],
-    )
-    .await;
-
-    mqtt.send(MqttMessage::new(&topic, final_state.to_string()))
-        .await
-        .unwrap();
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:main:service:collectd",
-            smartrest,
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn a_control_command_status_is_ignored_when_service_control_is_disabled() {
-    let ttd = TempTedgeDir::new();
-    let mut config = test_mapper_config(&ttd);
-    config.capabilities.service_control = false;
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/collectd"),
-        r#"{ "@type": "service" }"#,
-    ))
-    .await
-    .unwrap();
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/collectd/cmd/control/c8y-mapper-1234"),
-        json!({"status": "executing", "action": "restart", "serviceName": "collectd", "serviceType": "service"})
-            .to_string(),
-    ))
-    .await
-    .unwrap();
-
-    while let Some(message) = mqtt.recv().await {
-        assert_ne!(
-            message.topic.name, "c8y/s/us/test-device:device:main:service:collectd",
-            "{message:?}"
-        );
-    }
 }
 
 #[tokio::test]

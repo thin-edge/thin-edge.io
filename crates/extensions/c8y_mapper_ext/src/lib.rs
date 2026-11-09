@@ -16,7 +16,6 @@ pub mod json;
 mod mea;
 mod operations;
 mod serializer;
-mod service_command;
 pub mod service_monitor;
 mod shell_execute;
 mod signals;

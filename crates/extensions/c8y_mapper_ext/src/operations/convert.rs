@@ -1,9 +1,11 @@
 //! Converting Cumulocity Smartrest operation messages into local thin-edge operation messages.
+use crate::entity_cache::CloudEntityMetadata;
 use crate::supported_operations::operation::Operation;
 use c8y_api::json_c8y_deserializer::C8yDeviceProfile;
 use c8y_api::json_c8y_deserializer::C8yDownloadConfigFile;
 use c8y_api::json_c8y_deserializer::C8yFirmware;
 use c8y_api::json_c8y_deserializer::C8yLogfileRequest;
+use c8y_api::json_c8y_deserializer::C8yServiceCommand;
 use c8y_api::json_c8y_deserializer::C8yUploadConfigFile;
 use c8y_api::smartrest::message_ids::SET_SUPPORTED_CONFIGURATIONS;
 use c8y_api::smartrest::message_ids::SET_SUPPORTED_LOGS;
@@ -14,9 +16,16 @@ use tedge_api::commands::CommandStatus;
 use tedge_api::commands::ConfigMetadata;
 use tedge_api::commands::ConfigSnapshotCmdPayload;
 use tedge_api::commands::ConfigUpdateCmdPayload;
+use tedge_api::commands::ControlCmd;
+use tedge_api::commands::ControlCmdMetadata;
+use tedge_api::commands::ControlCmdPayload;
 use tedge_api::commands::FirmwareUpdateCmdPayload;
 use tedge_api::commands::LogMetadata;
 use tedge_api::commands::LogUploadCmdPayload;
+use tedge_api::control::ActionName;
+use tedge_api::control::ServiceName;
+use tedge_api::control::ServiceType;
+use tedge_api::control::DEFAULT_SERVICE_TYPE;
 use tedge_api::device_profile::ConfigPayload;
 use tedge_api::device_profile::DeviceProfileCmdPayload;
 use tedge_api::entity::EntityExternalId;
@@ -478,5 +487,140 @@ impl CumulocityConverter {
 
         info!(target: "C8Y", topic = %request.topic, payload = %request.payload, "Forwarding c8y operation to device");
         Ok(vec![request.into_message()])
+    }
+
+    pub(crate) async fn convert_control_metadata(
+        &mut self,
+        service: &EntityTopicId,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if !self.config.capabilities.service_control {
+            warn!("Received control metadata, however, service_control feature is disabled");
+            return Ok(vec![]);
+        }
+
+        let mut messages = vec![];
+
+        let actions = if message.payload_bytes().is_empty() {
+            vec![]
+        } else {
+            let capability = match ControlCmdMetadata::from_slice(message.payload_bytes()) {
+                Ok(capability) => capability,
+                Err(err) => {
+                    warn!(
+                        topic = %message.topic.name,
+                        "Ignoring the control capability of a service: {err}"
+                    );
+                    return Ok(vec![]);
+                }
+            };
+
+            // The operation directory of a service is not watched,
+            // so the operation is registered here
+            match self.register_operation(service, "c8y_ServiceCommand").await {
+                Ok(mut registration) => messages.append(&mut registration),
+                Err(err) => error!(
+                    "Failed to register the `c8y_ServiceCommand` operation of {service}: {err}"
+                ),
+            }
+
+            capability
+                .actions
+                .into_iter()
+                .filter_map(|action| match action.parse::<ActionName>() {
+                    Ok(action) => Some(action),
+                    Err(err) => {
+                        warn!(
+                            topic = %message.topic.name,
+                            "Not declaring the action of a service to Cumulocity: {err}"
+                        );
+                        None
+                    }
+                })
+                .collect()
+        };
+
+        messages.push(self.inventory_update_message(
+            service,
+            json!({ "c8y_SupportedServiceCommands": actions }),
+        )?);
+        self.service_actions.insert(service.clone(), actions);
+
+        Ok(messages)
+    }
+
+    pub(crate) fn convert_control_request(
+        &self,
+        device_xid: String,
+        cmd_id: String,
+        request: C8yServiceCommand,
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let target = self
+            .entity_cache
+            .try_get_by_external_id(&device_xid.into())
+            .map_err(|err| CumulocityMapperError::ServiceCommandRejected {
+                reason: err.to_string(),
+            })?;
+
+        let (action, service_name, service_type) = self
+            .validate_service_command(target, &request)
+            .map_err(|reason| CumulocityMapperError::ServiceCommandRejected { reason })?;
+
+        let command = ControlCmd {
+            target: target.topic_id().clone(),
+            cmd_id,
+            payload: ControlCmdPayload {
+                status: CommandStatus::Init,
+                action: action.to_string(),
+                service_name: service_name.to_string(),
+                service_type: service_type.to_string(),
+            },
+        };
+
+        Ok(vec![command.command_message(&self.mqtt_schema)])
+    }
+
+    /// Checks a `c8y_ServiceCommand` request and resolves the service name and type to run it with.
+    ///
+    /// Returns the reason to fail the operation with when the request cannot be run.
+    fn validate_service_command(
+        &self,
+        target: &CloudEntityMetadata,
+        request: &C8yServiceCommand,
+    ) -> Result<(ActionName, ServiceName, ServiceType), String> {
+        let xid = target.external_id.as_ref();
+        let command = &request.command;
+
+        let action = command
+            .parse::<ActionName>()
+            .map_err(|err| format!("{xid} cannot run the command '{command}': {err}"))?;
+        if !self
+            .service_actions
+            .get(target.topic_id())
+            .is_some_and(|actions| actions.contains(&action))
+        {
+            return Err(format!("{xid} has not declared the '{action}' action"));
+        }
+
+        let service_name = Some(request.service_name.as_str())
+            .filter(|name| !name.is_empty())
+            .or_else(|| target.registered_name())
+            .ok_or_else(|| {
+                format!("{xid} cannot run the '{action}' action: neither the operation nor the registration of the service gives a service name")
+            })?;
+        // `tedge service` validates the name too,
+        // but only a check here reports the reason on the operation
+        let service_name = service_name
+            .parse::<ServiceName>()
+            .map_err(|err| format!("{xid} cannot run the '{action}' action: {err}"))?;
+
+        let service_type = Some(request.service_type.as_str())
+            .filter(|ty| !ty.is_empty())
+            .or_else(|| target.registered_type())
+            .unwrap_or(DEFAULT_SERVICE_TYPE)
+            .parse::<ServiceType>()
+            .map_err(|err| format!("{xid} cannot run the '{action}' action: {err}"))?;
+
+        Ok((action, service_name, service_type))
     }
 }
