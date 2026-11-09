@@ -871,6 +871,10 @@ impl WorkflowActor {
                             ))
                             .await;
                     }
+                } else if state.is_expired(handlers.timeout) {
+                    log_file.log_info("=> sub-operation timeout").await;
+                    let new_state = state.update(handlers.on_timeout);
+                    self.publish_command_state(new_state, &mut log_file).await?;
                 };
 
                 Ok(())

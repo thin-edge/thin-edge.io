@@ -396,7 +396,7 @@ impl WorkflowSupervisor {
             }
 
             _ => {
-                // TODO: Use the timestamp to filter out action pending since too long
+                // The command is resumed, running the current state actions and timeout handlers.
                 Some(command)
             }
         }

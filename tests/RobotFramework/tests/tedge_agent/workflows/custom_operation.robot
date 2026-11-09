@@ -180,7 +180,7 @@ Invoke sub-operation from a sub-operation
     ${expected_log}    Get File    ${CURDIR}/gp-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
 
-Fail operation after sub-operation timeout
+Fail operation after unknown sub-operation timeout
     # See https://github.com/thin-edge/thin-edge.io/issues/4397
     Execute Command
     ...    tedge mqtt pub --retain te/device/main///cmd/issue-4397/test-sub-timeout '{"status":"init"}'
@@ -189,6 +189,23 @@ Fail operation after sub-operation timeout
     ...    message_pattern=.*waiting.*
     ...    maximum=1
     Execute Command    sleep 1
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397/test-sub-timeout
+    ...    message_pattern=.*No response from unknown_op.*
+    ...    maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-4397/test-sub-timeout ''
+
+Fail operation after unknown sub-operation timeout on restart
+    # See https://github.com/thin-edge/thin-edge.io/issues/4397
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/issue-4397/test-sub-timeout '{"status":"init"}'
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397/test-sub-timeout
+    ...    message_pattern=.*waiting.*
+    ...    maximum=1
+    Stop Service    tedge-agent
+    Execute Command    sleep 1
+    Start Service    tedge-agent
     ${cmd_messages}    Should Have MQTT Messages
     ...    te/device/main///cmd/issue-4397/test-sub-timeout
     ...    message_pattern=.*No response from unknown_op.*

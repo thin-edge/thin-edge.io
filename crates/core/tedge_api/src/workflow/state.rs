@@ -21,6 +21,9 @@ use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::time::Duration;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
 
 const OP_LOG_PATH_KEY: &str = "logPath";
 const OP_WORKFLOW_VERSION_KEY: &str = "@version";
@@ -252,9 +255,7 @@ impl GenericCommandState {
 
     pub fn set_timestamp(&mut self) {
         if !self.is_cleared() {
-            let now = time::OffsetDateTime::now_utc()
-                .format(&time::format_description::well_known::Rfc3339)
-                .unwrap();
+            let now = OffsetDateTime::now_utc().format(&Rfc3339).unwrap();
             self.set_key_value(OP_WORKFLOW_TIMESTAMP_KEY, &now);
         }
     }
@@ -471,6 +472,17 @@ impl GenericCommandState {
 
     pub fn is_cleared(&self) -> bool {
         self.payload.is_null()
+    }
+
+    pub fn is_expired(&self, timeout: Option<Duration>) -> bool {
+        let Some(timeout) = timeout else {
+            return false;
+        };
+
+        self.get_text_property(OP_WORKFLOW_TIMESTAMP_KEY)
+            .and_then(|timestamp| OffsetDateTime::parse(timestamp, &Rfc3339).ok())
+            .filter(|timestamp| OffsetDateTime::now_utc() > *timestamp + timeout)
+            .is_some()
     }
 
     pub fn get_command_status(&self) -> CommandStatus {
