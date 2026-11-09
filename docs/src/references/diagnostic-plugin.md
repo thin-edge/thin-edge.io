@@ -29,6 +29,8 @@ The runner is the `tedge diag collect` command, which calls plugins that must be
     * option1 `--output-dir <PATH>`: the path to the temporary output subdirectory for the plugin (e.g.
       `/tmp/tedge-diag-now/01_tedge`)
     * option2 `--config-dir <PATH>`: the directory where the `tedge.toml` file is stored (e.g. `/etc/tedge`)
+* The runner sets the `TEDGE_CONFIG_DIR` environment variable to the `--config-dir` path,
+  so the `tedge` commands run by a plugin use this directory even without the `--config-dir` option.
 * The runner logs both stdout and stderr from the plugin's execution and stores them in `output.log`.
 * The runner makes a tarball archive of the output directory as `<OUTPUT_DIR>/<TARBALL_NAME>.tar.gz` (e.g.
   `/tmp/tedge-diag-now.tar.gz`)

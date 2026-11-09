@@ -33,12 +33,15 @@ if [ -n "$OUTPUT_DIR" ] && [ ! -d "$OUTPUT_DIR" ]; then
 fi
 
 entity_store() {
-    if [ -f "$TEDGE_CONFIG_DIR"/.agent/entity_store.jsonl ]; then
+    STATE_DIR=$(tedge config get agent.state.path)
+    if [ -f "$STATE_DIR"/entity_store.jsonl ]; then
+        cp "$STATE_DIR"/entity_store.jsonl "$OUTPUT_DIR"/
+    elif [ -f "$TEDGE_CONFIG_DIR"/.agent/entity_store.jsonl ]; then
         cp "$TEDGE_CONFIG_DIR"/.agent/entity_store.jsonl "$OUTPUT_DIR"/
     elif [ -f "$TEDGE_CONFIG_DIR"/.tedge-mapper-c8y/entity_store.jsonl ]; then
         cp "$TEDGE_CONFIG_DIR"/.tedge-mapper-c8y/entity_store.jsonl  "$OUTPUT_DIR"/
     else
-        echo "entity_store.jsonl not found" >&2
+        echo "entity_store.jsonl not found in $STATE_DIR, $TEDGE_CONFIG_DIR/.agent or $TEDGE_CONFIG_DIR/.tedge-mapper-c8y" >&2
     fi
 }
 

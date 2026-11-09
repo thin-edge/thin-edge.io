@@ -43,6 +43,18 @@ Run tedge diag collect with multiple plugin directories
 
     Validate preset plugins    tedge-diag-now
 
+tedge commands run by a plugin without --config-dir use the config dir given to tedge diag collect
+    Execute Command    mkdir -p /setup/custom-config
+    Execute Command    tedge config set device.type custom-device-type --config-dir /setup/custom-config
+    Execute Command
+    ...    printf '#!/bin/sh\ntedge config get device.type\n' > /setup/diag-plugins/device_type.sh && chmod +x /setup/diag-plugins/device_type.sh
+
+    Execute Command
+    ...    tedge diag collect --config-dir /setup/custom-config --plugin-dir /setup/diag-plugins --name tedge-diag-config-dir --keep-dir
+    ...    stdout=${False}
+    ${content}=    Execute Command    cat /tmp/tedge-diag-config-dir/device_type/output.log
+    Should Contain    ${content}    custom-device-type
+
 Exit with 0 when a plugin is non applicable
     Execute Command    tedge config set diag.plugin_paths /setup/diag-plugins
     Execute Command

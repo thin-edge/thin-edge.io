@@ -178,7 +178,8 @@ impl DiagCollectCommand {
             .arg("--output-dir")
             .arg(plugin_output_dir.path())
             .arg("--config-dir")
-            .arg(&self.config_dir);
+            .arg(&self.config_dir)
+            .env("TEDGE_CONFIG_DIR", &self.config_dir);
         let child = command.spawn()?;
         let mut command_log =
             CommandLog::from_log_path(output_file, plugin_name.into(), "no cmd_id".into());
@@ -366,6 +367,28 @@ mod tests {
         for item in expected_command {
             assert!(content.contains(item.as_str()));
         }
+    }
+
+    #[tokio::test]
+    async fn plugins_run_with_tedge_config_dir_set_to_the_config_dir() {
+        let ttd = TempTedgeDir::new();
+        let command = DiagCollectCommand::new(&ttd);
+        let diag_root_dir = TedgePaths::from_root_with_defaults(&command.diag_dir, "", "");
+        let plugin_path = command.first_plugin_dir().join("plugin_env.sh");
+        with_exec_permission(
+            &plugin_path,
+            "#!/bin/sh\necho \"TEDGE_CONFIG_DIR=$TEDGE_CONFIG_DIR\"",
+        );
+
+        let status = command
+            .execute_diag_plugin(&diag_root_dir, &plugin_path)
+            .await
+            .unwrap();
+        assert!(status.success());
+
+        let log_path = command.diag_dir.join("plugin_env").join("output.log");
+        let content = tokio::fs::read_to_string(log_path).await.unwrap();
+        assert!(content.contains(&format!("TEDGE_CONFIG_DIR={}", command.config_dir)));
     }
 
     #[test]
