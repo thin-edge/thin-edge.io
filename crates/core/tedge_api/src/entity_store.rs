@@ -255,18 +255,9 @@ impl EntityStore {
                     let topic_id = message.topic_id.clone();
                     let current_entity_data =
                         self.pending_entity_store.take_cached_entity_data(message);
-                    let mut pending_entities = vec![current_entity_data];
-
-                    let pending_children = self
-                        .pending_entity_store
-                        .take_cached_child_entities_data(&topic_id);
-                    for pending_child in pending_children {
-                        let child_reg_message = pending_child.reg_message.clone();
-                        self.register_and_persist_entity(child_reg_message.clone())?;
-                        pending_entities.push(pending_child);
-                    }
-
-                    Ok(pending_entities)
+                    let mut registered_entities = vec![current_entity_data];
+                    self.register_pending_descendants(topic_id, &mut registered_entities);
+                    Ok(registered_entities)
                 }
             }
             Err(Error::NoParent(_)) if self.get(&message.topic_id).is_none() => {
@@ -278,6 +269,48 @@ impl EntityStore {
                 Ok(vec![])
             }
             Err(err) => Err(err),
+        }
+    }
+
+    /// Registers the pending descendants of a freshly registered entity,
+    /// adding them to `registered_entities` along with their cached data,
+    /// a parent always before its children.
+    ///
+    /// A pending entity which registration is rejected is logged and skipped,
+    /// leaving its own pending children in the cache,
+    /// until that entity is registered with a valid registration message.
+    fn register_pending_descendants(
+        &mut self,
+        topic_id: EntityTopicId,
+        registered_entities: &mut Vec<RegisteredEntityData>,
+    ) {
+        let mut parents = vec![topic_id];
+        while let Some(parent) = parents.pop() {
+            let children = self
+                .pending_entity_store
+                .take_cached_child_registrations(&parent);
+            for child in children {
+                match self.register_and_persist_entity(child.clone()) {
+                    Ok(_) => {
+                        parents.push(child.topic_id.clone());
+                        let child_data = self.pending_entity_store.take_cached_entity_data(child);
+                        registered_entities.push(child_data);
+                    }
+                    Err(Error::NoParent(_)) => {
+                        // The child has been re-registered with a parent that is not registered yet
+                        self.pending_entity_store
+                            .cache_early_registration_message(child);
+                    }
+                    Err(err) => {
+                        error!(
+                            "Rejected the pending registration of {}: {} with {} due to: {err}",
+                            child.r#type,
+                            child.topic_id,
+                            child.to_json()
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -1208,6 +1241,7 @@ impl EntityTwinMessage {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
+    use mqtt_channel::Topic;
     use serde_json::json;
     use std::collections::BTreeSet;
     use std::io::Write;
@@ -2751,6 +2785,93 @@ mod tests {
     }
 
     #[test]
+    fn pending_child_of_a_service_is_rejected_when_the_service_is_registered() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+
+        // Pending child and grand-child, the child waiting for a service
+        update(
+            &mut store,
+            "device/child0//",
+            json!({"@type": "child-device", "@parent": "device/main/service/foo"}),
+        );
+        update(
+            &mut store,
+            "device/child00//",
+            json!({"@type": "child-device", "@parent": "device/child0//"}),
+        );
+        let health_status = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child00///status/health"),
+            r#"{"status":"up"}"#,
+        );
+        store.cache_early_data_message(health_status.clone());
+
+        // The service is registered, but not its pending child
+        let registered = update(
+            &mut store,
+            "device/main/service/foo",
+            json!({"@type": "service"}),
+        );
+        assert_eq!(topic_ids(&registered), ["device/main/service/foo"]);
+        assert!(store.get(&entity("device/main/service/foo")).is_some());
+        assert!(store.get(&entity("device/child0//")).is_none());
+        assert!(store.get(&entity("device/child00//")).is_none());
+
+        // The grand-child is still pending,
+        // and is registered with its cached data once its parent is registered with a valid parent
+        let registered = update(
+            &mut store,
+            "device/child0//",
+            json!({"@type": "child-device"}),
+        );
+        assert_eq!(
+            topic_ids(&registered),
+            ["device/child0//", "device/child00//"]
+        );
+        assert_eq!(registered[1].data_messages, vec![health_status]);
+    }
+
+    #[test]
+    fn rejected_pending_entity_does_not_prevent_the_registration_of_its_siblings() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+
+        // A pending service, with its own pending child,
+        // and a pending child device, both waiting for the same parent
+        update(
+            &mut store,
+            "device/child0/service/foo",
+            json!({"@type": "service", "@parent": "device/child0//"}),
+        );
+        update(
+            &mut store,
+            "device/child00//",
+            json!({"@type": "child-device", "@parent": "device/child0/service/foo"}),
+        );
+        update(
+            &mut store,
+            "device/child01//",
+            json!({"@type": "child-device", "@parent": "device/child0//"}),
+        );
+
+        let registered = update(
+            &mut store,
+            "device/child0//",
+            json!({"@type": "child-device"}),
+        );
+
+        assert_eq!(
+            topic_ids(&registered),
+            [
+                "device/child0//",
+                "device/child0/service/foo",
+                "device/child01//"
+            ]
+        );
+        assert!(store.get(&entity("device/child00//")).is_none());
+    }
+
+    #[test]
     fn update_health_endpoint() {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut store = new_entity_store(&temp_dir, true);
@@ -2880,6 +3001,25 @@ mod tests {
         );
         store.update(registration.unwrap()).unwrap();
         assert!(store.get(&entity(topic_id)).is_some());
+    }
+
+    fn update(
+        store: &mut EntityStore,
+        topic_id: &str,
+        payload: JsonValue,
+    ) -> Vec<RegisteredEntityData> {
+        let registration = EntityRegistrationMessage::try_from(
+            topic_id.parse().unwrap(),
+            payload.to_string().as_bytes(),
+        );
+        store.update(registration.unwrap()).unwrap()
+    }
+
+    fn topic_ids(entities: &[RegisteredEntityData]) -> Vec<&str> {
+        entities
+            .iter()
+            .map(|entity| entity.reg_message.topic_id.as_str())
+            .collect()
     }
 
     fn register_child(store: &mut EntityStore, parent: &str, topic_id: &str) {

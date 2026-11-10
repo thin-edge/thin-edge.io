@@ -107,9 +107,23 @@ impl CloudEntityMetadata {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UpdateOutcome {
     Unchanged,
-    Inserted(Vec<RegisteredEntityData>),
+    Inserted {
+        /// The inserted entity followed by its pending descendants that are now registered too
+        registered: Vec<RegisteredEntityData>,
+        /// The pending descendants which registration has been rejected
+        rejected: Vec<RejectedEntity>,
+    },
     Updated(Box<EntityMetadata>, Box<EntityMetadata>),
     Deleted,
+}
+
+/// A pending entity which registration has been rejected once its parent got registered
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("Rejected the pending registration of {entity_type}: {topic_id} due to: {reason}")]
+pub struct RejectedEntity {
+    pub topic_id: EntityTopicId,
+    pub entity_type: EntityType,
+    pub reason: String,
 }
 
 /// An in-memory cache of entity metadata with their external ids, indexed by their entity topic ids.
@@ -159,7 +173,8 @@ impl EntityCache {
 
     /// Insert a new entity or update an existing entity
     ///
-    /// Return Inserted if the entity is new. Any pending child entities of the given entity are also registered and returned.
+    /// Return Inserted if the entity is new. Any pending child entities of the given entity are also registered and returned,
+    /// except those which registration is rejected, which are returned apart.
     /// Return Updated if the entity was previously registered and has been updated by this call
     /// Return Unchanged if the entity not affected by this call
     pub fn upsert(&mut self, entity: EntityRegistrationMessage) -> Result<UpdateOutcome, Error> {
@@ -175,23 +190,56 @@ impl EntityCache {
                 }
 
                 let current_entity_data = self.pending_entities.take_cached_entity_data(entity);
-                let mut registered_entities = vec![current_entity_data];
+                let mut registered = vec![current_entity_data];
+                let mut rejected = vec![];
+                self.insert_pending_descendants(topic_id, &mut registered, &mut rejected);
 
-                let pending_children = self
-                    .pending_entities
-                    .take_cached_child_entities_data(&topic_id);
-                for pending_child in pending_children {
-                    let child_reg_message = pending_child.reg_message.clone();
-                    self.insert(child_reg_message)?;
-                    registered_entities.push(pending_child);
+                UpdateOutcome::Inserted {
+                    registered,
+                    rejected,
                 }
-
-                UpdateOutcome::Inserted(registered_entities)
             }
         };
 
         debug!("Updated entity map: {:?}", self.entities);
         Ok(outcome)
+    }
+
+    /// Inserts the pending descendants of a freshly inserted entity,
+    /// adding them to `registered` along with their cached data,
+    /// a parent always before its children.
+    ///
+    /// A pending entity which registration is rejected is added to `rejected`,
+    /// leaving its own pending children in the cache,
+    /// until that entity is registered with a valid registration message.
+    fn insert_pending_descendants(
+        &mut self,
+        topic_id: EntityTopicId,
+        registered: &mut Vec<RegisteredEntityData>,
+        rejected: &mut Vec<RejectedEntity>,
+    ) {
+        let mut parents = vec![topic_id];
+        while let Some(parent) = parents.pop() {
+            let children = self
+                .pending_entities
+                .take_cached_child_registrations(&parent);
+            for child in children {
+                match self.insert(child.clone()) {
+                    Ok(true) => {
+                        parents.push(child.topic_id.clone());
+                        registered.push(self.pending_entities.take_cached_entity_data(child));
+                    }
+                    // The child has been re-registered with a parent that is not registered yet,
+                    // and is pending again
+                    Ok(false) => {}
+                    Err(err) => rejected.push(RejectedEntity {
+                        topic_id: child.topic_id,
+                        entity_type: child.r#type,
+                        reason: err.to_string(),
+                    }),
+                }
+            }
+        }
     }
 
     fn insert(&mut self, mut entity: EntityRegistrationMessage) -> Result<bool, Error> {
@@ -582,6 +630,7 @@ mod tests {
     use super::Error;
     use crate::converter::CumulocityConverter;
     use crate::entity_cache::CloudEntityMetadata;
+    use crate::entity_cache::RejectedEntity;
     use crate::entity_cache::UpdateOutcome;
     use assert_matches::assert_matches;
     use serde_json::json;
@@ -593,7 +642,10 @@ mod tests {
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
+    use tedge_api::pending_entity_store::RegisteredEntityData;
     use tedge_flows::FlowContextHandle;
+    use tedge_mqtt_ext::MqttMessage;
+    use tedge_mqtt_ext::Topic;
     use test_case::test_case;
 
     #[test]
@@ -605,7 +657,7 @@ mod tests {
             topic_id.clone(),
             EntityType::ChildDevice,
         ));
-        assert_matches!(res, Ok(UpdateOutcome::Inserted(_)));
+        assert_matches!(res, Ok(UpdateOutcome::Inserted { .. }));
         let external_id: EntityExternalId = "test-device:device:child1".into();
         let expected = CloudEntityMetadata::new(
             external_id.clone(),
@@ -684,7 +736,7 @@ mod tests {
                 .with_twin_fragment("key2".to_string(), "val2".into())
                 .with_twin_fragment("key3".to_string(), "val3".into());
         let res = cache.upsert(reg_message.clone());
-        assert_matches!(res, Ok(UpdateOutcome::Inserted(_)));
+        assert_matches!(res, Ok(UpdateOutcome::Inserted { .. }));
 
         // Same reg message
         let res = cache.upsert(reg_message);
@@ -888,6 +940,117 @@ mod tests {
         assert!(cache.get(&entity("device/child0//")).is_none());
     }
 
+    #[test]
+    fn pending_child_of_a_service_is_rejected_when_the_service_is_registered() {
+        let mut cache = new_entity_cache();
+
+        // Pending child and grand-child, the child waiting for a service
+        upsert(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device", "@parent": "device/main/service/foo"}),
+        )
+        .unwrap();
+        upsert(
+            &mut cache,
+            "device/child00//",
+            json!({"@type": "child-device", "@parent": "device/child0//"}),
+        )
+        .unwrap();
+        let measurement = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child00///m/environment"),
+            json!({"temperature": 50}).to_string(),
+        );
+        cache
+            .pending_entities
+            .cache_early_data_message(measurement.clone());
+
+        // The service is registered, but not its pending child
+        let (registered, rejected) = inserted(upsert(
+            &mut cache,
+            "device/main/service/foo",
+            json!({"@type": "service"}),
+        ));
+        assert_eq!(topic_ids(&registered), ["device/main/service/foo"]);
+        assert_eq!(
+            rejected,
+            vec![RejectedEntity {
+                topic_id: entity("device/child0//"),
+                entity_type: EntityType::ChildDevice,
+                reason: "Entity: 'device/main/service/foo' can not be a parent of 'device/child0//' because it is a service. Only devices can be parents".to_string(),
+            }]
+        );
+        assert!(cache.get(&entity("device/main/service/foo")).is_some());
+        assert!(cache.get(&entity("device/child0//")).is_none());
+        assert!(cache.get(&entity("device/child00//")).is_none());
+
+        // The grand-child is still pending,
+        // and is registered with its cached data once its parent is registered with a valid parent
+        let (registered, rejected) = inserted(upsert(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device"}),
+        ));
+        assert_eq!(
+            topic_ids(&registered),
+            ["device/child0//", "device/child00//"]
+        );
+        assert_eq!(registered[1].data_messages, vec![measurement]);
+        assert!(rejected.is_empty());
+    }
+
+    #[test]
+    fn rejected_pending_entity_does_not_prevent_the_registration_of_its_siblings() {
+        let mut cache = new_entity_cache();
+
+        // Two pending children waiting for the same parent, one with an invalid external id
+        upsert(
+            &mut cache,
+            "device/child00//",
+            json!({"@type": "child-device", "@parent": "device/child0//", "@id": "bad+id"}),
+        )
+        .unwrap();
+        upsert(
+            &mut cache,
+            "device/child01//",
+            json!({"@type": "child-device", "@parent": "device/child0//"}),
+        )
+        .unwrap();
+
+        let (registered, rejected) = inserted(upsert(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device"}),
+        ));
+
+        assert_eq!(
+            topic_ids(&registered),
+            ["device/child0//", "device/child01//"]
+        );
+        assert_eq!(rejected.len(), 1);
+        assert_eq!(rejected[0].topic_id, entity("device/child00//"));
+        assert!(cache.get(&entity("device/child00//")).is_none());
+    }
+
+    fn inserted(
+        outcome: Result<UpdateOutcome, Error>,
+    ) -> (Vec<RegisteredEntityData>, Vec<RejectedEntity>) {
+        match outcome {
+            Ok(UpdateOutcome::Inserted {
+                registered,
+                rejected,
+            }) => (registered, rejected),
+            outcome => panic!("Expected an inserted outcome, got: {outcome:?}"),
+        }
+    }
+
+    fn topic_ids(entities: &[RegisteredEntityData]) -> Vec<&str> {
+        entities
+            .iter()
+            .map(|entity| entity.reg_message.topic_id.as_str())
+            .collect()
+    }
+
     fn upsert(
         cache: &mut EntityCache,
         topic_id: &str,
@@ -901,7 +1064,7 @@ mod tests {
 
     fn register(cache: &mut EntityCache, topic_id: &str, payload: serde_json::Value) {
         let res = upsert(cache, topic_id, payload);
-        assert_matches!(res, Ok(UpdateOutcome::Inserted(_)));
+        assert_matches!(res, Ok(UpdateOutcome::Inserted { .. }));
     }
 
     fn entity(topic_id: &str) -> EntityTopicId {

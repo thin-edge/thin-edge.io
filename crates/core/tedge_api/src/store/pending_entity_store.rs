@@ -85,39 +85,28 @@ impl PendingEntityStore {
         }
     }
 
-    /// Recursively removes from the pending entity cache the children of a freshly registered device.
+    /// Removes from the pending entity cache the registration messages
+    /// of the direct children of a freshly registered entity.
     ///
-    /// Returns the list of devices which registration is no more pending.
-    pub fn take_cached_child_entities_data(
+    /// The data messages cached for these children,
+    /// as well as the pending registrations of their own children, are left in the cache.
+    /// They are taken only when a child is actually registered,
+    /// using `take_cached_entity_data` and `take_cached_child_registrations`,
+    /// so that they are not lost if the registration of that child is rejected.
+    pub fn take_cached_child_registrations(
         &mut self,
         entity_tid: &EntityTopicId,
-    ) -> Vec<RegisteredEntityData> {
-        let mut children = vec![];
-        if let Some(direct_children) = self.orphans.remove(entity_tid) {
-            for child in direct_children {
-                if let Some(pending_entity_cache) = self.entities.remove(&child) {
-                    let pending_entity_data = self.registered_data_from_cache(pending_entity_cache);
-                    children.push(pending_entity_data);
-                    children.append(&mut self.take_cached_child_entities_data(&child));
-                }
-            }
-        }
-        children
-    }
-
-    fn registered_data_from_cache(
-        &mut self,
-        pending_cache: PendingEntityCache,
-    ) -> RegisteredEntityData {
-        let reg_message = pending_cache.reg_message.unwrap();
-        let mut pending_messages = vec![];
-        pending_messages.extend(pending_cache.metadata);
-        pending_messages.extend(self.take_cached_telemetry_data(&reg_message.topic_id));
-
-        RegisteredEntityData {
-            reg_message,
-            data_messages: pending_messages,
-        }
+    ) -> Vec<EntityRegistrationMessage> {
+        self.orphans
+            .remove(entity_tid)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|child| {
+                self.entities
+                    .get_mut(&child)
+                    .and_then(|cached_entity| cached_entity.reg_message.take())
+            })
+            .collect()
     }
 
     fn take_cached_telemetry_data(&mut self, entity_tid: &EntityTopicId) -> Vec<MqttMessage> {
@@ -167,7 +156,10 @@ impl PendingEntityStore {
     pub fn cache_early_registration_message(&mut self, reg_message: EntityRegistrationMessage) {
         let source = reg_message.topic_id.clone();
         let parent = reg_message.parent.clone().unwrap();
-        self.orphans.entry(parent).or_default().push(source.clone());
+        let siblings = self.orphans.entry(parent).or_default();
+        if !siblings.contains(&source) {
+            siblings.push(source.clone());
+        }
         self.entities
             .entry(source)
             .and_modify(|cached_entity| {
@@ -237,23 +229,69 @@ mod tests {
             .with_parent(EntityTopicId::default_child_device("child0").unwrap()),
         );
 
-        let children = store.take_cached_child_entities_data(
-            &EntityTopicId::default_child_device("child0").unwrap(),
-        );
+        let take_children = |store: &mut PendingEntityStore, parent: &str| {
+            store
+                .take_cached_child_registrations(
+                    &EntityTopicId::default_child_device(parent).unwrap(),
+                )
+                .into_iter()
+                .map(|e| e.topic_id)
+                .collect::<Vec<EntityTopicId>>()
+        };
 
         assert_eq!(
-            children
-                .into_iter()
-                .map(|e| e.reg_message.topic_id)
-                .collect::<Vec<EntityTopicId>>(),
+            take_children(&mut store, "child0"),
             vec![
                 EntityTopicId::default_child_device("child00").unwrap(),
-                EntityTopicId::default_child_device("child000").unwrap(),
-                EntityTopicId::default_child_device("child0000").unwrap(),
-                EntityTopicId::default_child_device("child00000").unwrap(),
                 EntityTopicId::default_child_device("child01").unwrap(),
             ]
-        )
+        );
+        assert_eq!(
+            take_children(&mut store, "child00"),
+            vec![EntityTopicId::default_child_device("child000").unwrap()]
+        );
+        assert_eq!(
+            take_children(&mut store, "child000"),
+            vec![EntityTopicId::default_child_device("child0000").unwrap()]
+        );
+        assert_eq!(
+            take_children(&mut store, "child0000"),
+            vec![EntityTopicId::default_child_device("child00000").unwrap()]
+        );
+        assert!(take_children(&mut store, "child0").is_empty());
+    }
+
+    #[test]
+    fn taking_child_registrations_keeps_their_cached_data() {
+        let mut store = build_pending_entity_store();
+        let child = EntityTopicId::default_child_device("child0").unwrap();
+        let grandchild = EntityTopicId::default_child_device("child00").unwrap();
+
+        store.cache_early_registration_message(
+            EntityRegistrationMessage::new_custom(child.clone(), EntityType::ChildDevice)
+                .with_parent(EntityTopicId::default_main_device()),
+        );
+        store.cache_early_registration_message(
+            EntityRegistrationMessage::new_custom(grandchild.clone(), EntityType::ChildDevice)
+                .with_parent(child.clone()),
+        );
+        let measurement = MqttMessage::new(
+            &Topic::new_unchecked("te/device/child0///m/environment"),
+            json!({"temperature": 50}).to_string(),
+        );
+        store.cache_early_data_message(measurement.clone());
+
+        let children = store.take_cached_child_registrations(&EntityTopicId::default_main_device());
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].topic_id, child);
+
+        // Taking the child registration leaves its data and its own children in the cache,
+        // to be taken once the child is actually registered
+        let child_data = store.take_cached_entity_data(children[0].clone());
+        assert_eq!(child_data.data_messages, vec![measurement]);
+        let grandchildren = store.take_cached_child_registrations(&child);
+        assert_eq!(grandchildren.len(), 1);
+        assert_eq!(grandchildren[0].topic_id, grandchild);
     }
 
     #[test]

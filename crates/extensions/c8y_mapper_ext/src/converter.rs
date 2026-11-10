@@ -312,7 +312,7 @@ impl CumulocityConverter {
         let payload = message.payload_str().unwrap_or_default();
         let outcome = self.entity_cache.upsert(register_message)?;
         match &outcome {
-            UpdateOutcome::Inserted(registered) => {
+            UpdateOutcome::Inserted { registered, .. } => {
                 self.log_registered_entities(registered, payload)
             }
             UpdateOutcome::Updated(updated, previous) => {
@@ -1828,7 +1828,10 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let UpdateOutcome::Inserted(entities) = converter
+        let UpdateOutcome::Inserted {
+            registered: entities,
+            ..
+        } = converter
             .process_entity_metadata_message(&in_message)
             .await
             .unwrap()
@@ -1864,7 +1867,10 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let UpdateOutcome::Inserted(entities) = converter
+        let UpdateOutcome::Inserted {
+            registered: entities,
+            ..
+        } = converter
             .process_entity_metadata_message(&in_message)
             .await
             .unwrap()
@@ -3309,7 +3315,10 @@ pub(crate) mod tests {
             json!({"@type": "child-device", "@id": "child1", "name": "child1"}).to_string(),
         );
 
-        let UpdateOutcome::Inserted(entities) = converter
+        let UpdateOutcome::Inserted {
+            registered: entities,
+            ..
+        } = converter
             .process_entity_metadata_message(&reg_message)
             .await
             .unwrap()
@@ -3403,7 +3412,10 @@ pub(crate) mod tests {
             })
             .to_string(),
         );
-        let UpdateOutcome::Inserted(entities) = converter
+        let UpdateOutcome::Inserted {
+            registered: entities,
+            ..
+        } = converter
             .process_entity_metadata_message(&reg_message)
             .await
             .unwrap()
