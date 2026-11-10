@@ -31,7 +31,6 @@ use c8y_api::smartrest::message::collect_smartrest_messages;
 use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
 use c8y_api::smartrest::message::get_smartrest_device_id;
 use c8y_api::smartrest::message::get_smartrest_template_id;
-use c8y_api::smartrest::message::sanitize_bytes_for_smartrest;
 use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
 use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
@@ -1011,15 +1010,16 @@ impl CumulocityConverter {
                         {
                             match output.status.code() {
                                 Some(0) => {
-                                    let sanitized_stdout = sanitize_bytes_for_smartrest(
-                                        &output.stdout,
-                                        MAX_PAYLOAD_LIMIT_IN_BYTES,
-                                    );
+                                    // Not truncated here, as the characters rejected by Cumulocity
+                                    // are removed before the result is truncated to fit the message
+                                    let stdout = String::from_utf8(output.stdout)
+                                        .unwrap_or_else(|err| {
+                                            error!("The output contains invalid UTF-8: {err}");
+                                            String::new()
+                                        });
                                     let result = match result_format {
-                                        ResultFormat::Text => TextOrCsv::Text(sanitized_stdout),
-                                        ResultFormat::Csv => {
-                                            EmbeddedCsv::new(sanitized_stdout).into()
-                                        }
+                                        ResultFormat::Text => TextOrCsv::Text(stdout),
+                                        ResultFormat::Csv => EmbeddedCsv::new(stdout).into(),
                                     };
 
                                     if !skip_status_update {
