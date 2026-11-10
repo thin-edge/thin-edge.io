@@ -5,6 +5,9 @@ use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::EntityType;
+use tedge_api::entity_store;
+use tedge_api::entity_store::validate_parent;
+use tedge_api::entity_store::validate_reregistration;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -38,17 +41,11 @@ pub enum Error {
     #[error(transparent)]
     InvalidExternalId(#[from] InvalidExternalIdError),
 
-    #[error("Updating the external id of {0} is not supported")]
-    InvalidExternalIdUpdate(EntityTopicId),
-
-    #[error("Updating the entity type of {0} is not supported")]
-    InvalidEntityTypeUpdate(EntityTopicId),
+    #[error(transparent)]
+    InvalidEntityUpdate(#[from] entity_store::Error),
 
     #[error("Updating the twin data of {0} with a registration message is not supported")]
     InvalidEntityTwinUpdate(EntityTopicId),
-
-    #[error("Updating the parent of the main device is not supported")]
-    InvalidMainDeviceParentUpdate,
 
     #[error("Auto registration of the entity with topic id {0} failed as it does not match the default topic scheme: 'device/<device-id>/service/<service-id>'. Try explicit registration instead.")]
     NonDefaultTopicScheme(EntityTopicId),
@@ -198,41 +195,27 @@ impl EntityCache {
     }
 
     fn insert(&mut self, mut entity: EntityRegistrationMessage) -> Result<bool, Error> {
-        let parent = match entity.r#type {
-            EntityType::MainDevice => None,
-            EntityType::ChildDevice => entity
-                .parent
-                .clone()
-                .or_else(|| Some(self.entities.main_device_tid.clone())),
-            EntityType::Service => entity
-                .parent
-                .clone()
-                .or_else(|| entity.topic_id.default_service_parent_identifier())
-                .or_else(|| Some(self.entities.main_device_tid.clone())),
-        };
-
-        if entity.r#type != EntityType::MainDevice
-            && !self.entities.contains(
-                parent
-                    .as_ref()
-                    .expect("At least a default parent exists for child entities"),
-            )
-        {
-            if entity.r#type == EntityType::Service {
-                entity.parent = parent.clone();
+        let parent = entity.parent_or_default(&self.entities.main_device_tid);
+        if let Some(parent) = &parent {
+            if let Err(err) = validate_parent(&entity.topic_id, parent, |topic_id| {
+                self.entities.get_metadata(topic_id)
+            }) {
+                let entity_store::Error::NoParent(_) = err else {
+                    return Err(err.into());
+                };
+                if entity.r#type == EntityType::Service {
+                    entity.parent = Some(parent.clone());
+                }
+                self.pending_entities
+                    .cache_early_registration_message(entity);
+                return Ok(false);
             }
-            self.pending_entities
-                .cache_early_registration_message(entity);
-            return Ok(false);
         }
 
         let topic_id = entity.topic_id.clone();
-        let external_id = if let Some(id) = entity.external_id {
-            (self.external_id_validator_fn)(id.as_ref())?
-        } else if entity.r#type == EntityType::MainDevice {
-            self.entities.main_device_xid.clone()
-        } else {
-            (self.external_id_mapper_fn)(&entity.topic_id, self.main_device_external_id())
+        let external_id = match entity.external_id {
+            Some(id) => (self.external_id_validator_fn)(id.as_ref())?,
+            None => self.default_external_id(&topic_id, entity.r#type),
         };
 
         let entity_metadata = EntityMetadata {
@@ -253,24 +236,36 @@ impl EntityCache {
         Ok(true)
     }
 
+    /// The external id of an entity registered without an `@id`
+    fn default_external_id(
+        &self,
+        topic_id: &EntityTopicId,
+        r#type: EntityType,
+    ) -> EntityExternalId {
+        match r#type {
+            EntityType::MainDevice => self.entities.main_device_xid.clone(),
+            _ => (self.external_id_mapper_fn)(topic_id, self.main_device_external_id()),
+        }
+    }
+
     fn update(
         &mut self,
-        entity: EntityRegistrationMessage,
+        mut entity: EntityRegistrationMessage,
         existing_entity: EntityMetadata,
     ) -> Result<UpdateOutcome, Error> {
         let topic_id = entity.topic_id.clone();
 
-        if entity.r#type != existing_entity.r#type {
-            return Err(Error::InvalidEntityTypeUpdate(topic_id.clone()));
-        }
-
-        if entity.external_id.is_some() && entity.external_id != existing_entity.external_id {
-            return Err(Error::InvalidExternalIdUpdate(topic_id.clone()));
-        }
-
-        if entity.r#type == EntityType::MainDevice && entity.parent != existing_entity.parent {
-            return Err(Error::InvalidMainDeviceParentUpdate);
-        }
+        // A registration message for an existing entity is its complete new definition,
+        // so the parent and the external id fall back to their defaults when not given.
+        // Every cached entity has an external id, generated when no `@id` was given,
+        // hence an `@id` can only be left out if it was left out on the first registration.
+        let parent = entity.parent_or_default(&self.entities.main_device_tid);
+        entity.external_id = entity
+            .external_id
+            .or_else(|| Some(self.default_external_id(&topic_id, entity.r#type)));
+        validate_reregistration(&existing_entity, &entity, parent.as_ref(), |topic_id| {
+            self.entities.get_metadata(topic_id)
+        })?;
 
         let mut merged_twin_data = existing_entity.twin_data.clone();
         merged_twin_data.extend(entity.twin_data);
@@ -282,14 +277,8 @@ impl EntityCache {
             topic_id: topic_id.clone(),
             external_id: existing_entity.external_id.clone(),
             r#type: existing_entity.r#type,
-            parent: entity
-                .parent
-                .clone()
-                .or_else(|| existing_entity.parent.clone()),
-            health_endpoint: entity
-                .health_endpoint
-                .clone()
-                .or_else(|| existing_entity.health_endpoint.clone()),
+            parent,
+            health_endpoint: entity.health_endpoint,
             twin_data: existing_entity.twin_data.clone(),
             config: existing_entity.config.clone(),
         };
@@ -481,12 +470,14 @@ impl EntityIndexes {
         entity
     }
 
-    pub fn contains(&self, topic_id: &EntityTopicId) -> bool {
-        self.entities.contains_key(topic_id)
-    }
-
     fn get(&self, entity_topic_id: &EntityTopicId) -> Option<&CloudEntityMetadata> {
         self.entities.get(entity_topic_id)
+    }
+
+    /// Returns the cloud-agnostic metadata of a registered entity,
+    /// as expected by the entity validation functions of `tedge_api`.
+    fn get_metadata(&self, entity_topic_id: &EntityTopicId) -> Option<&EntityMetadata> {
+        self.get(entity_topic_id).map(|entity| &entity.metadata)
     }
 
     fn get_mut(&mut self, entity_topic_id: &EntityTopicId) -> Option<&mut CloudEntityMetadata> {
@@ -593,7 +584,9 @@ mod tests {
     use crate::entity_cache::CloudEntityMetadata;
     use crate::entity_cache::UpdateOutcome;
     use assert_matches::assert_matches;
+    use serde_json::json;
     use serde_json::Map;
+    use serde_json::Value as JsonValue;
     use tedge_api::entity::EntityExternalId;
     use tedge_api::entity::EntityMetadata;
     use tedge_api::entity::EntityType;
@@ -601,6 +594,7 @@ mod tests {
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_flows::FlowContextHandle;
+    use test_case::test_case;
 
     #[test]
     fn external_id_generation() {
@@ -697,15 +691,16 @@ mod tests {
         assert_matches!(res, Ok(UpdateOutcome::Unchanged));
 
         // Reg message without the original twin data
-        let res = cache.upsert(EntityRegistrationMessage::new_custom(
-            topic_id.clone(),
-            EntityType::ChildDevice,
-        ));
+        let res = cache.upsert(
+            EntityRegistrationMessage::new_custom(topic_id.clone(), EntityType::ChildDevice)
+                .with_external_id("child0".into()),
+        );
         assert_matches!(res, Ok(UpdateOutcome::Unchanged));
 
         // Reg message with a subset of original twin data
         let res = cache.upsert(
             EntityRegistrationMessage::new_custom(topic_id.clone(), EntityType::ChildDevice)
+                .with_external_id("child0".into())
                 .with_twin_fragment("key2".to_string(), "val2".into()),
         );
         assert_matches!(res, Ok(UpdateOutcome::Unchanged));
@@ -721,6 +716,196 @@ mod tests {
         assert_eq!(metadata.metadata.twin_data["key1"], "val1");
         assert_eq!(metadata.metadata.twin_data["key2"], "val2");
         assert_eq!(metadata.metadata.twin_data["key3"], "val3");
+    }
+
+    #[test]
+    fn reregistration_without_parent_resets_it_to_the_default() {
+        let mut cache = new_entity_cache();
+        register(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device"}),
+        );
+        register(
+            &mut cache,
+            "device/child01//",
+            json!({"@type": "child-device", "@parent": "device/child0//"}),
+        );
+
+        let res = upsert(
+            &mut cache,
+            "device/child01//",
+            json!({"@type": "child-device"}),
+        );
+
+        let Ok(UpdateOutcome::Updated(new, old)) = res else {
+            panic!("Expected the entity to be updated, got: {res:?}");
+        };
+        assert_eq!(old.parent, Some(entity("device/child0//")));
+        assert_eq!(new.parent, Some(EntityTopicId::default_main_device()));
+    }
+
+    #[test]
+    fn reregistration_without_health_endpoint_clears_it() {
+        let mut cache = new_entity_cache();
+        register(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device", "@health": "device/child0/service/foo"}),
+        );
+
+        let res = upsert(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device"}),
+        );
+
+        let Ok(UpdateOutcome::Updated(new, old)) = res else {
+            panic!("Expected the entity to be updated, got: {res:?}");
+        };
+        assert_eq!(
+            old.health_endpoint,
+            Some(entity("device/child0/service/foo"))
+        );
+        assert_eq!(new.health_endpoint, None);
+    }
+
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/child0//"}),
+        "Entity: 'device/child0//' can not be its own parent";
+        "self_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/main/service/tedge-agent"}),
+        "Entity: 'device/main/service/tedge-agent' can not be a parent of 'device/child0//' because it is a service. Only devices can be parents";
+        "service_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/child000//"}),
+        "Entity: 'device/child000//' can not be a parent of 'device/child0//' because 'device/child000//' is a descendent of 'device/child0//'";
+        "descendent_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/unknown//"}),
+        "The specified parent \"device/unknown//\" does not exist in the entity store";
+        "unknown_parent"
+    )]
+    #[test_case(
+        "device/main//",
+        json!({"@type": "device", "@parent": "device/child0//"}),
+        "The parent of main device can not be updated";
+        "main_device_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "service", "@id": "child0"}),
+        "Updating the entity type of device/child0// is not supported";
+        "type_change"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "other-id"}),
+        "Updating the external id of device/child0// is not supported";
+        "external_id_change"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device"}),
+        "Updating the external id of device/child0// is not supported";
+        "external_id_omitted"
+    )]
+    #[test_case(
+        "device/child00//",
+        json!({"@type": "child-device", "@id": "child00", "@parent": "device/child0//"}),
+        "Updating the external id of device/child00// is not supported";
+        "external_id_added"
+    )]
+    fn invalid_reregistration_is_rejected_and_not_cached(
+        topic_id: &str,
+        payload: JsonValue,
+        error_msg: &str,
+    ) {
+        let mut cache = new_entity_cache();
+        register(
+            &mut cache,
+            "device/main/service/tedge-agent",
+            json!({"@type": "service"}),
+        );
+        register(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device", "@id": "child0"}),
+        );
+        register(
+            &mut cache,
+            "device/child00//",
+            json!({"@type": "child-device", "@parent": "device/child0//"}),
+        );
+        register(
+            &mut cache,
+            "device/child000//",
+            json!({"@type": "child-device", "@parent": "device/child00//"}),
+        );
+        let before = cache.get(&entity(topic_id)).cloned();
+
+        let res = upsert(&mut cache, topic_id, payload);
+
+        assert_eq!(res.unwrap_err().to_string(), error_msg);
+        assert_eq!(cache.get(&entity(topic_id)).cloned(), before);
+
+        // A rejected re-registration is not cached until its parent is registered
+        register(
+            &mut cache,
+            "device/unknown//",
+            json!({"@type": "child-device"}),
+        );
+        assert_eq!(cache.get(&entity(topic_id)).cloned(), before);
+    }
+
+    #[test]
+    fn registration_under_a_service_is_rejected() {
+        let mut cache = new_entity_cache();
+        register(
+            &mut cache,
+            "device/main/service/tedge-agent",
+            json!({"@type": "service"}),
+        );
+
+        let res = upsert(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device", "@parent": "device/main/service/tedge-agent"}),
+        );
+
+        assert_eq!(
+            res.unwrap_err().to_string(),
+            "Entity: 'device/main/service/tedge-agent' can not be a parent of 'device/child0//' because it is a service. Only devices can be parents"
+        );
+        assert!(cache.get(&entity("device/child0//")).is_none());
+    }
+
+    fn upsert(
+        cache: &mut EntityCache,
+        topic_id: &str,
+        payload: serde_json::Value,
+    ) -> Result<UpdateOutcome, Error> {
+        let registration =
+            EntityRegistrationMessage::try_from(entity(topic_id), payload.to_string().as_bytes())
+                .unwrap();
+        cache.upsert(registration)
+    }
+
+    fn register(cache: &mut EntityCache, topic_id: &str, payload: serde_json::Value) {
+        let res = upsert(cache, topic_id, payload);
+        assert_matches!(res, Ok(UpdateOutcome::Inserted(_)));
+    }
+
+    fn entity(topic_id: &str) -> EntityTopicId {
+        topic_id.parse().unwrap()
     }
 
     fn new_entity_cache() -> EntityCache {
