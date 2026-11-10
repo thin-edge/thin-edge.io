@@ -26,6 +26,7 @@ use tedge_mqtt_ext::MqttMessage;
 use tedge_mqtt_ext::MqttRequest;
 use tedge_mqtt_ext::TopicFilter;
 use tracing::error;
+use tracing::info;
 
 #[derive(Debug)]
 pub enum EntityStoreRequest {
@@ -206,9 +207,21 @@ impl EntityStoreServer {
             return;
         }
 
+        let previous = self.entity_store.get(&topic_id).cloned();
         match EntityRegistrationMessage::try_from(topic_id.clone(), payload) {
             Ok(entity) => match self.entity_store.update(entity.clone()) {
                 Ok(registered) => {
+                    if let Some(previous) = previous {
+                        self.log_entity_changes(&previous);
+                    } else if registered.is_empty() {
+                        info!(
+                            "Registration of {}: {topic_id} with {} is pending until its parent is registered",
+                            entity.r#type,
+                            entity.to_json()
+                        );
+                    } else {
+                        log_registered_entities(&registered);
+                    }
                     for entity in registered {
                         for (fragment_key, fragment_value) in entity.reg_message.twin_data {
                             self.publish_twin_data(
@@ -246,6 +259,7 @@ impl EntityStoreServer {
         {
             let entities = self.entity_store.auto_register_entity(&topic_id)?;
             for entity in entities {
+                info!("Auto-registered {}: {}", entity.r#type, entity.topic_id);
                 let message = entity
                     .to_mqtt_message(&self.config.mqtt_schema)
                     .with_retain();
@@ -339,6 +353,7 @@ impl EntityStoreServer {
         }
 
         let registered = self.entity_store.update(entity.clone())?;
+        log_registered_entities(&registered);
 
         if !registered.is_empty() {
             let message = entity.to_mqtt_message(&self.config.mqtt_schema);
@@ -352,7 +367,12 @@ impl EntityStoreServer {
         topic_id: &EntityTopicId,
         update_message: EntityUpdateMessage,
     ) -> Result<&EntityMetadata, entity_store::Error> {
-        let entity = self.entity_store.update_entity(topic_id, update_message)?;
+        let previous = self.entity_store.get(topic_id).cloned();
+        self.entity_store.update_entity(topic_id, update_message)?;
+        if let Some(previous) = previous {
+            self.log_entity_changes(&previous);
+        }
+        let entity = self.entity_store.try_get(topic_id)?;
         let entity_reg_msg: EntityRegistrationMessage = entity.into();
         let entity_msg = entity_reg_msg.to_mqtt_message(&self.config.mqtt_schema);
 
@@ -361,10 +381,34 @@ impl EntityStoreServer {
         self.entity_store.try_get(topic_id)
     }
 
+    /// Log what changed in an entity, given its previous version, if anything
+    fn log_entity_changes(&self, previous: &EntityMetadata) {
+        let Some(current) = self.entity_store.get(&previous.topic_id) else {
+            return;
+        };
+        let changes = current.changes_from(previous);
+        if !changes.is_empty() {
+            info!(
+                "Updated {}: {} with changes: {changes}",
+                current.r#type, current.topic_id
+            );
+        }
+    }
+
     async fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityMetadata> {
         let deleted = self.entity_store.deregister_entity(topic_id);
-        if deleted.is_empty() {
+        let Some((entity, descendants)) = deleted.split_first() else {
             return deleted;
+        };
+        if descendants.is_empty() {
+            info!("Deregistered {}: {topic_id}", entity.r#type);
+        } else {
+            info!(
+                "Deregistered {}: {topic_id} and its {} descendants: {}",
+                entity.r#type,
+                descendants.len(),
+                join_topic_ids(descendants.iter().map(|e| &e.topic_id))
+            );
         }
 
         let mut topics = TopicFilter::empty();
@@ -449,6 +493,39 @@ impl EntityStoreServer {
 
         Ok(())
     }
+}
+
+/// Log the entities registered by a single registration message:
+/// the target entity followed by any of its pending descendants that are now registered too
+fn log_registered_entities(registered: &[RegisteredEntityData]) {
+    let Some((entity, pending)) = registered.split_first() else {
+        return;
+    };
+    let entity = &entity.reg_message;
+    if pending.is_empty() {
+        info!(
+            "Registered {}: {} with {}",
+            entity.r#type,
+            entity.topic_id,
+            entity.to_json()
+        );
+    } else {
+        info!(
+            "Registered {}: {} with {}, along with its {} pending descendants: {}",
+            entity.r#type,
+            entity.topic_id,
+            entity.to_json(),
+            pending.len(),
+            join_topic_ids(pending.iter().map(|e| &e.reg_message.topic_id))
+        );
+    }
+}
+
+fn join_topic_ids<'a>(topic_ids: impl Iterator<Item = &'a EntityTopicId>) -> String {
+    topic_ids
+        .map(|topic_id| topic_id.to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 pub fn subscriptions(mqtt_schema: &MqttSchema) -> TopicFilter {

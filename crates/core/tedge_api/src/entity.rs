@@ -110,6 +110,37 @@ impl EntityMetadata {
         self
     }
 
+    /// Describe the registration fields that differ from a previous version of this entity
+    ///
+    /// Returns a comma-separated list of `key: old -> new` pairs, using the keys of a registration message
+    /// (e.g. `@parent: "device/main//" -> "device/child1//", name: "foo" -> "bar"`),
+    /// or an empty string if nothing changed.
+    /// A field missing from one of the versions is shown as `null`.
+    pub fn changes_from(&self, previous: &EntityMetadata) -> String {
+        let previous = previous.registration_fields();
+        let current = self.registration_fields();
+        let keys: std::collections::BTreeSet<&String> =
+            previous.keys().chain(current.keys()).collect();
+        keys.into_iter()
+            .filter_map(|key| {
+                let old = previous.get(key).unwrap_or(&JsonValue::Null);
+                let new = current.get(key).unwrap_or(&JsonValue::Null);
+                (old != new).then(|| format!("{key}: {old} -> {new}"))
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// The fields of this entity as they appear in a registration message
+    fn registration_fields(&self) -> Map<String, JsonValue> {
+        let mut fields = match serde_json::to_value(self) {
+            Ok(JsonValue::Object(fields)) => fields,
+            _ => Map::new(),
+        };
+        fields.extend(self.twin_data.clone());
+        fields
+    }
+
     /// Creates a entity metadata for the main device.
     pub fn main_device(device_id: Option<EntityExternalId>) -> Self {
         Self {
@@ -200,4 +231,31 @@ pub enum InsertOutcome {
     Unchanged,
     Updated,
     Inserted,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn changes_from_lists_only_the_modified_fields() {
+        let child = EntityTopicId::default_child_device("child1").unwrap();
+        let mut previous = EntityMetadata::new(child.clone(), EntityType::ChildDevice)
+            .with_parent(EntityTopicId::default_main_device());
+        previous.twin_data.insert("name".into(), json!("foo"));
+        previous.twin_data.insert("type".into(), json!("sensor"));
+
+        let mut current = previous
+            .clone()
+            .with_parent(EntityTopicId::default_child_device("child0").unwrap())
+            .with_health_endpoint(child);
+        current.twin_data.insert("name".into(), json!("bar"));
+
+        assert_eq!(
+            current.changes_from(&previous),
+            r#"@health: null -> "device/child1//", @parent: "device/main//" -> "device/child0//", name: "foo" -> "bar""#
+        );
+        assert_eq!(current.changes_from(&current), "");
+    }
 }
