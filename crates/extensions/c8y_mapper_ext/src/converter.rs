@@ -71,6 +71,7 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
+use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_api::script::ShellScript;
 use tedge_api::workflow::log::log_dir::OperationLogsError;
 use tedge_api::workflow::GenericCommandState;
@@ -294,14 +295,68 @@ impl CumulocityConverter {
         assert!(channel == Channel::EntityMetadata);
         if message.payload().is_empty() {
             // Clear cached entity
-            self.entity_cache.delete(&topic_id);
+            if let Some(entity) = self.entity_cache.delete(&topic_id) {
+                info!(
+                    "Deregistered {}: {topic_id} (external id: {})",
+                    entity.r#type(),
+                    entity.external_id.as_ref()
+                );
+            }
             self.service_commands.remove_service(&topic_id);
             return Ok(UpdateOutcome::Deleted);
         }
 
         let register_message =
-            EntityRegistrationMessage::try_from(topic_id, message.payload_bytes())?;
-        Ok(self.entity_cache.upsert(register_message.clone())?)
+            EntityRegistrationMessage::try_from(topic_id.clone(), message.payload_bytes())?;
+        let entity_type = register_message.r#type;
+        let payload = message.payload_str().unwrap_or_default();
+        let outcome = self.entity_cache.upsert(register_message)?;
+        match &outcome {
+            UpdateOutcome::Inserted(registered) => {
+                self.log_registered_entities(registered, payload)
+            }
+            UpdateOutcome::Updated(updated, previous) => {
+                let changes = updated.changes_from(previous);
+                if !changes.is_empty() {
+                    info!("Updated {entity_type}: {topic_id} with changes: {changes}");
+                }
+            }
+            UpdateOutcome::Unchanged if self.entity_cache.get(&topic_id).is_none() => info!(
+                "Registration of {entity_type}: {topic_id} with {payload} is pending until its parent is registered"
+            ),
+            UpdateOutcome::Unchanged | UpdateOutcome::Deleted => {}
+        }
+        Ok(outcome)
+    }
+
+    /// Log the entities registered by a single registration message:
+    /// the target entity followed by any of its pending descendants that are now registered too
+    fn log_registered_entities(&self, registered: &[RegisteredEntityData], payload: &str) {
+        // All the registered entities are guaranteed to be in the cache,
+        // which holds their external ids, possibly generated on registration
+        let mut registered = registered
+            .iter()
+            .filter_map(|entity| self.entity_cache.get(&entity.reg_message.topic_id));
+        let Some(entity) = registered.next() else {
+            return;
+        };
+        let entity_type = entity.r#type();
+        let topic_id = entity.topic_id();
+        let external_id = entity.external_id.as_ref();
+
+        let descendants: Vec<_> = registered
+            .map(|e| format!("{} (external id: {})", e.topic_id(), e.external_id.as_ref()))
+            .collect();
+        if descendants.is_empty() {
+            info!(
+                "Registered {entity_type}: {topic_id} (external id: {external_id}) with {payload}"
+            );
+        } else {
+            info!(
+                "Registered {entity_type}: {topic_id} (external id: {external_id}) with {payload}, along with its descendants: {}",
+                descendants.join(", ")
+            );
+        }
     }
 
     /// Convert an entity registration message into its C8y counterpart
@@ -1628,7 +1683,6 @@ pub(crate) mod tests {
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_api::mqtt_topics::OperationType;
-    use tedge_api::pending_entity_store::RegisteredEntityData;
     use tedge_api::script::ShellScript;
     use tedge_api::workflow::log::log_dir::OperationLogs;
     use tedge_api::CommandStatus;

@@ -1023,29 +1023,33 @@ impl EntityRegistrationMessage {
     }
 
     // TODO: manual serialize impl
-    pub fn to_mqtt_message(mut self, mqtt_schema: &MqttSchema) -> MqttMessage {
+    pub fn to_mqtt_message(self, mqtt_schema: &MqttSchema) -> MqttMessage {
+        let message = self.to_json();
+        let message_topic = mqtt_schema.topic_for(&self.topic_id, &Channel::EntityMetadata);
+        MqttMessage::new(&message_topic, message).with_retain()
+    }
+
+    /// The JSON payload of this registration message
+    pub fn to_json(&self) -> String {
         let mut props = serde_json::Map::new();
 
         props.insert("@type".to_string(), self.r#type.to_string().into());
 
-        if let Some(external_id) = self.external_id {
+        if let Some(external_id) = &self.external_id {
             props.insert("@id".to_string(), external_id.as_ref().to_string().into());
         }
 
-        if let Some(parent) = self.parent {
+        if let Some(parent) = &self.parent {
             props.insert("@parent".to_string(), parent.to_string().into());
         }
 
-        if let Some(health_endpoint) = self.health_endpoint {
+        if let Some(health_endpoint) = &self.health_endpoint {
             props.insert("@health".to_string(), health_endpoint.to_string().into());
         }
 
-        props.append(&mut self.twin_data);
+        props.extend(self.twin_data.clone());
 
-        let message = serde_json::to_string(&props).unwrap();
-
-        let message_topic = mqtt_schema.topic_for(&self.topic_id, &Channel::EntityMetadata);
-        MqttMessage::new(&message_topic, message).with_retain()
+        serde_json::to_string(&props).unwrap()
     }
 }
 
