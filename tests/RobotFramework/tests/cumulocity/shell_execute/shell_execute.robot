@@ -149,6 +149,33 @@ Execute multiline shell command
     Operation Should Be SUCCESSFUL    ${operation}
     Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    hello\nworld\n
 
+Removes the terminal escape sequences from the output
+    [Documentation]    Cumulocity rejects a status update containing control characters,
+    ...    leaving the operation in the EXECUTING state
+    ${operation}=    Cumulocity.Execute Shell Command    printf '\\033[31mhello\\033[0m\\n'
+    Operation Should Be SUCCESSFUL    ${operation}
+    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    hello\n
+
+Removes a two-character escape sequence from the output
+    ${operation}=    Cumulocity.Execute Shell Command    printf 'a\\033b'
+    Operation Should Be SUCCESSFUL    ${operation}
+    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    a
+
+Removes the control characters from the output
+    ${operation}=    Cumulocity.Execute Shell Command    printf 'a\\001b\\002c\\tend\\n'
+    Operation Should Be SUCCESSFUL    ${operation}
+    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    abc\tend\n
+
+Removes the terminal escape sequences from the failure reason
+    ${operation}=    Cumulocity.Execute Shell Command
+    ...    printf '\\033[31merror\\033[0m\\n' >&2; exit 1
+    Operation Should Be FAILED    ${operation}    failure_reason=.*Command returned exit code 1: error$
+
+Disables the colors of the commands following the NO_COLOR convention
+    ${operation}=    Cumulocity.Execute Shell Command    text=echo "NO_COLOR=$NO_COLOR"
+    Operation Should Be SUCCESSFUL    ${operation}
+    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    NO_COLOR=1\n
+
 Commands fail if the data.path does not exist and include the path in the failure reason
     [Tags]    \#3796
     Execute Command    cmd=tedge config set data.path /dummy
