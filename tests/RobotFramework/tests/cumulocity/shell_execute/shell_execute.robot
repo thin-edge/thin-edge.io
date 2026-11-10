@@ -171,10 +171,10 @@ Removes the terminal escape sequences from the failure reason
     ...    printf '\\033[31merror\\033[0m\\n' >&2; exit 1
     Operation Should Be FAILED    ${operation}    failure_reason=.*Command returned exit code 1: error$
 
-Disables the colors of the commands following the NO_COLOR convention
-    ${operation}=    Cumulocity.Execute Shell Command    text=echo "NO_COLOR=$NO_COLOR"
+Disables the colors of the commands following the NO_COLOR or CLICOLOR conventions
+    ${operation}=    Cumulocity.Execute Shell Command    text=echo "NO_COLOR=$NO_COLOR CLICOLOR=$CLICOLOR"
     Operation Should Be SUCCESSFUL    ${operation}
-    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    NO_COLOR=1\n
+    Should Be Equal    ${operation.to_json()["c8y_Command"]["result"]}    NO_COLOR=1 CLICOLOR=0\n
 
 Commands fail if the data.path does not exist and include the path in the failure reason
     [Tags]    \#3796

@@ -2,6 +2,7 @@ use super::payload::SmartrestPayload;
 use super::payload::SmartrestPayloadError;
 use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::error::SmartRestSerializerError;
+use crate::smartrest::message::strip_unsupported_chars;
 use csv::StringRecord;
 use serde::ser::SerializeSeq;
 use serde::Serialize;
@@ -42,6 +43,8 @@ pub fn fail_operation_with_id(op_id: &str, reason: &str) -> SmartrestPayload {
 }
 
 fn fail_operation(template_id: usize, operation: &str, reason: &str) -> SmartrestPayload {
+    let reason = &strip_unsupported_chars(reason);
+
     // If the failure reason exceeds 500 bytes, truncate it
     if reason.len() <= 500 {
         SmartrestPayload::serialize((template_id, operation, reason))
@@ -105,6 +108,9 @@ fn succeed_static_operation(
 /// If the provided CSV does not match the standard Cumulocity format, the standard CSV escaping
 /// rules will be applied. For example, `a,field "with" quotes` will be converted to
 /// `a,"field ""with"" quotes"` before being appended to the output of this function.
+///
+/// The characters rejected by Cumulocity, e.g. the terminal color escape sequences,
+/// are removed from the payload.
 ///
 /// If the message size turns out to be bigger than maximum cumulocity message size, it will be truncated to fit in the
 /// limit.
@@ -347,11 +353,26 @@ impl C8yOperation for &String {
     }
 }
 
-#[derive(Debug, Serialize, Eq, PartialEq)]
-#[serde(untagged)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum TextOrCsv {
     Text(String),
     Csv(EmbeddedCsv),
+}
+
+/// Serializes the text, or the CSV fields, without the characters rejected by Cumulocity.
+///
+/// CSV fields are stripped individually during serialization,
+/// so the delimiters and quotes are not taken as part of an escape sequence.
+impl Serialize for TextOrCsv {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            TextOrCsv::Text(text) => serializer.serialize_str(&strip_unsupported_chars(text)),
+            TextOrCsv::Csv(csv) => csv.serialize(serializer),
+        }
+    }
 }
 
 impl From<EmbeddedCsv> for TextOrCsv {
@@ -384,7 +405,7 @@ impl Serialize for EmbeddedCsv {
         let record = parse_single_record(&self.0)?;
         let mut seq = serializer.serialize_seq(Some(record.len()))?;
         for field in record.iter() {
-            seq.serialize_element(field)?;
+            seq.serialize_element(&strip_unsupported_chars(field))?;
         }
         seq.end()
     }
@@ -724,6 +745,41 @@ mod tests {
                 &field[field.len().saturating_sub(30)..]
             );
         }
+    }
+
+    #[test]
+    fn succeed_operation_removes_unsupported_chars() {
+        let smartrest = succeed_operation_with_id(
+            "1234",
+            TextOrCsv::Text("\x1b[31mhello\x1b[0m\n\0world".into()),
+        )
+        .unwrap();
+
+        assert_eq!(smartrest.as_str(), "506,1234,\"hello\nworld\"");
+    }
+
+    #[test]
+    fn succeed_operation_removes_unsupported_chars_from_csv() {
+        let smartrest =
+            succeed_operation_with_id("1234", EmbeddedCsv::new("\x1b[1mfoo\x1b[0m,bar\x07".into()))
+                .unwrap();
+
+        assert_eq!(smartrest.as_str(), "506,1234,foo,bar");
+    }
+
+    #[test]
+    fn succeed_operation_keeps_the_csv_fields_following_an_escape_character() {
+        let smartrest =
+            succeed_operation_with_id("1234", EmbeddedCsv::new("foo\x1b,bar".into())).unwrap();
+
+        assert_eq!(smartrest.as_str(), "506,1234,foo,bar");
+    }
+
+    #[test]
+    fn fail_operation_removes_unsupported_chars() {
+        let smartrest = fail_operation_with_id("1234", "\x1b[31merror\x1b[0m: a\x1bb");
+
+        assert_eq!(smartrest.as_str(), "505,1234,error: a");
     }
 
     #[test]

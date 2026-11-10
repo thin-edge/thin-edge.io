@@ -62,6 +62,11 @@ const TERMINATION_GRACE_PERIOD: Duration = Duration::from_secs(60);
 #[cfg(test)]
 const TERMINATION_GRACE_PERIOD: Duration = Duration::from_secs(1);
 
+/// The environment variables asking the command line tools not to print colors:
+/// `NO_COLOR` set to any non-empty value, see <https://no-color.org>,
+/// and `CLICOLOR` set to `0`, see <https://bixense.com/clicolors>
+const NO_COLOR_ENVS: [(&str, &str); 2] = [("NO_COLOR", "1"), ("CLICOLOR", "0")];
+
 /// The file the output of a command is stored into
 pub struct OutputFile {
     pub file: File,
@@ -73,6 +78,10 @@ pub struct OutputFile {
 
 /// Run `<shell> -c <command>`, capturing the combined stdout and stderr of the command,
 /// and adding the given environment variables to the environment of the command.
+///
+/// `NO_COLOR` and `CLICOLOR` are set, so the tools following either convention
+/// don't add color escape sequences to an output which is not displayed by a terminal.
+/// The command can still override them to get colors.
 ///
 /// The output is relayed through a pipe to the given file.
 /// The pipe is shared by stdout and stderr, so that both streams are interleaved
@@ -112,6 +121,7 @@ pub fn execute_to_file(
     let mut child = Command::new(shell)
         // "--" ends the shell options, so a command starting with a hyphen is run as a command
         .args(["-c", "--", command])
+        .envs(NO_COLOR_ENVS)
         .envs(envs.iter().copied())
         .stdin(Stdio::null())
         .stdout(pipe_writer.try_clone()?)
@@ -444,6 +454,13 @@ mod tests {
 
         assert_eq!(outcome.timed_out, None);
         assert_eq!(outcome.result, "before\nbefore\n");
+    }
+
+    #[test]
+    fn colors_are_disabled() {
+        let outcome =
+            execute_with_defaults("echo \"NO_COLOR=$NO_COLOR CLICOLOR=$CLICOLOR\"").unwrap();
+        assert_eq!(outcome.result, "NO_COLOR=1 CLICOLOR=0\n");
     }
 
     #[test]
