@@ -1,0 +1,9 @@
+# The application property in the C2D message's property bag whose value selects the
+# thin-edge operation to run (e.g. a cloud-side sender sets `method=shell` as a custom
+# message property when sending the C2D message).
+# [methods.*] is optional: a method with no entry runs the tedge operation of the
+# same name. Add an entry to rename the operation, or to require that certain
+# fields be present in the payload.
+[methods.shell]
+operation = "shell_execute"
+required_fragment = ["command"]

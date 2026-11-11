@@ -1,0 +1,18 @@
+version = "1.0"
+description = "Turn Azure IoT Hub cloud-to-device messages into thin-edge commands"
+tags = ["az", "cloud-to-device"]
+
+# az/messages/devicebound/<property-bag>, bridged from devices/{id}/messages/devicebound/#
+input.mqtt.topics = ["az/messages/devicebound/#"]
+
+steps = [
+    { script = "c2d.js" },
+]
+
+[output.mqtt]
+
+[errors.mqtt]
+topic = "te/errors"
+
+[config]
+methods = "${params.methods}"
