@@ -91,44 +91,34 @@ pub(crate) fn strip_unsupported_chars(input: &str) -> String {
 /// Consumes the longest prefix matching an escape sequence:
 /// a sequence missing its final byte is dropped up to where it stops matching.
 fn skip_escape_sequence(chars: &mut Peekable<Chars>) {
-    // Looping, rather than recursing, on an escape sequence nested in a control string,
-    // so a long run of such sequences cannot overflow the stack
-    'sequence: loop {
-        match chars.peek() {
-            // Control Sequence, e.g. the colors: parameter and intermediate bytes, then a final byte
-            Some('[') => {
-                chars.next();
-                while chars
-                    .next_if(|c| CSI_PARAMETER_OR_INTERMEDIATE.contains(c))
-                    .is_some()
-                {}
-                chars.next_if(|c| CSI_FINAL.contains(c));
-            }
-            // Control String, e.g. a hyperlink or a window title: terminated by `BEL`, `ST` or `ESC \`.
-            // An unterminated string is not skipped past the end of the line,
-            // so a stray escape character doesn't remove the following lines.
-            Some(']' | 'P' | 'X' | '^' | '_') => {
-                chars.next();
-                while let Some(c) = chars.next_if(|c| *c != '\n') {
-                    if c == BEL || c == ST {
-                        break;
-                    }
-                    if c == ESC {
-                        // `ESC \` terminates the string, any other `ESC` starts a new sequence
-                        if chars.next_if_eq(&'\\').is_none() {
-                            continue 'sequence;
-                        }
-                        break;
-                    }
+    match chars.peek() {
+        // Control Sequence, e.g. the colors: parameter and intermediate bytes, then a final byte
+        Some('[') => {
+            chars.next();
+            while chars
+                .next_if(|c| CSI_PARAMETER_OR_INTERMEDIATE.contains(c))
+                .is_some()
+            {}
+            chars.next_if(|c| CSI_FINAL.contains(c));
+        }
+        // Control String, e.g. a hyperlink or a window title: terminated by `BEL`, `ST` or `ESC \`.
+        // An unterminated string is not skipped past the end of the line,
+        // so a stray escape character doesn't remove the following lines.
+        Some(']' | 'P' | 'X' | '^' | '_') => {
+            chars.next();
+            // The loop stops before an `ESC` and leaves it to the caller:
+            // `ESC \` ends the string, any other `ESC` starts a new sequence
+            while let Some(c) = chars.next_if(|c| *c != '\n' && *c != ESC) {
+                if c == BEL || c == ST {
+                    break;
                 }
             }
-            // Other escape sequences: intermediate bytes, then a final byte
-            _ => {
-                while chars.next_if(|c| INTERMEDIATE.contains(c)).is_some() {}
-                chars.next_if(|c| FINAL.contains(c));
-            }
         }
-        return;
+        // Other escape sequences: intermediate bytes, then a final byte
+        _ => {
+            while chars.next_if(|c| INTERMEDIATE.contains(c)).is_some() {}
+            chars.next_if(|c| FINAL.contains(c));
+        }
     }
 }
 
