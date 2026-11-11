@@ -783,6 +783,14 @@ mod tests {
     }
 
     #[test]
+    fn escape_sequences_do_not_count_toward_the_failure_reason_limit() {
+        let reason = format!("{}error", "\x1b[31m".repeat(100));
+        let smartrest = fail_operation_with_id("1234", &reason);
+
+        assert_eq!(smartrest.as_str(), "505,1234,error");
+    }
+
+    #[test]
     fn fail_operation_truncates_reason_on_a_char_boundary() {
         // Each 'é' is 2 bytes long and the 500 bytes limit is even,
         // so the leading one byte 'a' is what makes it fall inside a character
