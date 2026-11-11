@@ -40,7 +40,7 @@ pub fn get_smartrest_template_id(payload: &str) -> String {
 }
 
 /// Truncates the input to `max_size` bytes, on a character boundary.
-pub fn sanitize_for_smartrest(input: &str, max_size: usize) -> String {
+pub fn truncate_for_smartrest(input: &str, max_size: usize) -> String {
     input
         .chars()
         .scan(0, |bytes_count, c| {
@@ -113,7 +113,10 @@ fn skip_escape_sequence(chars: &mut Peekable<Chars>) {
 ///
 /// If the input has only one line, returns the line only.
 /// If the input is empty or contains invalid UTF-8, it returns an empty String.
-/// The output is ensured to be SmartREST compatible.
+/// The output is truncated to `max_size` bytes, on a character boundary.
+/// The characters rejected by Cumulocity are removed by [`fail_operation_with_id`].
+///
+/// [`fail_operation_with_id`]: crate::smartrest::smartrest_serializer::fail_operation_with_id
 pub fn get_failure_reason_for_smartrest(input: &[u8], max_size: usize) -> String {
     let input_string = std::str::from_utf8(input).unwrap_or_else(|err| {
         error!("The input contains invalid UTF-8: {err}");
@@ -121,8 +124,8 @@ pub fn get_failure_reason_for_smartrest(input: &[u8], max_size: usize) -> String
     });
     let last_line = input_string.trim_end().lines().last().unwrap_or_default();
     match input_string.lines().count() {
-        0 | 1 => sanitize_for_smartrest(last_line, max_size),
-        _ => sanitize_for_smartrest(&format!("{last_line}\n\n{input_string}"), max_size),
+        0 | 1 => truncate_for_smartrest(last_line, max_size),
+        _ => truncate_for_smartrest(&format!("{last_line}\n\n{input_string}"), max_size),
     }
 }
 
@@ -245,9 +248,9 @@ mod tests {
     #[test_case("baz", "baz"; "no new line")]
     #[test_case("", ""; "empty")]
     #[test_case("こんにちは", "こんにちは"; "no ascii")]
-    fn u8_vec_is_sanitized(input: &str, expected_output: &str) {
-        let sanitized = sanitize_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
-        assert_eq!(sanitized, expected_output.to_string());
+    fn u8_vec_is_truncated(input: &str, expected_output: &str) {
+        let truncated = truncate_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
+        assert_eq!(truncated, expected_output.to_string());
     }
 
     #[rstest]
@@ -277,7 +280,7 @@ mod tests {
     #[test_case("foo bar bye", "foo bar by"; "ascii")]
     #[test_case("こんにちは", "こんに"; "no ascii")]
     fn size_u8_vec_is_stripped(input: &str, expected_output: &str) {
-        let stripped = sanitize_for_smartrest(input, 10);
+        let stripped = truncate_for_smartrest(input, 10);
         assert_eq!(stripped, expected_output.to_string());
     }
     #[test_case("baz\n", "baz"; "one line")]
