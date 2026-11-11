@@ -39,22 +39,6 @@ pub fn get_smartrest_template_id(payload: &str) -> String {
     payload.split(',').next().unwrap().to_string()
 }
 
-/// Decodes the input and truncates it to `max_size` bytes, on a character boundary.
-///
-/// If the input contains invalid UTF-8, it returns an empty String.
-///
-/// The characters rejected by Cumulocity are not removed here,
-/// but by the SmartREST serializer, field by field, see [`strip_unsupported_chars`].
-// TODO: make this return Result
-// TODO: make a variant which assumes `max_size = MAX_PAYLOAD_LIMIT_IN_BYTES`
-pub fn sanitize_bytes_for_smartrest(input: &[u8], max_size: usize) -> String {
-    let input = std::str::from_utf8(input).unwrap_or_else(|err| {
-        error!("The input contains invalid UTF-8: {err}");
-        ""
-    });
-    sanitize_for_smartrest(input, max_size)
-}
-
 /// Truncates the input to `max_size` bytes, on a character boundary.
 pub fn sanitize_for_smartrest(input: &str, max_size: usize) -> String {
     input
@@ -246,14 +230,6 @@ mod tests {
             stripped,
             "\t\n\r !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
         );
-    }
-
-    #[test]
-    fn invalid_utf8_is_contained() {
-        let invalid_sparkle_heart = vec![0, 159, 146, 150];
-        let sanitized =
-            sanitize_bytes_for_smartrest(&invalid_sparkle_heart, MAX_PAYLOAD_LIMIT_IN_BYTES);
-        assert_eq!(sanitized, "");
     }
 
     #[test]
