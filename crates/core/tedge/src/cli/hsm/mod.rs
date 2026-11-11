@@ -7,6 +7,7 @@ mod delete_key;
 mod init_token;
 mod list_keys;
 mod list_tokens;
+mod uri_scope;
 
 pub use self::create_key::CreateKeyArgs;
 pub(crate) use self::create_key::CreateKeyHsmCmd;
