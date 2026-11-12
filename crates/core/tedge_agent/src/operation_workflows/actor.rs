@@ -64,8 +64,10 @@ type DownloaderRequest = (String, DownloadRequest);
 type DownloaderResult = (String, DownloadResult);
 type UploaderRequest = (String, UploadRequest);
 type UploaderResult = (String, UploadResult);
+pub(crate) type SetTimeout = tedge_timer_ext::SetTimeout<GenericCommandState>;
+pub(crate) type Timeout = tedge_timer_ext::Timeout<GenericCommandState>;
 
-/// A generic command state that is published by the [TedgeOperationConverterActor]
+/// A generic command state that is published by the [WorkflowActor]
 /// to itself for further processing .i.e. after a state update
 #[derive(Debug)]
 pub struct InternalCommandState(GenericCommandState);
@@ -82,7 +84,7 @@ pub(crate) struct CommandAwaitingLookup {
     state: GenericCommandState,
 }
 
-fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, GenericCommandData, FsWatchEvent, ResolvedCommandTarget] : Debug);
+fan_in_message_type!(AgentInput[MqttMessage, InternalCommandState, GenericCommandData, FsWatchEvent, ResolvedCommandTarget, Timeout] : Debug);
 
 pub struct WorkflowActor {
     pub(crate) mqtt_schema: MqttSchema,
@@ -104,6 +106,7 @@ pub struct WorkflowActor {
     pub(crate) script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     pub(crate) downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
     pub(crate) uploader: ClientMessageBox<UploaderRequest, UploaderResult>,
+    pub(crate) timer: LoggingSender<SetTimeout>,
     pub(crate) entity_store: EntityStoreClient,
     pub(crate) pending_lookups: HashMap<String, CommandAwaitingLookup>,
     pub(crate) tmp_dir: Utf8PathBuf,
@@ -131,6 +134,9 @@ impl Actor for WorkflowActor {
                 }
                 AgentInput::InternalCommandState(InternalCommandState(command_state)) => {
                     self.process_command_update(command_state).await?;
+                }
+                AgentInput::Timeout(command_state) => {
+                    self.process_command_update(command_state.event).await?;
                 }
                 AgentInput::GenericCommandData(GenericCommandData::State(new_state)) => {
                     self.process_builtin_command_update(new_state).await?;
@@ -422,6 +428,7 @@ impl WorkflowActor {
     /// - from MQTT as for init and clear messages
     /// - from the engine itself when a progress is made
     /// - from one of the builtin operation actors
+    /// - from a timer triggering a timeout
     async fn process_command_update(
         &mut self,
         state: GenericCommandState,
@@ -864,6 +871,7 @@ impl WorkflowActor {
                     } else {
                         // Nothing specific has to be done: the current state has been persisted
                         // and will be resumed on completion of the sub-operation
+                        // or when the timeout expires
                         // TODO: Register a timeout event
                         log_file
                             .log_info(&format!(
@@ -875,7 +883,11 @@ impl WorkflowActor {
                     log_file.log_info("=> sub-operation timeout").await;
                     let new_state = state.update(handlers.on_timeout);
                     self.publish_command_state(new_state, &mut log_file).await?;
-                };
+                } else if let Some(timeout) = handlers.timeout {
+                    self.timer
+                        .send(SetTimeout::new(timeout, state.clone()))
+                        .await?;
+                }
 
                 Ok(())
             }
