@@ -591,6 +591,7 @@ mod tests {
     use super::Error;
     use crate::converter::CumulocityConverter;
     use crate::entity_cache::CloudEntityMetadata;
+    use crate::entity_cache::FlowContextEntity;
     use crate::entity_cache::UpdateOutcome;
     use assert_matches::assert_matches;
     use serde_json::Map;
@@ -721,6 +722,25 @@ mod tests {
         assert_eq!(metadata.metadata.twin_data["key1"], "val1");
         assert_eq!(metadata.metadata.twin_data["key2"], "val2");
         assert_eq!(metadata.metadata.twin_data["key3"], "val3");
+    }
+
+    #[test]
+    fn a_child_device_without_name_has_its_external_id_as_name_in_the_flow_context() {
+        let mut cache = new_entity_cache();
+        let topic_id: EntityTopicId = "device/child1//".parse().unwrap();
+        cache
+            .upsert(EntityRegistrationMessage::new_custom(
+                topic_id.clone(),
+                EntityType::ChildDevice,
+            ))
+            .unwrap();
+
+        let entity: FlowContextEntity = cache
+            .flow_context()
+            .get_value(topic_id.as_str())
+            .into_value()
+            .unwrap();
+        assert_eq!(entity.display_name, "test-device:device:child1");
     }
 
     fn new_entity_cache() -> EntityCache {
