@@ -287,15 +287,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-tempfile"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8a57b75c36e16f4d015e60e6a177552976a99b6947724403c551bcfa7cb1207"
-dependencies = [
- "tokio",
-]
-
-[[package]]
 name = "async-trait"
 version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5880,7 +5871,6 @@ dependencies = [
  "camino",
  "serde",
  "serde_json",
- "tedge-write",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
@@ -6184,17 +6174,14 @@ name = "tedge_utils"
 version = "2.1.0"
 dependencies = [
  "anyhow",
- "async-tempfile",
  "camino",
  "doku",
  "futures",
  "maplit",
- "mqtt_channel",
  "nix",
  "notify",
  "notify-debouncer-full",
  "once_cell",
- "pin-project",
  "serde",
  "serde_json",
  "strum",

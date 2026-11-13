@@ -1,3 +1,5 @@
+#![allow(unreachable_code)]
+
 use std::ffi::OsString;
 
 use camino::Utf8PathBuf;

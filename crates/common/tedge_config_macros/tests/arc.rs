@@ -1,3 +1,5 @@
+#![allow(unreachable_code)]
+
 use std::sync::Arc;
 use tedge_config_macros::*;
 

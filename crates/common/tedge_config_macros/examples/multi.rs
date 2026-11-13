@@ -1,3 +1,5 @@
+#![allow(unreachable_code)]
+
 use tedge_config_macros::*;
 
 #[derive(thiserror::Error, Debug)]

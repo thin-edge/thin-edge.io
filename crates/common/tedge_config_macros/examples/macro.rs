@@ -1,3 +1,5 @@
+#![allow(unreachable_code)]
+
 use camino::Utf8PathBuf;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;

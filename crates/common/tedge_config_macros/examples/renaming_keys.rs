@@ -1,3 +1,5 @@
+#![allow(unreachable_code)]
+
 use camino::Utf8PathBuf;
 use std::path::PathBuf;
 use tedge_config_macros::*;
