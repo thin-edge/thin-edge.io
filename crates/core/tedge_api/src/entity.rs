@@ -1,3 +1,4 @@
+use crate::control::DEFAULT_SERVICE_TYPE;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::TopicIdError;
 use serde::Deserialize;
@@ -136,20 +137,51 @@ impl EntityMetadata {
         })
     }
 
-    pub fn display_name(&self) -> Option<&str> {
-        self.twin_data
-            .get("name")
-            .and_then(|v| v.as_str())
-            .or_else(|| match self.r#type {
-                EntityType::MainDevice => self.external_id.as_ref().map(|xid| xid.as_ref()),
-                EntityType::ChildDevice => None,
-                EntityType::Service => self.topic_id.default_service_name(),
-            })
+    /// Returns the default value of a twin key, used when the twin data has no value for it
+    pub fn default_twin_value<'a>(
+        &'a self,
+        key: &str,
+        config: &'a TwinDefaultsConfig,
+    ) -> Option<&'a str> {
+        match (self.r#type, key) {
+            (EntityType::Service, "type") if config.service_type.is_empty() => {
+                Some(DEFAULT_SERVICE_TYPE)
+            }
+            (EntityType::Service, "type") => Some(&config.service_type),
+            _ => None,
+        }
     }
 
-    pub fn display_type(&self) -> Option<&str> {
-        self.twin_data.get("type").and_then(|v| v.as_str())
+    /// Returns the twin value of a key, or its default value when the twin data has no value for it
+    pub fn twin_value_with_default(
+        &self,
+        key: &str,
+        config: &TwinDefaultsConfig,
+    ) -> Option<JsonValue> {
+        self.twin_data
+            .get(key)
+            .cloned()
+            .or_else(|| self.default_twin_value(key, config).map(JsonValue::from))
     }
+
+    /// Returns the twin data, with the default values of the keys it has no value for
+    pub fn twin_data_with_defaults(&self, config: &TwinDefaultsConfig) -> Map<String, JsonValue> {
+        let mut twin_data = Map::new();
+        for key in ["type"] {
+            if let Some(value) = self.default_twin_value(key, config) {
+                twin_data.insert(key.to_string(), value.into());
+            }
+        }
+        twin_data.extend(self.twin_data.clone());
+        twin_data
+    }
+}
+
+/// The settings the default twin values depend on
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TwinDefaultsConfig {
+    /// The `service.type` setting
+    pub service_type: String,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

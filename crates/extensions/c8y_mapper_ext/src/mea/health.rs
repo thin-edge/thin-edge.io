@@ -1,6 +1,6 @@
 use crate::entity_cache::CloudEntityMetadata;
+use crate::entity_cache::FlowContextEntity;
 use crate::mea::get_entity_metadata;
-use crate::mea::get_entity_parent_metadata;
 use crate::service_monitor::convert_health_status_message;
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -79,17 +79,20 @@ impl HealthStatusConverter {
     pub fn convert(
         &self,
         context: &FlowContextHandle,
-        entity: CloudEntityMetadata,
+        entity: FlowContextEntity,
         message: &Message,
     ) -> Result<Vec<Message>, FlowError> {
         let Some(main_xid) =
-            get_entity_metadata(context, self.main_device.as_str()).map(|main| main.external_id)
+            get_entity_metadata::<CloudEntityMetadata>(context, self.main_device.as_str())
+                .map(|main| main.external_id)
         else {
             return Ok(vec![]);
         };
 
-        let parent_xid =
-            get_entity_parent_metadata(context, &entity).map(|parent| parent.external_id);
+        let parent_xid = entity.parent.as_ref().and_then(|parent| {
+            get_entity_metadata::<CloudEntityMetadata>(context, parent.as_str())
+                .map(|parent| parent.external_id)
+        });
 
         let mqtt_input = message.clone().try_into().map_err(|err| {
             FlowError::UnsupportedMessage(format!("Invalid health status: {err}"))

@@ -79,6 +79,7 @@ mod tests {
     use std::time::Duration;
     use tedge_actors::MessageReceiver;
     use tedge_actors::Sender;
+    use tedge_config::TEdgeConfig;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::test_helpers::test_mqtt_box::assert_received_contains_str;
     use tedge_mqtt_ext::MqttMessage;
@@ -370,7 +371,7 @@ mod tests {
     #[test_case(
         json!({"@type": "service"}),
         json!({"command": "restart", "serviceName": "collectd"}),
-        "service";
+        "openrc";
         "default"
     )]
     #[tokio::test]
@@ -380,7 +381,11 @@ mod tests {
         expected_type: &str,
     ) {
         let tmp_dir = TempTedgeDir::new();
-        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.service = TEdgeConfig::load_toml_str("service.type = \"openrc\"")
+            .service
+            .clone();
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
         converter
             .process_entity_metadata_message(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd"),

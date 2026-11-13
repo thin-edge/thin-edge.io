@@ -63,6 +63,7 @@ use tedge_api::commands::SoftwareListCommand;
 use tedge_api::control::ActionName;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityType;
+use tedge_api::entity::TwinDefaultsConfig;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -167,7 +168,6 @@ pub struct CumulocityConverter {
     pub device_name: String,
     mqtt_publisher: LoggingSender<MqttMessage>,
     pub http_proxy: C8YHttpProxy,
-    pub service_type: String,
     pub mqtt_schema: MqttSchema,
     pub(crate) entity_cache: EntityCache,
 
@@ -200,12 +200,6 @@ impl CumulocityConverter {
         flow_context: FlowContextHandle,
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
-
-        let service_type = if config.service.ty.is_empty() {
-            "service".to_owned()
-        } else {
-            config.service.ty.clone()
-        };
 
         let ops_dir = config.ops_dir.path();
         let operations_by_xid = {
@@ -240,6 +234,9 @@ impl CumulocityConverter {
             Self::map_to_c8y_external_id,
             Self::validate_external_id,
             EARLY_MESSAGE_BUFFER_SIZE,
+            TwinDefaultsConfig {
+                service_type: config.service.ty.clone(),
+            },
         );
 
         let command_id = config.id_generator();
@@ -260,7 +257,6 @@ impl CumulocityConverter {
             supported_operations: operation_manager,
             http_proxy,
             mqtt_publisher,
-            service_type,
             mqtt_schema: mqtt_schema.clone(),
             entity_cache,
             command_id,
@@ -311,24 +307,19 @@ impl CumulocityConverter {
         let input = EntityRegistrationMessage::try_from(source, message.payload_bytes())?;
         let mut messages = vec![];
 
-        // Parse the optional fields
-        let display_name = input.twin_data.get("name").and_then(|v| v.as_str());
-        let display_type = input.twin_data.get("type").and_then(|v| v.as_str());
-
         let entity_topic_id = &input.topic_id;
-        let external_id = self.entity_cache.try_get_external_id(entity_topic_id)?;
+        let entity = self.entity_cache.try_get(entity_topic_id)?;
+        let external_id = &entity.external_id;
         let reg_message = match input.r#type {
             EntityType::MainDevice => None,
             EntityType::ChildDevice => {
                 let parent_xid: Option<&EntityExternalId> =
                     self.entity_cache.parent_external_id(entity_topic_id)?;
-                let display_name = display_name.unwrap_or(external_id.as_ref());
-                let display_type = display_type.unwrap_or("thin-edge.io-child");
 
                 let child_creation_message = child_device_creation_message(
                     external_id.as_ref(),
-                    Some(display_name),
-                    Some(display_type),
+                    Some(entity.display_name()),
+                    Some(entity.display_type()),
                     parent_xid.map(|xid| xid.as_ref()),
                     &self.device_name,
                     &self.config.bridge_config.c8y_prefix,
@@ -339,17 +330,11 @@ impl CumulocityConverter {
             }
             EntityType::Service => {
                 let parent_xid = self.entity_cache.parent_external_id(entity_topic_id)?;
-                let display_name = display_name.unwrap_or_else(|| {
-                    entity_topic_id
-                        .default_service_name()
-                        .unwrap_or(external_id.as_ref())
-                });
-                let display_type = display_type.unwrap_or(&self.service_type);
 
                 let service_creation_message = service_creation_message(
                     external_id.as_ref(),
-                    display_name,
-                    display_type,
+                    entity.display_name(),
+                    entity.display_type(),
                     "up",
                     parent_xid.map(|xid| xid.as_ref()),
                     &self.device_name,
@@ -1593,6 +1578,7 @@ pub(crate) mod tests {
     use c8y_api::proxy_url::Protocol;
     use c8y_api::smartrest::topic::C8yTopic;
     use c8y_http_proxy::handle::C8YHttpProxy;
+    use rstest::rstest;
     use serde_json::json;
     use serde_json::Value;
     use std::str::FromStr;
@@ -3164,11 +3150,18 @@ pub(crate) mod tests {
         assert_eq!(outcome, UpdateOutcome::Unchanged);
     }
 
+    #[rstest]
+    #[case::empty("", "service")]
+    #[case::set("systemd", "systemd")]
     #[tokio::test]
-    async fn handles_empty_service_type_2383() {
+    async fn the_health_status_of_a_service_registered_without_type_has_the_default_service_type(
+        #[case] service_type: &str,
+        #[case] expected_type: &str,
+    ) {
         let tmp_dir = TempTedgeDir::new();
         let mut config = c8y_converter_config(&tmp_dir);
-        let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
+        let tedge_config =
+            TEdgeConfig::load_toml_str(&format!("service.type = \"{service_type}\""));
         config.service = tedge_config.service.clone();
 
         let mut converter = MeaConverter::<HealthStatusConverter>::from_c8y_config(config);
@@ -3198,7 +3191,7 @@ pub(crate) mod tests {
                 converter.c8y_converter.device_name
             )
         );
-        assert_eq!(smartrest_fields.next().unwrap(), "service");
+        assert_eq!(smartrest_fields.next().unwrap(), expected_type);
         assert_eq!(smartrest_fields.next().unwrap(), "service1");
         assert_eq!(smartrest_fields.next().unwrap(), "up");
     }

@@ -1,5 +1,5 @@
-use crate::entity_cache::CloudEntityMetadata;
 use crate::json::Units;
+use serde::de::DeserializeOwned;
 use tedge_flows::FlowContextHandle;
 use tedge_flows::JsonValue;
 
@@ -9,21 +9,15 @@ pub mod health;
 pub mod measurements;
 pub mod message_cache;
 
-fn get_entity_metadata(context: &FlowContextHandle, entity: &str) -> Option<CloudEntityMetadata> {
+fn get_entity_metadata<T: DeserializeOwned>(
+    context: &FlowContextHandle,
+    entity: &str,
+) -> Option<T> {
     let json = context.get_value(entity);
     if json == JsonValue::Null {
         return None;
     }
     json.into_value().ok()
-}
-
-fn get_entity_parent_metadata(
-    context: &FlowContextHandle,
-    entity: &CloudEntityMetadata,
-) -> Option<CloudEntityMetadata> {
-    entity
-        .parent()
-        .and_then(|parent_tid| get_entity_metadata(context, parent_tid.as_str()))
 }
 
 fn get_measurement_units(

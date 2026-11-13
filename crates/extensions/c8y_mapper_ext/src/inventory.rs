@@ -48,7 +48,11 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        self.convert_twin_fragment(source, entity_type, fragment_key, fragment_value)
+        let entity = self.entity_cache.try_get(source)?;
+        let fragment_value = entity
+            .twin_value_with_default(fragment_key)
+            .unwrap_or(JsonValue::Null);
+        self.convert_twin_fragment(source, entity_type, fragment_key, &fragment_value)
     }
 
     pub(crate) fn convert_twin_fragment(
@@ -112,9 +116,13 @@ pub fn inventory_update_topic(prefix: &TopicPrefix, external_id: &str) -> Topic 
 
 #[cfg(test)]
 mod tests {
+    use crate::converter::tests::c8y_converter_config;
     use crate::converter::tests::create_c8y_converter;
+    use crate::converter::tests::create_c8y_converter_from_config;
     use crate::converter::tests::register_source_entities;
+    use rstest::rstest;
     use serde_json::json;
+    use tedge_config::TEdgeConfig;
     use tedge_mqtt_ext::test_helpers::assert_messages_matching;
     use tedge_mqtt_ext::MqttMessage;
     use tedge_mqtt_ext::Topic;
@@ -481,6 +489,44 @@ mod tests {
                     "serviceType": "systemd"
                 })
                 .into(),
+            )],
+        );
+    }
+
+    #[rstest]
+    #[case::service_type("type", json!({"serviceType": "systemd"}))]
+    #[tokio::test]
+    async fn clearing_the_twin_value_of_a_service_sends_its_default_value(
+        #[case] key: &str,
+        #[case] expected_fragment: serde_json::Value,
+    ) {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.service = TEdgeConfig::load_toml_str("service.type = \"systemd\"")
+            .service
+            .clone();
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+
+        let reg_message = &MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/service01"),
+            r#"{"@type": "service", "@id": "service01", "name": "daemon", "type": "container"}"#,
+        );
+        converter
+            .process_entity_metadata_message(reg_message)
+            .await
+            .unwrap();
+
+        let twin_message = MqttMessage::new(
+            &Topic::new_unchecked(&format!("te/device/main/service/service01/twin/{key}")),
+            "",
+        );
+        let inventory_messages = converter.convert(&twin_message).await;
+
+        assert_messages_matching(
+            &inventory_messages,
+            [(
+                "c8y/inventory/managedObjects/update/service01",
+                expected_fragment.into(),
             )],
         );
     }

@@ -12,7 +12,7 @@
 //!        "temperature": 23,
 //!        "pressure": 220
 //!     }"#;
-//! let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
+//! let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None), Default::default());
 //! let output = from_thin_edge_json(single_value_thin_edge_json, &entity,"",None);
 //! ```
 
@@ -155,7 +155,11 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
-        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
+        let entity = CloudEntityMetadata::new(
+            "foo".into(),
+            EntityMetadata::main_device(None),
+            Default::default(),
+        );
         let output = from_thin_edge_json_with_timestamp(
             single_value_thin_edge_json,
             timestamp,
@@ -197,7 +201,11 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
-        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
+        let entity = CloudEntityMetadata::new(
+            "foo".into(),
+            EntityMetadata::main_device(None),
+            Default::default(),
+        );
         let output = from_thin_edge_json_with_timestamp(
             single_value_thin_edge_json,
             timestamp,
@@ -248,7 +256,11 @@ mod tests {
                     "type": "ThinEdgeMeasurement"
                   }"#;
 
-        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
+        let entity = CloudEntityMetadata::new(
+            "foo".into(),
+            EntityMetadata::main_device(None),
+            Default::default(),
+        );
         let output = from_thin_edge_json(single_value_thin_edge_json, &entity, "", None);
 
         assert_eq!(
@@ -271,7 +283,11 @@ mod tests {
 
         let timestamp = datetime!(2021-04-08 0:00:0 +05:00);
 
-        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
+        let entity = CloudEntityMetadata::new(
+            "foo".into(),
+            EntityMetadata::main_device(None),
+            Default::default(),
+        );
         let output = from_thin_edge_json_with_timestamp(
             multi_value_thin_edge_json,
             timestamp,
@@ -355,7 +371,11 @@ mod tests {
       "type": "ThinEdgeMeasurement"
     }"#;
 
-        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
+        let entity = CloudEntityMetadata::new(
+            "foo".into(),
+            EntityMetadata::main_device(None),
+            Default::default(),
+        );
         let units = Units::from_metadata(serde_json::from_str(units).unwrap());
         let output = from_thin_edge_json(input, &entity, "", Some(&units));
 
@@ -382,7 +402,11 @@ mod tests {
             "type": "ThinEdgeMeasurement"
         }"#;
 
-        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
+        let entity = CloudEntityMetadata::new(
+            "foo".into(),
+            EntityMetadata::main_device(None),
+            Default::default(),
+        );
         let output = from_thin_edge_json(input, &entity, "", None);
 
         let actual_output = output.unwrap().split_whitespace().collect::<String>();
@@ -415,7 +439,11 @@ mod tests {
                   "type": "ThinEdgeMeasurement"
                 }}"#, time, measurement, measurement);
 
-        let entity = CloudEntityMetadata::new("foo".into(), EntityMetadata::main_device(None));
+        let entity = CloudEntityMetadata::new(
+            "foo".into(),
+            EntityMetadata::main_device(None),
+            Default::default(),
+        );
         let output = from_thin_edge_json(input.as_str(), &entity, "", None).unwrap();
         assert_eq!(
             expected_output.split_whitespace().collect::<String>(),
@@ -466,6 +494,7 @@ mod tests {
         let entity = CloudEntityMetadata::new(
             child_id.into(),
             EntityMetadata::child_device(child_id.to_string()).unwrap(),
+            Default::default(),
         );
         let output =
             from_thin_edge_json_with_timestamp(thin_edge_json, timestamp, &entity, "", None);

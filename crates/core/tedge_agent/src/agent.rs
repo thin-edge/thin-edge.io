@@ -38,6 +38,7 @@ use tedge_actors::ServerActorBuilder;
 use tedge_actors::ServerConfig;
 use tedge_api::control::ControlCapability;
 use tedge_api::control::TEDGE_SERVICE_ACTIONS;
+use tedge_api::entity::TwinDefaultsConfig;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::http_url::EntityStoreUrls;
 use tedge_api::http_url::FileTransferUrls;
@@ -336,8 +337,13 @@ impl Agent {
                 state_dir,
                 clean_start,
             )?;
-            let entity_store_server_config =
-                EntityStoreServerConfig::new(mqtt_schema.clone(), self.config.entity_auto_register);
+            let entity_store_server_config = EntityStoreServerConfig::new(
+                mqtt_schema.clone(),
+                self.config.entity_auto_register,
+                TwinDefaultsConfig {
+                    service_type: self.config.service.ty.clone(),
+                },
+            );
             let entity_store_server = EntityStoreServer::new(
                 entity_store_server_config,
                 entity_store,
