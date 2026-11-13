@@ -25,7 +25,8 @@ tedge mqtt pub --retain 'te/device/main/service/collectd' '{"@type":"service","@
 ```
 
 If [auto-registration](../../entity-management/auto-registration) is enabled,
-a service that is not registered yet is registered with the default type `service`
+a service that is not registered yet is registered
+with the [default service type](../health-monitoring#configuring-the-default-service-type)
 when it declares its actions.
 
 A service declares the actions that it supports
