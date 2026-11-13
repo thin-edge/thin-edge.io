@@ -95,7 +95,7 @@ async fn twin_fragment_updates_published_to_mqtt() {
 #[case::service(
     "device/main/service/collectd",
     json!({"@type": "service"}),
-    json!({"type": "systemd"})
+    json!({"name": "collectd", "type": "systemd"})
 )]
 #[case::service_with_name_and_type(
     "device/main/service/collectd",
@@ -146,6 +146,7 @@ async fn default_twin_values_apply_only_to_services_and_only_to_missing_keys(
 }
 
 #[rstest]
+#[case::service_name("name", json!("collectd"))]
 #[case::service_type("type", json!("systemd"))]
 #[tokio::test]
 async fn a_cleared_twin_value_of_a_service_falls_back_to_its_default_value(

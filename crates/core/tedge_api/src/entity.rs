@@ -144,6 +144,7 @@ impl EntityMetadata {
         config: &'a TwinDefaultsConfig,
     ) -> Option<&'a str> {
         match (self.r#type, key) {
+            (EntityType::Service, "name") => self.topic_id.default_service_name(),
             (EntityType::Service, "type") if config.service_type.is_empty() => {
                 Some(DEFAULT_SERVICE_TYPE)
             }
@@ -167,7 +168,7 @@ impl EntityMetadata {
     /// Returns the twin data, with the default values of the keys it has no value for
     pub fn twin_data_with_defaults(&self, config: &TwinDefaultsConfig) -> Map<String, JsonValue> {
         let mut twin_data = Map::new();
-        for key in ["type"] {
+        for key in ["name", "type"] {
             if let Some(value) = self.default_twin_value(key, config) {
                 twin_data.insert(key.to_string(), value.into());
             }

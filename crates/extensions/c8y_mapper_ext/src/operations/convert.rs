@@ -604,7 +604,7 @@ impl CumulocityConverter {
 
         let service_name = Some(request.service_name.as_str())
             .filter(|name| !name.is_empty())
-            .or_else(|| target.registered_name())
+            .or_else(|| target.twin_str_with_default("name"))
             .ok_or_else(|| {
                 format!("{xid} cannot run the '{action}' action: neither the operation nor the registration of the service gives a service name")
             })?;

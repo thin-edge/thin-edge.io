@@ -494,6 +494,7 @@ mod tests {
     }
 
     #[rstest]
+    #[case::service_name("name", json!({"name": "service01"}))]
     #[case::service_type("type", json!({"serviceType": "systemd"}))]
     #[tokio::test]
     async fn clearing_the_twin_value_of_a_service_sends_its_default_value(
@@ -509,7 +510,7 @@ mod tests {
 
         let reg_message = &MqttMessage::new(
             &Topic::new_unchecked("te/device/main/service/service01"),
-            r#"{"@type": "service", "@id": "service01", "name": "daemon", "type": "container"}"#,
+            r#"{"@type": "service", "@id": "service01-xid", "name": "daemon", "type": "container"}"#,
         );
         converter
             .process_entity_metadata_message(reg_message)
@@ -525,7 +526,7 @@ mod tests {
         assert_messages_matching(
             &inventory_messages,
             [(
-                "c8y/inventory/managedObjects/update/service01",
+                "c8y/inventory/managedObjects/update/service01-xid",
                 expected_fragment.into(),
             )],
         );
