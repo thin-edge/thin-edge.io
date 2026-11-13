@@ -39,8 +39,15 @@ cargo mutants --in-diff target/mutants-review/pr.diff \
 Results land in `target/mutants-review/run/mutants.out/`: `missed.txt` holds the targets; `timeout.txt` and `unviable.txt` are only reported, as counts.
 
 cargo-mutants runs only the tests of the crate that holds each mutant, so a mutant in a library crate is reported missed even when a crate that calls it tests the behaviour. Rerun the missed mutants with those crates' tests added, using `-o target/mutants-review/downstream`, the `-F` filters from step 4, and one `--test-package` for the mutant's own crate and for each crate that calls the mutated function (use the `name` from each crate's `Cargo.toml`, which may contain hyphens, e.g. `tedge-agent`). Only mutants still missed after this go to step 3, and step 4 uses the same `--test-package` list.
+cargo-mutants runs the extra crates' tests on each mutant, but not on the unmutated tree (the baseline),
+so first run `cargo nextest run --all-features -p <caller> ...` in the worktree.
+Leave out any crate whose tests fail there: its failures would make every mutant look caught.
+Pass `--timeout` of at least five times the duration of that run:
+the default is five times the baseline's test time (minimum 20 seconds), which covers only the mutant's own crate, so slow caller tests would time out.
 
-Done when the runs have exited and the final `missed.txt` is read.
+Done when the runs have exited with code 0, 2 or 3 (all caught, some missed, some timed out) and the final `missed.txt` is read.
+On exit code 4 (the tests fail on the unmutated tree), show the user `log/baseline.log` from that run's `mutants.out/` and stop:
+cargo-mutants then tests no mutants and leaves `missed.txt` empty.
 
 ## 3. Give every missed mutant a verdict
 
@@ -48,7 +55,7 @@ For each line of `missed.txt`, read the mutated function and the tests that cove
 
 - **Gap**: a real behaviour the PR introduced is untested. Write the smallest test that fails on the mutant and passes on the real code. Put it where that crate's existing tests for the function live, matching their style and helpers.
 - **Equivalent**: the mutant cannot change observable behaviour (e.g. `>` vs `>=` where equality is unreachable, a `Default` that returns the same value). Record a one-sentence reason naming why it is unobservable.
-- **Not worth pinning**: `Debug`/`Display` output or log messages, where a test would only freeze incidental text; or behaviour a test can only observe at prohibitive cost (e.g. waiting out a real timeout of tens of seconds). Record a one-sentence reason.
+- **Not worth pinning**: `Debug`/`Display` output or log messages, where a test would only freeze incidental text; or behaviour a test can only observe at prohibitive cost (e.g. a wait of tens of seconds that `#[tokio::test(start_paused = true)]` cannot skip, such as `std::thread::sleep`). Record a one-sentence reason.
 
 Test names describe the behaviour pinned, never the mutant (`rejects_port_zero`, not `kills_mutant_line_42`).
 
@@ -67,6 +74,8 @@ cargo mutants -f <mutated file> ... \
 `--in-diff` is unusable here: cargo-mutants rejects the diff once the new tests change the files it covers. Instead, `-f` scopes to the mutated files and each `-F` is a regex matching the mutant's full line from `missed.txt`, with regex metacharacters escaped. Keep the `path:line:col: ` prefix: names such as `delete match arm` are shared by several mutants in a file, and the prefix is what tells them apart. A test inserted above the mutated line shifts its line number; in that case take the new number from `cargo mutants -f <file> --list`.
 
 This checks both halves at once: the baseline fails if a new test fails on the real code, and each targeted mutant must now appear in `caught.txt`. A mutant still in `missed.txt` means the test asserts the wrong thing; revise it and rerun. After two failed revisions, mark it **unverified** with the attempted test and an explanation of what it could not observe, and move on.
+An exit code of 4 means a new test fails on the real code and no mutant was tested:
+read `log/baseline.log` in `verify/mutants.out/`, fix the test, and rerun.
 
 Capture each test's text and the file it belongs in.
 
@@ -98,6 +107,7 @@ gh api graphql -f query='query{repository(owner:"<owner>",name:"<repo>"){pullReq
 ```
 
 - **One exists**: read its comments and match their style; drop any gap or note an existing comment already makes. Add each comment with `addPullRequestReviewThread(input:{pullRequestReviewId, path, line, side:RIGHT, body})`, passing the body with `-F body=@file` to keep its formatting intact.
+  Show the user the list of equivalent and not-worth-pinning verdicts, to add to the review body when they submit.
 - **None exists**: `gh api repos/<owner>/<repo>/pulls/<number>/reviews --input review.json`, with `review.json` holding `commit_id` (the `headRefOid`), `body`, and `comments: [{path, line, side, body}]`, and no `event` field (omitting `event` is what keeps it pending).
 
 Done when the review reads back as `state: PENDING` with the new comments; give the user the comment URLs, then `git worktree remove --force /tmp/mutants-review-<number>`.
