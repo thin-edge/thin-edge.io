@@ -136,7 +136,7 @@ Invoke sub-operation from a super-command operation
     ...    message_pattern=.*successful.*
     ...    maximum=1
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/super_command/test-42 ''
-    ${actual_log}    Execute Command    cat /tmp/test-42.json
+    ${actual_log}    Execute Command    jq -c 'del(.payload."@time")' /tmp/test-42.json
     ${expected_log}    Get File    ${CURDIR}/super-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
     ${workflow_log}    Execute Command    cat /var/log/tedge/agent/workflow-super_command-test-42.log
@@ -176,9 +176,73 @@ Invoke sub-operation from a sub-operation
     ...    message_pattern=.*successful.*
     ...    maximum=1
     Execute Command    tedge mqtt pub --retain te/device/main///cmd/gp_command/test-sub-sub ''
-    ${actual_log}    Execute Command    cat /tmp/test-sub-sub.json
+    ${actual_log}    Execute Command    jq -c 'del(.payload."@time")' /tmp/test-sub-sub.json
     ${expected_log}    Get File    ${CURDIR}/gp-command-expected.log
     Should Be Equal    ${actual_log}    ${expected_log}
+
+Fail operation after unknown sub-operation timeout
+    # See https://github.com/thin-edge/thin-edge.io/issues/4397
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/issue-4397/test-sub-timeout '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397/test-sub-timeout
+    ...    message_pattern=.*waiting.*
+    ...    maximum=1
+    Execute Command    sleep 1
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397/test-sub-timeout
+    ...    message_pattern=.*No response from unknown_op.*
+    ...    maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-4397/test-sub-timeout ''
+
+Fail operation after unknown sub-operation timeout on restart
+    # See https://github.com/thin-edge/thin-edge.io/issues/4397
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/issue-4397/test-sub-timeout '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397/test-sub-timeout
+    ...    message_pattern=.*waiting.*
+    ...    maximum=1
+    Stop Service    tedge-agent
+    Execute Command    sleep 1
+    Start Service    tedge-agent
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397/test-sub-timeout
+    ...    message_pattern=.*No response from unknown_op.*
+    ...    maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-4397/test-sub-timeout ''
+
+Fail operation after sub-operation timeout
+    # See https://github.com/thin-edge/thin-edge.io/issues/4397
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/issue-4397-bis/test-sub-timeout '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397-bis/test-sub-timeout
+    ...    message_pattern=.*waiting.*
+    ...    maximum=1
+    Execute Command    sleep 1
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397-bis/test-sub-timeout
+    ...    message_pattern=.*No response from sleep sub operation.*
+    ...    maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-4397-bis/test-sub-timeout ''
+
+Fail operation after sub-operation timeout on restart
+    # See https://github.com/thin-edge/thin-edge.io/issues/4397
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/issue-4397-bis/test-sub-timeout-restart '{"status":"init"}'
+    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397-bis/test-sub-timeout-restart
+    ...    message_pattern=.*waiting.*
+    ...    maximum=1
+    Stop Service    tedge-agent
+    Execute Command    sleep 1
+    Start Service    tedge-agent
+    ${cmd_messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/issue-4397-bis/test-sub-timeout-restart
+    ...    message_pattern=.*No response from sleep sub operation.*
+    ...    maximum=1
+    Execute Command    tedge mqtt pub --retain te/device/main///cmd/issue-4397-bis/test-sub-timeout-restart ''
 
 Command steps should not be executed twice
     TRY
@@ -373,6 +437,8 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/lite_device_profile.example.txt    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-2896.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-3079.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-4397.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-4397-bis.toml    /etc/tedge/operations/
 
 Execute Operation Workflow
     [Arguments]    ${operation}    ${cmd_id}

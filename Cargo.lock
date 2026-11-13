@@ -5432,6 +5432,7 @@ dependencies = [
  "tedge_script_ext",
  "tedge_supervisor",
  "tedge_test_utils",
+ "tedge_timer_ext",
  "tedge_uploader_ext",
  "tedge_utils",
  "tempfile",
