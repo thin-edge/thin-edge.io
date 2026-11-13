@@ -230,6 +230,8 @@ impl<T: Default + PartialEq> MultiDto<T> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(unreachable_code)]
+
     use super::*;
     use serde::Deserialize;
     use serde_json::json;

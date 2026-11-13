@@ -1,3 +1,5 @@
+#![allow(unreachable_code)]
+
 mod version;
 use futures::Stream;
 use reqwest::NoProxy;

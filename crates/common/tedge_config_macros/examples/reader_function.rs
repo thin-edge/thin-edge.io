@@ -1,3 +1,5 @@
+#![allow(unreachable_code)]
+
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use certificate::CertificateError;
