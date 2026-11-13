@@ -427,13 +427,26 @@ mod tests {
     }
 
     #[test_case(
+        json!({"@type": "service", "name": "collectd-daemon"}),
         json!({"command": "restart", "serviceName": "collectd"}),
         "collectd";
         "from the operation"
     )]
-    #[test_case(json!({"command": "restart"}), "collectd-daemon"; "registered")]
+    #[test_case(
+        json!({"@type": "service", "name": "collectd-daemon"}),
+        json!({"command": "restart"}),
+        "collectd-daemon";
+        "registered"
+    )]
+    #[test_case(
+        json!({"@type": "service"}),
+        json!({"command": "restart"}),
+        "collectd";
+        "default"
+    )]
     #[tokio::test]
-    async fn the_service_name_is_taken_from_the_operation_or_the_registration(
+    async fn the_service_name_is_taken_from_the_operation_the_registration_or_the_default(
+        registration: serde_json::Value,
         request: serde_json::Value,
         expected_name: &str,
     ) {
@@ -442,7 +455,7 @@ mod tests {
         converter
             .process_entity_metadata_message(&MqttMessage::new(
                 &Topic::new_unchecked("te/device/main/service/collectd"),
-                json!({"@type": "service", "name": "collectd-daemon"}).to_string(),
+                registration.to_string(),
             ))
             .await
             .unwrap();
@@ -575,12 +588,6 @@ mod tests {
     )]
     #[test_case(
         json!({"@type": "service"}),
-        json!({"command": "restart", "serviceType": "service"}),
-        "neither the operation nor the registration of the service gives a service name";
-        "no service name"
-    )]
-    #[test_case(
-        json!({"@type": "service"}),
         json!({"command": "restart", "serviceName": "--now", "serviceType": "service"}),
         "Invalid service name";
         "a service name looking like an option"
@@ -639,6 +646,46 @@ mod tests {
             .await;
 
         assert_operation_failed(&messages, SMARTREST_TOPIC, reason);
+    }
+
+    #[tokio::test]
+    async fn an_operation_is_failed_when_neither_the_operation_nor_the_registration_gives_a_service_name(
+    ) {
+        let tmp_dir = TempTedgeDir::new();
+        let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        converter
+            .process_entity_metadata_message(&MqttMessage::new(
+                &Topic::new_unchecked("te/custom/collectd//"),
+                json!({"@type": "service", "@id": "custom-collectd", "@parent": "device/main//"})
+                    .to_string(),
+            ))
+            .await
+            .unwrap();
+        converter
+            .convert(&MqttMessage::new(
+                &Topic::new_unchecked("te/custom/collectd///cmd/control"),
+                r#"{"actions":["restart"]}"#,
+            ))
+            .await;
+
+        let messages = converter
+            .convert(&MqttMessage::new(
+                &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+                json!({
+                    "id": OPERATION_ID,
+                    "status": "PENDING",
+                    "c8y_ServiceCommand": {"command": "restart", "serviceType": "service"},
+                    "externalSource": {"externalId": "custom-collectd", "type": "c8y_Serial"},
+                })
+                .to_string(),
+            ))
+            .await;
+
+        assert_operation_failed(
+            &messages,
+            "c8y/s/us/custom-collectd",
+            "neither the operation nor the registration of the service gives a service name",
+        );
     }
 
     #[tokio::test]
