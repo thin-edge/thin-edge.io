@@ -369,6 +369,8 @@ curl http://localhost:8000/te/v1/entities/device/child01///twin \
 ## Get entity twin data
 
 The twin fragments of an entity can be queried individually or as a whole.
+For a service registered without `name` or `type`,
+the response includes their [default values](../../../references/mqtt-api#register-a-service-of-the-main-device).
 
 ### Get a single twin fragment
 
