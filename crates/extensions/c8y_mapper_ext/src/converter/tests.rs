@@ -1501,11 +1501,17 @@ async fn duplicate_registration_messages_not_mapped_2311() {
     assert_eq!(outcome, UpdateOutcome::Unchanged);
 }
 
+#[rstest]
+#[case::empty("", "service")]
+#[case::set("systemd", "systemd")]
 #[tokio::test]
-async fn handles_empty_service_type_2383() {
+async fn the_health_status_of_a_service_registered_without_type_has_the_default_service_type(
+    #[case] service_type: &str,
+    #[case] expected_type: &str,
+) {
     let tmp_dir = TempTedgeDir::new();
     let mut config = c8y_converter_config(&tmp_dir);
-    let tedge_config = TEdgeConfig::load_toml_str("service.ty = \"\"");
+    let tedge_config = TEdgeConfig::load_toml_str(&format!("service.type = \"{service_type}\""));
     config.service = tedge_config.service.clone();
 
     let mut converter = MeaConverter::<HealthStatusConverter>::from_c8y_config(config);
@@ -1535,9 +1541,37 @@ async fn handles_empty_service_type_2383() {
             converter.c8y_converter.config.device_id
         )
     );
-    assert_eq!(smartrest_fields.next().unwrap(), "service");
+    assert_eq!(smartrest_fields.next().unwrap(), expected_type);
     assert_eq!(smartrest_fields.next().unwrap(), "service1");
     assert_eq!(smartrest_fields.next().unwrap(), "up");
+}
+
+#[tokio::test]
+async fn the_health_status_of_a_child_device_service_registered_without_type_has_the_type_service()
+{
+    let tmp_dir = TempTedgeDir::new();
+    let mut config = c8y_converter_config(&tmp_dir);
+    config.service = TEdgeConfig::load_toml_str("service.type = \"systemd\"")
+        .service
+        .clone();
+    let mut converter = MeaConverter::<HealthStatusConverter>::from_c8y_config(config);
+
+    let service_health_message = MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1/service/service1/status/health"),
+        json!({"status": "up"}).to_string(),
+    );
+    converter
+        .register_source_entities(&service_health_message.topic.name)
+        .await;
+
+    let output = converter.convert(&service_health_message).await;
+    let service_creation_message = output
+        .iter()
+        .find_map(|m| m.payload_str().ok().filter(|p| p.starts_with("102,")))
+        .expect("service creation message should be present");
+
+    let smartrest_fields: Vec<&str> = service_creation_message.split(',').collect();
+    assert_eq!(smartrest_fields[2], "service");
 }
 
 #[tokio::test]

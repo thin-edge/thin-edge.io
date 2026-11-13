@@ -417,16 +417,6 @@ impl EntityStore {
         Ok(removed_entities)
     }
 
-    pub fn get_twin_fragment(
-        &self,
-        topic_id: &EntityTopicId,
-        fragment_key: &str,
-    ) -> Option<&JsonValue> {
-        self.entities
-            .get(topic_id)
-            .and_then(|entity| entity.twin_data.get(fragment_key))
-    }
-
     /// Updates the entity twin data with the provided fragment data.
     /// Returns `true`, if the twin data got updated with the new fragment value.
     /// If the provided fragment already existed, `false` is returned.
@@ -464,14 +454,6 @@ impl EntityStore {
         }
 
         Ok(true)
-    }
-
-    pub fn get_twin_fragments(
-        &mut self,
-        topic_id: &EntityTopicId,
-    ) -> Result<&Map<String, JsonValue>, entity_store::Error> {
-        let entity = self.try_get(topic_id)?;
-        Ok(&entity.twin_data)
     }
 
     pub fn set_twin_fragments(
@@ -2125,7 +2107,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            store.get_twin_fragment(&topic_id, "foo"),
+            store.get(&topic_id).unwrap().twin_data.get("foo"),
             Some(&json!("bar"))
         );
 
@@ -2151,7 +2133,7 @@ mod tests {
 
         let store = new_entity_store(&temp_dir, false);
 
-        assert_eq!(store.get_twin_fragment(&topic_id, "foo"), None);
+        assert_eq!(store.get(&topic_id).unwrap().twin_data.get("foo"), None);
     }
 
     #[test]

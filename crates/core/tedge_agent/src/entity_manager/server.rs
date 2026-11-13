@@ -10,6 +10,7 @@ use tedge_actors::MessageSink;
 use tedge_actors::Sender;
 use tedge_actors::Server;
 use tedge_api::entity::EntityMetadata;
+use tedge_api::entity::TwinDefaultsConfig;
 use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
@@ -69,13 +70,19 @@ pub struct EntityStoreServer {
 pub struct EntityStoreServerConfig {
     pub mqtt_schema: MqttSchema,
     pub entity_auto_register: bool,
+    pub twin_defaults: TwinDefaultsConfig,
 }
 
 impl EntityStoreServerConfig {
-    pub fn new(mqtt_schema: MqttSchema, entity_auto_register: bool) -> Self {
+    pub fn new(
+        mqtt_schema: MqttSchema,
+        entity_auto_register: bool,
+        twin_defaults: TwinDefaultsConfig,
+    ) -> Self {
         Self {
             mqtt_schema,
             entity_auto_register,
+            twin_defaults,
         }
     }
 }
@@ -150,18 +157,23 @@ impl Server for EntityStoreServer {
                 EntityStoreResponse::List(entities.into_iter().cloned().collect())
             }
             EntityStoreRequest::GetTwinFragment(topic_id, fragment_key) => {
-                let twin = self
-                    .entity_store
-                    .get_twin_fragment(&topic_id, &fragment_key);
-                EntityStoreResponse::GetTwinFragment(twin.cloned())
+                let twin_defaults = &self.config.twin_defaults;
+                let twin = self.entity_store.get(&topic_id).and_then(|entity| {
+                    entity.twin_value_with_default(&fragment_key, twin_defaults)
+                });
+                EntityStoreResponse::GetTwinFragment(twin)
             }
             EntityStoreRequest::SetTwinFragment(twin_data) => {
                 let res = self.set_twin_fragment(twin_data).await;
                 EntityStoreResponse::SetTwinFragment(res)
             }
             EntityStoreRequest::GetTwinFragments(topic_id) => {
-                let res = self.entity_store.get_twin_fragments(&topic_id);
-                EntityStoreResponse::GetTwinFragments(res.cloned())
+                let twin_defaults = &self.config.twin_defaults;
+                let res = self
+                    .entity_store
+                    .try_get(&topic_id)
+                    .map(|entity| entity.twin_data_with_defaults(twin_defaults));
+                EntityStoreResponse::GetTwinFragments(res)
             }
             EntityStoreRequest::SetTwinFragments(topic_id, fragments) => {
                 let res = self.set_entity_twin_fragments(&topic_id, fragments).await;

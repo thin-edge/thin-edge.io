@@ -517,6 +517,25 @@ Delete entity clears entity registration and all retained data messages
     Should Not Have Retained MQTT Messages    te/device/child00/#
     Should Not Have Retained MQTT Messages    te/device/child0/#
 
+Twin apis give the default type of a service
+    Execute Command    tedge config set service.type systemd
+    Restart Service    tedge-agent
+    Service Health Status Should Be Up    tedge-agent
+    Wait Until Keyword Succeeds
+    ...    10s
+    ...    500ms
+    ...    Register Entity
+    ...    device/main/service/default-check
+    ...    service
+
+    ${get}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/te/v1/entities/device/main/service/default-check/twin
+    Should Be Equal    ${get}    {"type":"systemd"}|200
+    ${get}=    Execute Command
+    ...    curl --silent --write-out "|%\{http_code\}" http://localhost:8000/te/v1/entities/device/main/service/default-check/twin/type
+    Should Be Equal    ${get}    "systemd"|200
+    Should Not Have Retained MQTT Messages    te/device/main/service/default-check/twin/#
+
 
 *** Keywords ***
 Custom Setup

@@ -1,5 +1,5 @@
 use crate::converter::create_get_pending_operations_message;
-use crate::entity_cache::CloudEntityMetadata;
+use crate::entity_cache::FlowContextEntity;
 use c8y_api::smartrest;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityType;
@@ -25,13 +25,13 @@ pub fn is_c8y_bridge_established(
 
 pub(crate) fn convert_health_status_message(
     mqtt_schema: &MqttSchema,
-    entity: &CloudEntityMetadata,
+    entity: &FlowContextEntity,
     parent_xid: Option<&EntityExternalId>,
     main_device_xid: &EntityExternalId,
     message: &MqttMessage,
     prefix: &TopicPrefix,
 ) -> Vec<MqttMessage> {
-    if entity.r#type() != EntityType::Service {
+    if entity.r#type != EntityType::Service {
         return vec![];
     }
 
@@ -42,8 +42,8 @@ pub(crate) fn convert_health_status_message(
     };
 
     let external_id = entity.external_id.as_ref();
-    let display_name = entity.display_name();
-    let display_type = entity.display_type();
+    let display_name = entity.display_name.as_str();
+    let display_type = entity.display_type.as_str();
 
     let Ok(status_message) = smartrest::inventory::service_creation_message(
         external_id,
@@ -77,9 +77,6 @@ pub(crate) fn convert_health_status_message(
 mod tests {
     use super::*;
     use crate::converter::CumulocityConverter;
-    use serde_json::Map;
-    use std::collections::BTreeMap;
-    use tedge_api::entity::EntityMetadata;
     use tedge_api::entity::EntityType;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_mqtt_ext::Topic;
@@ -200,18 +197,15 @@ mod tests {
             .clone()
             .map(|tid| CumulocityConverter::map_to_c8y_external_id(&tid, &"test_device".into()));
 
-        let entity = CloudEntityMetadata::new(
-            external_id.clone(),
-            EntityMetadata {
-                topic_id: entity_topic_id,
-                external_id: Some(external_id),
-                r#type: EntityType::Service,
-                parent,
-                health_endpoint: None,
-                twin_data: Map::new(),
-                config: BTreeMap::new(),
-            },
-        );
+        let entity = FlowContextEntity {
+            external_id,
+            display_name: entity_topic_id.default_service_name().unwrap().to_string(),
+            topic_id: entity_topic_id,
+            r#type: EntityType::Service,
+            parent,
+            display_type: "service".to_string(),
+            health_endpoint: None,
+        };
 
         let msg = convert_health_status_message(
             &mqtt_schema,
@@ -294,18 +288,15 @@ mod tests {
             .clone()
             .map(|tid| CumulocityConverter::map_to_c8y_external_id(&tid, &"test_device".into()));
 
-        let entity = CloudEntityMetadata::new(
-            external_id.clone(),
-            EntityMetadata {
-                topic_id: entity_topic_id,
-                external_id: Some(external_id),
-                r#type: EntityType::Service,
-                parent,
-                health_endpoint: None,
-                twin_data: Map::new(),
-                config: BTreeMap::new(),
-            },
-        );
+        let entity = FlowContextEntity {
+            external_id,
+            display_name: entity_topic_id.default_service_name().unwrap().to_string(),
+            topic_id: entity_topic_id,
+            r#type: EntityType::Service,
+            parent,
+            display_type: "service".to_string(),
+            health_endpoint: None,
+        };
 
         let msgs = convert_health_status_message(
             &mqtt_schema,

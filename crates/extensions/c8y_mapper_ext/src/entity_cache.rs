@@ -2,9 +2,12 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::sync::Arc;
+use tedge_api::control::DEFAULT_SERVICE_TYPE;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::EntityType;
+use tedge_api::entity::TwinDefaultsConfig;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -54,19 +57,24 @@ pub enum Error {
     NonDefaultTopicScheme(EntityTopicId),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(from = "FlowContextEntity")]
-#[serde(into = "FlowContextEntity")]
 pub struct CloudEntityMetadata {
     pub external_id: EntityExternalId,
     metadata: EntityMetadata,
+    twin_defaults: Arc<TwinDefaultsConfig>,
 }
 
 impl CloudEntityMetadata {
-    pub fn new(external_id: EntityExternalId, metadata: EntityMetadata) -> Self {
+    pub fn new(
+        external_id: EntityExternalId,
+        metadata: EntityMetadata,
+        twin_defaults: Arc<TwinDefaultsConfig>,
+    ) -> Self {
         Self {
             external_id,
             metadata,
+            twin_defaults,
         }
     }
 
@@ -83,27 +91,40 @@ impl CloudEntityMetadata {
     }
 
     pub fn display_name(&self) -> &str {
-        self.metadata
-            .display_name()
-            .unwrap_or_else(|| self.external_id.as_ref())
+        self.twin_str_with_default("name")
+            .or_else(|| match self.metadata.r#type {
+                EntityType::Service => self.metadata.topic_id.default_service_name(),
+                EntityType::MainDevice | EntityType::ChildDevice => None,
+            })
+            .unwrap_or(self.external_id.as_ref())
     }
 
     pub fn registered_name(&self) -> Option<&str> {
         self.metadata.twin_data.get("name").and_then(|v| v.as_str())
     }
 
-    pub fn registered_type(&self) -> Option<&str> {
-        self.metadata.display_type()
-    }
-
     pub fn display_type(&self) -> &str {
-        self.metadata
-            .display_type()
+        self.twin_str_with_default("type")
             .unwrap_or(match self.metadata.r#type {
                 EntityType::MainDevice => "thin-edge.io",
                 EntityType::ChildDevice => "thin-edge.io-child",
-                EntityType::Service => "service",
+                EntityType::Service => DEFAULT_SERVICE_TYPE,
             })
+    }
+
+    /// Returns the twin value of a key if it is a string, or else its default value
+    pub(crate) fn twin_str_with_default(&self, key: &str) -> Option<&str> {
+        self.metadata
+            .twin_data
+            .get(key)
+            .and_then(|v| v.as_str())
+            .or_else(|| self.metadata.default_twin_value(key, &self.twin_defaults))
+    }
+
+    /// Returns the twin value of a key of any JSON type, or its default value
+    pub(crate) fn twin_value_with_default(&self, key: &str) -> Option<serde_json::Value> {
+        self.metadata
+            .twin_value_with_default(key, &self.twin_defaults)
     }
 }
 
@@ -137,6 +158,7 @@ pub(crate) struct EntityCache {
 }
 
 impl EntityCache {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new<MF, SF>(
         flow_context: FlowContextHandle,
         mqtt_schema: MqttSchema,
@@ -145,6 +167,7 @@ impl EntityCache {
         external_id_mapper_fn: MF,
         external_id_validator_fn: SF,
         telemetry_cache_size: usize,
+        twin_defaults: TwinDefaultsConfig,
     ) -> Self
     where
         MF: Fn(&EntityTopicId, &EntityExternalId) -> EntityExternalId,
@@ -153,7 +176,12 @@ impl EntityCache {
         SF: 'static + Send + Sync,
     {
         Self {
-            entities: EntityIndexes::new(flow_context, main_device_tid, main_device_xid),
+            entities: EntityIndexes::new(
+                flow_context,
+                main_device_tid,
+                main_device_xid,
+                twin_defaults,
+            ),
             pending_entities: PendingEntityStore::new(mqtt_schema, telemetry_cache_size),
             external_id_mapper_fn: Box::new(external_id_mapper_fn),
             external_id_validator_fn: Box::new(external_id_validator_fn),
@@ -247,7 +275,11 @@ impl EntityCache {
 
         self.entities.insert(
             topic_id.clone(),
-            CloudEntityMetadata::new(external_id.clone(), entity_metadata),
+            CloudEntityMetadata::new(
+                external_id.clone(),
+                entity_metadata,
+                self.entities.twin_defaults.clone(),
+            ),
         );
 
         Ok(true)
@@ -305,6 +337,7 @@ impl EntityCache {
                     .clone()
                     .expect("External id must be present"),
                 updated_entity.clone(),
+                self.entities.twin_defaults.clone(),
             ),
         );
         Ok(UpdateOutcome::Updated(
@@ -439,6 +472,7 @@ impl EntityCache {
 struct EntityIndexes {
     main_device_tid: EntityTopicId,
     main_device_xid: EntityExternalId,
+    twin_defaults: Arc<TwinDefaultsConfig>,
     entities: HashMap<EntityTopicId, CloudEntityMetadata>,
     external_id_map: HashMap<EntityExternalId, EntityTopicId>,
     flow_context: FlowContextHandle,
@@ -449,10 +483,13 @@ impl EntityIndexes {
         flow_context: FlowContextHandle,
         main_device_tid: EntityTopicId,
         main_device_xid: EntityExternalId,
+        twin_defaults: TwinDefaultsConfig,
     ) -> Self {
+        let twin_defaults = Arc::new(twin_defaults);
         let mut indexes = EntityIndexes {
             main_device_tid: main_device_tid.clone(),
             main_device_xid: main_device_xid.clone(),
+            twin_defaults: twin_defaults.clone(),
             entities: HashMap::new(),
             external_id_map: HashMap::new(),
             flow_context,
@@ -460,6 +497,7 @@ impl EntityIndexes {
         let main_device_metadata = CloudEntityMetadata::new(
             main_device_xid.clone(),
             EntityMetadata::main_device(Some(main_device_xid)),
+            twin_defaults,
         );
         indexes.insert(main_device_tid, main_device_metadata);
         indexes
@@ -508,7 +546,8 @@ impl EntityIndexes {
 
     fn update_context(&self, topic_id: &EntityTopicId, entity: CloudEntityMetadata) {
         let external_id = entity.external_id.clone();
-        if let Ok(json_data) = JsonValue::from_value(entity) {
+        let context_entity = FlowContextEntity::from(entity);
+        if let Ok(json_data) = JsonValue::from_value(context_entity) {
             self.flow_context
                 .set_value(topic_id.as_str(), json_data.clone());
             self.flow_context.set_value(external_id.as_ref(), json_data);
@@ -565,7 +604,8 @@ impl From<FlowContextEntity> for CloudEntityMetadata {
             config: BTreeMap::new(),
         };
 
-        CloudEntityMetadata::new(external_id, metadata)
+        // The twin data holds `name` and `type`, so no default value is used
+        CloudEntityMetadata::new(external_id, metadata, Arc::default())
     }
 }
 
@@ -598,6 +638,7 @@ mod tests {
     use tedge_api::entity::EntityExternalId;
     use tedge_api::entity::EntityMetadata;
     use tedge_api::entity::EntityType;
+    use tedge_api::entity::TwinDefaultsConfig;
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
@@ -619,6 +660,7 @@ mod tests {
             EntityMetadata::new(topic_id.clone(), EntityType::ChildDevice)
                 .with_external_id(external_id)
                 .with_parent(EntityTopicId::default_main_device()),
+            Default::default(),
         );
         assert_eq!(cache.get(&topic_id), Some(&expected));
     }
@@ -753,6 +795,7 @@ mod tests {
             CumulocityConverter::map_to_c8y_external_id,
             CumulocityConverter::validate_external_id,
             10,
+            TwinDefaultsConfig::default(),
         )
     }
 }
