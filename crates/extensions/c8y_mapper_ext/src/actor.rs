@@ -161,9 +161,16 @@ impl C8yMapperActor {
                     .await
                 {
                     Ok(outcome) => match outcome {
-                        UpdateOutcome::Inserted(registered_entities) => {
-                            self.process_registered_entities(registered_entities)
-                                .await?
+                        UpdateOutcome::Inserted {
+                            registered,
+                            rejected,
+                        } => {
+                            self.process_registered_entities(registered).await?;
+                            for rejected_entity in rejected {
+                                self.mqtt_publisher
+                                    .send(self.converter.new_error_message(rejected_entity))
+                                    .await?;
+                            }
                         }
                         UpdateOutcome::Updated(updated_entity, old_entity) => {
                             self.process_entity_update(*updated_entity, *old_entity)
