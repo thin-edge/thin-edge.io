@@ -6,6 +6,7 @@ use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::EntityType;
 use tedge_api::entity_store;
+use tedge_api::entity_store::validate_parent;
 use tedge_api::entity_store::validate_reregistration;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
@@ -205,7 +206,12 @@ impl EntityCache {
     fn insert(&mut self, mut entity: EntityRegistrationMessage) -> Result<bool, Error> {
         let parent = entity.parent_or_default(&self.entities.main_device_tid);
         if let Some(parent) = &parent {
-            if !self.entities.contains(parent) {
+            if let Err(err) = validate_parent(&entity.topic_id, parent, |topic_id| {
+                self.entities.get_metadata(topic_id)
+            }) {
+                let entity_store::Error::NoParent(_) = err else {
+                    return Err(err.into());
+                };
                 if entity.r#type == EntityType::Service {
                     entity.parent = Some(parent.clone());
                 }
@@ -482,10 +488,6 @@ impl EntityIndexes {
             self.clear_context(topic_id, &entity.external_id);
         }
         entity
-    }
-
-    pub fn contains(&self, topic_id: &EntityTopicId) -> bool {
-        self.entities.contains_key(topic_id)
     }
 
     fn get(&self, entity_topic_id: &EntityTopicId) -> Option<&CloudEntityMetadata> {
@@ -793,6 +795,28 @@ mod tests {
             json!({"@type": "child-device"}),
         );
         assert_eq!(cache.get(&entity(topic_id)).cloned(), before);
+    }
+
+    #[test]
+    fn registration_under_a_service_is_rejected() {
+        let mut cache = new_entity_cache();
+        register(
+            &mut cache,
+            "device/main/service/tedge-agent",
+            json!({"@type": "service"}),
+        );
+
+        let res = upsert(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device", "@parent": "device/main/service/tedge-agent"}),
+        );
+
+        assert_eq!(
+            res.unwrap_err().to_string(),
+            "Entity: 'device/main/service/tedge-agent' can not be a parent of 'device/child0//' because it is a service. Only devices can be parents"
+        );
+        assert!(cache.get(&entity("device/child0//")).is_none());
     }
 
     fn upsert(

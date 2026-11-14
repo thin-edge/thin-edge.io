@@ -290,19 +290,19 @@ impl EntityStore {
         let mut affected_entities = vec![];
 
         let parent = message.parent_or_default(&self.main_device);
+        let lookup = |topic_id: &EntityTopicId| self.entities.get(topic_id);
         let existing = self.entities.get(&topic_id);
-        if let Some(existing) = existing {
-            validate_reregistration(existing, parent.as_ref(), |topic_id| {
-                self.entities.get(topic_id)
-            })?;
+        match existing {
+            Some(existing) => validate_reregistration(existing, parent.as_ref(), lookup)?,
+            None => {
+                if let Some(parent) = &parent {
+                    validate_parent(&topic_id, parent, lookup)?;
+                }
+            }
         }
 
         // parent device is affected if new device is its child
         if let Some(parent) = &parent {
-            if !self.entities.contains_key(parent) {
-                return Err(Error::NoParent(parent.to_string().into_boxed_str()));
-            }
-
             affected_entities.push(parent.clone());
         }
 
@@ -607,10 +607,6 @@ impl EntityTree {
             main_device: topic_id.clone(),
             entities: HashMap::from([(topic_id, EntityNode::new(metadata))]),
         }
-    }
-
-    pub fn contains_key(&self, topic_id: &EntityTopicId) -> bool {
-        self.entities.contains_key(topic_id)
     }
 
     /// Iterate over the entity topic ids
@@ -2620,6 +2616,31 @@ mod tests {
         // A rejected re-registration is not cached until its parent is registered
         register_child(&mut store, "device/main//", "device/unknown//");
         assert_eq!(store.get(&entity(topic_id)).cloned(), before);
+    }
+
+    #[test]
+    fn registration_under_a_service_is_rejected() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        register(
+            &mut store,
+            "device/main/service/tedge-agent",
+            json!({"@type": "service"}),
+        );
+
+        let registration = EntityRegistrationMessage::try_from(
+            entity("device/child0//"),
+            json!({"@type": "child-device", "@parent": "device/main/service/tedge-agent"})
+                .to_string()
+                .as_bytes(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            store.update(registration).unwrap_err().to_string(),
+            "Entity: 'device/main/service/tedge-agent' can not be a parent of 'device/child0//' because it is a service. Only devices can be parents"
+        );
+        assert!(store.get(&entity("device/child0//")).is_none());
     }
 
     #[test]
