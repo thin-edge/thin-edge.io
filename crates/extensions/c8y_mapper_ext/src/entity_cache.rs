@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::EntityType;
+use tedge_api::entity_store;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -37,6 +38,9 @@ pub enum Error {
 
     #[error(transparent)]
     InvalidExternalId(#[from] InvalidExternalIdError),
+
+    #[error(transparent)]
+    InvalidEntityUpdate(#[from] entity_store::Error),
 
     #[error("Updating the external id of {0} is not supported")]
     InvalidExternalIdUpdate(EntityTopicId),
@@ -263,6 +267,17 @@ impl EntityCache {
 
         if entity.r#type == EntityType::MainDevice && entity.parent != existing_entity.parent {
             return Err(Error::InvalidMainDeviceParentUpdate);
+        }
+
+        // An already registered entity can only be moved to a registered parent
+        if let Some(new_parent) = entity.parent.as_ref() {
+            if Some(new_parent) != existing_entity.parent.as_ref()
+                && !self.entities.contains(new_parent)
+            {
+                return Err(
+                    entity_store::Error::NoParent(new_parent.to_string().into_boxed_str()).into(),
+                );
+            }
         }
 
         let mut merged_twin_data = existing_entity.twin_data.clone();

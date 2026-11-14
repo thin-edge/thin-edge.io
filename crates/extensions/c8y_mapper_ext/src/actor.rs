@@ -31,6 +31,7 @@ use tedge_api::entity::EntityType;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::ChannelFilter;
+use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::pending_entity_store::RegisteredEntityData;
 use tedge_downloader_ext::DownloadRequest;
 use tedge_downloader_ext::DownloadResult;
@@ -218,52 +219,12 @@ impl C8yMapperActor {
         old_entity: EntityMetadata,
     ) -> Result<(), RuntimeError> {
         if updated_entity.parent != old_entity.parent {
-            let entity = self
-                .converter
-                .entity_cache
-                .get(&updated_entity.topic_id)
-                .expect("Entity should be present in the cache");
-            let child_xid = &entity.external_id;
-            let old_parent_xid = self
-                .converter
-                .entity_cache
-                .try_get_external_id(&old_entity.parent.unwrap())
-                .expect("Device external id should be present");
-            let new_parent_xid = self
-                .converter
-                .entity_cache
-                .try_get_external_id(&updated_entity.parent.clone().unwrap())
-                .expect("Device external id should be present");
-
-            let res = match entity.r#type() {
-                EntityType::MainDevice => {
-                    Err(anyhow!("Main device parent update is not supported").into())
-                }
-                EntityType::ChildDevice => {
-                    self.converter
-                        .http_proxy
-                        .update_child_device_parent(
-                            child_xid.as_ref(),
-                            old_parent_xid.as_ref(),
-                            new_parent_xid.as_ref(),
-                        )
-                        .await
-                }
-                EntityType::Service => {
-                    self.converter
-                        .http_proxy
-                        .update_child_addition_parent(
-                            child_xid.as_ref(),
-                            old_parent_xid.as_ref(),
-                            new_parent_xid.as_ref(),
-                        )
-                        .await
-                }
-            };
-
-            if let Err(err) = res {
+            if let Err(err) = self
+                .update_parent(&updated_entity, old_entity.parent.as_ref())
+                .await
+            {
                 self.mqtt_publisher
-                    .send(self.converter.new_error_message(err))
+                    .send(self.converter.new_error_message(&*err))
                     .await?;
             }
         }
@@ -276,6 +237,43 @@ impl C8yMapperActor {
             .await?;
 
         Ok(())
+    }
+
+    /// Move the cloud twin of an entity from its old parent to its new parent
+    async fn update_parent(
+        &mut self,
+        entity: &EntityMetadata,
+        old_parent: Option<&EntityTopicId>,
+    ) -> Result<(), anyhow::Error> {
+        let (Some(old_parent), Some(new_parent)) = (old_parent, entity.parent.as_ref()) else {
+            return Err(anyhow!(
+                "Updating the parent of {} is not supported",
+                entity.topic_id
+            ));
+        };
+        let cache = &self.converter.entity_cache;
+        let child_xid = cache.try_get_external_id(&entity.topic_id)?.clone();
+        let old_parent_xid = cache.try_get_external_id(old_parent)?.clone();
+        let new_parent_xid = cache.try_get_external_id(new_parent)?.clone();
+
+        let http_proxy = &mut self.converter.http_proxy;
+        match entity.r#type {
+            EntityType::MainDevice => Err(anyhow!("Main device parent update is not supported")),
+            EntityType::ChildDevice => Ok(http_proxy
+                .update_child_device_parent(
+                    child_xid.as_ref(),
+                    old_parent_xid.as_ref(),
+                    new_parent_xid.as_ref(),
+                )
+                .await?),
+            EntityType::Service => Ok(http_proxy
+                .update_child_addition_parent(
+                    child_xid.as_ref(),
+                    old_parent_xid.as_ref(),
+                    new_parent_xid.as_ref(),
+                )
+                .await?),
+        }
     }
 
     //  Process an MQTT message by converting and publishing it to the cloud
