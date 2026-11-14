@@ -664,12 +664,14 @@ impl EntityTree {
         entity_metadata: EntityMetadata,
     ) -> InsertOutcome {
         let maybe_parent = entity_metadata.parent.clone();
+        let mut previous_parent = None;
         let previous = self.entities.entry(topic_id.clone());
         let outcome = match previous {
             Entry::Occupied(mut occupied) => {
                 // if there is no change, no entities were affected
                 let existing_entity = occupied.get().metadata.clone();
                 let existing_children = occupied.get().children.clone();
+                previous_parent = existing_entity.parent.clone();
 
                 let mut merged_other = existing_entity.twin_data.clone();
                 merged_other.extend(entity_metadata.twin_data.clone());
@@ -697,6 +699,14 @@ impl EntityTree {
                 InsertOutcome::Inserted
             }
         };
+
+        if previous_parent != maybe_parent {
+            if let Some(previous_parent) = previous_parent {
+                if let Some(parent_entry) = self.entities.get_mut(&previous_parent) {
+                    parent_entry.children.remove(&topic_id);
+                }
+            }
+        }
 
         if let Some(parent) = maybe_parent {
             if let Some(parent_entry) = self.entities.get_mut(&parent) {
@@ -2486,6 +2496,52 @@ mod tests {
                 .to_string(),
             error_msg
         );
+    }
+
+    #[test]
+    fn reregistration_with_new_parent_moves_entity_with_its_descendants() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        build_entity_tree(
+            &mut store,
+            vec![
+                ("device/child0//", "child-device", None),
+                ("device/child00//", "child-device", Some("device/child0//")),
+                (
+                    "device/child000//",
+                    "child-device",
+                    Some("device/child00//"),
+                ),
+                ("device/child1//", "child-device", None),
+            ],
+        );
+
+        register_child(&mut store, "device/child1//", "device/child00//");
+
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root(entity("device/child0//")),
+            ),
+            ["device/child0//"]
+        );
+        assert_eq!(
+            list_entity_tree_topics::<Vec<&str>>(
+                &mut store,
+                ListFilters::default().root(entity("device/child1//")),
+            ),
+            ["device/child1//", "device/child00//", "device/child000//"]
+        );
+
+        // Deregistering the old parent must not remove the entity that moved away from it
+        let removed: Vec<_> = store
+            .deregister_entity(&entity("device/child0//"))
+            .into_iter()
+            .map(|e| e.topic_id)
+            .collect();
+        assert_eq!(removed, [entity("device/child0//")]);
+        assert!(store.get(&entity("device/child00//")).is_some());
+        assert!(store.get(&entity("device/child000//")).is_some());
     }
 
     #[test]
