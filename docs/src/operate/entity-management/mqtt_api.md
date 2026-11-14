@@ -150,6 +150,8 @@ so other properties like `@type` and `@id` cannot be updated after the registrat
 :::note
 The complete definition of the new entity must be provided in the payload
 unlike the [HTTP PATCH API](./rest_api.md#update-entity), that accepts the specific fragments to be updated.
+When `@parent` or `@health` is left out, the entity gets the default parent or no health endpoint,
+as on its first registration.
 :::note
 
 The new `@parent` must be a device.

@@ -2599,6 +2599,54 @@ mod tests {
         assert!(store.get(&entity("device/child000//")).is_some());
     }
 
+    #[test]
+    fn reregistration_without_parent_resets_it_to_the_default() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        build_entity_tree(
+            &mut store,
+            vec![
+                ("device/child0//", "child-device", None),
+                ("device/child01//", "child-device", Some("device/child0//")),
+                (
+                    "device/child0/service/service0",
+                    "service",
+                    Some("device/main//"),
+                ),
+            ],
+        );
+
+        register(
+            &mut store,
+            "device/child01//",
+            json!({"@type": "child-device"}),
+        );
+        register(
+            &mut store,
+            "device/child0/service/service0",
+            json!({"@type": "service"}),
+        );
+
+        assert_eq!(
+            store.get(&entity("device/child01//")).unwrap().parent,
+            Some(entity("device/main//"))
+        );
+        assert_eq!(
+            store
+                .get(&entity("device/child0/service/service0"))
+                .unwrap()
+                .parent,
+            Some(entity("device/child0//"))
+        );
+        assert_eq!(
+            list_entity_tree_topics::<BTreeSet<&str>>(
+                &mut store,
+                ListFilters::default().parent(entity("device/child0//")),
+            ),
+            BTreeSet::from(["device/child0/service/service0"])
+        );
+    }
+
     #[test_case(
         "device/child0//",
         json!({"@type": "child-device", "@id": "child0", "@parent": "device/child0//"}),

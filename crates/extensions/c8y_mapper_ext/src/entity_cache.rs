@@ -324,10 +324,9 @@ impl EntityCache {
             return Err(Error::InvalidMainDeviceParentUpdate);
         }
 
-        let parent = entity
-            .parent
-            .clone()
-            .or_else(|| existing_entity.parent.clone());
+        // A registration message for an existing entity is its complete new definition,
+        // so the parent falls back to its default when not given.
+        let parent = entity.parent_or_default(&self.entities.main_device_tid);
         validate_reregistration(&existing_entity, parent.as_ref(), |topic_id| {
             self.entities.get_metadata(topic_id)
         })?;
@@ -343,10 +342,7 @@ impl EntityCache {
             external_id: existing_entity.external_id.clone(),
             r#type: existing_entity.r#type,
             parent,
-            health_endpoint: entity
-                .health_endpoint
-                .clone()
-                .or_else(|| existing_entity.health_endpoint.clone()),
+            health_endpoint: entity.health_endpoint,
             twin_data: existing_entity.twin_data.clone(),
             config: existing_entity.config.clone(),
         };
@@ -787,6 +783,58 @@ mod tests {
         assert_eq!(metadata.metadata.twin_data["key1"], "val1");
         assert_eq!(metadata.metadata.twin_data["key2"], "val2");
         assert_eq!(metadata.metadata.twin_data["key3"], "val3");
+    }
+
+    #[test]
+    fn reregistration_without_parent_resets_it_to_the_default() {
+        let mut cache = new_entity_cache();
+        register(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device"}),
+        );
+        register(
+            &mut cache,
+            "device/child01//",
+            json!({"@type": "child-device", "@parent": "device/child0//"}),
+        );
+
+        let res = upsert(
+            &mut cache,
+            "device/child01//",
+            json!({"@type": "child-device"}),
+        );
+
+        let Ok(UpdateOutcome::Updated(new, old)) = res else {
+            panic!("Expected the entity to be updated, got: {res:?}");
+        };
+        assert_eq!(old.parent, Some(entity("device/child0//")));
+        assert_eq!(new.parent, Some(EntityTopicId::default_main_device()));
+    }
+
+    #[test]
+    fn reregistration_without_health_endpoint_clears_it() {
+        let mut cache = new_entity_cache();
+        register(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device", "@health": "device/child0/service/foo"}),
+        );
+
+        let res = upsert(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device"}),
+        );
+
+        let Ok(UpdateOutcome::Updated(new, old)) = res else {
+            panic!("Expected the entity to be updated, got: {res:?}");
+        };
+        assert_eq!(
+            old.health_endpoint,
+            Some(entity("device/child0/service/foo"))
+        );
+        assert_eq!(new.health_endpoint, None);
     }
 
     #[test_case(
