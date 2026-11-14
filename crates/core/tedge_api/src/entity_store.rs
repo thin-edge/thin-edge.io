@@ -289,18 +289,7 @@ impl EntityStore {
 
         let mut affected_entities = vec![];
 
-        let parent = match message.r#type {
-            EntityType::MainDevice => None,
-            EntityType::ChildDevice => message
-                .parent
-                .clone()
-                .or_else(|| Some(self.main_device.clone())),
-            EntityType::Service => message
-                .parent
-                .clone()
-                .or_else(|| topic_id.default_service_parent_identifier())
-                .or_else(|| Some(self.main_device.clone())),
-        };
+        let parent = message.parent_or_default(&self.main_device);
 
         // parent device is affected if new device is its child
         if let Some(parent) = &parent {
@@ -794,22 +783,7 @@ impl EntityTree {
                 return Err(Error::InvalidMainDeviceParent);
             }
 
-            let entity = self
-                .try_get(&new_parent)
-                .map_err(|_| Error::NoParent(new_parent.to_string().into_boxed_str()))?;
-            if entity.r#type == EntityType::Service {
-                return Err(Error::InvalidServiceParent(
-                    new_parent.clone(),
-                    topic_id.clone(),
-                ));
-            }
-
-            if self.ancestors(&new_parent)?.contains(&topic_id) {
-                return Err(Error::InvalidDescendentParent(
-                    new_parent.clone(),
-                    topic_id.clone(),
-                ));
-            }
+            validate_parent(topic_id, &new_parent, |topic_id| self.get(topic_id))?;
 
             let current_parent = self.get_parent(topic_id)?.clone();
             if current_parent != new_parent {
@@ -915,6 +889,44 @@ pub enum Error {
     UnknownHealthEndpoint(EntityTopicId),
 }
 
+/// Checks that `parent` can be the parent of the entity `topic_id`.
+///
+/// The parent must be a registered device,
+/// that is neither the entity itself nor one of its descendants.
+///
+/// The `lookup` function returns the registered entities.
+pub fn validate_parent<'a>(
+    topic_id: &EntityTopicId,
+    parent: &EntityTopicId,
+    lookup: impl Fn(&EntityTopicId) -> Option<&'a EntityMetadata>,
+) -> Result<(), Error> {
+    if parent == topic_id {
+        return Err(Error::InvalidSelfParent(parent.clone()));
+    }
+
+    let parent_entity =
+        lookup(parent).ok_or_else(|| Error::NoParent(parent.to_string().into_boxed_str()))?;
+    if parent_entity.r#type == EntityType::Service {
+        return Err(Error::InvalidServiceParent(
+            parent.clone(),
+            topic_id.clone(),
+        ));
+    }
+
+    let mut ancestor = parent_entity.parent.as_ref();
+    while let Some(ancestor_id) = ancestor {
+        if ancestor_id == topic_id {
+            return Err(Error::InvalidDescendentParent(
+                parent.clone(),
+                topic_id.clone(),
+            ));
+        }
+        ancestor = lookup(ancestor_id).and_then(|entity| entity.parent.as_ref());
+    }
+
+    Ok(())
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum InitError {
     #[error(transparent)]
@@ -1008,6 +1020,24 @@ impl EntityRegistrationMessage {
     pub fn with_health_endpoint(mut self, health_endpoint: EntityTopicId) -> Self {
         let _ = self.health_endpoint.insert(health_endpoint);
         self
+    }
+
+    /// The parent of the entity defined by this message,
+    /// falling back to its default parent when `@parent` is not given.
+    ///
+    /// The main device has no parent.
+    pub fn parent_or_default(&self, main_device: &EntityTopicId) -> Option<EntityTopicId> {
+        match self.r#type {
+            EntityType::MainDevice => None,
+            EntityType::ChildDevice => {
+                Some(self.parent.clone().unwrap_or_else(|| main_device.clone()))
+            }
+            EntityType::Service => self
+                .parent
+                .clone()
+                .or_else(|| self.topic_id.default_service_parent_identifier())
+                .or_else(|| Some(main_device.clone())),
+        }
     }
 
     /// Creates a entity registration message for a main device.

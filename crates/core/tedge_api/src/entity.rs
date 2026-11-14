@@ -239,7 +239,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn changes_from_lists_only_the_modified_fields() {
+    fn entity_changes_describe_only_the_modified_registration_fields() {
         let child = EntityTopicId::default_child_device("child1").unwrap();
         let mut previous = EntityMetadata::new(child.clone(), EntityType::ChildDevice)
             .with_parent(EntityTopicId::default_main_device());

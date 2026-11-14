@@ -198,41 +198,22 @@ impl EntityCache {
     }
 
     fn insert(&mut self, mut entity: EntityRegistrationMessage) -> Result<bool, Error> {
-        let parent = match entity.r#type {
-            EntityType::MainDevice => None,
-            EntityType::ChildDevice => entity
-                .parent
-                .clone()
-                .or_else(|| Some(self.entities.main_device_tid.clone())),
-            EntityType::Service => entity
-                .parent
-                .clone()
-                .or_else(|| entity.topic_id.default_service_parent_identifier())
-                .or_else(|| Some(self.entities.main_device_tid.clone())),
-        };
-
-        if entity.r#type != EntityType::MainDevice
-            && !self.entities.contains(
-                parent
-                    .as_ref()
-                    .expect("At least a default parent exists for child entities"),
-            )
-        {
-            if entity.r#type == EntityType::Service {
-                entity.parent = parent.clone();
+        let parent = entity.parent_or_default(&self.entities.main_device_tid);
+        if let Some(parent) = &parent {
+            if !self.entities.contains(parent) {
+                if entity.r#type == EntityType::Service {
+                    entity.parent = Some(parent.clone());
+                }
+                self.pending_entities
+                    .cache_early_registration_message(entity);
+                return Ok(false);
             }
-            self.pending_entities
-                .cache_early_registration_message(entity);
-            return Ok(false);
         }
 
         let topic_id = entity.topic_id.clone();
-        let external_id = if let Some(id) = entity.external_id {
-            (self.external_id_validator_fn)(id.as_ref())?
-        } else if entity.r#type == EntityType::MainDevice {
-            self.entities.main_device_xid.clone()
-        } else {
-            (self.external_id_mapper_fn)(&entity.topic_id, self.main_device_external_id())
+        let external_id = match entity.external_id {
+            Some(id) => (self.external_id_validator_fn)(id.as_ref())?,
+            None => self.default_external_id(&topic_id, entity.r#type),
         };
 
         let entity_metadata = EntityMetadata {
@@ -251,6 +232,18 @@ impl EntityCache {
         );
 
         Ok(true)
+    }
+
+    /// The external id of an entity registered without an `@id`
+    fn default_external_id(
+        &self,
+        topic_id: &EntityTopicId,
+        r#type: EntityType,
+    ) -> EntityExternalId {
+        match r#type {
+            EntityType::MainDevice => self.entities.main_device_xid.clone(),
+            _ => (self.external_id_mapper_fn)(topic_id, self.main_device_external_id()),
+        }
     }
 
     fn update(
