@@ -152,6 +152,13 @@ The complete definition of the new entity must be provided in the payload
 unlike the [HTTP PATCH API](./rest_api.md#update-entity), that accepts the specific fragments to be updated.
 :::note
 
+The new `@parent` must be a device.
+It can't be the entity itself or one of its descendants,
+the same `@parent` rules applied by the [HTTP PATCH API](./rest_api.md#update-entity).
+Unlike the HTTP PATCH API, the new `@health` is not checked,
+so it can refer to a service that is not registered yet.
+An update that breaks any of these rules is rejected and the entity keeps its current definition.
+
 ### Example: Update the parent of an entity
 
 Update the parent of the entity `device/child01//` by making it a child of `device/child0//`:

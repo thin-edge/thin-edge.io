@@ -290,6 +290,12 @@ impl EntityStore {
         let mut affected_entities = vec![];
 
         let parent = message.parent_or_default(&self.main_device);
+        let existing = self.entities.get(&topic_id);
+        if let Some(existing) = existing {
+            validate_reregistration(existing, parent.as_ref(), |topic_id| {
+                self.entities.get(topic_id)
+            })?;
+        }
 
         // parent device is affected if new device is its child
         if let Some(parent) = &parent {
@@ -932,6 +938,25 @@ pub fn validate_parent<'a>(
             ));
         }
         ancestor = lookup(ancestor_id).and_then(|entity| entity.parent.as_ref());
+    }
+
+    Ok(())
+}
+
+/// Checks that a registration message for the already registered entity `existing`
+/// only changes what can be updated after the registration.
+///
+/// The `new_parent` is the parent defined by the message, after applying the default.
+/// It must be a valid parent of the entity, if it differs from its current parent.
+pub fn validate_reregistration<'a>(
+    existing: &EntityMetadata,
+    new_parent: Option<&EntityTopicId>,
+    lookup: impl Fn(&EntityTopicId) -> Option<&'a EntityMetadata>,
+) -> Result<(), Error> {
+    if let Some(new_parent) = new_parent {
+        if Some(new_parent) != existing.parent.as_ref() {
+            validate_parent(&existing.topic_id, new_parent, lookup)?;
+        }
     }
 
     Ok(())
@@ -2542,6 +2567,59 @@ mod tests {
         assert_eq!(removed, [entity("device/child0//")]);
         assert!(store.get(&entity("device/child00//")).is_some());
         assert!(store.get(&entity("device/child000//")).is_some());
+    }
+
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/child0//"}),
+        "Entity: 'device/child0//' can not be its own parent";
+        "self_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/main/service/tedge-agent"}),
+        "Entity: 'device/main/service/tedge-agent' can not be a parent of 'device/child0//' because it is a service. Only devices can be parents";
+        "service_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/child000//"}),
+        "Entity: 'device/child000//' can not be a parent of 'device/child0//' because 'device/child000//' is a descendent of 'device/child0//'";
+        "descendent_parent"
+    )]
+    fn invalid_reregistration_is_rejected_and_not_cached(
+        topic_id: &str,
+        payload: JsonValue,
+        error_msg: &str,
+    ) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        register(
+            &mut store,
+            "device/main/service/tedge-agent",
+            json!({"@type": "service"}),
+        );
+        register(
+            &mut store,
+            "device/child0//",
+            json!({"@type": "child-device", "@id": "child0"}),
+        );
+        register_child(&mut store, "device/child0//", "device/child00//");
+        register_child(&mut store, "device/child00//", "device/child000//");
+        let before = store.get(&entity(topic_id)).cloned();
+
+        let registration =
+            EntityRegistrationMessage::try_from(entity(topic_id), payload.to_string().as_bytes())
+                .unwrap();
+        assert_eq!(
+            store.update(registration).unwrap_err().to_string(),
+            error_msg
+        );
+        assert_eq!(store.get(&entity(topic_id)).cloned(), before);
+
+        // A rejected re-registration is not cached until its parent is registered
+        register_child(&mut store, "device/main//", "device/unknown//");
+        assert_eq!(store.get(&entity(topic_id)).cloned(), before);
     }
 
     #[test]

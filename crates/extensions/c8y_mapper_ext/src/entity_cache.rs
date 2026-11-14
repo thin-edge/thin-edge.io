@@ -6,6 +6,7 @@ use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::EntityType;
 use tedge_api::entity_store;
+use tedge_api::entity_store::validate_reregistration;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -269,16 +270,13 @@ impl EntityCache {
             return Err(Error::InvalidMainDeviceParentUpdate);
         }
 
-        // An already registered entity can only be moved to a registered parent
-        if let Some(new_parent) = entity.parent.as_ref() {
-            if Some(new_parent) != existing_entity.parent.as_ref()
-                && !self.entities.contains(new_parent)
-            {
-                return Err(
-                    entity_store::Error::NoParent(new_parent.to_string().into_boxed_str()).into(),
-                );
-            }
-        }
+        let parent = entity
+            .parent
+            .clone()
+            .or_else(|| existing_entity.parent.clone());
+        validate_reregistration(&existing_entity, parent.as_ref(), |topic_id| {
+            self.entities.get_metadata(topic_id)
+        })?;
 
         let mut merged_twin_data = existing_entity.twin_data.clone();
         merged_twin_data.extend(entity.twin_data);
@@ -290,10 +288,7 @@ impl EntityCache {
             topic_id: topic_id.clone(),
             external_id: existing_entity.external_id.clone(),
             r#type: existing_entity.r#type,
-            parent: entity
-                .parent
-                .clone()
-                .or_else(|| existing_entity.parent.clone()),
+            parent,
             health_endpoint: entity
                 .health_endpoint
                 .clone()
@@ -497,6 +492,12 @@ impl EntityIndexes {
         self.entities.get(entity_topic_id)
     }
 
+    /// Returns the cloud-agnostic metadata of a registered entity,
+    /// as expected by the entity validation functions of `tedge_api`.
+    fn get_metadata(&self, entity_topic_id: &EntityTopicId) -> Option<&EntityMetadata> {
+        self.get(entity_topic_id).map(|entity| &entity.metadata)
+    }
+
     fn get_mut(&mut self, entity_topic_id: &EntityTopicId) -> Option<&mut CloudEntityMetadata> {
         self.entities.get_mut(entity_topic_id)
     }
@@ -601,7 +602,9 @@ mod tests {
     use crate::entity_cache::CloudEntityMetadata;
     use crate::entity_cache::UpdateOutcome;
     use assert_matches::assert_matches;
+    use serde_json::json;
     use serde_json::Map;
+    use serde_json::Value as JsonValue;
     use tedge_api::entity::EntityExternalId;
     use tedge_api::entity::EntityMetadata;
     use tedge_api::entity::EntityType;
@@ -609,6 +612,7 @@ mod tests {
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
     use tedge_flows::FlowContextHandle;
+    use test_case::test_case;
 
     #[test]
     fn external_id_generation() {
@@ -729,6 +733,86 @@ mod tests {
         assert_eq!(metadata.metadata.twin_data["key1"], "val1");
         assert_eq!(metadata.metadata.twin_data["key2"], "val2");
         assert_eq!(metadata.metadata.twin_data["key3"], "val3");
+    }
+
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/child0//"}),
+        "Entity: 'device/child0//' can not be its own parent";
+        "self_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/main/service/tedge-agent"}),
+        "Entity: 'device/main/service/tedge-agent' can not be a parent of 'device/child0//' because it is a service. Only devices can be parents";
+        "service_parent"
+    )]
+    #[test_case(
+        "device/child0//",
+        json!({"@type": "child-device", "@id": "child0", "@parent": "device/child000//"}),
+        "Entity: 'device/child000//' can not be a parent of 'device/child0//' because 'device/child000//' is a descendent of 'device/child0//'";
+        "descendent_parent"
+    )]
+    fn invalid_reregistration_is_rejected_and_not_cached(
+        topic_id: &str,
+        payload: JsonValue,
+        error_msg: &str,
+    ) {
+        let mut cache = new_entity_cache();
+        register(
+            &mut cache,
+            "device/main/service/tedge-agent",
+            json!({"@type": "service"}),
+        );
+        register(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device", "@id": "child0"}),
+        );
+        register(
+            &mut cache,
+            "device/child00//",
+            json!({"@type": "child-device", "@parent": "device/child0//"}),
+        );
+        register(
+            &mut cache,
+            "device/child000//",
+            json!({"@type": "child-device", "@parent": "device/child00//"}),
+        );
+        let before = cache.get(&entity(topic_id)).cloned();
+
+        let res = upsert(&mut cache, topic_id, payload);
+
+        assert_eq!(res.unwrap_err().to_string(), error_msg);
+        assert_eq!(cache.get(&entity(topic_id)).cloned(), before);
+
+        // A rejected re-registration is not cached until its parent is registered
+        register(
+            &mut cache,
+            "device/unknown//",
+            json!({"@type": "child-device"}),
+        );
+        assert_eq!(cache.get(&entity(topic_id)).cloned(), before);
+    }
+
+    fn upsert(
+        cache: &mut EntityCache,
+        topic_id: &str,
+        payload: serde_json::Value,
+    ) -> Result<UpdateOutcome, Error> {
+        let registration =
+            EntityRegistrationMessage::try_from(entity(topic_id), payload.to_string().as_bytes())
+                .unwrap();
+        cache.upsert(registration)
+    }
+
+    fn register(cache: &mut EntityCache, topic_id: &str, payload: serde_json::Value) {
+        let res = upsert(cache, topic_id, payload);
+        assert_matches!(res, Ok(UpdateOutcome::Inserted(_)));
+    }
+
+    fn entity(topic_id: &str) -> EntityTopicId {
+        topic_id.parse().unwrap()
     }
 
     fn new_entity_cache() -> EntityCache {
