@@ -412,12 +412,30 @@ impl EntityStore {
         Ok(affected_entities)
     }
 
+    /// Update the parent or the health endpoint of an entity
+    ///
+    /// The updated entity is persisted, as the registration messages are.
+    /// A failure to persist is logged and doesn't prevent the update.
     pub fn update_entity(
         &mut self,
         topic_id: &EntityTopicId,
         update_message: EntityUpdateMessage,
     ) -> Result<&EntityMetadata, Error> {
-        self.entities.update_entity(topic_id, update_message)
+        let previous = self.entities.get(topic_id).cloned();
+        let updated = self
+            .entities
+            .update_entity(topic_id, update_message)?
+            .clone();
+
+        if previous.as_ref() != Some(&updated) {
+            let message =
+                EntityRegistrationMessage::from(&updated).to_mqtt_message(&self.mqtt_schema);
+            if let Err(err) = self.message_log.append_message(&message) {
+                error!("Failed to persist the update of {topic_id}: {err}");
+            }
+        }
+
+        self.entities.try_get(topic_id)
     }
 
     pub fn ancestors(&self, topic_id: &EntityTopicId) -> Result<Vec<&EntityTopicId>, Error> {
@@ -2486,6 +2504,34 @@ mod tests {
         assert!(store.get(&entity("device/main/service/004")).is_some());
         assert!(store.get(&entity("device/00D//")).is_some());
         assert!(store.get(&entity("device/00E//")).is_some());
+    }
+
+    #[test]
+    fn entity_updates_are_persisted() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, false);
+        register_child(&mut store, "device/main//", "device/child0//");
+        register_child(&mut store, "device/main//", "device/child1//");
+        register_service(&mut store, "device/child1//", "device/child1/service/foo");
+
+        store
+            .update_entity(
+                &entity("device/child1//"),
+                EntityUpdateMessage::default()
+                    .with_parent(entity("device/child0//"))
+                    .with_health_endpoint(entity("device/child1/service/foo")),
+            )
+            .unwrap();
+
+        // Reload the entity store using the same persistent file
+        let store = new_entity_store(&temp_dir, false);
+        let child1 = store.get(&entity("device/child1//")).unwrap();
+        assert_eq!(child1.parent, Some(entity("device/child0//")));
+        assert_eq!(
+            child1.health_endpoint,
+            Some(entity("device/child1/service/foo"))
+        );
+        assert!(store.get(&entity("device/child1/service/foo")).is_some());
     }
 
     #[test]
