@@ -139,6 +139,7 @@ impl EntityStore {
     pub fn load_from_message_log(&mut self) {
         info!("Loading the entity store from the log");
         let messages: Vec<_> = self.message_log.messages().collect();
+        let mut registrations = vec![];
         for message in messages {
             if let Ok((source, channel)) = self.mqtt_schema.entity_channel_of(&message.topic) {
                 match channel {
@@ -147,10 +148,7 @@ impl EntityStore {
                             source.clone(),
                             message.payload_bytes(),
                         ) {
-                            if let Err(err) = self.register_entity(register_message) {
-                                error!("Failed to re-register {source} from the persistent entity store due to {err}");
-                                continue;
-                            }
+                            registrations.push(register_message);
                         }
                     }
                     Channel::EntityTwinData { .. } => {
@@ -174,7 +172,46 @@ impl EntityStore {
                 );
             }
         }
+        self.restore_registrations(registrations);
         info!("Finished loading the entity store from the log");
+    }
+
+    /// Re-registers the entities of the log.
+    ///
+    /// The log keeps the registration of an entity where its first registration was,
+    /// even when the entity has been moved since then under a parent registered later.
+    /// So, a registration which parent is not registered yet is not rejected right away,
+    /// but retried after the other registrations,
+    /// for as long as some registration of a previous round has been successful.
+    fn restore_registrations(&mut self, mut registrations: Vec<EntityRegistrationMessage>) {
+        while !registrations.is_empty() {
+            let round_size = registrations.len();
+            let mut orphans = vec![];
+            for registration in registrations {
+                let source = registration.topic_id.clone();
+                match self.register_entity(registration.clone()) {
+                    Ok(_) => {}
+                    Err(err @ Error::NoParent(_)) => orphans.push((registration, err)),
+                    Err(err) => {
+                        error!("Failed to re-register {source} from the persistent entity store due to {err}");
+                    }
+                }
+            }
+
+            if orphans.len() == round_size {
+                for (registration, err) in orphans {
+                    error!(
+                        "Failed to re-register {} from the persistent entity store due to {err}",
+                        registration.topic_id
+                    );
+                }
+                return;
+            }
+            registrations = orphans
+                .into_iter()
+                .map(|(registration, _)| registration)
+                .collect();
+        }
     }
 
     /// Iterates over the entity topic ids
@@ -2449,6 +2486,33 @@ mod tests {
         assert!(store.get(&entity("device/main/service/004")).is_some());
         assert!(store.get(&entity("device/00D//")).is_some());
         assert!(store.get(&entity("device/00E//")).is_some());
+    }
+
+    #[test]
+    fn reparented_entities_are_restored_from_the_log_in_any_order() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, false);
+        register_child(&mut store, "device/main//", "device/child1//");
+        register_child(&mut store, "device/child1//", "device/child11//");
+        register_child(&mut store, "device/main//", "device/child2//");
+
+        // The log keeps child1 before child2, the new parent of child1
+        register_child(&mut store, "device/child2//", "device/child1//");
+
+        // Reload the entity store using the same persistent file
+        let store = new_entity_store(&temp_dir, false);
+        assert_eq!(
+            store.get(&entity("device/child1//")).unwrap().parent,
+            Some(entity("device/child2//"))
+        );
+        assert_eq!(
+            store.get(&entity("device/child11//")).unwrap().parent,
+            Some(entity("device/child1//"))
+        );
+        assert_eq!(
+            store.get(&entity("device/child2//")).unwrap().parent,
+            Some(entity("device/main//"))
+        );
     }
 
     #[test]
