@@ -46,6 +46,11 @@ Restarts a service managed by the init system
     ${after}=    Get Service PID    ${SERVICE_NAME}
     Should Not Be Equal    ${before}    ${after}    The service was not restarted
 
+Restarts a service of the configured service type through the init system
+    [Template]    Restart Service With Configured Service Type
+    systemd
+    Systemd
+
 Rejects an action the service has not declared
     ${operation}=    Create Service Command Operation
     ...    ${SERVICE_XID}
@@ -87,6 +92,25 @@ Custom Setup
     Cumulocity.External Identity Should Exist    ${SERVICE_XID}    show_info=${False}
     Execute Command
     ...    tedge mqtt pub -q 1 --retain te/device/main/service/${SERVICE_NAME}/cmd/control '{"actions":["restart"]}'
+
+Restart Service With Configured Service Type
+    [Arguments]    ${service_type}
+    Execute Command    tedge config set service.type ${service_type}
+    # tedge-mapper-c8y reads service.type only at startup
+    ThinEdgeIO.Restart Service    tedge-mapper-c8y
+    ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
+    ${before}=    Get Service PID    ${SERVICE_NAME}
+    ${operation}=    Create Service Command Operation
+    ...    ${SERVICE_XID}
+    ...    {"command":"restart","serviceName":"${SERVICE_NAME}","serviceType":"${service_type}"}
+    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    ${after}=    Get Service PID    ${SERVICE_NAME}
+    Should Not Be Equal    ${before}    ${after}    The service was not restarted
+    [Teardown]    Run Keywords
+    ...    Execute Command    tedge config unset service.type
+    ...    AND    ThinEdgeIO.Restart Service    tedge-mapper-c8y
+    ...    AND    ThinEdgeIO.Service Health Status Should Be Up    tedge-mapper-c8y
 
 Supported Service Commands Should Be
     [Arguments]    ${external_id}    @{expected}

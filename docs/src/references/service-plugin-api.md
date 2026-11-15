@@ -7,7 +7,7 @@ description: Service Plugin API reference
 
 # Service Plugin API
 
-A **service plugin** runs the actions of services with a type other than the default type `service`.
+A **service plugin** runs the actions of the services whose type is the same as the name of the plugin file.
 The service type is the `type` field of the
 [service registration message](../mqtt-api#register-a-service-of-the-main-device).
 
@@ -31,10 +31,10 @@ called either by an operator or by the
 
 The service type selects the backend that runs the action.
 
-| Service type          | Backend                                                                            |
-|-----------------------|--------------------------------------------------------------------------------------|
-| `service` (default)   | The init system, as configured in [`system.toml`](../init-system-configuration)  |
-| any other type `<t>`  | The service plugin `<plugin-dir>/<t>`                                              |
+| Service type                                                                | Backend                                                                            |
+|-----------------------------------------------------------------------------|--------------------------------------------------------------------------------------|
+| a type `<t>` with a plugin file                                             | The service plugin `<plugin-dir>/<t>`                                              |
+| `service` or the `tedge config` value `service.type`, with no plugin file   | The init system, as configured in [`system.toml`](../init-system-configuration)  |
 
 The plugin directories are the `tedge config` value `service.plugin_paths`,
 a comma-separated list, `/usr/share/tedge/service-plugins` per default.
@@ -48,6 +48,10 @@ sudo tedge config set service.plugin_paths /usr/local/share/tedge/service-plugin
 ```sh
 # Handled by the init system, e.g. systemctl restart collectd
 sudo tedge service restart collectd
+sudo tedge service restart collectd --type service
+
+# Handled by the init system when service.type is set to systemd
+sudo tedge service restart collectd --type systemd
 
 # Handled by /usr/share/tedge/service-plugins/container
 sudo tedge service restart nodered --type container
@@ -59,8 +63,8 @@ so no privileged surface is added.
 
 The set of supported actions is decided by the backend, not by the runner.
 The action name is passed through unchanged.
-For the default service type, the actions are the templates defined in `system.toml`.
-For any other type, they are whatever the plugin implements.
+For the init system, the actions are the templates defined in `system.toml`.
+For a plugin, they are whatever the plugin implements.
 
 ### Running a plugin
 
@@ -69,7 +73,8 @@ For any other type, they are whatever the plugin implements.
 * The runner forwards the plugin's stdout and stderr to its own.
 * The runner maps the plugin's exit code to its own:
   `0` stays `0`, `2` stays `2`, any other non-zero code is reported as a failure of that action.
-* A service type with no plugin file is reported as not supported, with exit code `2`.
+* A service type with no plugin file, other than `service` and the value of `service.type`,
+  is reported as not supported, with exit code `2`.
 
 ### Timeout
 
@@ -96,7 +101,7 @@ and exits with code `1`.
 
 Exit code `2` separates "no backend can run this" from "the backend ran it and it failed".
 It is what the runner exits with when the action has no template in `system.toml`,
-when the service type has no plugin file,
+when the service type is handled neither by a plugin file nor by the init system,
 and when the plugin itself exits `2`.
 When an action is rejected this way by the init system,
 the error message lists the actions `system.toml` does define.
@@ -110,7 +115,7 @@ and all execution is argv-based: no argument is ever interpolated into a shell c
 |--------------|-------------------------------------------------------------|
 | action       | `[A-Za-z][A-Za-z0-9_-]*`. Neither a space nor a leading `-` |
 | service name | Non-empty and not starting with `-`                     |
-| service type | `[a-z0-9_-]+`, so it cannot escape the plugin directory |
+| service type | `[a-z0-9_-]+`, so that a plugin name cannot escape the plugin directory. The value of `service.type` is also accepted, but it names a plugin only when it matches `[a-z0-9_-]+` |
 
 A rejected argument fails the command without any backend being invoked.
 
