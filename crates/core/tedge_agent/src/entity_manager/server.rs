@@ -396,7 +396,7 @@ impl EntityStoreServer {
     }
 
     async fn deregister_entity(&mut self, topic_id: &EntityTopicId) -> Vec<EntityMetadata> {
-        let deleted = self.entity_store.deregister_entity(topic_id);
+        let deleted = self.entity_store.deregister_and_persist_entity(topic_id);
         let Some((entity, descendants)) = deleted.split_first() else {
             return deleted;
         };

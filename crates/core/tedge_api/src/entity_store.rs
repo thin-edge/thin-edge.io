@@ -428,24 +428,33 @@ impl EntityStore {
 
     /// Recursively deregister an entity, its child devices and services
     ///
-    /// Persist the deregistration message
+    /// Persist the deregistration of each removed entity, descendants first,
+    /// so that none of them is restored from the log when the store is reloaded.
+    ///
+    /// A failure to persist a deregistration is logged and doesn't prevent the removal,
+    /// as the removed entities still have to be cleaned up by the caller.
     pub fn deregister_and_persist_entity(
         &mut self,
         topic_id: &EntityTopicId,
-    ) -> Result<Vec<EntityMetadata>, Error> {
+    ) -> Vec<EntityMetadata> {
         let removed_entities = self.deregister_entity(topic_id);
 
-        if !removed_entities.is_empty() {
+        for entity in removed_entities.iter().rev() {
             let topic = self
                 .mqtt_schema
-                .topic_for(topic_id, &Channel::EntityMetadata);
+                .topic_for(&entity.topic_id, &Channel::EntityMetadata);
             let message = MqttMessage::new(&topic, "")
                 .with_retain()
                 .with_qos(QoS::AtLeastOnce);
-            self.message_log.append_message(&message)?;
+            if let Err(err) = self.message_log.append_message(&message) {
+                error!(
+                    "Failed to persist the deregistration of {}: {err}",
+                    entity.topic_id
+                );
+            }
         }
 
-        Ok(removed_entities)
+        removed_entities
     }
 
     pub fn get_twin_fragment(
@@ -2440,6 +2449,31 @@ mod tests {
         assert!(store.get(&entity("device/main/service/004")).is_some());
         assert!(store.get(&entity("device/00D//")).is_some());
         assert!(store.get(&entity("device/00E//")).is_some());
+    }
+
+    #[test]
+    fn deregistered_entities_are_not_restored_from_the_log() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, false);
+        register_child(&mut store, "device/main//", "device/child0//");
+        register_child(&mut store, "device/child0//", "device/child00//");
+        register_service(&mut store, "device/child00//", "device/child00/service/foo");
+        register_child(&mut store, "device/main//", "device/child1//");
+
+        let removed = store.deregister_and_persist_entity(&entity("device/child0//"));
+        assert_eq!(removed.len(), 3);
+
+        // Reload the entity store using the same persistent file:
+        // the deregistered entity and all its descendants are gone
+        let store = new_entity_store(&temp_dir, false);
+        for topic_id in [
+            "device/child0//",
+            "device/child00//",
+            "device/child00/service/foo",
+        ] {
+            assert!(store.get(&entity(topic_id)).is_none(), "{topic_id}");
+        }
+        assert!(store.get(&entity("device/child1//")).is_some());
     }
 
     #[test]
