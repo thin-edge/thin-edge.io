@@ -326,6 +326,9 @@ impl EntityStore {
         let lookup = |topic_id: &EntityTopicId| self.entities.get(topic_id);
         let existing = self.entities.get(&topic_id);
         match existing {
+            Some(existing) if existing.r#type == EntityType::MainDevice => {
+                validate_main_device_reregistration(existing, &message)?
+            }
             Some(existing) => validate_reregistration(existing, parent.as_ref(), lookup)?,
             None => {
                 if let Some(parent) = &parent {
@@ -927,6 +930,9 @@ pub enum Error {
     #[error("Updating the entity type of {0} is not supported")]
     InvalidEntityTypeUpdate(EntityTopicId),
 
+    #[error("Updating the external id of {0} is not supported")]
+    InvalidExternalIdUpdate(EntityTopicId),
+
     #[error("Entity: '{0}' can not be a health endpoint of '{1}' because it is not a service. Only services can be health endpoints")]
     InvalidHealthEndpoint(EntityTopicId, EntityTopicId),
 
@@ -986,6 +992,29 @@ pub fn validate_reregistration<'a>(
         if Some(new_parent) != existing.parent.as_ref() {
             validate_parent(&existing.topic_id, new_parent, lookup)?;
         }
+    }
+
+    Ok(())
+}
+
+/// Checks that a registration message for the already registered main device `existing`
+/// doesn't change its `@type` or `@id`, nor gives it a parent.
+///
+/// The `@id` is not checked when the main device has none,
+/// as its external id is then set by the cloud mapper, unknown to the agent.
+fn validate_main_device_reregistration(
+    existing: &EntityMetadata,
+    message: &EntityRegistrationMessage,
+) -> Result<(), Error> {
+    let topic_id = &existing.topic_id;
+    if message.r#type != existing.r#type {
+        return Err(Error::InvalidEntityTypeUpdate(topic_id.clone()));
+    }
+    if existing.external_id.is_some() && message.external_id != existing.external_id {
+        return Err(Error::InvalidExternalIdUpdate(topic_id.clone()));
+    }
+    if message.parent.is_some() {
+        return Err(Error::InvalidMainDeviceParent);
     }
 
     Ok(())
@@ -2665,6 +2694,18 @@ mod tests {
         "Entity: 'device/child000//' can not be a parent of 'device/child0//' because 'device/child000//' is a descendent of 'device/child0//'";
         "descendent_parent"
     )]
+    #[test_case(
+        "device/main//",
+        json!({"@type": "device", "@id": "test-device", "@parent": "device/child0//"}),
+        "The parent of main device can not be updated";
+        "main_device_parent"
+    )]
+    #[test_case(
+        "device/main//",
+        json!({"@type": "child-device", "@id": "test-device"}),
+        "Updating the entity type of device/main// is not supported";
+        "main_device_type_change"
+    )]
     fn invalid_reregistration_is_rejected_and_not_cached(
         topic_id: &str,
         payload: JsonValue,
@@ -2698,6 +2739,44 @@ mod tests {
         // A rejected re-registration is not cached until its parent is registered
         register_child(&mut store, "device/main//", "device/unknown//");
         assert_eq!(store.get(&entity(topic_id)).cloned(), before);
+    }
+
+    #[test]
+    fn main_device_external_id_can_only_be_set_once() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut store = new_entity_store(&temp_dir, true);
+        let main_device = entity("device/main//");
+
+        // The external id of the main device is unknown to the agent until registered
+        register(&mut store, "device/main//", json!({"@type": "device"}));
+        register(
+            &mut store,
+            "device/main//",
+            json!({"@type": "device", "@id": "main-id"}),
+        );
+        assert_eq!(
+            store.get(&main_device).unwrap().external_id,
+            Some("main-id".into())
+        );
+
+        for payload in [
+            json!({"@type": "device", "@id": "other-id"}),
+            json!({"@type": "device"}),
+        ] {
+            let registration = EntityRegistrationMessage::try_from(
+                main_device.clone(),
+                payload.to_string().as_bytes(),
+            )
+            .unwrap();
+            assert_eq!(
+                store.update(registration).unwrap_err().to_string(),
+                "Updating the external id of device/main// is not supported"
+            );
+            assert_eq!(
+                store.get(&main_device).unwrap().external_id,
+                Some("main-id".into())
+            );
+        }
     }
 
     #[test]
