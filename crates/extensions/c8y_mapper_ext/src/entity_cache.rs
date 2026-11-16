@@ -50,9 +50,6 @@ pub enum Error {
     #[error("Updating the entity type of {0} is not supported")]
     InvalidEntityTypeUpdate(EntityTopicId),
 
-    #[error("Updating the twin data of {0} with a registration message is not supported")]
-    InvalidEntityTwinUpdate(EntityTopicId),
-
     #[error("Updating the parent of the main device is not supported")]
     InvalidMainDeviceParentUpdate,
 
@@ -331,12 +328,8 @@ impl EntityCache {
             self.entities.get_metadata(topic_id)
         })?;
 
-        let mut merged_twin_data = existing_entity.twin_data.clone();
-        merged_twin_data.extend(entity.twin_data);
-        if merged_twin_data != existing_entity.twin_data {
-            return Err(Error::InvalidEntityTwinUpdate(topic_id.clone()));
-        }
-
+        // The twin fragments of a registration message for an existing entity are ignored:
+        // the twin data of an entity is only updated using the twin topics.
         let updated_entity = EntityMetadata {
             topic_id: topic_id.clone(),
             external_id: existing_entity.external_id.clone(),
@@ -725,7 +718,7 @@ mod tests {
     }
 
     #[test]
-    fn main_device_twin_update_with_reg_message_not_supported() {
+    fn main_device_twin_data_of_reg_message_is_ignored() {
         let mut cache = new_entity_cache();
 
         let res = cache.upsert(
@@ -736,7 +729,9 @@ mod tests {
             .with_twin_fragment("new".to_string(), "fragment".into()),
         );
 
-        assert_matches!(res, Err(Error::InvalidEntityTwinUpdate(_)));
+        assert_matches!(res, Ok(UpdateOutcome::Unchanged));
+        let main_device = cache.get(&EntityTopicId::default_main_device()).unwrap();
+        assert!(main_device.metadata.twin_data.is_empty());
     }
 
     #[test]
@@ -772,6 +767,15 @@ mod tests {
         );
         assert_matches!(res, Ok(UpdateOutcome::Unchanged));
 
+        // Reg message with new and updated twin fragments
+        let res = cache.upsert(
+            EntityRegistrationMessage::new_custom(topic_id.clone(), EntityType::ChildDevice)
+                .with_external_id("child0".into())
+                .with_twin_fragment("key2".to_string(), "new-val2".into())
+                .with_twin_fragment("key4".to_string(), "val4".into()),
+        );
+        assert_matches!(res, Ok(UpdateOutcome::Unchanged));
+
         let metadata = cache.get(&topic_id).unwrap();
         assert_eq!(metadata.external_id, "child0".into());
         assert_eq!(metadata.metadata.external_id, Some("child0".into()));
@@ -783,6 +787,36 @@ mod tests {
         assert_eq!(metadata.metadata.twin_data["key1"], "val1");
         assert_eq!(metadata.metadata.twin_data["key2"], "val2");
         assert_eq!(metadata.metadata.twin_data["key3"], "val3");
+    }
+
+    #[test]
+    fn reregistration_updates_the_parent_and_ignores_the_twin_fragments() {
+        let mut cache = new_entity_cache();
+        register(
+            &mut cache,
+            "device/child0//",
+            json!({"@type": "child-device"}),
+        );
+        register(
+            &mut cache,
+            "device/child1//",
+            json!({"@type": "child-device", "name": "initial"}),
+        );
+
+        let res = upsert(
+            &mut cache,
+            "device/child1//",
+            json!({"@type": "child-device", "@parent": "device/child0//", "name": "updated", "foo": "bar"}),
+        );
+
+        let Ok(UpdateOutcome::Updated(new, old)) = res else {
+            panic!("Expected the entity to be updated, got: {res:?}");
+        };
+        assert_eq!(old.parent, Some(EntityTopicId::default_main_device()));
+        assert_eq!(new.parent, Some(entity("device/child0//")));
+        assert_eq!(new.twin_data, old.twin_data);
+        assert_eq!(new.twin_data["name"], "initial");
+        assert!(!new.twin_data.contains_key("foo"));
     }
 
     #[test]
