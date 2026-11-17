@@ -88,6 +88,7 @@ mod custom_operations;
 mod operations;
 mod registration;
 mod supported_operations;
+mod workflow_operations;
 
 const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 
