@@ -1,5 +1,6 @@
 use super::*;
 use rstest::rstest;
+use test_case::test_case;
 
 #[tokio::test]
 async fn convert_measurement_with_child_id() {
@@ -43,130 +44,77 @@ async fn convert_measurement_with_child_id() {
     );
 }
 
+#[test_case("te/device/nested_child///m/", "nested_child", 2 ; "nested child device")]
+#[test_case(
+    "te/device/nested_child/service/nested_service/m/",
+    "nested_service",
+    3
+    ; "service of a nested child device"
+)]
 #[tokio::test]
-async fn convert_measurement_with_nested_child_device() {
+async fn convert_measurement_of_nested_child_entity(
+    in_topic: &str,
+    external_id: &str,
+    registered_entities: usize,
+) {
     let tmp_dir = TempTedgeDir::new();
     let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/immediate_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/main//",
-            "@id":"immediate_child"
-        })
-        .to_string(),
-    );
-    let _ = converter
-        .process_entity_metadata_message(&reg_message)
-        .await
-        .unwrap();
+    let registrations = [
+        (
+            "te/device/immediate_child//",
+            json!({"@type":"child-device", "@parent":"device/main//", "@id":"immediate_child"}),
+        ),
+        (
+            "te/device/nested_child//",
+            json!({"@type":"child-device", "@parent":"device/immediate_child//", "@id":"nested_child"}),
+        ),
+        (
+            "te/device/nested_child/service/nested_service",
+            json!({"@type":"service", "@parent":"device/nested_child//", "@id":"nested_service"}),
+        ),
+    ];
+    for (topic, registration) in registrations.into_iter().take(registered_entities) {
+        let reg_message = MqttMessage::new(&Topic::new_unchecked(topic), registration.to_string());
+        converter
+            .process_entity_metadata_message(&reg_message)
+            .await
+            .unwrap();
+    }
 
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/immediate_child//",
-            "@id":"nested_child"
-        })
-        .to_string(),
-    );
-    let _ = converter
-        .process_entity_metadata_message(&reg_message)
-        .await
-        .unwrap();
-
-    let in_topic = "te/device/nested_child///m/";
     let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
     let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
     let expected_c8y_json_message = MqttMessage::new(
         &Topic::new_unchecked("c8y/measurement/measurements/create"),
         json!({
-            "externalSource":{"externalId":"nested_child","type":"c8y_Serial"},
+            "externalSource":{"externalId":external_id,"type":"c8y_Serial"},
             "temp":{"temp":{"value":1.0}},
             "time":"2021-11-16T17:45:40.571760714+01:00",
             "type":"ThinEdgeMeasurement"
         })
         .to_string(),
     );
-
-    // Test the first output messages contains SmartREST and C8Y JSON.
-    let out_first_messages = converter.convert(&in_message).await;
-    assert_eq!(out_first_messages, vec![expected_c8y_json_message.clone()]);
+    assert_eq!(
+        converter.convert(&in_message).await,
+        vec![expected_c8y_json_message]
+    );
 }
 
+#[test_case(
+    "te/device/child1/service/app1/m/m_type",
+    "test-device:device:child1:service:app1"
+    ; "child device service"
+)]
+#[test_case(
+    "te/device/main/service/appm/m/m_type",
+    "test-device:device:main:service:appm"
+    ; "main device service"
+)]
 #[tokio::test]
-async fn convert_measurement_with_nested_child_service() {
-    let tmp_dir = TempTedgeDir::new();
-    let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/immediate_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/main//",
-            "@id":"immediate_child"
-        })
-        .to_string(),
-    );
-    let _ = converter
-        .process_entity_metadata_message(&reg_message)
-        .await
-        .unwrap();
-
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/immediate_child//",
-            "@id":"nested_child"
-        })
-        .to_string(),
-    );
-    let _ = converter
-        .process_entity_metadata_message(&reg_message)
-        .await
-        .unwrap();
-
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child/service/nested_service"),
-        json!({
-            "@type":"service",
-            "@parent":"device/nested_child//",
-            "@id":"nested_service"
-        })
-        .to_string(),
-    );
-    let _ = converter
-        .process_entity_metadata_message(&reg_message)
-        .await
-        .unwrap();
-
-    let in_topic = "te/device/nested_child/service/nested_service/m/";
-    let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
-    let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
-
-    let expected_c8y_json_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/measurement/measurements/create"),
-        json!({
-            "externalSource":{"externalId":"nested_service","type":"c8y_Serial"},
-            "temp":{"temp":{"value":1.0}},
-            "time":"2021-11-16T17:45:40.571760714+01:00",
-            "type":"ThinEdgeMeasurement"
-        })
-        .to_string(),
-    );
-
-    // Test the first output messages contains SmartREST and C8Y JSON.
-    let out_first_messages = converter.convert(&in_message).await;
-    assert_eq!(out_first_messages, vec![expected_c8y_json_message.clone()]);
-}
-
-#[tokio::test]
-async fn convert_measurement_for_child_device_service() {
+async fn convert_measurement_of_service(in_topic: &str, external_id: &str) {
     let tmp_dir = TempTedgeDir::new();
     let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
-    let in_topic = "te/device/child1/service/app1/m/m_type";
     let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
     let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
 
@@ -175,46 +123,17 @@ async fn convert_measurement_for_child_device_service() {
     let expected_c8y_json_message = MqttMessage::new(
         &Topic::new_unchecked("c8y/measurement/measurements/create"),
         json!({
-                "externalSource":{
-                    "externalId":"test-device:device:child1:service:app1",
-                    "type":"c8y_Serial"
-                },
-                "temp":{"temp":{"value":1.0}},
-                "time":"2021-11-16T17:45:40.571760714+01:00",
-                "type":"m_type"})
+            "externalSource":{"externalId":external_id,"type":"c8y_Serial"},
+            "temp":{"temp":{"value":1.0}},
+            "time":"2021-11-16T17:45:40.571760714+01:00",
+            "type":"m_type"
+        })
         .to_string(),
     );
-
-    let out_first_messages = converter.convert(&in_message).await;
-    assert_eq!(out_first_messages, vec![expected_c8y_json_message.clone(),]);
-}
-
-#[tokio::test]
-async fn convert_measurement_for_main_device_service() {
-    let tmp_dir = TempTedgeDir::new();
-    let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
-
-    let in_topic = "te/device/main/service/appm/m/m_type";
-    let in_payload = r#"{"temp": 1, "time": "2021-11-16T17:45:40.571760714+01:00"}"#;
-    let in_message = MqttMessage::new(&Topic::new_unchecked(in_topic), in_payload);
-
-    converter.register_source_entities(in_topic).await;
-
-    let expected_c8y_json_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/measurement/measurements/create"),
-        json!({
-                "externalSource":{
-                    "externalId":"test-device:device:main:service:appm",
-                    "type":"c8y_Serial"
-                },
-                "temp":{"temp":{"value":1.0}},
-                "time":"2021-11-16T17:45:40.571760714+01:00",
-                "type":"m_type"})
-        .to_string(),
+    assert_eq!(
+        converter.convert(&in_message).await,
+        vec![expected_c8y_json_message]
     );
-
-    let out_first_messages = converter.convert(&in_message).await;
-    assert_eq!(out_first_messages, vec![expected_c8y_json_message.clone(),]);
 }
 
 #[tokio::test]
@@ -469,17 +388,20 @@ async fn test_convert_big_event_for_child_device() {
     }
 }
 
+#[test_case("te/device/main///m/" ; "main device")]
+#[test_case("te/device/child1///m/" ; "child device")]
 #[tokio::test]
-async fn test_convert_big_measurement() {
+async fn big_measurement_is_converted_to_c8y_json(measurement_topic: &str) {
     let tmp_dir = TempTedgeDir::new();
     let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
-    let measurement_topic = "te/device/main///m/";
-    let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
-
+    // Measurement payload > size_threshold after converting to c8y json
+    let big_measurement_payload = create_thin_edge_measurement(10 * 1024);
     let big_measurement_message = MqttMessage::new(
         &Topic::new_unchecked(measurement_topic),
         big_measurement_payload,
     );
+
+    converter.register_source_entities(measurement_topic).await;
     let result = converter.convert(&big_measurement_message).await;
 
     let payload = result[0].payload_str().unwrap();
@@ -508,27 +430,6 @@ async fn test_convert_small_measurement() {
         .payload_str()
         .unwrap()
         .contains(r#""type":"ThinEdgeMeasurement""#));
-}
-
-#[tokio::test]
-async fn test_convert_big_measurement_for_child_device() {
-    let tmp_dir = TempTedgeDir::new();
-    let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
-    let measurement_topic = "te/device/child1///m/";
-    let big_measurement_payload = create_thin_edge_measurement(10 * 1024); // Measurement payload > size_threshold after converting to c8y json
-
-    let big_measurement_message = MqttMessage::new(
-        &Topic::new_unchecked(measurement_topic),
-        big_measurement_payload,
-    );
-
-    converter.register_source_entities(measurement_topic).await;
-
-    let result = converter.convert(&big_measurement_message).await;
-
-    // Skipping the first two auto-registration messages and validating the third mapped message
-    let payload = result[0].payload_str().unwrap();
-    assert!(payload.contains(r#""temperature0":{"temperature0":{"value":0.0}}"#));
 }
 
 fn create_packet(size: usize) -> String {
