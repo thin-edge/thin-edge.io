@@ -82,6 +82,9 @@ Every prompt includes: the scratch directory path, where to read files from (hea
 - "Follow `.agents/skills/rust-review/SKILL.md` in correctness-only mode on the diff in `diff.patch`."
 - Owned sections of `CODING_STANDARDS.md`: **Correctness** (except the **Errors** rules on `thiserror`/`anyhow` and on message wording, which Standards owns), **thin-edge.io specifics**, and from **Tests** the subsections **What to test** and **Speed and determinism**.
 - "Trace every changed branch with a concrete input. Every changed behaviour either has a named test that covers it or a finding saying which test is missing. A missing-test finding names a concrete regression that the existing tests would not catch; if you cannot name one, it is not a finding."
+- "When a finding rests on a fact about the code or a tool, check every other place in the change where the same fact applies, and report them in the same finding."
+- "For a change to agent instructions (a skill or command file), trace each step as the agent that follows it. Also trace each command with a wrong input, such as a filter that matches nothing or a misspelled name, and report any step that then gives a normal-looking result."
+- "Check every claim about a third-party tool or API against its source code or reference docs, not memory, and cite the file and line or the URL. If you cannot read the source code or the docs, mark the claim as unchecked."
 
 **Standards** prompt:
 
