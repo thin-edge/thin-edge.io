@@ -6198,6 +6198,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "once_cell",
+ "rstest",
  "serde",
  "serde_json",
  "strum",
