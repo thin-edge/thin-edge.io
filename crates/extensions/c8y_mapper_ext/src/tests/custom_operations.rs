@@ -1,62 +1,17 @@
 use super::*;
 use test_case::test_case;
 
-#[tokio::test]
-async fn custom_operation_without_timeout_successful() {
-    // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
-    // and executes the custom operation successfully, no timeout given here.
-
-    let ttd = TempTedgeDir::new();
-
-    let cmd_file = ttd.path().join("command");
-    //create custom operation file
-    create_custom_op_file(&ttd, cmd_file.as_path(), None, None);
-    //create command
-    let content = r#"#!/bin/sh
+#[test_case(
+    None,
+    r#"#!/bin/sh
     for i in $(seq 1 2)
     do
         sleep 1
     done
     echo "Executed successfully without timeout"
-    "#;
-    create_custom_cmd(cmd_file.as_path(), content);
-
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    // Simulate c8y_Command SmartREST request
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
-        "511,test-device,c8y_Command",
-    ))
-    .await
-    .expect("Send failed");
-
-    let _ = tokio::time::timeout(TEST_TIMEOUT_MS, async {
-        loop {
-            mqtt.recv().await;
-        }
-    })
-    .await;
-
-    // Expect `501` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
-
-    // Expect `503` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "503,c8y_Command,\"Executed successfully without timeout\n\"",
-        )],
-    )
-    .await;
-
-    // assert the signterm is handled
-    let expected_content = "command \"511,test-device,c8y_Command\"
+    "#,
+    "503,c8y_Command,\"Executed successfully without timeout\n\"",
+    "command \"511,test-device,c8y_Command\"
 Exit status: 0 (OK)
 
 stderr (EMPTY)
@@ -64,56 +19,20 @@ stderr (EMPTY)
 stdout <<EOF
 Executed successfully without timeout
 EOF
-";
-
-    assert_command_exec_log_content(ttd, expected_content);
-}
-
-#[tokio::test]
-async fn custom_operation_with_timeout_successful() {
-    // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
-    // and executes the custom operation within the timeout period
-
-    let ttd = TempTedgeDir::new();
-    let cmd_file = ttd.path().join("command");
-    //create custom operation file
-    create_custom_op_file(&ttd, cmd_file.as_path(), Some(5), Some(2));
-    //create command
-    let content = r#"#!/bin/sh
+"
+    ; "successful without timeout"
+)]
+#[test_case(
+    Some((5, 2)),
+    r#"#!/bin/sh
     for i in $(seq 1 2)
     do
         sleep 1
     done
     echo "Successfully Executed"
-    "#;
-    create_custom_cmd(cmd_file.as_path(), content);
-
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    // Simulate c8y_Command SmartREST request
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
-        "511,test-device,c8y_Command",
-    ))
-    .await
-    .expect("Send failed");
-
-    // Expect `501` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
-
-    // Expect `503` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "503,c8y_Command,\"Successfully Executed\n\"")],
-    )
-    .await;
-
-    // assert the signterm is handled
-    let expected_content = "command \"511,test-device,c8y_Command\"
+    "#,
+    "503,c8y_Command,\"Successfully Executed\n\"",
+    "command \"511,test-device,c8y_Command\"
 Exit status: 0 (OK)
 
 stderr (EMPTY)
@@ -121,26 +40,15 @@ stderr (EMPTY)
 stdout <<EOF
 Successfully Executed
 EOF
-";
-
-    assert_command_exec_log_content(ttd, expected_content);
-}
-
-#[tokio::test]
-async fn custom_operation_timeout_sigterm() {
-    // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
-    // and executes the custom operation, it will timeout because it will not complete before given timeout
-    // sigterm is sent to stop the custom operation
-
-    let ttd = TempTedgeDir::new();
-    let cmd_file = ttd.path().join("command");
-    //create custom operation file
-    create_custom_op_file(&ttd, cmd_file.as_path(), Some(2), Some(2));
-    //create command
-    // Block on `sleep & wait` rather than a foreground `sleep`:
-    // the `wait` builtin is interrupted by a trapped signal
-    // (a foreground `sleep` would defer it until the sleep completes).
-    let content = r#"#!/bin/sh
+"
+    ; "successful within the timeout"
+)]
+// Block on `sleep & wait` rather than a foreground `sleep`:
+// the `wait` builtin is interrupted by a trapped signal
+// (a foreground `sleep` would defer it until the sleep completes).
+#[test_case(
+    Some((2, 2)),
+    r#"#!/bin/sh
     trap 'echo received SIGTERM; exit 124' TERM
     for i in $(seq 1 10)
     do
@@ -148,38 +56,9 @@ async fn custom_operation_timeout_sigterm() {
         sleep 5 >/dev/null 2>&1 &
         wait
     done
-    "#;
-    create_custom_cmd(cmd_file.as_path(), content);
-
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    // Simulate c8y_Command SmartREST request
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
-        "511,test-device,c8y_Command",
-    ))
-    .await
-    .expect("Send failed");
-
-    // Expect `501` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
-
-    // Expect `501` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "502,c8y_Command,operation failed due to timeout: duration=2s",
-        )],
-    )
-    .await;
-
-    // assert the signterm is handled
-    let expected_content = "command \"511,test-device,c8y_Command\"
+    "#,
+    "502,c8y_Command,operation failed due to timeout: duration=2s",
+    "command \"511,test-device,c8y_Command\"
 Exit status: 124 (ERROR)
 
 stderr <<EOF
@@ -190,55 +69,12 @@ stdout <<EOF
 main 1
 received SIGTERM
 EOF
-";
-
-    assert_command_exec_log_content(ttd, expected_content);
-}
-
-#[tokio::test]
-async fn custom_operation_fails_when_its_command_cannot_be_killed() {
-    let ttd = TempTedgeDir::new();
-    let cmd_file = create_unkillable_command(&ttd);
-    create_custom_op_file(&ttd, cmd_file.as_path(), Some(1), Some(1));
-
-    let config = config_waiting_one_second_after_kill(&ttd);
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
-        "511,test-device,c8y_Command",
-    ))
-    .await
-    .expect("Send failed");
-
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "502,c8y_Command,\"failed to kill the process")],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn custom_operation_timeout_sigkill() {
-    // The test assures SM Mapper correctly receives custom operation on `c8y/s/ds`
-    // and executes the custom operation, it will timeout because it will not complete before given timeout
-    // sigterm sent first, still the operation did not stop, so sigkill will be sent to stop the operation
-
-    let ttd = TempTedgeDir::new();
-
-    let cmd_file = ttd.path().join("command");
-    //create custom operation file
-    create_custom_op_file(&ttd, cmd_file.as_path(), Some(2), Some(2));
-    //create command
-    // Block on `sleep & wait` rather than a foreground `sleep`:
-    // the `wait` builtin is interrupted by a trapped signal
-    // (a foreground `sleep` would defer it until the sleep completes).
-    let content = r#"#!/bin/sh
+"
+    ; "stopped by sigterm on timeout"
+)]
+#[test_case(
+    Some((2, 2)),
+    r#"#!/bin/sh
     trap 'echo ignore SIGTERM' TERM
     for i in $(seq 1 50)
     do
@@ -246,38 +82,9 @@ async fn custom_operation_timeout_sigkill() {
         sleep 5 >/dev/null 2>&1 &
         wait
     done
-    "#;
-    create_custom_cmd(cmd_file.as_path(), content);
-
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    // Simulate c8y_Command SmartREST request
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
-        "511,test-device,c8y_Command",
-    ))
-    .await
-    .expect("Send failed");
-
-    // Expect `501` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
-
-    // Expect `502` smartrest message on `c8y/s/us`.
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "502,c8y_Command,operation failed due to timeout: duration=2s",
-        )],
-    )
-    .await;
-
-    // assert the signterm is handled
-    let expected_content = "command \"511,test-device,c8y_Command\"
+    "#,
+    "502,c8y_Command,operation failed due to timeout: duration=2s",
+    "command \"511,test-device,c8y_Command\"
 Killed by signal: 9
 
 stderr <<EOF
@@ -289,9 +96,84 @@ main 1
 ignore SIGTERM
 main 2
 EOF
-";
+"
+    ; "killed by sigkill when ignoring sigterm"
+)]
+#[tokio::test]
+async fn custom_operation_runs_its_script(
+    timeouts: Option<(i64, i64)>,
+    script: &str,
+    expected_result: &str,
+    expected_log: &str,
+) {
+    let (mapper, mut mqtt) = run_smartrest_command(timeouts, script, |config| config).await;
 
-    assert_command_exec_log_content(ttd, expected_content);
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", expected_result)]).await;
+    assert_command_exec_log_content(&mapper, expected_log);
+}
+
+#[tokio::test]
+async fn custom_operation_fails_when_its_command_cannot_be_killed() {
+    let (_mapper, mut mqtt) =
+        run_smartrest_command(Some((1, 1)), UNKILLABLE_SCRIPT, wait_one_second_after_kill).await;
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "502,c8y_Command,\"failed to kill the process")],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn json_custom_operation_fails_by_id_when_its_command_cannot_be_killed() {
+    let dir = TempTedgeDir::new();
+    create_unkillable_operation(&dir, r#"on_fragment = "c8y_Command""#);
+    let (_mapper, mut mqtt) = publish_c8y_command(
+        dir,
+        |config| C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..wait_one_second_after_kill(config)
+        },
+        "c8y/devicecontrol/notifications",
+        json!({}),
+    )
+    .await;
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [("c8y/s/us", "505,1234,failed to kill the process")],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn custom_operation_skipping_status_updates_is_not_failed_when_its_command_cannot_be_killed()
+{
+    let dir = TempTedgeDir::new();
+    create_unkillable_operation(
+        &dir,
+        r#"topic = "c8y/s/ds"
+on_message = "511"
+skip_status_update = true"#,
+    );
+    let config = wait_one_second_after_kill(test_mapper_config(&dir));
+    let (mapper, mut mqtt) = spawn_mapper_with_config(dir, config).await;
+    publish(&mut mqtt, "c8y/s/ds", "511,test-device,c8y_Command").await;
+
+    // The failure is logged just before it would be published
+    wait_for_command_log(&mapper, "failed to kill the process").await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_received_not_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "501,c8y_Command"),
+            ("c8y/s/us", "502,c8y_Command"),
+        ],
+    )
+    .await;
 }
 
 #[test_case(
@@ -836,143 +718,7 @@ async fn c8y_command_is_ignored_when_shell_execute_is_disabled() {
     }
 }
 
-#[tokio::test]
-async fn json_custom_operation_fails_by_id_when_its_command_cannot_be_killed() {
-    let ttd = TempTedgeDir::new();
-    let cmd_file = create_unkillable_command(&ttd);
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(&format!(
-            r#"[exec]
-            command = "{cmd_file}"
-            on_fragment = "c8y_Command"
-            timeout = 1
-            forceful_timeout = 1
-            "#
-        ));
-
-    let config = C8yMapperConfig {
-        smartrest_use_operation_id: true,
-        ..config_waiting_one_second_after_kill(&ttd)
-    };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    let operation = json!({
-        "status": "PENDING",
-        "id": "1234",
-        "c8y_Command": {},
-        "externalSource": {"externalId": "test-device", "type": "c8y_Serial"}
-    });
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
-        operation.to_string(),
-    ))
-    .await
-    .expect("Send failed");
-
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "505,1234,failed to kill the process")],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn custom_operation_skipping_status_updates_is_not_failed_when_its_command_cannot_be_killed()
-{
-    let ttd = TempTedgeDir::new();
-    let cmd_file = create_unkillable_command(&ttd);
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(&format!(
-            r#"[exec]
-            topic = "c8y/s/ds"
-            on_message = "511"
-            command = "{cmd_file}"
-            timeout = 1
-            forceful_timeout = 1
-            skip_status_update = true
-            "#
-        ));
-
-    let config = config_waiting_one_second_after_kill(&ttd);
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
-        "511,test-device,c8y_Command",
-    ))
-    .await
-    .expect("Send failed");
-
-    // The failure is logged just before it would be published
-    wait_for_command_log(&ttd, "failed to kill the process").await;
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_received_not_contains_str(
-        &mut mqtt,
-        [
-            ("c8y/s/us", "501,c8y_Command"),
-            ("c8y/s/us", "502,c8y_Command"),
-        ],
-    )
-    .await;
-}
-
-/// Creates a command that cannot be killed on timeout: its `setsid` child leaves the process group
-/// killed on timeout and keeps stdout open, so the mapper never sees the command exit
-fn create_unkillable_command(ttd: &TempTedgeDir) -> Utf8PathBuf {
-    let cmd_file = ttd.path().join("command");
-    // The `setsid` child outlives the 3 seconds the mapper waits for the command: 2 timeouts of 1 second and the exit wait
-    let content = r#"#!/bin/sh
-    setsid sleep 5 &
-    sleep 10
-    "#;
-    create_custom_cmd(cmd_file.as_path(), content);
-    cmd_file
-}
-
-/// The test configuration of the mapper, giving a killed command one second to exit
-fn config_waiting_one_second_after_kill(ttd: &TempTedgeDir) -> C8yMapperConfig {
-    C8yMapperConfig {
-        custom_operation_exit_wait_after_kill: Duration::from_secs(1),
-        ..test_mapper_config(ttd)
-    }
-}
-
-/// Waits for a command log of the mapper to contain the given text
-async fn wait_for_command_log(ttd: &TempTedgeDir, expected: &str) {
-    let log_dir = ttd.path();
-    let found = tokio::time::timeout(TEST_TIMEOUT_MS, async {
-        loop {
-            let logged = fs::read_dir(log_dir)
-                .into_iter()
-                .flatten()
-                .flatten()
-                .any(|entry| {
-                    fs::read_to_string(entry.path()).is_ok_and(|log| log.contains(expected))
-                });
-            if logged {
-                return;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    })
-    .await;
-    assert!(found.is_ok(), "No command log contains {expected:?}");
-}
-
-pub(super) fn assert_command_exec_log_content(cfg_dir: TempTedgeDir, expected_contents: &str) {
+pub(super) fn assert_command_exec_log_content(cfg_dir: &TempTedgeDir, expected_contents: &str) {
     let paths = fs::read_dir(cfg_dir.path().join("agent")).unwrap();
     for path in paths {
         let mut file =
@@ -1031,7 +777,20 @@ async fn send_c8y_command(
         .dir("c8y")
         .file("c8y_Command")
         .with_raw_content(operation_file);
+    publish_c8y_command(dir, configure, topic, c8y_command).await
+}
 
+/// Sends a `c8y_Command` operation, with the ID 1234 and the given fragment, on the given topic,
+/// to a mapper using the operation files of the given directory
+async fn publish_c8y_command(
+    dir: TempTedgeDir,
+    configure: impl FnOnce(C8yMapperConfig) -> C8yMapperConfig,
+    topic: &str,
+    c8y_command: serde_json::Value,
+) -> (
+    TestMapper,
+    TestMqttBox<TimedMessageBox<MockMqttBoxUnbuffered>>,
+) {
     let config = configure(test_mapper_config(&dir));
     let (mapper, mut mqtt) = spawn_mapper_with_config(dir, config).await;
 
@@ -1131,4 +890,76 @@ async fn send_workflow_operation(
     .await;
 
     (mapper, mqtt)
+}
+
+/// Sends a SmartREST `c8y_Command` operation to a mapper running the given script for it,
+/// with the given graceful and forceful timeouts
+async fn run_smartrest_command(
+    timeouts: Option<(i64, i64)>,
+    script: &str,
+    configure: impl FnOnce(C8yMapperConfig) -> C8yMapperConfig,
+) -> (
+    TestMapper,
+    TestMqttBox<TimedMessageBox<MockMqttBoxUnbuffered>>,
+) {
+    let dir = TempTedgeDir::new();
+    let cmd_file = dir.path().join("command");
+    let (graceful_timeout, forceful_timeout) = timeouts.unzip();
+    create_custom_op_file(&dir, cmd_file.as_path(), graceful_timeout, forceful_timeout);
+    create_custom_cmd(cmd_file.as_path(), script);
+
+    let config = configure(test_mapper_config(&dir));
+    let (mapper, mut mqtt) = spawn_mapper_with_config(dir, config).await;
+    publish(&mut mqtt, "c8y/s/ds", "511,test-device,c8y_Command").await;
+    (mapper, mqtt)
+}
+
+/// A script that cannot be killed on timeout: its `setsid` child leaves the process group
+/// killed on timeout and keeps stdout open, so the mapper never sees the script exit.
+/// The child outlives the 3 seconds the mapper waits: 2 timeouts of 1 second and the exit wait.
+const UNKILLABLE_SCRIPT: &str = r#"#!/bin/sh
+    setsid sleep 5 &
+    sleep 10
+    "#;
+
+/// Creates a `c8y_Command` operation file running [`UNKILLABLE_SCRIPT`] with timeouts of one
+/// second, triggered by the given `[exec]` entries
+fn create_unkillable_operation(dir: &TempTedgeDir, trigger: &str) {
+    let cmd_file = dir.path().join("command");
+    create_custom_cmd(cmd_file.as_path(), UNKILLABLE_SCRIPT);
+    dir.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(&format!(
+            "[exec]\n{trigger}\ncommand = \"{cmd_file}\"\ntimeout = 1\nforceful_timeout = 1\n"
+        ));
+}
+
+/// Gives a killed command one second to exit
+fn wait_one_second_after_kill(config: C8yMapperConfig) -> C8yMapperConfig {
+    C8yMapperConfig {
+        custom_operation_exit_wait_after_kill: Duration::from_secs(1),
+        ..config
+    }
+}
+
+/// Waits for a command log of the mapper to contain the given text
+async fn wait_for_command_log(dir: &TempTedgeDir, expected: &str) {
+    let found = tokio::time::timeout(TEST_TIMEOUT_MS, async {
+        loop {
+            let logged = fs::read_dir(dir.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+                .any(|entry| {
+                    fs::read_to_string(entry.path()).is_ok_and(|log| log.contains(expected))
+                });
+            if logged {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await;
+    assert!(found.is_ok(), "No command log contains {expected:?}");
 }
