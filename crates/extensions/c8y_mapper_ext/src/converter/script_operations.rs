@@ -248,3 +248,52 @@ async fn publish_status(
         error!("Failed to publish a message: {status}. Error: {err}");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::converter::tests::create_c8y_converter;
+    use camino::Utf8Path;
+    use tedge_test_utils::fs::TempTedgeDir;
+
+    #[tokio::test]
+    async fn no_log_file_is_created_for_a_command_that_cannot_be_spawned() {
+        let tmp_dir = TempTedgeDir::new();
+        let (converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+        let mut operation =
+            toml::from_str::<Operation>("[exec]\ncommand = \"/nonexistent/command\"").unwrap();
+        operation.name = "missing_command".to_owned();
+
+        let result = converter
+            .execute_operation(
+                ShellScript::from_str("/nonexistent/command").unwrap(),
+                &operation,
+                None,
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(CumulocityMapperError::ExecuteFailed { .. })),
+            "{result:?}"
+        );
+        assert_eq!(
+            log_files(tmp_dir.path(), "missing_command-"),
+            Vec::<String>::new()
+        );
+    }
+
+    /// The files in the given directory and its subdirectories whose names start with the given prefix
+    fn log_files(dir: &Utf8Path, prefix: &str) -> Vec<String> {
+        let mut found = vec![];
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if path.is_dir() {
+                found.extend(log_files(Utf8Path::from_path(&path).unwrap(), prefix));
+            } else if name.starts_with(prefix) {
+                found.push(path.display().to_string());
+            }
+        }
+        found
+    }
+}
