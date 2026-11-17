@@ -1,326 +1,187 @@
 use super::*;
 use test_case::test_case;
 
+#[test_case(
+    "main",
+    "temperature_alarm",
+    r#"{ "severity": "major", "text": "Temperature high" }"#,
+    "302,temperature_alarm,Temperature high"
+    ; "main device"
+)]
+#[test_case(
+    "external_sensor",
+    "temperature_high",
+    r#"{ "severity": "minor", "text": "Temperature high" }"#,
+    "303,temperature_high,Temperature high"
+    ; "child device"
+)]
+#[test_case(
+    "main",
+    "empty_temperature_alarm",
+    "",
+    "306,empty_temperature_alarm"
+    ; "main device clearing an alarm"
+)]
+#[test_case(
+    "external_sensor",
+    "empty_temperature_alarm",
+    "",
+    "306,empty_temperature_alarm"
+    ; "child device clearing an alarm"
+)]
+#[test_case(
+    "main",
+    "empty_temperature_alarm",
+    "{}",
+    "303,empty_temperature_alarm,empty_temperature_alarm"
+    ; "main device with an empty json payload"
+)]
 #[tokio::test]
-async fn c8y_mapper_alarm_mapping_to_smartrest() {
+async fn c8y_mapper_alarm_mapping_to_smartrest(
+    device: &str,
+    alarm_type: &str,
+    alarm: &str,
+    expected: &str,
+) {
     let (_ttd, mut mqtt) = spawn_mapper().await;
+    let smartrest_topic = if device == "main" {
+        "c8y/s/us".to_string()
+    } else {
+        register_external_sensor(&mut mqtt).await;
+        format!("c8y/s/us/test-device:device:{device}")
+    };
 
     publish(
         &mut mqtt,
-        "te/device/main///a/temperature_alarm",
-        r#"{ "severity": "major", "text": "Temperature high" }"#,
+        &format!("te/device/{device}///a/{alarm_type}"),
+        alarm,
     )
     .await;
 
-    assert_received_contains_str(
-        &mut mqtt,
-        [("c8y/s/us", "302,temperature_alarm,Temperature high")],
-    )
-    .await;
+    assert_received_contains_str(&mut mqtt, [(smartrest_topic.as_str(), expected)]).await;
 }
 
+#[test_case(
+    "main",
+    "custom_temperature_alarm",
+    json!({
+        "severity": "major",
+        "text": "Temperature high",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "customFragment": { "nested": { "value": "extra info" } }
+    }),
+    json!({
+        "severity":"MAJOR",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "text":"Temperature high",
+        "customFragment": { "nested": { "value":"extra info" } }
+    })
+    ; "main device with a custom fragment"
+)]
+#[test_case(
+    "external_sensor",
+    "custom_temperature_alarm",
+    json!({
+        "severity": "major",
+        "text": "Temperature high",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "customFragment": { "nested": { "value": "extra info" } }
+    }),
+    json!({
+        "severity":"MAJOR",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "text":"Temperature high",
+        "customFragment": { "nested": { "value":"extra info" } }
+    })
+    ; "child device with a custom fragment"
+)]
+#[test_case(
+    "main",
+    "custom_msg_pressure_alarm",
+    json!({
+        "severity": "major",
+        "text": "Pressure high",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "message":"custom message"
+    }),
+    json!({
+        "severity":"MAJOR",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "text":"Pressure high",
+        "message":"custom message"
+    })
+    ; "main device with a message as custom fragment"
+)]
+#[test_case(
+    "external_sensor",
+    "child_custom_msg_pressure_alarm",
+    json!({
+        "severity": "major",
+        "text": "Pressure high",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "message":"custom message"
+    }),
+    json!({
+        "severity":"MAJOR",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "text":"Pressure high",
+        "message":"custom message"
+    })
+    ; "child device with a message as custom fragment"
+)]
+#[test_case(
+    "main",
+    "msg_to_text_pressure_alarm",
+    json!({
+        "severity": "major",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "message":"Pressure high"
+    }),
+    json!({
+        "severity":"MAJOR",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "text":"msg_to_text_pressure_alarm",
+        "message":"Pressure high"
+    })
+    ; "main device with a message but no text"
+)]
+#[test_case(
+    "external_sensor",
+    "child_msg_to_text_pressure_alarm",
+    json!({
+        "severity": "major",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "message":"Pressure high"
+    }),
+    json!({
+        "severity":"MAJOR",
+        "time":"2023-01-25T18:41:14.776170774Z",
+        "text":"child_msg_to_text_pressure_alarm",
+        "message":"Pressure high"
+    })
+    ; "child device with a message but no text"
+)]
 #[tokio::test]
-async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
+async fn c8y_mapper_alarm_mapping_to_c8y_json(
+    device: &str,
+    alarm_type: &str,
+    alarm: serde_json::Value,
+    mut expected: serde_json::Value,
+) {
     let (_ttd, mut mqtt) = spawn_mapper().await;
+    expected["type"] = alarm_type.into();
+    if device != "main" {
+        register_external_sensor(&mut mqtt).await;
+        expected["externalSource"] = json!({
+            "externalId": format!("test-device:device:{device}"),
+            "type": "c8y_Serial"
+        });
+    }
 
-    // Register the device upfront
-    register_external_sensor(&mut mqtt).await;
+    let topic = format!("te/device/{device}///a/{alarm_type}");
+    publish(&mut mqtt, &topic, alarm.to_string()).await;
 
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor///a/temperature_high",
-        json!({ "severity": "minor", "text": "Temperature high" }).to_string(),
-    )
-    .await;
-
-    // Expect child device creation and converted temperature alarm messages
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:external_sensor",
-            "303,temperature_high,Temperature high",
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    publish(
-        &mut mqtt,
-        "te/device/main///a/custom_temperature_alarm",
-        json!({
-            "severity": "major",
-            "text": "Temperature high",
-            "time":"2023-01-25T18:41:14.776170774Z",
-            "customFragment": {
-                "nested": {
-                    "value": "extra info"
-                }
-            }
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted temperature alarm message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "c8y/alarm/alarms/create",
-            json!({
-                "type":"custom_temperature_alarm",
-                "severity":"MAJOR",
-                "time":"2023-01-25T18:41:14.776170774Z",
-                "text":"Temperature high",
-                "customFragment": {
-                    "nested": {
-                        "value":"extra info"
-                    }
-                }
-            }),
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    // Register the device upfront
-    register_external_sensor(&mut mqtt).await;
-
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor///a/custom_temperature_alarm",
-        json!({
-            "severity": "major",
-            "text": "Temperature high",
-            "time":"2023-01-25T18:41:14.776170774Z",
-            "customFragment": {
-                "nested": {
-                    "value": "extra info"
-                }
-            }
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted temperature alarm message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "c8y/alarm/alarms/create",
-            json!({
-                "type":"custom_temperature_alarm",
-                "severity":"MAJOR",
-                "time":"2023-01-25T18:41:14.776170774Z",
-                "text":"Temperature high",
-                "customFragment": {
-                    "nested": {
-                        "value":"extra info"
-                    }
-                },
-                "externalSource": {
-                    "externalId":"test-device:device:external_sensor",
-                    "type":"c8y_Serial"
-                }
-            }),
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    publish(
-        &mut mqtt,
-        "te/device/main///a/custom_msg_pressure_alarm",
-        json!({
-            "severity": "major",
-            "text": "Pressure high",
-            "time":"2023-01-25T18:41:14.776170774Z",
-            "message":"custom message"
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted temperature alarm message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "c8y/alarm/alarms/create",
-            json!({
-                "type":"custom_msg_pressure_alarm",
-                "severity":"MAJOR",
-                "time":"2023-01-25T18:41:14.776170774Z",
-                "text":"Pressure high",
-                "message":"custom message"
-            }),
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    // Register the device upfront
-    register_external_sensor(&mut mqtt).await;
-
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor///a/child_custom_msg_pressure_alarm",
-        json!({
-            "severity": "major",
-            "text": "Pressure high",
-            "time":"2023-01-25T18:41:14.776170774Z",
-            "message":"custom message"
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted temperature alarm message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "c8y/alarm/alarms/create",
-            json!({
-                "type":"child_custom_msg_pressure_alarm",
-                "severity":"MAJOR",
-                "time":"2023-01-25T18:41:14.776170774Z",
-                "text":"Pressure high",
-                "message":"custom message",
-                "externalSource":{
-                    "externalId":"test-device:device:external_sensor",
-                    "type":"c8y_Serial"
-                }
-            }),
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_child_alarm_with_custom_message() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    // Register the device upfront
-    register_external_sensor(&mut mqtt).await;
-
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor///a/child_msg_to_text_pressure_alarm",
-        json!({
-            "severity": "major",
-            "time":"2023-01-25T18:41:14.776170774Z",
-            "message":"Pressure high"
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted temperature alarm message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "c8y/alarm/alarms/create",
-            json!({
-                "type":"child_msg_to_text_pressure_alarm",
-                "severity":"MAJOR",
-                "time":"2023-01-25T18:41:14.776170774Z",
-                "text":"child_msg_to_text_pressure_alarm",
-                "message":"Pressure high",
-                "externalSource":{
-                    "externalId":"test-device:device:external_sensor",
-                    "type":"c8y_Serial"
-                }
-            }),
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_alarm_with_custom_message() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    publish(
-        &mut mqtt,
-        "te/device/main///a/msg_to_text_pressure_alarm",
-        json!({
-            "severity": "major",
-            "time":"2023-01-25T18:41:14.776170774Z",
-            "message":"Pressure high"
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted temperature alarm message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "c8y/alarm/alarms/create",
-            json!({
-                "type":"msg_to_text_pressure_alarm",
-                "severity":"MAJOR",
-                "time":"2023-01-25T18:41:14.776170774Z",
-                "text":"msg_to_text_pressure_alarm",
-                "message":"Pressure high",
-            }),
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_child_alarm_empty_payload() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    // Register the device upfront
-    register_external_sensor(&mut mqtt).await;
-
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor///a/empty_temperature_alarm",
-        "".to_string(),
-    )
-    .await;
-
-    // Expect converted alarm SmartREST message
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:external_sensor",
-            "306,empty_temperature_alarm",
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_alarm_empty_payload() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    publish(
-        &mut mqtt,
-        "te/device/main///a/empty_temperature_alarm",
-        "".to_string(),
-    )
-    .await;
-
-    // Expect converted alarm SmartREST message
-    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "306,empty_temperature_alarm")]).await;
+    assert_received_includes_json(&mut mqtt, [("c8y/alarm/alarms/create", expected)]).await;
 }
 
 #[tokio::test]
@@ -369,44 +230,6 @@ async fn c8y_mapper_alarm_is_persisted_to_internal_topic() {
         &mut mqtt,
         "c8y-internal/alarms/te/device/main///a/temperature_alarm",
         |payload| payload.is_empty(),
-    )
-    .await;
-}
-
-/// Wait for a retained message on the given topic, with a payload matching the given predicate
-async fn assert_received_retained<M>(
-    mqtt: &mut TestMqttBox<M>,
-    topic: &str,
-    payload_matches: impl Fn(&[u8]) -> bool,
-) where
-    M: MessageReceiver<MqttMessage> + Send,
-{
-    // Messages might have already been buffered by a previous assertion
-    while !mqtt.any(|m| m.topic.name == topic && m.retain && payload_matches(m.payload_bytes())) {
-        if mqtt.recv().await.is_none() {
-            panic!("Didn't receive the expected retained message on {topic}");
-        }
-    }
-}
-
-#[tokio::test]
-async fn c8y_mapper_alarm_empty_json_payload() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    publish(
-        &mut mqtt,
-        "te/device/main///a/empty_temperature_alarm",
-        "{}",
-    )
-    .await;
-
-    // Expect converted alarm SmartREST message
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us",
-            "303,empty_temperature_alarm,empty_temperature_alarm",
-        )],
     )
     .await;
 }
@@ -653,6 +476,24 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
         )],
     )
     .await;
+}
+
+/// Waits for a retained message on the given topic, with a payload matching the given predicate
+async fn assert_received_retained<M>(
+    mqtt: &mut TestMqttBox<M>,
+    topic: &str,
+    payload_matches: impl Fn(&[u8]) -> bool,
+) where
+    M: MessageReceiver<MqttMessage> + Send,
+{
+    let is_expected =
+        |m: &MqttMessage| m.topic.name == topic && m.retain && payload_matches(m.payload_bytes());
+    // Messages might have already been buffered by a previous assertion
+    while !mqtt.any(is_expected) {
+        if mqtt.recv().await.is_none() {
+            panic!("Didn't receive the expected retained message on {topic}");
+        }
+    }
 }
 
 /// Registers the `external_sensor` child device of the main device
