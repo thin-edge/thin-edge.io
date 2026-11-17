@@ -26,6 +26,7 @@ use tedge_actors::futures::channel::mpsc;
 use tedge_actors::test_helpers::FakeServerBox;
 use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
+use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
 use tedge_actors::Builder;
 use tedge_actors::ChannelError;
@@ -81,37 +82,29 @@ const TEST_TIMEOUT_MS: Duration = Duration::from_millis(5000);
 #[tokio::test]
 async fn mapper_publishes_init_messages_on_startup() {
     // Start SM Mapper
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114"), ("c8y/s/us", "500")]).await;
 }
 
 #[tokio::test]
 async fn mapper_converts_agent_twin_to_c8y_agent_fragment() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     let version = env!("CARGO_PKG_VERSION");
 
     // Simulate tedge-agent publishing the agent twin fragment
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///twin/agent"),
+    publish(
+        &mut mqtt,
+        "te/device/main///twin/agent",
         json!({
             "name": "thin-edge.io",
             "url": "https://thin-edge.io",
             "version": version
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -139,12 +132,12 @@ async fn child_device_registration_mapping() {
     let mut avail = test_handle.avail.with_timeout(TEST_TIMEOUT_MS);
     let mut mqtt = test_handle.mqtt.with_timeout(TEST_TIMEOUT_MS);
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1//"),
+    publish(
+        &mut mqtt,
+        "te/device/child1//",
         r#"{ "@type": "child-device", "type": "RaspberryPi", "name": "Child1" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -164,12 +157,12 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child2//"),
+    publish(
+        &mut mqtt,
+        "te/device/child2//",
         r#"{ "@type": "child-device", "@parent": "device/child1//" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -189,12 +182,12 @@ async fn child_device_registration_mapping() {
     )
     .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child3//"),
+    publish(
+        &mut mqtt,
+        "te/device/child3//",
         r#"{ "@type": "child-device", "@id": "child3", "@parent": "device/child2//" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -217,18 +210,15 @@ async fn child_device_registration_mapping() {
 
 #[tokio::test]
 async fn custom_topic_scheme_registration_mapping() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Child device with custom scheme
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/custom///"),
+    publish(
+        &mut mqtt,
+        "te/custom///",
         r#"{ "@type": "child-device", "type": "RaspberryPi", "name": "Child1" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -239,12 +229,12 @@ async fn custom_topic_scheme_registration_mapping() {
     )
     .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/custom/child1//"),
+    publish(
+        &mut mqtt,
+        "te/custom/child1//",
         r#"{ "@type": "child-device", "type": "RaspberryPi", "name": "Child1" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -256,12 +246,12 @@ async fn custom_topic_scheme_registration_mapping() {
     .await;
 
     // Service with custom scheme
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/custom/service/collectd/"),
+    publish(
+        &mut mqtt,
+        "te/custom/service/collectd/",
         r#"{ "@type": "service", "type": "systemd", "name": "Collectd" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -275,31 +265,28 @@ async fn custom_topic_scheme_registration_mapping() {
 
 #[tokio::test]
 async fn service_registration_mapping() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Create a direct child device: child1 and a nested child device: child2
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1//"),
+    publish(
+        &mut mqtt,
+        "te/device/child1//",
         r#"{ "@type": "child-device" }"#,
-    ))
-    .await
-    .unwrap();
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child2//"),
+    )
+    .await;
+    publish(
+        &mut mqtt,
+        "te/device/child2//",
         r#"{ "@type": "child-device", "@parent": "device/child1//" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/collectd"),
+    publish(
+        &mut mqtt,
+        "te/device/main/service/collectd",
         r#"{ "@type": "service", "type": "systemd", "name": "Collectd" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -310,12 +297,12 @@ async fn service_registration_mapping() {
     )
     .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1/service/collectd"),
+    publish(
+        &mut mqtt,
+        "te/device/child1/service/collectd",
         r#"{ "@type": "service", "type": "systemd", "name": "Collectd" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -326,12 +313,12 @@ async fn service_registration_mapping() {
     )
     .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child2/service/collectd"),
+    publish(
+        &mut mqtt,
+        "te/device/child2/service/collectd",
         r#"{ "@type": "service", "type": "systemd", "name": "Collectd" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -353,12 +340,12 @@ async fn mapper_publishes_supported_software_types() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     // Simulate software_list capability message
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/software_list"),
+    publish(
+        &mut mqtt,
+        "te/device/main///cmd/software_list",
         json!({"types": ["apt", "docker"]}).to_string(),
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     assert_received_includes_json(
         &mut mqtt,
@@ -372,18 +359,14 @@ async fn mapper_publishes_supported_software_types() {
 
 #[tokio::test]
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///a/temperature_alarm"),
+    publish(
+        &mut mqtt,
+        "te/device/main///a/temperature_alarm",
         r#"{ "severity": "major", "text": "Temperature high" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -394,26 +377,22 @@ async fn c8y_mapper_alarm_mapping_to_smartrest() {
 
 #[tokio::test]
 async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor///a/temperature_high"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor///a/temperature_high",
         json!({ "severity": "minor", "text": "Temperature high" }).to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect child device creation and converted temperature alarm messages
     assert_received_contains_str(
@@ -428,16 +407,11 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
 
 #[tokio::test]
 async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &"te/device/main///a/custom_temperature_alarm"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/main///a/custom_temperature_alarm",
         json!({
             "severity": "major",
             "text": "Temperature high",
@@ -449,9 +423,8 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
             }
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -476,23 +449,19 @@ async fn c8y_mapper_alarm_with_custom_fragment_mapping_to_c8y_json() {
 
 #[tokio::test]
 async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &"te/device/external_sensor///a/custom_temperature_alarm"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor///a/custom_temperature_alarm",
         json!({
             "severity": "major",
             "text": "Temperature high",
@@ -504,9 +473,8 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
             }
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -535,16 +503,11 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
 
 #[tokio::test]
 async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &"te/device/main///a/custom_msg_pressure_alarm"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/main///a/custom_msg_pressure_alarm",
         json!({
             "severity": "major",
             "text": "Pressure high",
@@ -552,9 +515,8 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
             "message":"custom message"
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -575,23 +537,19 @@ async fn c8y_mapper_alarm_with_message_as_custom_fragment_mapping_to_c8y_json() 
 
 #[tokio::test]
 async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &"te/device/external_sensor///a/child_custom_msg_pressure_alarm"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor///a/child_custom_msg_pressure_alarm",
         json!({
             "severity": "major",
             "text": "Pressure high",
@@ -599,9 +557,8 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
             "message":"custom message"
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -626,32 +583,27 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
 
 #[tokio::test]
 async fn c8y_mapper_child_alarm_with_custom_message() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &"te/device/external_sensor///a/child_msg_to_text_pressure_alarm"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor///a/child_msg_to_text_pressure_alarm",
         json!({
             "severity": "major",
             "time":"2023-01-25T18:41:14.776170774Z",
             "message":"Pressure high"
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -676,25 +628,19 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
 
 #[tokio::test]
 async fn c8y_mapper_alarm_with_custom_message() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &"te/device/main///a/msg_to_text_pressure_alarm"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/main///a/msg_to_text_pressure_alarm",
         json!({
             "severity": "major",
             "time":"2023-01-25T18:41:14.776170774Z",
             "message":"Pressure high"
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -715,25 +661,22 @@ async fn c8y_mapper_alarm_with_custom_message() {
 
 #[tokio::test]
 async fn c8y_mapper_child_alarm_empty_payload() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor///a/empty_temperature_alarm"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor///a/empty_temperature_alarm",
         "".to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted alarm SmartREST message
     assert_received_contains_str(
@@ -748,18 +691,14 @@ async fn c8y_mapper_child_alarm_empty_payload() {
 
 #[tokio::test]
 async fn c8y_mapper_alarm_empty_payload() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///a/empty_temperature_alarm"),
+    publish(
+        &mut mqtt,
+        "te/device/main///a/empty_temperature_alarm",
         "".to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted alarm SmartREST message
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "306,empty_temperature_alarm")]).await;
@@ -767,18 +706,14 @@ async fn c8y_mapper_alarm_empty_payload() {
 
 #[tokio::test]
 async fn c8y_mapper_alarm_is_persisted_to_internal_topic() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///a/temperature_alarm"),
+    publish(
+        &mut mqtt,
+        "te/device/main///a/temperature_alarm",
         r#"{ "severity": "major", "text": "Temperature high" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -837,18 +772,14 @@ async fn assert_received_retained<M>(
 
 #[tokio::test]
 async fn c8y_mapper_alarm_empty_json_payload() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///a/empty_temperature_alarm"),
+    publish(
+        &mut mqtt,
+        "te/device/main///a/empty_temperature_alarm",
         "{}",
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted alarm SmartREST message
     assert_received_contains_str(
@@ -863,31 +794,26 @@ async fn c8y_mapper_alarm_empty_json_payload() {
 
 #[tokio::test]
 async fn c8y_mapper_child_event() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &"te/device/external_sensor///e/custom_event"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor///e/custom_event",
         json!({
             "text": "Someone logged-in",
             "time":"2023-01-25T18:41:14.776170774Z",
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted temperature alarm message
     assert_received_includes_json(
@@ -910,38 +836,33 @@ async fn c8y_mapper_child_event() {
 
 #[tokio::test]
 async fn c8y_mapper_child_service_event() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor/service/service_child"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor/service/service_child",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &"te/device/external_sensor/service/service_child/e/custom_event"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor/service/service_child/e/custom_event",
         json!({
             "text": "Someone logged-in",
             "time":"2023-01-25T18:41:14.776170774Z",
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted event message
     assert_received_includes_json(
@@ -964,31 +885,26 @@ async fn c8y_mapper_child_service_event() {
 
 #[tokio::test]
 async fn c8y_mapper_main_service_event() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the service upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/service_main"),
+    publish(
+        &mut mqtt,
+        "te/device/main/service/service_main",
         r#"{"@type": "service"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &"te/device/main/service/service_main/e/custom_event"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/main/service/service_main/e/custom_event",
         json!({
             "text": "Someone logged-in",
             "time":"2023-01-25T18:41:14.776170774Z",
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted event for the main device service
     assert_received_includes_json(
@@ -1011,38 +927,33 @@ async fn c8y_mapper_main_service_event() {
 
 #[tokio::test]
 async fn c8y_mapper_child_service_alarm() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device and service upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor//"),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/external_sensor/service/service_child"),
+    )
+    .await;
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor/service/service_child",
         r#"{"@type": "service"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &"te/device/external_sensor/service/service_child/a/custom_alarm"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/external_sensor/service/service_child/a/custom_alarm",
         json!({
             "severity":"critical",
             "text": "temperature alarm",
             "time":"2023-01-25T18:41:14.776170774Z",
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted alarm for the main device service
     assert_received_contains_str(
@@ -1057,32 +968,27 @@ async fn c8y_mapper_child_service_alarm() {
 
 #[tokio::test]
 async fn c8y_mapper_main_service_alarm() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the service upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/service_main"),
+    publish(
+        &mut mqtt,
+        "te/device/main/service/service_main",
         r#"{"@type": "service"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &"te/device/main/service/service_main/a/custom_alarm"
-            .try_into()
-            .unwrap(),
+    publish(
+        &mut mqtt,
+        "te/device/main/service/service_main/a/custom_alarm",
         json!({
             "severity":"critical",
             "text": "temperature alarm",
             "time":"2023-01-25T18:41:14.776170774Z",
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted alarm for the main device service
     assert_received_contains_str(
@@ -1097,14 +1003,11 @@ async fn c8y_mapper_main_service_alarm() {
 
 #[tokio::test]
 async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///a/complex_text_alarm"),
+    publish(
+        &mut mqtt,
+        "te/device/main///a/complex_text_alarm",
         json!({
             "severity": "major",
             "text":{
@@ -1116,9 +1019,8 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
             "message":"custom message"
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect converted alarm SmartREST message
     assert_received_contains_str(&mut mqtt, [("te/errors", "Parsing of alarm message for the type: complex_text_alarm failed due to error: invalid")]).await;
@@ -1223,12 +1125,12 @@ async fn mapper_dynamically_updates_supported_operations_for_tedge_device() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/tedge-agent"),
+    publish(
+        &mut mqtt,
+        "te/device/main/service/tedge-agent",
         r#"{"@type": "service"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     // Simulate tedge-agent health status message
     mqtt.send(
@@ -1311,12 +1213,12 @@ async fn mapper_dynamically_updates_supported_operations_for_child_device() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1//"),
+    publish(
+        &mut mqtt,
+        "te/device/child1//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     // Assert that the creation of the operation file alone doesn't trigger the supported operations update
 
@@ -2832,10 +2734,7 @@ async fn mapper_converts_custom_operation_for_child_device() {
 
 #[tokio::test]
 async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     let reg_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/immediate_child//"),
@@ -2859,12 +2758,7 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
     );
     mqtt.send(reg_message).await.unwrap();
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child///a/"),
-        json!({ "severity": "minor", "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string(),
-    ))
-        .await
-        .unwrap();
+    publish(&mut mqtt, "te/device/nested_child///a/", json!({ "severity": "minor", "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string()).await;
 
     // Expect nested child device creating an minor alarm
     assert_received_contains_str(
@@ -2889,10 +2783,7 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
 
 #[tokio::test]
 async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     let reg_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/immediate_child//"),
@@ -2916,12 +2807,12 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
     );
     mqtt.send(reg_message).await.unwrap();
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child///e/"),
+    publish(
+        &mut mqtt,
+        "te/device/nested_child///e/",
         json!({ "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -2955,10 +2846,7 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
 
 #[tokio::test]
 async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     let reg_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/immediate_child//"),
@@ -2994,12 +2882,7 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
 
     mqtt.send(reg_message).await.unwrap();
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child/service/nested_service/a/"),
-        json!({ "severity": "minor", "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string(),
-    ))
-        .await
-        .unwrap();
+    publish(&mut mqtt, "te/device/nested_child/service/nested_service/a/", json!({ "severity": "minor", "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string()).await;
 
     // Expect child device service creating minor temperature alarm messages
     assert_received_contains_str(
@@ -3014,10 +2897,7 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
 
 #[tokio::test]
 async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     let reg_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/immediate_child//"),
@@ -3053,12 +2933,12 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
 
     mqtt.send(reg_message).await.unwrap();
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child/service/nested_service/e/"),
+    publish(
+        &mut mqtt,
+        "te/device/nested_child/service/nested_service/e/",
         json!({ "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     // Expect nested child device service creating the event messages
     assert_received_includes_json(
@@ -3155,8 +3035,9 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     // simulate many successful operations that needs to be handled by the mapper
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/log_upload/c8y-mapper-1"),
+    publish(
+        &mut mqtt,
+        "te/device/main///cmd/log_upload/c8y-mapper-1",
         json!({
             "status": "successful",
             "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/log_upload/c8y-mapper-1",
@@ -3167,9 +3048,8 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
             "lines": 1000
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     let (download_id, download_request) = dl
         .recv()
@@ -3202,16 +3082,12 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
     assert_eq!(upload_id, "c8y-mapper-1");
 
     // now that an upload is ongoing, check that downloads can also be triggered
-    mqtt.send(MqttMessage::new(
-            &Topic::new_unchecked("te/device/main///cmd/config_snapshot/c8y-mapper-2"),
-            json!({
+    publish(&mut mqtt, "te/device/main///cmd/config_snapshot/c8y-mapper-2", json!({
             "status": "successful",
             "tedgeUrl": "http://localhost:8888/te/v1/files/test-device/config_snapshot/c8y-mapper-2",
             "type": "typeA",
         })
-                .to_string(),
-        ))
-            .await.unwrap();
+                .to_string()).await;
 
     let (config_snapshot_id, _) = dl
         .recv()
@@ -3220,40 +3096,36 @@ async fn mapper_processes_other_operations_while_uploads_and_downloads_are_ongoi
     assert_eq!(config_snapshot_id, "c8y-mapper-2");
 
     // while download and upload are ongoing, try some other operation that doesn't do download or upload
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/restart/c8y-mapper-3"),
+    publish(
+        &mut mqtt,
+        "te/device/main///cmd/restart/c8y-mapper-3",
         json!({
             "status": "successful",
         })
         .to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "503,c8y_Restart")]).await;
 }
 
 #[tokio::test]
 async fn the_restart_command_of_a_service_is_reported_as_c8y_restart() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/collectd"),
+    publish(
+        &mut mqtt,
+        "te/device/main/service/collectd",
         r#"{ "@type": "service" }"#,
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/collectd/cmd/restart/c8y-mapper-1234"),
+    publish(
+        &mut mqtt,
+        "te/device/main/service/collectd/cmd/restart/c8y-mapper-1234",
         json!({"status": "successful"}).to_string(),
-    ))
-    .await
-    .unwrap();
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -3267,11 +3139,7 @@ async fn the_restart_command_of_a_service_is_reported_as_c8y_restart() {
 
 #[tokio::test]
 async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // should hold for any operation type
     mqtt.send(MqttMessage::new(
@@ -3288,11 +3156,7 @@ async fn mapper_doesnt_update_status_of_subworkflow_commands_3048() {
 
 #[tokio::test]
 async fn mapper_doesnt_send_duplicate_operation_status() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_ttd, mut mqtt) = spawn_mapper().await;
 
     for _ in 0..3 {
         mqtt.send(
@@ -3314,18 +3178,15 @@ async fn mapper_doesnt_send_duplicate_operation_status() {
 
 #[tokio::test]
 async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_device() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (ttd, mut mqtt) = spawn_mapper().await;
 
     // Simulate config_snapshot cmd metadata message
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/config_snapshot"),
+    publish(
+        &mut mqtt,
+        "te/device/main///cmd/config_snapshot",
         r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     // Validate SmartREST message is published
     assert_received_contains_str(
@@ -3344,12 +3205,12 @@ async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_devi
         .exists());
 
     // Simulate config_update cmd metadata message
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/config_update"),
+    publish(
+        &mut mqtt,
+        "te/device/main///cmd/config_update",
         r#"{"types" : [ "typeD", "typeE", "typeF" ]}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     // Validate SmartREST message is published
     assert_received_contains_str(
@@ -3373,26 +3234,23 @@ async fn mapper_converts_config_metadata_to_supported_op_and_types_for_main_devi
 
 #[tokio::test]
 async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device() {
-    let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1//"),
+    publish(
+        &mut mqtt,
+        "te/device/child1//",
         r#"{"@type": "child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     // Simulate config_snapshot cmd metadata message
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
+    publish(
+        &mut mqtt,
+        "te/device/child1///cmd/config_snapshot",
         r#"{"types" : [ "typeA", "typeB", "typeC" ]}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     // Validate SmartREST message is published
     assert_received_contains_str(
@@ -3417,12 +3275,12 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
         .exists());
 
     // Sending an updated list of config types
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/config_snapshot"),
+    publish(
+        &mut mqtt,
+        "te/device/child1///cmd/config_snapshot",
         r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     // Assert that the updated config type list does not trigger a duplicate supported ops message
     assert_received_contains_str(
@@ -3435,12 +3293,12 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
     .await;
 
     // Simulate config_update cmd metadata message
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/config_update"),
+    publish(
+        &mut mqtt,
+        "te/device/child1///cmd/config_update",
         r#"{"types" : [ "typeD", "typeE", "typeF" ]}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     // Validate SmartREST message is published
     assert_received_contains_str(
@@ -3465,12 +3323,12 @@ async fn mapper_converts_config_cmd_to_supported_op_and_types_for_child_device()
         .exists());
 
     // Sending an updated list of config types
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1///cmd/config_update"),
+    publish(
+        &mut mqtt,
+        "te/device/child1///cmd/config_update",
         r#"{"types" : [ "typeB", "typeC", "typeD" ]}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     // Assert that the updated config type list does not trigger a duplicate supported ops message
     assert_received_contains_str(
@@ -3508,39 +3366,34 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
     let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
 
     // Register the tedge-mapper-c8y service upfront
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y"),
-        r#"{"@parent":"device/main//","@type":"service","name":"tedge-mapper-c8y","type":"service"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    publish(&mut mqtt, "te/device/main/service/tedge-mapper-c8y", r#"{"@parent":"device/main//","@type":"service","name":"tedge-mapper-c8y","type":"service"}"#).await;
 
     // Also register other entities
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child01//"),
+    publish(
+        &mut mqtt,
+        "te/device/child01//",
         r#"{"@parent":"device/main//","@type":"child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/child02//"),
+    )
+    .await;
+    publish(
+        &mut mqtt,
+        "te/device/child02//",
         r#"{"@parent":"device/main//","@type":"child-device"}"#,
-    ))
-    .await
-    .expect("Send failed");
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/collectd"),
+    )
+    .await;
+    publish(
+        &mut mqtt,
+        "te/device/main/service/collectd",
         r#"{"@parent":"device/main//","@type":"service"}"#,
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
-    mqtt.send(MqttMessage::new(
-        &Topic::new_unchecked("te/device/main/service/tedge-mapper-c8y/signal/sync"),
+    publish(
+        &mut mqtt,
+        "te/device/main/service/tedge-mapper-c8y/signal/sync",
         "{}",
-    ))
-    .await
-    .expect("Send failed");
+    )
+    .await;
 
     assert_received_contains_str(
         &mut mqtt,
@@ -3618,6 +3471,55 @@ fn create_thin_edge_child_operations(ttd: &TempTedgeDir, child_id: &str, ops: Ve
     for op in ops {
         child_ops_dir.file(op);
     }
+}
+
+/// A mapper spawned with the default test configuration, with the directory it uses
+///
+/// The message boxes of the mapper, other than MQTT, are kept open until the end of the test,
+/// as the mapper stops processing some messages when one of them is closed.
+pub(crate) struct TestMapper {
+    dir: TempTedgeDir,
+    _boxes: Box<dyn std::any::Any>,
+}
+
+impl std::ops::Deref for TestMapper {
+    type Target = TempTedgeDir;
+
+    fn deref(&self) -> &TempTedgeDir {
+        &self.dir
+    }
+}
+
+/// Spawns a mapper with the default test configuration, returning its MQTT connection
+async fn spawn_mapper() -> (
+    TestMapper,
+    TestMqttBox<TimedMessageBox<MockMqttBoxUnbuffered>>,
+) {
+    let dir = TempTedgeDir::new();
+    let TestHandle {
+        mqtt,
+        http,
+        fs,
+        ul,
+        dl,
+        avail,
+    } = spawn_c8y_mapper_actor(&dir, true).await;
+    let mapper = TestMapper {
+        dir,
+        _boxes: Box::new((http, fs, ul, dl, avail)),
+    };
+    (mapper, mqtt.with_timeout(TEST_TIMEOUT_MS))
+}
+
+/// Publishes a message to the mapper
+async fn publish<M: Sender<MqttMessage>>(
+    mqtt: &mut TestMqttBox<M>,
+    topic: &str,
+    payload: impl Into<Vec<u8>>,
+) {
+    mqtt.send(MqttMessage::new(&Topic::new_unchecked(topic), payload))
+        .await
+        .expect("Send failed");
 }
 
 pub(crate) async fn spawn_c8y_mapper_actor(tmp_dir: &TempTedgeDir, init: bool) -> TestHandle {
