@@ -148,6 +148,32 @@ async fn spawn_mapper() -> (
     (mapper, mqtt.with_timeout(TEST_TIMEOUT_MS))
 }
 
+/// Spawns a mapper with the given configuration and directory, returning its MQTT connection
+///
+/// The HTTP requests of the mapper are answered by a dummy Cumulocity proxy.
+async fn spawn_mapper_with_config(
+    dir: TempTedgeDir,
+    config: C8yMapperConfig,
+) -> (
+    TestMapper,
+    TestMqttBox<TimedMessageBox<MockMqttBoxUnbuffered>>,
+) {
+    let TestHandle {
+        mqtt,
+        http,
+        fs,
+        ul,
+        dl,
+        avail,
+    } = spawn_c8y_mapper_actor_with_config(&dir, config, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+    let mapper = TestMapper {
+        dir,
+        _boxes: Box::new((fs, ul, dl, avail)),
+    };
+    (mapper, mqtt.with_timeout(TEST_TIMEOUT_MS))
+}
+
 /// Publishes a message to the mapper
 async fn publish<M: Sender<MqttMessage>>(
     mqtt: &mut TestMqttBox<M>,
