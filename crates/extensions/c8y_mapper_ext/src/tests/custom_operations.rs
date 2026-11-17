@@ -1,7 +1,8 @@
 use super::*;
-use test_case::test_case;
+use rstest::rstest;
 
-#[test_case(
+#[rstest]
+#[case::successful_without_timeout(
     None,
     r#"#!/bin/sh
     for i in $(seq 1 2)
@@ -20,9 +21,8 @@ stdout <<EOF
 Executed successfully without timeout
 EOF
 "
-    ; "successful without timeout"
 )]
-#[test_case(
+#[case::successful_within_the_timeout(
     Some((5, 2)),
     r#"#!/bin/sh
     for i in $(seq 1 2)
@@ -41,12 +41,11 @@ stdout <<EOF
 Successfully Executed
 EOF
 "
-    ; "successful within the timeout"
 )]
 // Block on `sleep & wait` rather than a foreground `sleep`:
 // the `wait` builtin is interrupted by a trapped signal
 // (a foreground `sleep` would defer it until the sleep completes).
-#[test_case(
+#[case::stopped_by_sigterm_on_timeout(
     Some((2, 2)),
     r#"#!/bin/sh
     trap 'echo received SIGTERM; exit 124' TERM
@@ -70,9 +69,8 @@ main 1
 received SIGTERM
 EOF
 "
-    ; "stopped by sigterm on timeout"
 )]
-#[test_case(
+#[case::killed_by_sigkill_when_ignoring_sigterm(
     Some((2, 2)),
     r#"#!/bin/sh
     trap 'echo ignore SIGTERM' TERM
@@ -97,14 +95,13 @@ ignore SIGTERM
 main 2
 EOF
 "
-    ; "killed by sigkill when ignoring sigterm"
 )]
 #[tokio::test]
 async fn custom_operation_runs_its_script(
-    timeouts: Option<(i64, i64)>,
-    script: &str,
-    expected_result: &str,
-    expected_log: &str,
+    #[case] timeouts: Option<(i64, i64)>,
+    #[case] script: &str,
+    #[case] expected_result: &str,
+    #[case] expected_log: &str,
 ) {
     let (mapper, mut mqtt) = run_smartrest_command(timeouts, script, |config| config).await;
 
@@ -176,7 +173,8 @@ skip_status_update = true"#,
     .await;
 }
 
-#[test_case(
+#[rstest]
+#[case::with_operation_id(
     "c8y/devicecontrol/notifications",
     r#"[exec]
     command = "echo ${.payload.c8y_Command.text}"
@@ -184,9 +182,8 @@ skip_status_update = true"#,
     "#,
     true,
     ["504,1234", "506,1234,\"do something\n\""]
-    ; "with operation id"
 )]
-#[test_case(
+#[case::with_operation_name(
     "c8y/devicecontrol/notifications",
     r#"[exec]
     command = "echo ${.payload.c8y_Command.text}"
@@ -194,9 +191,8 @@ skip_status_update = true"#,
     "#,
     false,
     ["501,c8y_Command", "503,c8y_Command,\"do something\n\""]
-    ; "with operation name"
 )]
-#[test_case(
+#[case::with_custom_topic(
     "c8y/custom/operation/one",
     r#"[exec]
     topic = "${.bridge.topic_prefix}/custom/operation/one"
@@ -205,15 +201,15 @@ skip_status_update = true"#,
     "#,
     false,
     ["501,c8y_Command", "503,c8y_Command,\"do something\n\""]
-    ; "with custom topic"
 )]
 #[tokio::test]
 async fn json_custom_operation_status_update(
-    topic: &str,
-    operation_file: &str,
-    use_operation_id: bool,
-    [executing, successful]: [&str; 2],
+    #[case] topic: &str,
+    #[case] operation_file: &str,
+    #[case] use_operation_id: bool,
+    #[case] expected_statuses: [&str; 2],
 ) {
+    let [executing, successful] = expected_statuses;
     let (_mapper, mut mqtt) = send_c8y_command(
         operation_file,
         |config| C8yMapperConfig {

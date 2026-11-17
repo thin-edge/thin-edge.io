@@ -1,47 +1,43 @@
 use super::*;
-use test_case::test_case;
+use rstest::rstest;
 
-#[test_case(
+#[rstest]
+#[case::main_device(
     "main",
     "temperature_alarm",
     r#"{ "severity": "major", "text": "Temperature high" }"#,
     "302,temperature_alarm,Temperature high"
-    ; "main device"
 )]
-#[test_case(
+#[case::child_device(
     "external_sensor",
     "temperature_high",
     r#"{ "severity": "minor", "text": "Temperature high" }"#,
     "303,temperature_high,Temperature high"
-    ; "child device"
 )]
-#[test_case(
+#[case::main_device_clearing_an_alarm(
     "main",
     "empty_temperature_alarm",
     "",
     "306,empty_temperature_alarm"
-    ; "main device clearing an alarm"
 )]
-#[test_case(
+#[case::child_device_clearing_an_alarm(
     "external_sensor",
     "empty_temperature_alarm",
     "",
     "306,empty_temperature_alarm"
-    ; "child device clearing an alarm"
 )]
-#[test_case(
+#[case::main_device_with_an_empty_json_payload(
     "main",
     "empty_temperature_alarm",
     "{}",
     "303,empty_temperature_alarm,empty_temperature_alarm"
-    ; "main device with an empty json payload"
 )]
 #[tokio::test]
 async fn c8y_mapper_alarm_mapping_to_smartrest(
-    device: &str,
-    alarm_type: &str,
-    alarm: &str,
-    expected: &str,
+    #[case] device: &str,
+    #[case] alarm_type: &str,
+    #[case] alarm: &str,
+    #[case] expected: &str,
 ) {
     let (_ttd, mut mqtt) = spawn_mapper().await;
     let smartrest_topic = if device == "main" {
@@ -61,7 +57,8 @@ async fn c8y_mapper_alarm_mapping_to_smartrest(
     assert_received_contains_str(&mut mqtt, [(smartrest_topic.as_str(), expected)]).await;
 }
 
-#[test_case(
+#[rstest]
+#[case::main_device_with_a_custom_fragment(
     "main",
     "custom_temperature_alarm",
     json!({
@@ -76,9 +73,8 @@ async fn c8y_mapper_alarm_mapping_to_smartrest(
         "text":"Temperature high",
         "customFragment": { "nested": { "value":"extra info" } }
     })
-    ; "main device with a custom fragment"
 )]
-#[test_case(
+#[case::child_device_with_a_custom_fragment(
     "external_sensor",
     "custom_temperature_alarm",
     json!({
@@ -93,9 +89,8 @@ async fn c8y_mapper_alarm_mapping_to_smartrest(
         "text":"Temperature high",
         "customFragment": { "nested": { "value":"extra info" } }
     })
-    ; "child device with a custom fragment"
 )]
-#[test_case(
+#[case::main_device_with_a_message_as_custom_fragment(
     "main",
     "custom_msg_pressure_alarm",
     json!({
@@ -110,9 +105,8 @@ async fn c8y_mapper_alarm_mapping_to_smartrest(
         "text":"Pressure high",
         "message":"custom message"
     })
-    ; "main device with a message as custom fragment"
 )]
-#[test_case(
+#[case::child_device_with_a_message_as_custom_fragment(
     "external_sensor",
     "child_custom_msg_pressure_alarm",
     json!({
@@ -127,9 +121,8 @@ async fn c8y_mapper_alarm_mapping_to_smartrest(
         "text":"Pressure high",
         "message":"custom message"
     })
-    ; "child device with a message as custom fragment"
 )]
-#[test_case(
+#[case::main_device_with_a_message_but_no_text(
     "main",
     "msg_to_text_pressure_alarm",
     json!({
@@ -143,9 +136,8 @@ async fn c8y_mapper_alarm_mapping_to_smartrest(
         "text":"msg_to_text_pressure_alarm",
         "message":"Pressure high"
     })
-    ; "main device with a message but no text"
 )]
-#[test_case(
+#[case::child_device_with_a_message_but_no_text(
     "external_sensor",
     "child_msg_to_text_pressure_alarm",
     json!({
@@ -159,14 +151,13 @@ async fn c8y_mapper_alarm_mapping_to_smartrest(
         "text":"child_msg_to_text_pressure_alarm",
         "message":"Pressure high"
     })
-    ; "child device with a message but no text"
 )]
 #[tokio::test]
 async fn c8y_mapper_alarm_mapping_to_c8y_json(
-    device: &str,
-    alarm_type: &str,
-    alarm: serde_json::Value,
-    mut expected: serde_json::Value,
+    #[case] device: &str,
+    #[case] alarm_type: &str,
+    #[case] alarm: serde_json::Value,
+    #[case] mut expected: serde_json::Value,
 ) {
     let (_ttd, mut mqtt) = spawn_mapper().await;
     expected["type"] = alarm_type.into();
@@ -234,32 +225,30 @@ async fn c8y_mapper_alarm_is_persisted_to_internal_topic() {
     .await;
 }
 
-#[test_case(
+#[rstest]
+#[case::child_device(
     &[("te/device/external_sensor//", r#"{"@type": "child-device"}"#)],
     "te/device/external_sensor///e/custom_event",
     "test-device:device:external_sensor"
-    ; "child device"
 )]
-#[test_case(
+#[case::child_device_service(
     &[
         ("te/device/external_sensor//", r#"{"@type": "child-device"}"#),
         ("te/device/external_sensor/service/service_child", r#"{"@type": "child-device"}"#),
     ],
     "te/device/external_sensor/service/service_child/e/custom_event",
     "test-device:device:external_sensor:service:service_child"
-    ; "child device service"
 )]
-#[test_case(
+#[case::main_device_service(
     &[("te/device/main/service/service_main", r#"{"@type": "service"}"#)],
     "te/device/main/service/service_main/e/custom_event",
     "test-device:device:main:service:service_main"
-    ; "main device service"
 )]
 #[tokio::test]
 async fn c8y_mapper_entity_event(
-    registrations: &[(&str, &str)],
-    event_topic: &str,
-    external_id: &str,
+    #[case] registrations: &[(&str, &str)],
+    #[case] event_topic: &str,
+    #[case] external_id: &str,
 ) {
     let (_ttd, mut mqtt) = spawn_mapper().await;
     for (topic, registration) in registrations {
@@ -290,26 +279,25 @@ async fn c8y_mapper_entity_event(
     .await;
 }
 
-#[test_case(
+#[rstest]
+#[case::child_device_service(
     &[
         ("te/device/external_sensor//", r#"{"@type": "child-device"}"#),
         ("te/device/external_sensor/service/service_child", r#"{"@type": "service"}"#),
     ],
     "te/device/external_sensor/service/service_child/a/custom_alarm",
     "c8y/s/us/test-device:device:external_sensor:service:service_child"
-    ; "child device service"
 )]
-#[test_case(
+#[case::main_device_service(
     &[("te/device/main/service/service_main", r#"{"@type": "service"}"#)],
     "te/device/main/service/service_main/a/custom_alarm",
     "c8y/s/us/test-device:device:main:service:service_main"
-    ; "main device service"
 )]
 #[tokio::test]
 async fn c8y_mapper_service_alarm(
-    registrations: &[(&str, &str)],
-    alarm_topic: &str,
-    smartrest_topic: &str,
+    #[case] registrations: &[(&str, &str)],
+    #[case] alarm_topic: &str,
+    #[case] smartrest_topic: &str,
 ) {
     let (_ttd, mut mqtt) = spawn_mapper().await;
     for (topic, registration) in registrations {

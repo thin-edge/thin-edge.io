@@ -1,6 +1,5 @@
 use super::*;
 use rstest::rstest;
-use test_case::test_case;
 
 #[tokio::test]
 async fn convert_measurement_with_child_id() {
@@ -44,18 +43,18 @@ async fn convert_measurement_with_child_id() {
     );
 }
 
-#[test_case("te/device/nested_child///m/", "nested_child", 2 ; "nested child device")]
-#[test_case(
+#[rstest]
+#[case::nested_child_device("te/device/nested_child///m/", "nested_child", 2)]
+#[case::service_of_a_nested_child_device(
     "te/device/nested_child/service/nested_service/m/",
     "nested_service",
     3
-    ; "service of a nested child device"
 )]
 #[tokio::test]
 async fn convert_measurement_of_nested_child_entity(
-    in_topic: &str,
-    external_id: &str,
-    registered_entities: usize,
+    #[case] in_topic: &str,
+    #[case] external_id: &str,
+    #[case] registered_entities: usize,
 ) {
     let tmp_dir = TempTedgeDir::new();
     let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
@@ -100,18 +99,17 @@ async fn convert_measurement_of_nested_child_entity(
     );
 }
 
-#[test_case(
+#[rstest]
+#[case::child_device_service(
     "te/device/child1/service/app1/m/m_type",
     "test-device:device:child1:service:app1"
-    ; "child device service"
 )]
-#[test_case(
+#[case::main_device_service(
     "te/device/main/service/appm/m/m_type",
     "test-device:device:main:service:appm"
-    ; "main device service"
 )]
 #[tokio::test]
-async fn convert_measurement_of_service(in_topic: &str, external_id: &str) {
+async fn convert_measurement_of_service(#[case] in_topic: &str, #[case] external_id: &str) {
     let tmp_dir = TempTedgeDir::new();
     let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
 
@@ -388,10 +386,11 @@ async fn test_convert_big_event_for_child_device() {
     }
 }
 
-#[test_case("te/device/main///m/" ; "main device")]
-#[test_case("te/device/child1///m/" ; "child device")]
+#[rstest]
+#[case::main_device("te/device/main///m/")]
+#[case::child_device("te/device/child1///m/")]
 #[tokio::test]
-async fn big_measurement_is_converted_to_c8y_json(measurement_topic: &str) {
+async fn big_measurement_is_converted_to_c8y_json(#[case] measurement_topic: &str) {
     let tmp_dir = TempTedgeDir::new();
     let mut converter = MeaConverter::<MeasurementConverter>::new(&tmp_dir);
     // Measurement payload > size_threshold after converting to c8y json

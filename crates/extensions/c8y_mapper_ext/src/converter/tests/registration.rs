@@ -2,20 +2,19 @@ use super::*;
 use rstest::rstest;
 use test_case::test_case;
 
-#[test_case(
+#[rstest]
+#[case::with_the_default_fragments(
     false,
     "101,test-device:device:child1,child1,thin-edge.io-child,false"
-    ; "with the default fragments"
 )]
-#[test_case(
+#[case::with_the_device_fragment(
     true,
     "101,test-device:device:child1,child1,thin-edge.io-child,true"
-    ; "with the device fragment"
 )]
 #[tokio::test]
 async fn convert_child_device_registration(
-    create_with_device_marker: bool,
-    expected: &'static str,
+    #[case] create_with_device_marker: bool,
+    #[case] expected: &'static str,
 ) {
     let tmp_dir = TempTedgeDir::new();
     let mut config = c8y_converter_config(&tmp_dir);

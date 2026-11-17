@@ -1,9 +1,10 @@
 //! Cumulocity operations converted by the mapper to thin-edge commands, as configured by operation templates
 
 use super::*;
-use test_case::test_case;
+use rstest::rstest;
 
-#[test_case(
+#[rstest]
+#[case::main_device(
     "main",
     r#"[exec]
     topic = "c8y/devicecontrol/notifications"
@@ -23,9 +24,8 @@ use test_case::test_case;
             "output": "${.payload.result}"
         }
     })
-    ; "main device"
 )]
-#[test_case(
+#[case::child_device(
     "child1",
     r#"[exec]
     topic = "c8y/devicecontrol/notifications"
@@ -41,9 +41,8 @@ use test_case::test_case;
         "text": "do something",
         "c8y-mapper": { "on_fragment": "c8y_Command" }
     })
-    ; "child device"
 )]
-#[test_case(
+#[case::combined_input(
     "main",
     r#"[exec]
     topic = "c8y/devicecontrol/notifications"
@@ -66,9 +65,8 @@ use test_case::test_case;
         "z": { "foo": "bar" },
         "c8y-mapper": { "on_fragment": "c8y_CombinedInput" }
     })
-    ; "combined input"
 )]
-#[test_case(
+#[case::without_workflow_input(
     "main",
     r#"[exec]
     topic = "c8y/devicecontrol/notifications"
@@ -82,14 +80,13 @@ use test_case::test_case;
         "status": "init",
         "c8y-mapper": { "on_fragment": "c8y_Command" }
     })
-    ; "without workflow input"
 )]
 #[tokio::test]
 async fn mapper_converts_custom_operation_to_command(
-    device: &str,
-    template: &str,
-    operation: serde_json::Value,
-    expected_command: serde_json::Value,
+    #[case] device: &str,
+    #[case] template: &str,
+    #[case] operation: serde_json::Value,
+    #[case] expected_command: serde_json::Value,
 ) {
     let (_mapper, mut mqtt) = send_workflow_operation(device, template, operation).await;
 

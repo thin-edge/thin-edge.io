@@ -1,5 +1,5 @@
 use super::*;
-use test_case::test_case;
+use rstest::rstest;
 
 #[tokio::test]
 async fn test_execute_operation_is_not_blocked() {
@@ -38,10 +38,11 @@ async fn test_execute_operation_is_not_blocked() {
     assert_eq!(now.elapsed().as_secs(), 0);
 }
 
-#[test_case(false ; "while in progress")]
-#[test_case(true ; "after completion")]
+#[rstest]
+#[case::while_in_progress(false)]
+#[case::after_completion(true)]
 #[tokio::test]
-async fn operations_are_deduplicated(completed: bool) {
+async fn operations_are_deduplicated(#[case] completed: bool) {
     let tmp_dir = TempTedgeDir::new();
     let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
@@ -177,10 +178,14 @@ async fn te_topic_operations_do_not_have_time_based_expiry() {
     assert_eq!(converter.commands.active_count(), 1);
 }
 
-#[test_case(60, 1 ; "not evicted from cache prematurely")]
-#[test_case(24 * 3600, 0 ; "not cached indefinitely")]
+#[rstest]
+#[case::not_evicted_from_cache_prematurely(60, 1)]
+#[case::not_cached_indefinitely(24 * 3600, 0)]
 #[tokio::test]
-async fn custom_operation_ids_expire(elapsed_secs: u64, expected_active_commands: usize) {
+async fn custom_operation_ids_expire(
+    #[case] elapsed_secs: u64,
+    #[case] expected_active_commands: usize,
+) {
     let tmp_dir = TempTedgeDir::new();
     let (mut converter, _http_proxy) = create_converter_with_custom_operation(&tmp_dir);
 
