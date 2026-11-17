@@ -238,28 +238,24 @@ impl<T: Default + Transformer> MeaConverter<T> {
         let context = self.c8y_converter.entity_cache.flow_context();
         let timestamp = SystemTime::now();
         let message: Message = message.clone().into();
-        match self.mea_converter.on_message(timestamp, &message, context) {
-            Ok(messages) => messages
-                .into_iter()
-                .filter_map(|msg| MqttMessage::try_from(msg).ok())
-                .collect(),
-            Err(_) => {
-                vec![]
-            }
-        }
+        into_mqtt_messages(self.mea_converter.on_message(timestamp, &message, context))
     }
 
     fn sync_messages(&mut self) -> Vec<MqttMessage> {
         let context = self.c8y_converter.entity_cache.flow_context();
         let timestamp = SystemTime::now();
-        match self.mea_converter.on_interval(timestamp, context) {
-            Ok(messages) => messages
-                .into_iter()
-                .filter_map(|msg| MqttMessage::try_from(msg).ok())
-                .collect(),
-            Err(_) => {
-                vec![]
-            }
-        }
+        into_mqtt_messages(self.mea_converter.on_interval(timestamp, context))
     }
+}
+
+/// The MQTT messages output by a flow, ignoring any error
+fn into_mqtt_messages<E>(output: Result<Vec<Message>, E>) -> Vec<MqttMessage> {
+    output
+        .map(|messages| {
+            messages
+                .into_iter()
+                .filter_map(|message| MqttMessage::try_from(message).ok())
+                .collect()
+        })
+        .unwrap_or_default()
 }

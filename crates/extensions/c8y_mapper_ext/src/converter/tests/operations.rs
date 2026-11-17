@@ -1,4 +1,5 @@
 use super::*;
+use test_case::test_case;
 
 #[tokio::test]
 async fn test_execute_operation_is_not_blocked() {
@@ -37,55 +38,28 @@ async fn test_execute_operation_is_not_blocked() {
     assert_eq!(now.elapsed().as_secs(), 0);
 }
 
+#[test_case(false ; "while in progress")]
+#[test_case(true ; "after completion")]
 #[tokio::test]
-async fn operations_are_deduplicated() {
+async fn operations_are_deduplicated(completed: bool) {
     let tmp_dir = TempTedgeDir::new();
     let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
-    let operation = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
-            {"id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
+    let operation = restart_operation();
     assert_eq!(
         converter.try_convert(&operation).await.unwrap(),
-        vec![MqttMessage {
-            topic: Topic {
-                name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
-            },
-            payload: json!({"status":"init"}).to_string().into(),
-            qos: QoS::AtLeastOnce,
-            retain: true,
-        },]
+        vec![restart_command()]
     );
-    assert_eq!(converter.try_convert(&operation).await.unwrap(), vec![]);
-}
-
-#[tokio::test]
-async fn operations_are_deduplicated_after_completion() {
-    let tmp_dir = TempTedgeDir::new();
-    let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
-
-    let operation = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
-            {"id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
-    assert_eq!(
-        converter.try_convert(&operation).await.unwrap(),
-        vec![MqttMessage {
-            topic: Topic {
-                name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
-            },
-            payload: json!({"status":"init"}).to_string().into(),
-            qos: QoS::AtLeastOnce,
-            retain: true,
-        },]
-    );
-    let local_completion = MqttMessage::new(
-        &Topic::new_unchecked("te/device/main///cmd/restart/c8y-mapper-16574089"),
-        "",
-    );
-    assert_eq!(
-        converter.try_convert(&local_completion).await.unwrap(),
-        vec![]
-    );
+    if completed {
+        let local_completion = MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/restart/c8y-mapper-16574089"),
+            "",
+        );
+        assert_eq!(
+            converter.try_convert(&local_completion).await.unwrap(),
+            vec![]
+        );
+    }
 
     assert_eq!(converter.try_convert(&operation).await.unwrap(), vec![]);
 }
@@ -94,25 +68,19 @@ async fn operations_are_deduplicated_after_completion() {
 async fn a_repeated_operation_does_not_hide_the_other_operations_of_its_message() {
     let tmp_dir = TempTedgeDir::new();
     let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
-    let repeated = json!({
-        "id": "16574089",
-        "status": "PENDING",
-        "c8y_Restart": {},
-        "externalSource": {"externalId": "test-device", "type": "c8y_Serial"}
-    });
+    let repeated = restart_operation();
+    converter.try_convert(&repeated).await.unwrap();
+
     let new = json!({
         "id": "16574090",
         "status": "PENDING",
         "c8y_Restart": {},
         "externalSource": {"externalId": "test-device", "type": "c8y_Serial"}
     });
-    let topic = Topic::new_unchecked("c8y/devicecontrol/notifications");
-    converter
-        .try_convert(&MqttMessage::new(&topic, repeated.to_string()))
-        .await
-        .unwrap();
-
-    let both = MqttMessage::new(&topic, format!("{repeated}\n{new}"));
+    let both = MqttMessage::new(
+        &repeated.topic,
+        format!("{}\n{new}", repeated.payload_str().unwrap()),
+    );
 
     assert_eq!(
         converter.try_convert(&both).await.unwrap(),
@@ -128,16 +96,9 @@ async fn a_repeated_operation_does_not_hide_the_other_operations_of_its_message(
 #[tokio::test]
 async fn custom_operations_are_deduplicated() {
     let tmp_dir = TempTedgeDir::new();
-    let custom_op = r#"exec.topic = "my/custom/topic"
-        exec.on_fragment = "my_op"
-        exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
-    let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
-    f.with_raw_content(custom_op);
-    let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+    let (mut converter, _http_proxy) = create_converter_with_custom_operation(&tmp_dir);
 
-    let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
-            {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
+    let operation = custom_operation();
     assert!(
         matches!(
             dbg!(converter.try_convert(&operation).await.unwrap().as_slice()),
@@ -159,12 +120,7 @@ async fn custom_operations_are_not_deduplicated_before_registration() {
     // and the operation is redelivered to the mapper, this should be
     // processed
     let tmp_dir = TempTedgeDir::new();
-    let custom_op = r#"exec.topic = "my/custom/topic"
-        exec.on_fragment = "my_op"
-        exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
-    let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
-    f.with_raw_content(custom_op);
-    let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+    let (mut converter, _http_proxy) = create_converter_with_custom_operation(&tmp_dir);
     let before_registration = SupportedOperations {
         device_id: converter.supported_operations.device_id.clone(),
         base_ops_dir: converter.supported_operations.base_ops_dir.clone(),
@@ -173,9 +129,7 @@ async fn custom_operations_are_not_deduplicated_before_registration() {
     let after_registration =
         std::mem::replace(&mut converter.supported_operations, before_registration);
 
-    let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
-            {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
+    let operation = custom_operation();
     assert_eq!(
         converter.try_convert(&operation).await.unwrap(),
         vec![],
@@ -200,17 +154,8 @@ async fn te_topic_operations_do_not_have_time_based_expiry() {
 
     tokio::time::pause();
 
-    let operation = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
-            {"id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
-    let expected_message = MqttMessage {
-        topic: Topic {
-            name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
-        },
-        payload: json!({"status":"init"}).to_string().into(),
-        qos: QoS::AtLeastOnce,
-        retain: true,
-    };
+    let operation = restart_operation();
+    let expected_message = restart_command();
 
     assert_eq!(
         converter.try_convert(&operation).await.unwrap().first(),
@@ -232,39 +177,30 @@ async fn te_topic_operations_do_not_have_time_based_expiry() {
     assert_eq!(converter.commands.active_count(), 1);
 }
 
+#[test_case(60, 1 ; "not evicted from cache prematurely")]
+#[test_case(24 * 3600, 0 ; "not cached indefinitely")]
 #[tokio::test]
-async fn custom_operation_ids_are_not_cached_indefinitely() {
+async fn custom_operation_ids_expire(elapsed_secs: u64, expected_active_commands: usize) {
     let tmp_dir = TempTedgeDir::new();
-    let custom_op = r#"exec.topic = "my/custom/topic"
-        exec.on_fragment = "my_op"
-        exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
-    let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
-    f.with_raw_content(custom_op);
-
-    let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+    let (mut converter, _http_proxy) = create_converter_with_custom_operation(&tmp_dir);
 
     tokio::time::pause();
 
-    let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
-            {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
-
     assert!(
         matches!(
-            dbg!(converter.try_convert(&operation).await.unwrap().as_slice()),
+            dbg!(converter.try_convert(&custom_operation()).await.unwrap().as_slice()),
             [MqttMessage { topic, .. }, ..] if topic.to_string() == "c8y/s/us"
         ),
         "First delivery after registration produces outgoing message"
     );
-
     assert_eq!(converter.commands.active_count(), 1);
-    tokio::time::advance(Duration::from_secs(24 * 3600)).await;
 
-    let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
+    tokio::time::advance(Duration::from_secs(elapsed_secs)).await;
 
     // Trigger the converter since it performs cache eviction only when it's converting c8y messages
+    let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
     converter.try_convert(&random_message).await.unwrap();
-    assert_eq!(converter.commands.active_count(), 0);
+    assert_eq!(converter.commands.active_count(), expected_active_commands);
 }
 
 #[tokio::test]
@@ -272,62 +208,19 @@ async fn active_commands_is_populated_with_existing_commands_from_retain_message
     let tmp_dir = TempTedgeDir::new();
     let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
 
-    let existing_pending_operation = MqttMessage {
-        topic: Topic {
-            name: "te/device/main///cmd/restart/c8y-mapper-16574089".into(),
-        },
-        payload: json!({"status":"init"}).to_string().into(),
-        qos: QoS::AtLeastOnce,
-        retain: true,
-    };
+    let existing_pending_operation = restart_command();
     converter
         .try_convert(&existing_pending_operation)
         .await
         .unwrap();
 
-    let operation = MqttMessage::new(&Topic::new_unchecked("c8y/devicecontrol/notifications"), json!(
-            {"id":"16574089","status":"PENDING","c8y_Restart":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
+    let operation = restart_operation();
 
     assert_eq!(
         converter.try_convert(&operation).await.unwrap().as_slice(),
         [],
         "Existing tedge operation should trigger de-duplication"
     );
-}
-
-#[tokio::test]
-async fn custom_operation_ids_are_not_evicted_from_cache_prematurely() {
-    let tmp_dir = TempTedgeDir::new();
-    let custom_op = r#"exec.topic = "my/custom/topic"
-        exec.on_fragment = "my_op"
-        exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
-    let f = tmp_dir.dir("operations").dir("c8y").file("my_op");
-    f.with_raw_content(custom_op);
-
-    let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
-
-    tokio::time::pause();
-
-    let operation = MqttMessage::new(&Topic::new_unchecked("my/custom/topic"), json!(
-            {"id":"16574089","status":"PENDING","my_op":{},"description":"do something","externalSource":{"externalId":"test-device","type":"c8y_Serial"}}
-        ).to_string());
-
-    assert!(
-        matches!(
-            dbg!(converter.try_convert(&operation).await.unwrap().as_slice()),
-            [MqttMessage { topic, .. }, ..] if topic.to_string() == "c8y/s/us"
-        ),
-        "First delivery after registration produces outgoing message"
-    );
-
-    assert_eq!(converter.commands.active_count(), 1);
-    // After a minute, the operation id should still exist
-    tokio::time::advance(Duration::from_secs(60)).await;
-
-    let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
-    converter.try_convert(&random_message).await.unwrap();
-    assert_eq!(converter.commands.active_count(), 1);
 }
 
 #[tokio::test]
@@ -434,4 +327,51 @@ async fn an_invalid_operation_of_a_child_device_is_failed_on_the_smartrest_topic
                 ),
             ],
         );
+}
+
+/// A `c8y_Restart` operation with the ID 16574089 for the main device
+fn restart_operation() -> MqttMessage {
+    c8y_operation("c8y/devicecontrol/notifications", "c8y_Restart")
+}
+
+/// The restart command created by the mapper for [`restart_operation`]
+fn restart_command() -> MqttMessage {
+    MqttMessage::new(
+        &Topic::new_unchecked("te/device/main///cmd/restart/c8y-mapper-16574089"),
+        json!({"status":"init"}).to_string(),
+    )
+    .with_qos(QoS::AtLeastOnce)
+    .with_retain()
+}
+
+/// A converter supporting the `my_op` custom operation, received on `my/custom/topic`
+fn create_converter_with_custom_operation(
+    tmp_dir: &TempTedgeDir,
+) -> (CumulocityConverter, FakeServerBox<HttpRequest, HttpResult>) {
+    let custom_op = r#"exec.topic = "my/custom/topic"
+        exec.on_fragment = "my_op"
+        exec.command = "/etc/tedge/operations/command ${.payload.my_op.text}""#;
+    tmp_dir
+        .dir("operations")
+        .dir("c8y")
+        .file("my_op")
+        .with_raw_content(custom_op);
+    create_c8y_converter(tmp_dir)
+}
+
+/// A `my_op` custom operation with the ID 16574089 for the main device
+fn custom_operation() -> MqttMessage {
+    c8y_operation("my/custom/topic", "my_op")
+}
+
+/// An operation with the ID 16574089 for the main device, with the given fragment, on the given topic
+fn c8y_operation(topic: &str, fragment: &str) -> MqttMessage {
+    let mut operation = json!({
+        "id": "16574089",
+        "status": "PENDING",
+        "description": "do something",
+        "externalSource": {"externalId": "test-device", "type": "c8y_Serial"}
+    });
+    operation[fragment] = json!({});
+    MqttMessage::new(&Topic::new_unchecked(topic), operation.to_string())
 }
