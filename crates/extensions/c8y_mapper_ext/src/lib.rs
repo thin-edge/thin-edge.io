@@ -4,6 +4,7 @@ pub mod actor;
 pub mod alarm_converter;
 pub mod availability;
 pub mod bridge_readiness;
+mod command_tracker;
 pub mod config;
 pub mod converter;
 pub mod domain_name_refresh;

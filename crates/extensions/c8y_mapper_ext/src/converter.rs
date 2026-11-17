@@ -1,8 +1,8 @@
 use super::config::C8yMapperConfig;
 use super::error::CumulocityMapperError;
-use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
+use crate::command_tracker::CommandTracker;
 use crate::dynamic_discovery::DiscoverOp;
 use crate::entity_cache::EntityCache;
 use crate::entity_cache::InvalidExternalIdError;
@@ -83,8 +83,6 @@ use tedge_uploader_ext::UploadRequest;
 use tedge_uploader_ext::UploadResult;
 use tedge_utils::file::FileError;
 use thiserror::Error;
-use tokio::time::Duration;
-use tokio::time::Instant;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -168,16 +166,7 @@ pub struct CumulocityConverter {
     pub(crate) entity_cache: EntityCache,
 
     pub command_id: IdGenerator,
-    // Keep active command IDs to avoid creation of multiple commands for an operation
-    pub active_commands: HashMap<CmdId, Option<Instant>>,
-    pub recently_completed_commands: HashMap<CmdId, Instant>,
-    active_commands_last_cleared: Instant,
-    // Keep the software list commands issued by this mapper, until they are cleared,
-    // to avoid requesting a software list while an equivalent request is still pending
-    pending_software_list_requests: HashMap<CmdId, EntityTopicId>,
-    // Targets for which a software list has to be requested, once the pending requests are known.
-    // A capability message can be received before the retained requests issued before a restart.
-    deferred_software_list_requests: HashSet<EntityTopicId>,
+    pub(crate) commands: CommandTracker,
 
     pub supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
@@ -260,11 +249,7 @@ impl CumulocityConverter {
             mqtt_schema: mqtt_schema.clone(),
             entity_cache,
             command_id,
-            active_commands: HashMap::new(),
-            recently_completed_commands: HashMap::new(),
-            active_commands_last_cleared: Instant::now(),
-            pending_software_list_requests: HashMap::new(),
-            deferred_software_list_requests: HashSet::new(),
+            commands: CommandTracker::default(),
             operation_handler,
             service_actions: HashMap::new(),
         })
@@ -489,7 +474,7 @@ impl CumulocityConverter {
             let device_xid = operation.external_source.external_id;
             let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
 
-            if self.command_already_exists(&cmd_id) {
+            if self.commands.is_known(&cmd_id) {
                 info!("{cmd_id} is already addressed");
                 continue;
             }
@@ -511,7 +496,7 @@ impl CumulocityConverter {
                 &device_xid,
                 Some(operation.op_id.clone()),
             );
-            self.active_commands.insert(cmd_id, Some(Instant::now()));
+            self.commands.started(cmd_id);
             output.extend(result);
         }
 
@@ -628,7 +613,7 @@ impl CumulocityConverter {
         let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
         let device_xid = operation.external_source.external_id;
 
-        if self.command_already_exists(&cmd_id) {
+        if self.commands.is_known(&cmd_id) {
             info!("{cmd_id} is already addressed");
             return Ok(vec![]);
         }
@@ -644,7 +629,7 @@ impl CumulocityConverter {
             .await;
 
         let output = self.handle_c8y_operation_result(&result, &device_xid, Some(operation.op_id));
-        self.active_commands.insert(cmd_id, Some(Instant::now()));
+        self.commands.started(cmd_id);
 
         Ok(output)
     }
@@ -843,28 +828,23 @@ impl CumulocityConverter {
     }
 
     pub fn has_deferred_software_list_requests(&self) -> bool {
-        !self.deferred_software_list_requests.is_empty()
+        self.commands.has_deferred_software_list_requests()
     }
 
     /// Requests a software list from each target registered for software update,
     /// unless a request issued by this mapper is still pending for that target
     pub fn take_software_list_requests(&mut self) -> Vec<MqttMessage> {
-        let mut requests = vec![];
-        for target in std::mem::take(&mut self.deferred_software_list_requests) {
-            if let Some(cmd_id) = self.pending_software_list_request(&target) {
-                info!("Skipping software list request for {target}: command {cmd_id} is still pending");
-                continue;
-            }
-            requests.push(self.request_software_list(&target));
-        }
-        requests
+        self.commands
+            .take_deferred_software_list_requests()
+            .iter()
+            .map(|target| self.request_software_list(target))
+            .collect()
     }
 
     fn request_software_list(&mut self, target: &EntityTopicId) -> MqttMessage {
         let cmd_id = self.command_id.new_id();
         let request = SoftwareListCommand::new(target, cmd_id.clone());
-        self.pending_software_list_requests
-            .insert(cmd_id, target.clone());
+        self.commands.software_list_requested(cmd_id, target);
         request.command_message(&self.mqtt_schema)
     }
 
@@ -965,20 +945,6 @@ impl CumulocityConverter {
         );
         Ok(())
     }
-
-    fn command_already_exists(&self, cmd_id: &str) -> bool {
-        self.active_commands.contains_key(cmd_id)
-            || self.recently_completed_commands.contains_key(cmd_id)
-    }
-
-    /// The id of a software list command issued by this mapper to the given target,
-    /// if any is still pending, i.e. not cleared yet whatever its status
-    fn pending_software_list_request(&self, target: &EntityTopicId) -> Option<&CmdId> {
-        self.pending_software_list_requests
-            .iter()
-            .find(|(_, pending_target)| *pending_target == target)
-            .map(|(cmd_id, _)| cmd_id)
-    }
 }
 
 #[derive(Error, Debug)]
@@ -1067,10 +1033,7 @@ impl CumulocityConverter {
 
             Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
-                self.active_commands.remove(cmd_id);
-                self.recently_completed_commands
-                    .insert(cmd_id.to_owned(), Instant::now());
-                self.pending_software_list_requests.remove(cmd_id);
+                self.commands.completed(cmd_id);
                 Ok(vec![])
             }
 
@@ -1116,16 +1079,7 @@ impl CumulocityConverter {
             }
 
             Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
-                // Keep track of operation if we've received it through a retain message
-                // If we've already got the operation in `active_commands`, set the insertion
-                // time to `None` to disable the time-based expiry
-                self.active_commands.insert(cmd_id.clone(), None);
-                if *operation == OperationType::SoftwareList {
-                    // A software list request, possibly issued before a restart of the mapper,
-                    // which has to be cleared before a new one is issued to the same target
-                    self.pending_software_list_requests
-                        .insert(cmd_id.clone(), source.clone());
-                }
+                self.commands.resumed(cmd_id, operation, &source);
 
                 let entity = self.entity_cache.try_get(&source)?;
                 let entity = operations::EntityTarget {
@@ -1151,31 +1105,7 @@ impl CumulocityConverter {
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if self.active_commands_last_cleared.elapsed() > Duration::from_secs(3600) {
-            let mut to_remove_active = vec![];
-            for (id, time) in &self.active_commands {
-                if let Some(time) = time {
-                    // Expire tasks after 12 hours
-                    if time.elapsed() > Duration::from_secs(3600 * 12) {
-                        to_remove_active.push(id.to_owned());
-                    }
-                }
-            }
-            let mut to_remove_completed = vec![];
-            for (id, time) in &self.recently_completed_commands {
-                // Remove completed tasks after 1 hour
-                if time.elapsed() > Duration::from_secs(3600) {
-                    to_remove_completed.push(id.to_owned());
-                }
-            }
-            for id in to_remove_active {
-                self.active_commands.remove(&id);
-            }
-            for id in to_remove_completed {
-                self.recently_completed_commands.remove(&id);
-            }
-            self.active_commands_last_cleared = Instant::now();
-        }
+        self.commands.expire();
 
         let messages = match &message.topic {
             topic
@@ -1472,14 +1402,10 @@ impl CumulocityConverter {
         };
 
         if message.retain {
-            self.deferred_software_list_requests.insert(target.clone());
+            self.commands.defer_software_list_request(target);
         } else {
-            // A live capability message is published by an agent that has just (re)started.
-            // The requests pending since before are not reliable anymore:
-            // some might never be completed or cleared, e.g. a cleared request resumed by the agent.
-            self.pending_software_list_requests
-                .retain(|_, pending_target| pending_target != target);
-            self.deferred_software_list_requests.remove(target);
+            // A live capability message is published by an agent that has just (re)started
+            self.commands.reset_software_list_requests(target);
             registration.push(self.request_software_list(target));
         }
         Ok(registration)
@@ -1569,6 +1495,7 @@ pub(crate) mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_utils::paths::TedgePaths;
     use test_case::test_case;
+    use tokio::time::Instant;
 
     #[tokio::test]
     async fn test_sync_alarms() {
@@ -2598,7 +2525,7 @@ pub(crate) mod tests {
             Some(&expected_message),
             "First delivery after registration produces outgoing message"
         );
-        assert_eq!(converter.active_commands.len(), 1);
+        assert_eq!(converter.commands.active_count(), 1);
 
         // Converter should disable time-based expiry when the `te` topic
         // message is processed
@@ -2610,7 +2537,7 @@ pub(crate) mod tests {
 
         // Trigger the converter since it performs cache eviction only when it's converting c8y messages
         converter.try_convert(&random_message).await.unwrap();
-        assert_eq!(converter.active_commands.len(), 1);
+        assert_eq!(converter.commands.active_count(), 1);
     }
 
     #[tokio::test]
@@ -2638,14 +2565,14 @@ pub(crate) mod tests {
             "First delivery after registration produces outgoing message"
         );
 
-        assert_eq!(converter.active_commands.len(), 1);
+        assert_eq!(converter.commands.active_count(), 1);
         tokio::time::advance(Duration::from_secs(24 * 3600)).await;
 
         let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
 
         // Trigger the converter since it performs cache eviction only when it's converting c8y messages
         converter.try_convert(&random_message).await.unwrap();
-        assert_eq!(converter.active_commands.len(), 0);
+        assert_eq!(converter.commands.active_count(), 0);
     }
 
     #[tokio::test]
@@ -2944,13 +2871,13 @@ pub(crate) mod tests {
             "First delivery after registration produces outgoing message"
         );
 
-        assert_eq!(converter.active_commands.len(), 1);
+        assert_eq!(converter.commands.active_count(), 1);
         // After a minute, the operation id should still exist
         tokio::time::advance(Duration::from_secs(60)).await;
 
         let random_message = MqttMessage::new(&Topic::new_unchecked("c8y/s/ds"), "510,test");
         converter.try_convert(&random_message).await.unwrap();
-        assert_eq!(converter.active_commands.len(), 1);
+        assert_eq!(converter.commands.active_count(), 1);
     }
 
     #[tokio::test]
