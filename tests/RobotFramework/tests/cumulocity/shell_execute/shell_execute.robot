@@ -171,6 +171,19 @@ Removes the terminal escape sequences from the failure reason
     ...    printf '\\033[31merror\\033[0m\\n' >&2; exit 1
     Operation Should Be FAILED    ${operation}    failure_reason=.*Command returned exit code 1: error$
 
+Uses the last line with visible text as the failure reason
+    [Documentation]    A last line holding only escape sequences, e.g. resetting the colors,
+    ...    has nothing to read once they are removed
+    ${operation}=    Cumulocity.Execute Shell Command
+    ...    printf '\\033[31merror\\n\\033[0m' >&2; exit 1
+    Operation Should Be FAILED    ${operation}    failure_reason=.*Command returned exit code 1: error$
+
+Uses the last line with visible text as the failure reason after a tput color reset
+    [Documentation]    `tput sgr0` prints `ESC ( B ESC [ m`, which is not only a color escape sequence
+    ${operation}=    Cumulocity.Execute Shell Command
+    ...    printf 'error\\n\\033(B\\033[m' >&2; exit 1
+    Operation Should Be FAILED    ${operation}    failure_reason=.*Command returned exit code 1: error$
+
 Disables the colors of the commands following the NO_COLOR or CLICOLOR conventions
     ${operation}=    Cumulocity.Execute Shell Command    text=echo "NO_COLOR=$NO_COLOR CLICOLOR=$CLICOLOR"
     Operation Should Be SUCCESSFUL    ${operation}

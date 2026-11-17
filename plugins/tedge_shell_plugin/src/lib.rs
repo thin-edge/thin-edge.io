@@ -22,6 +22,7 @@ use std::process::ExitStatus;
 use std::process::Stdio;
 use std::time::Duration;
 use std::time::Instant;
+use tedge_utils::control_chars::strip_control_chars;
 
 /// The outcome of a command executed by a shell
 #[derive(Debug, Eq, PartialEq)]
@@ -265,8 +266,8 @@ pub fn write_launch_error(out: &mut impl Write, reason: &str) -> std::io::Result
 /// so the reason is not truncated a second time.
 const MAX_REASON_LEN: usize = 500;
 
-/// Describe why a command failed, using its last output line, as this is
-/// where a command usually tells what went wrong.
+/// Describes why a command failed, using its last output line with some visible text,
+/// as this is where a command usually tells what went wrong.
 fn failure_reason(outcome: &ShellOutcome) -> String {
     if let Some(reason) = &outcome.reason {
         return reason[..reason.floor_char_boundary(MAX_REASON_LEN)].to_string();
@@ -280,22 +281,25 @@ fn failure_reason(outcome: &ShellOutcome) -> String {
         None => format!("Command returned exit code {}", outcome.exit_code),
     };
 
-    // Skipping the truncation notice, which is not what the command had to say
+    // Skipping the truncation notice, which is not what the command had to say,
+    // and the lines with nothing to read, e.g. a line resetting the terminal colors.
+    // The line is stripped before being truncated, so the truncation cannot cut
+    // an escape sequence and leave a reason which the mapper empties once stripped.
     let last_line = outcome
         .result
-        .trim_end()
         .lines()
-        .rfind(|line| !line.starts_with(TRUNCATION_NOTICE_PREFIX))
-        .unwrap_or_default();
+        .rev()
+        .filter(|line| !line.starts_with(TRUNCATION_NOTICE_PREFIX))
+        .map(strip_control_chars)
+        .find(|line| !line.trim().is_empty());
+    let Some(last_line) = last_line else {
+        return prefix;
+    };
 
-    match last_line {
-        "" => prefix,
-        last_line => {
-            let budget = MAX_REASON_LEN.saturating_sub(prefix.len() + 2);
-            let last_line = &last_line[..last_line.floor_char_boundary(budget)];
-            format!("{prefix}: {last_line}")
-        }
-    }
+    let last_line = last_line.trim_end();
+    let budget = MAX_REASON_LEN.saturating_sub(prefix.len() + 2);
+    let last_line = &last_line[..last_line.floor_char_boundary(budget)];
+    format!("{prefix}: {last_line}")
 }
 
 /// Markers used by the workflow engine to extract the JSON output of a script.
@@ -318,6 +322,7 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     const NO_LIMIT: u32 = u32::MAX;
     const NO_TIMEOUT: Duration = Duration::from_secs(3600);
@@ -571,6 +576,61 @@ mod tests {
         assert!(String::from_utf8(out)
             .unwrap()
             .contains(r#""reason":"Command returned exit code 3: the real error""#));
+    }
+
+    #[rstest]
+    #[case::color_reset_after_the_last_line(
+        r"printf '\033[31merror\n\033[0m' >&2; exit 1",
+        "Command returned exit code 1: error"
+    )]
+    #[case::trailing_space_before_a_color_reset(
+        r"printf '\033[31merror \033[0m'; exit 1",
+        "Command returned exit code 1: error"
+    )]
+    #[case::long_escape_sequence_before_the_text(
+        r"printf 'x\n\033]8;;https://e.com/%0600d\007error\033]8;;\033\\' 0; exit 1",
+        "Command returned exit code 1: error"
+    )]
+    #[case::tput_sgr0_color_reset(
+        r"printf 'error\n\033(B\033[m'; exit 1",
+        "Command returned exit code 1: error"
+    )]
+    #[case::hyperlink_terminator(
+        r"printf 'error\n\033]8;;\033\\'; exit 1",
+        "Command returned exit code 1: error"
+    )]
+    #[case::window_title(
+        r"printf 'error\n\033]0;title\007'; exit 1",
+        "Command returned exit code 1: error"
+    )]
+    #[case::two_character_escape_sequence(
+        r"printf 'error\n\033b'; exit 1",
+        "Command returned exit code 1: error"
+    )]
+    #[case::blank_lines(
+        r"printf 'foo\nbar  \n \t\n\n'; exit 1",
+        "Command returned exit code 1: bar"
+    )]
+    #[case::no_visible_text(r"printf '\033[0m\n\a\n'; exit 2", "Command returned exit code 2")]
+    fn failure_reason_is_the_last_line_with_visible_text(
+        #[case] command: &str,
+        #[case] expected_reason: &str,
+    ) {
+        let outcome = execute_with_defaults(command).unwrap();
+        assert_eq!(failure_reason(&outcome), expected_reason);
+    }
+
+    #[test]
+    fn long_failure_reason_is_truncated_on_a_char_boundary() {
+        // 300 two-byte characters, while the 500-byte limit leaves room for 235 after the prefix
+        let outcome = execute_with_defaults(r"printf 'é%.0s' $(seq 300); exit 1").unwrap();
+
+        let reason = failure_reason(&outcome);
+        assert_eq!(
+            reason,
+            format!("Command returned exit code 1: {}", "é".repeat(235))
+        );
+        assert_eq!(reason.len(), MAX_REASON_LEN);
     }
 
     #[test]
