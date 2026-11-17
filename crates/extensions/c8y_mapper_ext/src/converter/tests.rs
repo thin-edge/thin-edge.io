@@ -9,6 +9,7 @@ use crate::entity_cache::InvalidExternalIdError;
 use crate::mea::alarms::AlarmConverter;
 use crate::mea::health::HealthStatusConverter;
 use crate::mea::measurements::MeasurementConverter;
+use crate::supported_operations::operation::Operation;
 use crate::supported_operations::SupportedOperations;
 use crate::tests::spawn_dummy_c8y_http_proxy;
 use crate::Capabilities;
@@ -1444,23 +1445,6 @@ fn sanitize_c8y_external_id(input_id: &str, invalid_char: char) {
             external_id: input_id.into(),
             invalid_char,
         })
-    );
-}
-
-#[test_case("test-device:device:main", "main")]
-#[test_case("test-device:device:child", "child")]
-#[test_case("test-device:device:child:service:foo", "child")]
-#[test_case("test-device:device:child:foo:bar", "test-device:device:child:foo:bar")]
-#[test_case("a:very:long:and:complex:name", "a:very:long:and:complex:name")]
-#[test_case("non_default_name", "non_default_name")]
-#[tokio::test]
-async fn default_device_name_from_external_id(external_id: &str, device_name: &str) {
-    let tmp_dir = TempTedgeDir::new();
-    let (converter, _http_proxy) = create_c8y_converter(&tmp_dir);
-
-    assert_eq!(
-        converter.default_device_name_from_external_id(&external_id.into()),
-        device_name
     );
 }
 

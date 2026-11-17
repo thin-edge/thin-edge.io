@@ -1,3 +1,26 @@
+//! The conversion of the messages received by the Cumulocity mapper
+//!
+//! The [`C8yMapperActor`](crate::actor::C8yMapperActor) registers the entities,
+//! passes every other MQTT message it receives to [`CumulocityConverter::convert`]
+//! and publishes the messages that returns.
+//!
+//! On thin-edge topics, the converter handles:
+//! - entity registrations and twin data, which update the Cumulocity inventory
+//! - command metadata, which declares a capability of an entity as a Cumulocity supported operation
+//! - the commands created by this mapper, which are passed to the `OperationHandler`
+//!   to report their progress to Cumulocity and to clear them once completed
+//!
+//! Measurements, events, alarms and health statuses are converted by flows,
+//! except that events too large for MQTT come back to the converter to be posted over HTTP.
+//!
+//! On Cumulocity topics, the converter handles operations,
+//! as defined by the operation files loaded in `SupportedOperations`:
+//! - built-in operations, and custom operations with a workflow, are converted into thin-edge commands
+//! - custom operations with a script are run by the mapper itself, see `script_operations`
+//!
+//! The `CommandTracker` remembers the commands created for Cumulocity operations,
+//! so that an operation received twice creates a single command.
+
 use super::config::C8yMapperConfig;
 use super::error::CumulocityMapperError;
 use crate::actor::IdDownloadRequest;
@@ -13,10 +36,6 @@ use crate::mea::events::EventConverter;
 use crate::operations;
 use crate::operations::OperationHandler;
 use crate::shell_execute::SHELL_EXECUTE_OPERATION;
-use crate::supported_operations::operation::get_child_ops;
-use crate::supported_operations::operation::Operation;
-use crate::supported_operations::operation::ResultFormat;
-use crate::supported_operations::Operations;
 use crate::supported_operations::OperationsError;
 use crate::supported_operations::SupportedOperations;
 use anyhow::Context;
@@ -27,32 +46,17 @@ use c8y_api::json_c8y_deserializer::C8yOperation;
 use c8y_api::json_c8y_deserializer::C8ySoftwareUpdate;
 use c8y_api::smartrest::inventory::child_device_creation_message;
 use c8y_api::smartrest::inventory::service_creation_message;
-use c8y_api::smartrest::message::collect_smartrest_messages;
-use c8y_api::smartrest::message::get_failure_reason_for_smartrest;
-use c8y_api::smartrest::message::get_smartrest_device_id;
-use c8y_api::smartrest::message::get_smartrest_template_id;
-use c8y_api::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
-use c8y_api::smartrest::payload::SmartrestPayload;
 use c8y_api::smartrest::smartrest_serializer::request_pending_operations;
-use c8y_api::smartrest::smartrest_serializer::EmbeddedCsv;
 use c8y_api::smartrest::smartrest_serializer::OperationReference;
-use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_api::smartrest::topic::C8yTopic;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
 use serde_json::json;
-use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::process::Output;
-use std::str::FromStr;
 use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
-use tedge_actors::Sender;
 use tedge_api::commands::RestartCommand;
 use tedge_api::commands::SoftwareCommandMetadata;
 use tedge_api::commands::SoftwareListCommand;
@@ -65,12 +69,9 @@ use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_api::mqtt_topics::IdGenerator;
 use tedge_api::mqtt_topics::MqttSchema;
 use tedge_api::mqtt_topics::OperationType;
-use tedge_api::script::ShellScript;
 use tedge_api::workflow::log::log_dir::OperationLogsError;
-use tedge_api::workflow::GenericCommandState;
 use tedge_api::DownloadInfo;
 use tedge_api::Jsonify;
-use tedge_api::LoggedCommand;
 use tedge_config::models::TopicPrefix;
 use tedge_config::TEdgeConfigError;
 use tedge_flows::FlowContextHandle;
@@ -88,7 +89,8 @@ use tracing::error;
 use tracing::info;
 use tracing::trace;
 use tracing::warn;
-use tracing::Instrument;
+
+mod script_operations;
 
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
@@ -103,13 +105,6 @@ impl CumulocityConverter {
     pub async fn convert(&mut self, input: &MqttMessage) -> Vec<MqttMessage> {
         let messages_or_err = self.try_convert(input).await;
         self.wrap_errors_with_input(messages_or_err, input)
-    }
-
-    pub fn wrap_errors(
-        &self,
-        messages_or_err: Result<Vec<MqttMessage>, ConversionError>,
-    ) -> Vec<MqttMessage> {
-        messages_or_err.unwrap_or_else(|error| vec![self.new_error_message(error)])
     }
 
     pub fn wrap_errors_with_input(
@@ -155,6 +150,7 @@ impl CumulocityConverter {
     }
 }
 
+/// Converts the messages received by the Cumulocity mapper, see the [module documentation](self)
 pub struct CumulocityConverter {
     pub config: Arc<C8yMapperConfig>,
     pub(crate) mapper_config: MapperConfig,
@@ -192,22 +188,11 @@ impl CumulocityConverter {
             config.service.ty.clone()
         };
 
-        let ops_dir = config.ops_dir.path();
-        let operations_by_xid = {
-            let mut operations = get_child_ops(ops_dir, &config.bridge_config)?;
-            operations.insert(
-                config.device_id.clone(),
-                Operations::try_new(ops_dir, &config.bridge_config)?,
-            );
-            operations
-        };
-        let operation_manager = SupportedOperations {
-            device_id: device_id.clone(),
-
-            base_ops_dir: Arc::clone(&config.ops_dir),
-
-            operations_by_xid,
-        };
+        let operation_manager = SupportedOperations::load_all_devices(
+            device_id.clone(),
+            Arc::clone(&config.ops_dir),
+            &config.bridge_config,
+        )?;
 
         let mqtt_schema = config.mqtt_schema.clone();
         let http_event_topic =
@@ -408,18 +393,6 @@ impl CumulocityConverter {
         }
     }
 
-    /// Returns the `device_name` from the `EntityExternalId`
-    /// if it follows the default naming scheme `MAIN_DEVICE_COMMON_NAME:device:device_name`,
-    /// else returns its `String` representation
-    pub fn default_device_name_from_external_id(&self, external_id: &EntityExternalId) -> String {
-        let _main_device_id = &self.device_name;
-        match external_id.as_ref().split(':').collect::<Vec<&str>>()[..] {
-            [_main_device_id, "device", device_id, "service", _] => device_id.into(),
-            [_main_device_id, "device", device_id] => device_id.into(),
-            _ => external_id.into(),
-        }
-    }
-
     /// Validates if the provided id contains any invalid characters and
     /// returns a valid EntityExternalId if the validation passes,
     /// else returns InvalidExternalIdError
@@ -471,7 +444,6 @@ impl CumulocityConverter {
         let mut output = vec![];
         for operation_payload in operation_payloads {
             let operation = C8yOperation::from_json(operation_payload)?;
-            let device_xid = operation.external_source.external_id;
             let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
 
             if self.commands.is_known(&cmd_id) {
@@ -484,16 +456,11 @@ impl CumulocityConverter {
             let operation_message = MqttMessage::new(&message.topic, operation_payload);
 
             let result = self
-                .process_json_over_mqtt(
-                    device_xid.clone(),
-                    operation.op_id.clone(),
-                    &operation.extras,
-                    &operation_message,
-                )
+                .process_json_over_mqtt(&operation, &operation_message)
                 .await;
             let result = self.handle_c8y_operation_result(
                 &result,
-                &device_xid,
+                &operation.external_source.external_id,
                 Some(operation.op_id.clone()),
             );
             self.commands.started(cmd_id);
@@ -505,16 +472,16 @@ impl CumulocityConverter {
 
     async fn process_json_over_mqtt(
         &mut self,
-        device_xid: String,
-        operation_id: String,
-        extras: &HashMap<String, Value>,
+        c8y_operation: &C8yOperation,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let cmd_id = self.command_id.new_id_with_str(&operation_id);
+        let cmd_id = self.command_id.new_id_with_str(&c8y_operation.op_id);
+        let device_xid = c8y_operation.external_source.external_id.clone();
+        let extras = &c8y_operation.extras;
 
         let operation = C8yDeviceControlOperation::from_json_object(extras)?;
-        if let Some((c8y_operation, feature)) = self.disabled_feature_for(&operation) {
-            warn!("Received a {c8y_operation} operation, however, {feature} feature is disabled");
+        if let Some((operation_name, feature)) = self.disabled_feature_for(&operation) {
+            warn!("Received a {operation_name} operation, however, {feature} feature is disabled");
             return Ok(vec![]);
         }
 
@@ -556,13 +523,7 @@ impl CumulocityConverter {
             }
             C8yDeviceControlOperation::Custom => {
                 return self
-                    .process_json_custom_operation(
-                        operation_id,
-                        cmd_id,
-                        device_xid,
-                        extras,
-                        message,
-                    )
+                    .process_json_custom_operation(c8y_operation, message)
                     .await;
             }
         };
@@ -624,7 +585,6 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let operation = C8yOperation::from_json(message.payload.as_str()?)?;
         let cmd_id = self.command_id.new_id_with_str(&operation.op_id);
-        let device_xid = operation.external_source.external_id;
 
         if self.commands.is_known(&cmd_id) {
             info!("{cmd_id} is already addressed");
@@ -632,16 +592,14 @@ impl CumulocityConverter {
         }
 
         let result = self
-            .process_json_custom_operation(
-                operation.op_id.clone(),
-                cmd_id.clone(),
-                device_xid.clone(),
-                &operation.extras,
-                message,
-            )
+            .process_json_custom_operation(&operation, message)
             .await;
 
-        let output = self.handle_c8y_operation_result(&result, &device_xid, Some(operation.op_id));
+        let output = self.handle_c8y_operation_result(
+            &result,
+            &operation.external_source.external_id,
+            Some(operation.op_id),
+        );
         self.commands.started(cmd_id);
 
         Ok(output)
@@ -649,12 +607,12 @@ impl CumulocityConverter {
 
     async fn process_json_custom_operation(
         &self,
-        operation_id: String,
-        cmd_id: String,
-        device_xid: String,
-        extras: &HashMap<String, Value>,
+        c8y_operation: &C8yOperation,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let operation_id = &c8y_operation.op_id;
+        let cmd_id = self.command_id.new_id_with_str(operation_id);
+        let device_xid = c8y_operation.external_source.external_id.clone();
         let handlers = self.supported_operations.get_operation_handlers(
             &device_xid,
             &message.topic.name,
@@ -667,7 +625,7 @@ impl CumulocityConverter {
 
         let Some((on_fragment, custom_handler)) = handlers
             .iter()
-            .find(|(on_fragment, _)| extras.contains_key(on_fragment))
+            .find(|(on_fragment, _)| c8y_operation.extras.contains_key(on_fragment))
         else {
             return Ok(vec![]);
         };
@@ -685,62 +643,13 @@ impl CumulocityConverter {
                 );
             }
             None => {
-                self.execute_custom_operation(custom_handler, message, &operation_id)
+                self.execute_custom_operation(custom_handler, message, operation_id)
                     .await?;
             }
         }
 
         // MQTT messages are sent during the operation execution
         Ok(vec![])
-    }
-
-    async fn execute_custom_operation(
-        &self,
-        custom_handler: &Operation,
-        message: &MqttMessage,
-        operation_id: &str,
-    ) -> Result<(), CumulocityMapperError> {
-        let state = GenericCommandState::from_command_message(message).map_err(|e| {
-            CumulocityMapperError::JsonCustomOperationHandlerError {
-                operation: custom_handler.name.clone(),
-                err_msg: format!("Invalid JSON message, {e}. Message: {message:?}"),
-            }
-        })?;
-        let command_value = custom_handler.command().ok_or(
-            CumulocityMapperError::JsonCustomOperationHandlerError {
-                operation: custom_handler.name.clone(),
-                err_msg: "'command' is missing".to_string(),
-            },
-        )?;
-        let script_template = ShellScript::from_str(&command_value).map_err(|e| {
-            CumulocityMapperError::JsonCustomOperationHandlerError {
-                operation: custom_handler.name.clone(),
-                err_msg: format!("Fail to parse the script {command_value}: {e}"),
-            }
-        })?;
-        let script = script_template.inject_values(&state);
-
-        self.execute_operation(script, custom_handler, Some(operation_id.into()))
-            .await?;
-
-        Ok(())
-    }
-
-    async fn parse_c8y_smartrest_topics(
-        &mut self,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut output: Vec<MqttMessage> = Vec::new();
-        for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
-            let result = self.process_smartrest(smartrest_message.as_str()).await;
-            let mut msgs = self.handle_c8y_operation_result(
-                &result,
-                self.entity_cache.main_device_external_id().as_ref(),
-                None,
-            );
-            output.append(&mut msgs)
-        }
-        Ok(output)
     }
 
     fn handle_c8y_operation_result(
@@ -779,30 +688,6 @@ impl CumulocityConverter {
             }
 
             Ok(msgs) => msgs.to_owned(),
-        }
-    }
-
-    async fn process_smartrest(
-        &mut self,
-        payload: &str,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        match get_smartrest_device_id(payload) {
-            Some(device_id) => {
-                match get_smartrest_template_id(payload).as_str() {
-                    template if device_id == self.device_name => {
-                        self.forward_operation_request(payload, template).await
-                    }
-                    _ => {
-                        // Ignore any other child device incoming request as not yet supported
-                        debug!("Ignored. Message not yet supported: {payload}");
-                        Ok(vec![])
-                    }
-                }
-            }
-            None => {
-                debug!("Ignored. Message not yet supported: {payload}");
-                Ok(vec![])
-            }
         }
     }
 
@@ -862,104 +747,6 @@ impl CumulocityConverter {
         let request = SoftwareListCommand::new(target, cmd_id.clone());
         self.commands.software_list_requested(cmd_id, target);
         request.command_message(&self.mqtt_schema)
-    }
-
-    async fn forward_operation_request(
-        &mut self,
-        payload: &str,
-        template: &str,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        if let Some(operation) = self
-            .supported_operations
-            .matching_smartrest_template(template)
-        {
-            if let Some(command) = operation.command() {
-                let script = ShellScript {
-                    command,
-                    args: vec![payload.to_string()],
-                };
-                self.execute_operation(script, operation, None).await?;
-            }
-        }
-        // MQTT messages will be sent during the operation execution
-        Ok(vec![])
-    }
-
-    async fn execute_operation(
-        &self,
-        script: ShellScript,
-        operation: &Operation,
-        operation_id: Option<String>,
-    ) -> Result<(), CumulocityMapperError> {
-        let operation_name = operation.name.clone();
-        let execute_failed = |error_message: String| CumulocityMapperError::ExecuteFailed {
-            error_message,
-            command: script.command.clone(),
-            operation_name: operation_name.clone(),
-        };
-
-        let tmp_dir = self.config.tmp_dir.root();
-        if !tmp_dir.exists() {
-            return Err(execute_failed(format!(
-                "the configured tmp.path '{tmp_dir}' does not exist"
-            )));
-        }
-
-        let mut logged = LoggedCommand::new(&script.command, tmp_dir)
-            .map_err(|e| execute_failed(e.to_string()))?;
-        if let Some(profile) = &self.config.cloud_profile {
-            logged.env("TEDGE_CLOUD_PROFILE", profile);
-        }
-        logged.args(&script.args);
-        let child_process = logged
-            .spawn()
-            .map_err(|e| execute_failed(e.to_string()))?
-            .with_exit_wait_after_kill(self.config.custom_operation_exit_wait_after_kill);
-
-        let mut command_log = self
-            .config
-            .logs_path
-            .new_log_file(operation_name.clone(), self.command_id.new_id())
-            .await?;
-
-        let c8y_operation = OperationReference::new(
-            operation_id,
-            self.config.smartrest_use_operation_id,
-            operation_name.clone(),
-        );
-        let skip_status_update = operation.skip_status_update();
-        let mut mqtt_publisher = self.mqtt_publisher.clone();
-        let topic = C8yTopic::upstream_topic(&self.config.bridge_config.c8y_prefix);
-        let result_format = operation.result_format();
-        let graceful_timeout = operation.graceful_timeout();
-        let forceful_timeout = operation.forceful_timeout();
-
-        tokio::spawn(
-            async move {
-                if !skip_status_update {
-                    publish_status(&mut mqtt_publisher, &topic, c8y_operation.executing()).await;
-                }
-
-                let outcome = child_process
-                    .wait_for_output_with_timeout(
-                        &mut command_log,
-                        graceful_timeout,
-                        forceful_timeout,
-                    )
-                    .await;
-                if let Err(err) = &outcome {
-                    error!("Failed to run the {operation_name} operation: {err}");
-                }
-
-                // Built even when not published, to log an output that cannot be reported
-                let status = final_status(&c8y_operation, outcome, result_format);
-                if !skip_status_update {
-                    publish_status(&mut mqtt_publisher, &topic, status).await;
-                }
-            }
-            .instrument(tracing::Span::current()),
-        );
-        Ok(())
     }
 }
 
@@ -1043,55 +830,21 @@ impl CumulocityConverter {
                 self.try_convert_entity_twin_data(&source, &entity_type, message, fragment_key)
             }
 
-            Channel::Measurement { .. } => Ok(vec![]),
-            Channel::Event { .. } => Ok(vec![]),
-            Channel::Alarm { .. } => Ok(vec![]),
-
             Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
                 // The command has been fully processed
                 self.commands.completed(cmd_id);
                 Ok(vec![])
             }
 
-            Channel::CommandMetadata { operation } => {
-                if entity_type == EntityType::Service && operation == &OperationType::Control {
-                    return self.convert_control_metadata(&source, message).await;
-                }
+            Channel::CommandMetadata {
+                operation: OperationType::Control,
+            } if entity_type == EntityType::Service => {
+                self.convert_control_metadata(&source, message).await
+            }
 
-                // https://github.com/thin-edge/thin-edge.io/issues/2739
-                if message.payload().is_empty() {
-                    warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing device capabilities is not currently supported");
-                    return Ok(vec![]);
-                }
-                match operation {
-                    OperationType::Restart => self.register_restart_operation(&source).await,
-                    OperationType::SoftwareList => {
-                        self.register_software_list_operation(&source, message)
-                            .await
-                    }
-                    OperationType::SoftwareUpdate => {
-                        self.register_software_update_operation(&source, message)
-                            .await
-                    }
-                    OperationType::LogUpload => self.convert_log_metadata(&source, message).await,
-                    OperationType::ConfigSnapshot => {
-                        self.convert_config_snapshot_metadata(&source, message)
-                            .await
-                    }
-                    OperationType::ConfigUpdate => {
-                        self.convert_config_update_metadata(&source, message).await
-                    }
-                    OperationType::FirmwareUpdate => {
-                        self.register_firmware_update_operation(&source).await
-                    }
-                    OperationType::DeviceProfile => {
-                        self.register_device_profile_operation(&source).await
-                    }
-                    OperationType::Custom(command_name) => {
-                        self.register_custom_operation(&source, command_name).await
-                    }
-                    _ => Ok(vec![]),
-                }
+            Channel::CommandMetadata { operation } => {
+                self.convert_command_metadata(&source, operation, message)
+                    .await
             }
 
             Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
@@ -1111,8 +864,44 @@ impl CumulocityConverter {
 
             Channel::Signal { signal_type } => self.process_signal_message(&source, signal_type),
 
-            Channel::Health => Ok(vec![]),
+            // Measurements, events, alarms and health statuses are converted by flows
+            _ => Ok(vec![]),
+        }
+    }
 
+    /// Registers the capability declared by an entity for an operation
+    async fn convert_command_metadata(
+        &mut self,
+        source: &EntityTopicId,
+        operation: &OperationType,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        // https://github.com/thin-edge/thin-edge.io/issues/2739
+        if message.payload().is_empty() {
+            warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing device capabilities is not currently supported");
+            return Ok(vec![]);
+        }
+        match operation {
+            OperationType::Restart => self.register_restart_operation(source).await,
+            OperationType::SoftwareList => {
+                self.register_software_list_operation(source, message).await
+            }
+            OperationType::SoftwareUpdate => {
+                self.register_software_update_operation(source, message)
+                    .await
+            }
+            OperationType::LogUpload => self.convert_log_metadata(source, message).await,
+            OperationType::ConfigSnapshot => {
+                self.convert_config_snapshot_metadata(source, message).await
+            }
+            OperationType::ConfigUpdate => {
+                self.convert_config_update_metadata(source, message).await
+            }
+            OperationType::FirmwareUpdate => self.register_firmware_update_operation(source).await,
+            OperationType::DeviceProfile => self.register_device_profile_operation(source).await,
+            OperationType::Custom(command_name) => {
+                self.register_custom_operation(source, command_name).await
+            }
             _ => Ok(vec![]),
         }
     }
@@ -1200,11 +989,6 @@ impl CumulocityConverter {
         Ok(supported_operations_message)
     }
 
-    pub fn sync_messages(&mut self) -> Vec<MqttMessage> {
-        // FIXME clean-up alarm sync on c8y actor
-        vec![]
-    }
-
     fn try_process_operation_update_message(
         &mut self,
         message: &DiscoverOp,
@@ -1224,53 +1008,6 @@ impl CumulocityConverter {
         } else {
             Ok(None)
         }
-    }
-}
-
-/// The status update reporting how an operation's command ended
-fn final_status(
-    c8y_operation: &OperationReference,
-    outcome: Result<Output, std::io::Error>,
-    result_format: ResultFormat,
-) -> SmartrestPayload {
-    let output = match outcome {
-        Ok(output) => output,
-        Err(err) => return c8y_operation.failed(&err.to_string()),
-    };
-    if !output.status.success() {
-        let reason = get_failure_reason_for_smartrest(&output.stderr, MAX_PAYLOAD_LIMIT_IN_BYTES);
-        return c8y_operation.failed(&reason);
-    }
-
-    // Not truncated here, as the characters rejected by Cumulocity
-    // are removed before the result is truncated to fit the message
-    let stdout = String::from_utf8(output.stdout).unwrap_or_else(|err| {
-        error!("The output contains invalid UTF-8: {err}");
-        String::new()
-    });
-    let result = match result_format {
-        ResultFormat::Text => TextOrCsv::Text(stdout),
-        ResultFormat::Csv => EmbeddedCsv::new(stdout).into(),
-    };
-    c8y_operation.succeeded(result).unwrap_or_else(|err| {
-        let reason = format!(
-            "{:?}",
-            anyhow::Error::from(err).context(
-                "Custom operation process exited successfully, but couldn't convert output to valid SmartREST message"
-            )
-        );
-        c8y_operation.failed(&reason)
-    })
-}
-
-async fn publish_status(
-    mqtt_publisher: &mut LoggingSender<MqttMessage>,
-    topic: &Topic,
-    status: SmartrestPayload,
-) {
-    let message = MqttMessage::new(topic, status.as_str());
-    if let Err(err) = mqtt_publisher.send(message).await {
-        error!("Failed to publish a message: {status}. Error: {err}");
     }
 }
 
@@ -1426,23 +1163,6 @@ impl CumulocityConverter {
         }
         Ok(registration)
     }
-}
-
-/// Lists all the locally available child devices linked to this parent device.
-///
-/// The set of all locally available child devices is defined as any directory
-/// created under "`config_dir`/operations/c8y" for example "/etc/tedge/operations/c8y"
-pub fn get_local_child_devices_list(path: &Path) -> Result<HashSet<String>, CumulocityMapperError> {
-    Ok(fs::read_dir(path)
-        .map_err(|_| CumulocityMapperError::ReadDirError {
-            dir: PathBuf::from(&path),
-        })?
-        .map(|entry| entry.map(|e| e.path()))
-        .collect::<Result<Vec<PathBuf>, _>>()?
-        .into_iter()
-        .filter(|path| path.is_dir())
-        .map(|entry| entry.file_name().unwrap().to_string_lossy().to_string()) // safe unwrap
-        .collect::<HashSet<String>>())
 }
 
 #[cfg(test)]
