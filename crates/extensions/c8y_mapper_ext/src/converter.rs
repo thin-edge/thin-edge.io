@@ -512,82 +512,47 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let cmd_id = self.command_id.new_id_with_str(&operation_id);
 
-        let msgs = match C8yDeviceControlOperation::from_json_object(extras)? {
+        let operation = C8yDeviceControlOperation::from_json_object(extras)?;
+        if let Some((c8y_operation, feature)) = self.disabled_feature_for(&operation) {
+            warn!("Received a {c8y_operation} operation, however, {feature} feature is disabled");
+            return Ok(vec![]);
+        }
+
+        let msgs = match operation {
             C8yDeviceControlOperation::Restart(_) => {
-                if self.config.capabilities.device_restart {
-                    self.forward_restart_request(device_xid, cmd_id)?
-                } else {
-                    warn!("Received a c8y_Restart operation, however, device_restart feature is disabled");
-                    vec![]
-                }
+                self.forward_restart_request(device_xid, cmd_id)?
             }
             C8yDeviceControlOperation::SoftwareUpdate(request) => {
-                if self.config.capabilities.software_update {
-                    self.forward_software_request(device_xid, cmd_id, request)
-                        .await?
-                } else {
-                    warn!("Received a c8y_SoftwareUpdate operation, however, software_update feature is disabled");
-                    vec![]
-                }
+                self.forward_software_request(device_xid, cmd_id, request)
+                    .await?
             }
             C8yDeviceControlOperation::LogfileRequest(request) => {
-                if self.config.capabilities.log_upload {
-                    self.convert_log_upload_request(device_xid, cmd_id, request)?
-                } else {
-                    warn!("Received a c8y_LogfileRequest operation, however, log_upload feature is disabled");
-                    vec![]
-                }
+                self.convert_log_upload_request(device_xid, cmd_id, request)?
             }
             C8yDeviceControlOperation::UploadConfigFile(request) => {
-                if self.config.capabilities.config_snapshot {
-                    self.convert_config_snapshot_request(device_xid, cmd_id, request)?
-                } else {
-                    warn!("Received a c8y_UploadConfigFile operation, however, config_snapshot feature is disabled");
-                    vec![]
-                }
+                self.convert_config_snapshot_request(device_xid, cmd_id, request)?
             }
             C8yDeviceControlOperation::DownloadConfigFile(request) => {
-                if self.config.capabilities.config_update {
-                    self.convert_config_update_request(device_xid, cmd_id, request)
-                        .await?
-                } else {
-                    warn!("Received a c8y_DownloadConfigFile operation, however, config_update feature is disabled");
-                    vec![]
-                }
+                self.convert_config_update_request(device_xid, cmd_id, request)
+                    .await?
             }
             C8yDeviceControlOperation::Firmware(request) => {
-                if self.config.capabilities.firmware_update {
-                    self.convert_firmware_update_request(device_xid, cmd_id, request)?
-                } else {
-                    warn!("Received a c8y_Firmware operation, however, firmware_update feature is disabled");
+                self.convert_firmware_update_request(device_xid, cmd_id, request)?
+            }
+            C8yDeviceControlOperation::DeviceProfile(request) => match extras.get("profileName") {
+                Some(profile_name) => self.convert_device_profile_request(
+                    device_xid,
+                    cmd_id,
+                    request,
+                    serde_json::from_value(profile_name.clone())?,
+                )?,
+                None => {
+                    error!("Received a c8y_DeviceProfile without a profile name");
                     vec![]
                 }
-            }
-            C8yDeviceControlOperation::DeviceProfile(request) => {
-                if self.config.capabilities.device_profile {
-                    if let Some(profile_name) = extras.get("profileName") {
-                        self.convert_device_profile_request(
-                            device_xid,
-                            cmd_id,
-                            request,
-                            serde_json::from_value(profile_name.clone())?,
-                        )?
-                    } else {
-                        error!("Received a c8y_DeviceProfile without a profile name");
-                        vec![]
-                    }
-                } else {
-                    warn!("Received a c8y_DeviceProfile operation, however, device_profile feature is disabled");
-                    vec![]
-                }
-            }
+            },
             C8yDeviceControlOperation::ServiceCommand(request) => {
-                if self.config.capabilities.service_control {
-                    self.convert_control_request(device_xid, cmd_id, request)?
-                } else {
-                    warn!("Received a c8y_ServiceCommand operation, however, service_control feature is disabled");
-                    vec![]
-                }
+                self.convert_control_request(device_xid, cmd_id, request)?
             }
             C8yDeviceControlOperation::Custom => {
                 return self
@@ -603,6 +568,54 @@ impl CumulocityConverter {
         };
 
         Ok(msgs)
+    }
+
+    /// The Cumulocity operation name and the feature it requires, if that feature is disabled
+    fn disabled_feature_for(
+        &self,
+        operation: &C8yDeviceControlOperation,
+    ) -> Option<(&'static str, &'static str)> {
+        let capabilities = &self.config.capabilities;
+        let (c8y_operation, feature, enabled) = match operation {
+            C8yDeviceControlOperation::Restart(_) => {
+                ("c8y_Restart", "device_restart", capabilities.device_restart)
+            }
+            C8yDeviceControlOperation::SoftwareUpdate(_) => (
+                "c8y_SoftwareUpdate",
+                "software_update",
+                capabilities.software_update,
+            ),
+            C8yDeviceControlOperation::LogfileRequest(_) => {
+                ("c8y_LogfileRequest", "log_upload", capabilities.log_upload)
+            }
+            C8yDeviceControlOperation::UploadConfigFile(_) => (
+                "c8y_UploadConfigFile",
+                "config_snapshot",
+                capabilities.config_snapshot,
+            ),
+            C8yDeviceControlOperation::DownloadConfigFile(_) => (
+                "c8y_DownloadConfigFile",
+                "config_update",
+                capabilities.config_update,
+            ),
+            C8yDeviceControlOperation::Firmware(_) => (
+                "c8y_Firmware",
+                "firmware_update",
+                capabilities.firmware_update,
+            ),
+            C8yDeviceControlOperation::DeviceProfile(_) => (
+                "c8y_DeviceProfile",
+                "device_profile",
+                capabilities.device_profile,
+            ),
+            C8yDeviceControlOperation::ServiceCommand(_) => (
+                "c8y_ServiceCommand",
+                "service_control",
+                capabilities.service_control,
+            ),
+            C8yDeviceControlOperation::Custom => return None,
+        };
+        (!enabled).then_some((c8y_operation, feature))
     }
 
     async fn parse_json_custom_operation_topic(
@@ -652,25 +665,28 @@ impl CumulocityConverter {
             info!("No matched custom operation handler is found for the subscribed custom operation topics. The operation '{operation_id}' (ID) is ignored.");
         }
 
-        for (on_fragment, custom_handler) in &handlers {
-            if extras.contains_key(on_fragment) {
-                if let Some(command_name) = custom_handler.workflow_operation() {
-                    if self.is_disabled_command(command_name) {
-                        warn!("Received a {on_fragment} operation, however, the shell_execute feature is disabled");
-                        break;
-                    }
-                    return self.convert_custom_operation_request(
-                        device_xid,
-                        cmd_id,
-                        command_name.to_string(),
-                        custom_handler,
-                        message,
-                    );
-                } else {
-                    self.execute_custom_operation(custom_handler, message, &operation_id)
-                        .await?;
-                    break;
-                }
+        let Some((on_fragment, custom_handler)) = handlers
+            .iter()
+            .find(|(on_fragment, _)| extras.contains_key(on_fragment))
+        else {
+            return Ok(vec![]);
+        };
+        match custom_handler.workflow_operation() {
+            Some(command_name) if self.is_disabled_command(command_name) => {
+                warn!("Received a {on_fragment} operation, however, the shell_execute feature is disabled");
+            }
+            Some(command_name) => {
+                return self.convert_custom_operation_request(
+                    device_xid,
+                    cmd_id,
+                    command_name.to_string(),
+                    custom_handler,
+                    message,
+                );
+            }
+            None => {
+                self.execute_custom_operation(custom_handler, message, &operation_id)
+                    .await?;
             }
         }
 
