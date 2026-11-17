@@ -1,4 +1,5 @@
 use super::*;
+use test_case::test_case;
 
 #[tokio::test]
 async fn c8y_mapper_alarm_mapping_to_smartrest() {
@@ -23,12 +24,7 @@ async fn c8y_mapper_child_alarm_mapping_to_smartrest() {
     let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor//",
-        r#"{"@type": "child-device"}"#,
-    )
-    .await;
+    register_external_sensor(&mut mqtt).await;
 
     publish(
         &mut mqtt,
@@ -95,12 +91,7 @@ async fn c8y_mapper_child_alarm_with_custom_fragment_mapping_to_c8y_json() {
     let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor//",
-        r#"{"@type": "child-device"}"#,
-    )
-    .await;
+    register_external_sensor(&mut mqtt).await;
 
     publish(
         &mut mqtt,
@@ -183,12 +174,7 @@ async fn c8y_mapper_child_alarm_with_message_custom_fragment_mapping_to_c8y_json
     let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor//",
-        r#"{"@type": "child-device"}"#,
-    )
-    .await;
+    register_external_sensor(&mut mqtt).await;
 
     publish(
         &mut mqtt,
@@ -229,12 +215,7 @@ async fn c8y_mapper_child_alarm_with_custom_message() {
     let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor//",
-        r#"{"@type": "child-device"}"#,
-    )
-    .await;
+    register_external_sensor(&mut mqtt).await;
 
     publish(
         &mut mqtt,
@@ -307,12 +288,7 @@ async fn c8y_mapper_child_alarm_empty_payload() {
     let (_ttd, mut mqtt) = spawn_mapper().await;
 
     // Register the device upfront
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor//",
-        r#"{"@type": "child-device"}"#,
-    )
-    .await;
+    register_external_sensor(&mut mqtt).await;
 
     publish(
         &mut mqtt,
@@ -435,30 +411,44 @@ async fn c8y_mapper_alarm_empty_json_payload() {
     .await;
 }
 
+#[test_case(
+    &[("te/device/external_sensor//", r#"{"@type": "child-device"}"#)],
+    "te/device/external_sensor///e/custom_event",
+    "test-device:device:external_sensor"
+    ; "child device"
+)]
+#[test_case(
+    &[
+        ("te/device/external_sensor//", r#"{"@type": "child-device"}"#),
+        ("te/device/external_sensor/service/service_child", r#"{"@type": "child-device"}"#),
+    ],
+    "te/device/external_sensor/service/service_child/e/custom_event",
+    "test-device:device:external_sensor:service:service_child"
+    ; "child device service"
+)]
+#[test_case(
+    &[("te/device/main/service/service_main", r#"{"@type": "service"}"#)],
+    "te/device/main/service/service_main/e/custom_event",
+    "test-device:device:main:service:service_main"
+    ; "main device service"
+)]
 #[tokio::test]
-async fn c8y_mapper_child_event() {
+async fn c8y_mapper_entity_event(
+    registrations: &[(&str, &str)],
+    event_topic: &str,
+    external_id: &str,
+) {
     let (_ttd, mut mqtt) = spawn_mapper().await;
+    for (topic, registration) in registrations {
+        publish(&mut mqtt, topic, *registration).await;
+    }
 
-    // Register the device upfront
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor//",
-        r#"{"@type": "child-device"}"#,
-    )
-    .await;
+    let event = json!({
+        "text": "Someone logged-in",
+        "time":"2023-01-25T18:41:14.776170774Z",
+    });
+    publish(&mut mqtt, event_topic, event.to_string()).await;
 
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor///e/custom_event",
-        json!({
-            "text": "Someone logged-in",
-            "time":"2023-01-25T18:41:14.776170774Z",
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted temperature alarm message
     assert_received_includes_json(
         &mut mqtt,
         [(
@@ -468,7 +458,7 @@ async fn c8y_mapper_child_event() {
                 "time":"2023-01-25T18:41:14.776170774Z",
                 "text":"Someone logged-in",
                 "externalSource": {
-                    "externalId":"test-device:device:external_sensor",
+                    "externalId": external_id,
                     "type":"c8y_Serial"
                 }
             }),
@@ -477,167 +467,43 @@ async fn c8y_mapper_child_event() {
     .await;
 }
 
+#[test_case(
+    &[
+        ("te/device/external_sensor//", r#"{"@type": "child-device"}"#),
+        ("te/device/external_sensor/service/service_child", r#"{"@type": "service"}"#),
+    ],
+    "te/device/external_sensor/service/service_child/a/custom_alarm",
+    "c8y/s/us/test-device:device:external_sensor:service:service_child"
+    ; "child device service"
+)]
+#[test_case(
+    &[("te/device/main/service/service_main", r#"{"@type": "service"}"#)],
+    "te/device/main/service/service_main/a/custom_alarm",
+    "c8y/s/us/test-device:device:main:service:service_main"
+    ; "main device service"
+)]
 #[tokio::test]
-async fn c8y_mapper_child_service_event() {
+async fn c8y_mapper_service_alarm(
+    registrations: &[(&str, &str)],
+    alarm_topic: &str,
+    smartrest_topic: &str,
+) {
     let (_ttd, mut mqtt) = spawn_mapper().await;
+    for (topic, registration) in registrations {
+        publish(&mut mqtt, topic, *registration).await;
+    }
 
-    // Register the device upfront
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor//",
-        r#"{"@type": "child-device"}"#,
-    )
-    .await;
-    // Register the device upfront
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor/service/service_child",
-        r#"{"@type": "child-device"}"#,
-    )
-    .await;
+    let alarm = json!({
+        "severity":"critical",
+        "text": "temperature alarm",
+        "time":"2023-01-25T18:41:14.776170774Z",
+    });
+    publish(&mut mqtt, alarm_topic, alarm.to_string()).await;
 
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor/service/service_child/e/custom_event",
-        json!({
-            "text": "Someone logged-in",
-            "time":"2023-01-25T18:41:14.776170774Z",
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted event message
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "c8y/event/events/create",
-            json!({
-                "type":"custom_event",
-                "time":"2023-01-25T18:41:14.776170774Z",
-                "text":"Someone logged-in",
-                "externalSource": {
-                    "externalId":"test-device:device:external_sensor:service:service_child",
-                    "type":"c8y_Serial"
-                }
-            }),
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_main_service_event() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    // Register the service upfront
-    publish(
-        &mut mqtt,
-        "te/device/main/service/service_main",
-        r#"{"@type": "service"}"#,
-    )
-    .await;
-
-    publish(
-        &mut mqtt,
-        "te/device/main/service/service_main/e/custom_event",
-        json!({
-            "text": "Someone logged-in",
-            "time":"2023-01-25T18:41:14.776170774Z",
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted event for the main device service
-    assert_received_includes_json(
-        &mut mqtt,
-        [(
-            "c8y/event/events/create",
-            json!({
-                "type":"custom_event",
-                "time":"2023-01-25T18:41:14.776170774Z",
-                "text":"Someone logged-in",
-                "externalSource": {
-                    "externalId":"test-device:device:main:service:service_main",
-                    "type":"c8y_Serial"
-                }
-            }),
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_child_service_alarm() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    // Register the device and service upfront
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor//",
-        r#"{"@type": "child-device"}"#,
-    )
-    .await;
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor/service/service_child",
-        r#"{"@type": "service"}"#,
-    )
-    .await;
-
-    publish(
-        &mut mqtt,
-        "te/device/external_sensor/service/service_child/a/custom_alarm",
-        json!({
-            "severity":"critical",
-            "text": "temperature alarm",
-            "time":"2023-01-25T18:41:14.776170774Z",
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted alarm for the main device service
     assert_received_contains_str(
         &mut mqtt,
         [(
-            "c8y/s/us/test-device:device:external_sensor:service:service_child",
-            "301,custom_alarm,temperature alarm,2023-01-25T18:41:14.776170774Z",
-        )],
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn c8y_mapper_main_service_alarm() {
-    let (_ttd, mut mqtt) = spawn_mapper().await;
-
-    // Register the service upfront
-    publish(
-        &mut mqtt,
-        "te/device/main/service/service_main",
-        r#"{"@type": "service"}"#,
-    )
-    .await;
-
-    publish(
-        &mut mqtt,
-        "te/device/main/service/service_main/a/custom_alarm",
-        json!({
-            "severity":"critical",
-            "text": "temperature alarm",
-            "time":"2023-01-25T18:41:14.776170774Z",
-        })
-        .to_string(),
-    )
-    .await;
-
-    // Expect converted alarm for the main device service
-    assert_received_contains_str(
-        &mut mqtt,
-        [(
-            "c8y/s/us/test-device:device:main:service:service_main",
+            smartrest_topic,
             "301,custom_alarm,temperature alarm,2023-01-25T18:41:14.776170774Z",
         )],
     )
@@ -673,27 +539,7 @@ async fn c8y_mapper_alarm_complex_text_fragment_in_payload_failed() {
 async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
     let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/immediate_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/main//",
-            "@id":"immediate_child"
-        })
-        .to_string(),
-    );
-    mqtt.send(reg_message).await.unwrap();
-
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/immediate_child//",
-            "@id":"nested_child"
-        })
-        .to_string(),
-    );
-    mqtt.send(reg_message).await.unwrap();
+    register_nested_child(&mut mqtt).await;
 
     publish(&mut mqtt, "te/device/nested_child///a/", json!({ "severity": "minor", "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string()).await;
 
@@ -722,27 +568,7 @@ async fn c8y_mapper_nested_child_alarm_mapping_to_smartrest() {
 async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
     let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/immediate_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/main//",
-            "@id":"immediate_child"
-        })
-        .to_string(),
-    );
-    mqtt.send(reg_message).await.unwrap();
-
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/immediate_child//",
-            "@id":"nested_child"
-        })
-        .to_string(),
-    );
-    mqtt.send(reg_message).await.unwrap();
+    register_nested_child(&mut mqtt).await;
 
     publish(
         &mut mqtt,
@@ -785,39 +611,7 @@ async fn c8y_mapper_nested_child_event_mapping_to_smartrest() {
 async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
     let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/immediate_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/main//",
-            "@id":"immediate_child"
-        })
-        .to_string(),
-    );
-    mqtt.send(reg_message).await.unwrap();
-
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/immediate_child//",
-            "@id":"nested_child"
-        })
-        .to_string(),
-    );
-    mqtt.send(reg_message).await.unwrap();
-
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child/service/nested_service"),
-        json!({
-            "@type":"service",
-            "@parent":"device/nested_child//",
-            "@id":"nested_service"
-        })
-        .to_string(),
-    );
-
-    mqtt.send(reg_message).await.unwrap();
+    register_nested_service(&mut mqtt).await;
 
     publish(&mut mqtt, "te/device/nested_child/service/nested_service/a/", json!({ "severity": "minor", "text": "Temperature high","time":"2023-10-13T15:00:07.172674353Z" }).to_string()).await;
 
@@ -836,39 +630,7 @@ async fn c8y_mapper_nested_child_service_alarm_mapping_to_smartrest() {
 async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
     let (_ttd, mut mqtt) = spawn_mapper().await;
 
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/immediate_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/main//",
-            "@id":"immediate_child"
-        })
-        .to_string(),
-    );
-    mqtt.send(reg_message).await.unwrap();
-
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child//"),
-        json!({
-            "@type":"child-device",
-            "@parent":"device/immediate_child//",
-            "@id":"nested_child"
-        })
-        .to_string(),
-    );
-    mqtt.send(reg_message).await.unwrap();
-
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/nested_child/service/nested_service"),
-        json!({
-            "@type":"service",
-            "@parent":"device/nested_child//",
-            "@id":"nested_service"
-        })
-        .to_string(),
-    );
-
-    mqtt.send(reg_message).await.unwrap();
+    register_nested_service(&mut mqtt).await;
 
     publish(
         &mut mqtt,
@@ -889,6 +651,53 @@ async fn c8y_mapper_nested_child_service_event_mapping_to_smartrest() {
                 "externalSource":{"externalId":"nested_service","type":"c8y_Serial"}
             }),
         )],
+    )
+    .await;
+}
+
+/// Registers the `external_sensor` child device of the main device
+async fn register_external_sensor<M: Sender<MqttMessage>>(mqtt: &mut TestMqttBox<M>) {
+    publish(
+        mqtt,
+        "te/device/external_sensor//",
+        r#"{"@type": "child-device"}"#,
+    )
+    .await;
+}
+
+/// Registers the `nested_child` device, a child of `immediate_child`, itself a child of the main device
+async fn register_nested_child<M: Sender<MqttMessage>>(mqtt: &mut TestMqttBox<M>) {
+    let immediate_child = json!({
+        "@type":"child-device",
+        "@parent":"device/main//",
+        "@id":"immediate_child"
+    });
+    publish(
+        mqtt,
+        "te/device/immediate_child//",
+        immediate_child.to_string(),
+    )
+    .await;
+    let nested_child = json!({
+        "@type":"child-device",
+        "@parent":"device/immediate_child//",
+        "@id":"nested_child"
+    });
+    publish(mqtt, "te/device/nested_child//", nested_child.to_string()).await;
+}
+
+/// Registers the `nested_service` service of the `nested_child` device
+async fn register_nested_service<M: Sender<MqttMessage>>(mqtt: &mut TestMqttBox<M>) {
+    register_nested_child(mqtt).await;
+    let nested_service = json!({
+        "@type":"service",
+        "@parent":"device/nested_child//",
+        "@id":"nested_service"
+    });
+    publish(
+        mqtt,
+        "te/device/nested_child/service/nested_service",
+        nested_service.to_string(),
     )
     .await;
 }
