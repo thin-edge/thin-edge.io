@@ -174,7 +174,8 @@ Documenting the hazard is not a substitute.
 ### Tools
 
 - `#[tokio::test]` for async tests.
-- `rstest` for parameterised tests (`test-case` is also used, but `rstest` is preferred for new tests).
+- `rstest` for parameterised tests.
+  In a file that already uses `test-case`, use `test-case` for new parameterised tests.
 - `pretty_assertions` for readable diffs, `assert_matches!` for matching on enum shapes. **(polish)**
 - `tedge_test_utils::fs::TempTedgeDir` for temporary config and data directories.
 - Actor tests inject messages through message boxes
