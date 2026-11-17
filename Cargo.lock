@@ -5632,6 +5632,7 @@ dependencies = [
  "humantime",
  "nix",
  "predicates",
+ "rstest",
  "serde",
  "serde_json",
  "tedge_config",
