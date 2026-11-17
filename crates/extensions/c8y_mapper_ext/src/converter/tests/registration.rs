@@ -2,46 +2,25 @@ use super::*;
 use rstest::rstest;
 use test_case::test_case;
 
+#[test_case(
+    false,
+    "101,test-device:device:child1,child1,thin-edge.io-child,false"
+    ; "with the default fragments"
+)]
+#[test_case(
+    true,
+    "101,test-device:device:child1,child1,thin-edge.io-child,true"
+    ; "with the device fragment"
+)]
 #[tokio::test]
-async fn convert_child_device_registration() {
-    let tmp_dir = TempTedgeDir::new();
-    let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
-
-    let in_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/child1//"),
-        json!({
-            "@type":"child-device",
-            "name":"child1"
-        })
-        .to_string(),
-    );
-    let UpdateOutcome::Inserted(entities) = converter
-        .process_entity_metadata_message(&in_message)
-        .await
-        .unwrap()
-    else {
-        panic!("Expected insert outcome");
-    };
-
-    assert_eq!(entities.len(), 1);
-
-    let messages = converter.convert(&in_message).await;
-
-    assert_messages_present(
-        &messages,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:child1,child1,thin-edge.io-child,false".into(),
-        )],
-    );
-}
-
-#[tokio::test]
-async fn convert_child_device_registration_control_is_device_fragment() {
+async fn convert_child_device_registration(
+    create_with_device_marker: bool,
+    expected: &'static str,
+) {
     let tmp_dir = TempTedgeDir::new();
     let mut config = c8y_converter_config(&tmp_dir);
-    config.smartrest_child_device_create_with_device_marker = true;
-    let (mut converter, _) = create_c8y_converter_from_config(config);
+    config.smartrest_child_device_create_with_device_marker = create_with_device_marker;
+    let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
 
     let in_message = MqttMessage::new(
         &Topic::new_unchecked("te/device/child1//"),
@@ -63,13 +42,7 @@ async fn convert_child_device_registration_control_is_device_fragment() {
 
     let messages = converter.convert(&in_message).await;
 
-    assert_messages_present(
-        &messages,
-        [(
-            "c8y/s/us",
-            "101,test-device:device:child1,child1,thin-edge.io-child,true".into(),
-        )],
-    );
+    assert_messages_present(&messages, [("c8y/s/us", expected.into())]);
 }
 
 #[test_case("device/main//", "test-device")]
@@ -278,57 +251,26 @@ async fn early_messages_cached_and_processed_only_after_registration() {
 #[tokio::test]
 async fn early_child_device_registrations_processed_only_after_parent_registration() {
     let tmp_dir = TempTedgeDir::new();
-    let config = c8y_converter_config(&tmp_dir);
+    let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+    let registrations = [
+        ("te/device/child0//", child_device("child0", "main")),
+        ("te/device/child00//", child_device("child00", "child0")),
+        ("te/device/child000//", child_device("child000", "child00")),
+    ];
 
-    let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
-
-    // Publish great-grand-child registration before grand-child and child
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/child000//"),
-        json!({
-            "@type": "child-device",
-            "@id": "child000",
-            "name": "child000",
-            "@parent": "device/child00//",
-        })
-        .to_string(),
-    );
-
-    let outcome = converter
-        .process_entity_metadata_message(&reg_message)
-        .await
-        .unwrap();
-    assert_eq!(outcome, UpdateOutcome::Unchanged);
-
-    // Publish grand-child registration before child
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/child00//"),
-        json!({
-            "@type": "child-device",
-            "@id": "child00",
-            "name": "child00",
-            "@parent": "device/child0//",
-        })
-        .to_string(),
-    );
-
-    let outcome = converter
-        .process_entity_metadata_message(&reg_message)
-        .await
-        .unwrap();
-    assert_eq!(outcome, UpdateOutcome::Unchanged);
+    // Publish great-grand-child registration, then grand-child registration, before child
+    for (topic, registration) in registrations.iter().skip(1).rev() {
+        let reg_message = MqttMessage::new(&Topic::new_unchecked(topic), registration.to_string());
+        let outcome = converter
+            .process_entity_metadata_message(&reg_message)
+            .await
+            .unwrap();
+        assert_eq!(outcome, UpdateOutcome::Unchanged);
+    }
 
     // Register the immediate child device which will trigger the conversion of cached messages as well
-    let reg_message = MqttMessage::new(
-        &Topic::new_unchecked("te/device/child0//"),
-        json!({
-            "@type": "child-device",
-            "@id": "child0",
-            "name": "child0",
-            "@parent": "device/main//",
-        })
-        .to_string(),
-    );
+    let (topic, registration) = &registrations[0];
+    let reg_message = MqttMessage::new(&Topic::new_unchecked(topic), registration.to_string());
     let UpdateOutcome::Inserted(entities) = converter
         .process_entity_metadata_message(&reg_message)
         .await
@@ -339,38 +281,7 @@ async fn early_child_device_registrations_processed_only_after_parent_registrati
     let messages = registered_entities_into_mqtt_messages(entities);
     assert_messages_matching(
         &messages,
-        [
-            (
-                "te/device/child0//",
-                json!({
-                    "@type": "child-device",
-                    "@id": "child0",
-                    "name": "child0",
-                    "@parent": "device/main//",
-                })
-                .into(),
-            ),
-            (
-                "te/device/child00//",
-                json!({
-                    "@type": "child-device",
-                    "@id": "child00",
-                    "name": "child00",
-                    "@parent": "device/child0//",
-                })
-                .into(),
-            ),
-            (
-                "te/device/child000//",
-                json!({
-                    "@type": "child-device",
-                    "@id": "child000",
-                    "name": "child000",
-                    "@parent": "device/child00//",
-                })
-                .into(),
-            ),
-        ],
+        registrations.map(|(topic, registration)| (topic, registration.into())),
     );
 }
 
@@ -447,4 +358,14 @@ fn registered_entities_into_mqtt_messages(entities: Vec<RegisteredEntityData>) -
         }
     }
     messages
+}
+
+/// The registration of a child device of the given parent device
+fn child_device(id: &str, parent: &str) -> serde_json::Value {
+    json!({
+        "@type": "child-device",
+        "@id": id,
+        "name": id,
+        "@parent": format!("device/{parent}//"),
+    })
 }
