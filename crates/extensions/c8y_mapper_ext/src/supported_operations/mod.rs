@@ -66,6 +66,28 @@ pub struct SupportedOperations {
 }
 
 impl SupportedOperations {
+    /// Loads the supported operations of the main device and of its child devices
+    ///
+    /// # Errors
+    /// Returns an error if an operations directory or an operation file cannot be read or parsed
+    pub fn load_all_devices<C: Record + C8yPrefix>(
+        device_id: String,
+        base_ops_dir: Arc<ManagedDir>,
+        bridge_config: &C,
+    ) -> Result<Self, OperationsError> {
+        let ops_dir = base_ops_dir.path();
+        let mut operations_by_xid = operation::get_child_ops(ops_dir, bridge_config)?;
+        operations_by_xid.insert(
+            device_id.clone(),
+            Operations::try_new(ops_dir, bridge_config)?,
+        );
+        Ok(SupportedOperations {
+            device_id,
+            base_ops_dir,
+            operations_by_xid,
+        })
+    }
+
     /// Add an operation to the supported operation set for a given device.
     ///
     /// Creates and writes new operation file to the filesystem.
