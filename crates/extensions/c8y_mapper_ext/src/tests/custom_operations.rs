@@ -295,44 +295,19 @@ EOF
 
 #[tokio::test]
 async fn json_custom_operation_status_update_with_operation_id() {
-    let ttd = TempTedgeDir::new();
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(
-            r#"[exec]
-            command = "echo ${.payload.c8y_Command.text}"
-            on_fragment = "c8y_Command"
-            "#,
-        );
-
-    let config = C8yMapperConfig {
-        smartrest_use_operation_id: true,
-        ..test_mapper_config(&ttd)
-    };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    // Simulate c8y_Command SmartREST request
-    let input_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
-        json!({
-                 "status":"PENDING",
-                 "id": "1234",
-                 "c8y_Command": {
-                     "text": "do something"
-                 },
-            "externalSource":{
-           "externalId":"test-device",
-           "type":"c8y_Serial"
-        }
-             })
-        .to_string(),
-    );
-    mqtt.send(input_message).await.expect("Send failed");
+    let (_mapper, mut mqtt) = send_c8y_command(
+        r#"[exec]
+        command = "echo ${.payload.c8y_Command.text}"
+        on_fragment = "c8y_Command"
+        "#,
+        |config| C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..config
+        },
+        "c8y/devicecontrol/notifications",
+        json!({ "text": "do something" }),
+    )
+    .await;
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234,\"do something\n\"")]).await;
@@ -340,41 +315,20 @@ async fn json_custom_operation_status_update_with_operation_id() {
 
 #[tokio::test]
 async fn json_custom_operation_receives_cloud_profile_env() {
-    let ttd = TempTedgeDir::new();
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(
-            r#"[exec]
-            command = "sh -c 'printf %s \"$TEDGE_CLOUD_PROFILE\"'"
-            on_fragment = "c8y_Command"
-            "#,
-        );
-
-    let config = C8yMapperConfig {
-        cloud_profile: Some(ProfileName::try_from("profile-a".to_string()).unwrap()),
-        smartrest_use_operation_id: true,
-        ..test_mapper_config(&ttd)
-    };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    let input_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
-        json!({
-            "status":"PENDING",
-            "id": "1234",
-            "c8y_Command": {},
-            "externalSource":{
-                "externalId":"test-device",
-                "type":"c8y_Serial"
-            }
-        })
-        .to_string(),
-    );
-    mqtt.send(input_message).await.expect("Send failed");
+    let (_mapper, mut mqtt) = send_c8y_command(
+        r#"[exec]
+        command = "sh -c 'printf %s \"$TEDGE_CLOUD_PROFILE\"'"
+        on_fragment = "c8y_Command"
+        "#,
+        |config| C8yMapperConfig {
+            cloud_profile: Some(ProfileName::try_from("profile-a".to_string()).unwrap()),
+            smartrest_use_operation_id: true,
+            ..config
+        },
+        "c8y/devicecontrol/notifications",
+        json!({}),
+    )
+    .await;
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234,profile-a")]).await;
@@ -382,41 +336,20 @@ async fn json_custom_operation_receives_cloud_profile_env() {
 
 #[tokio::test]
 async fn custom_operation_csv_result_is_reported_without_escape_sequences() {
-    let ttd = TempTedgeDir::new();
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(
-            r#"[exec]
-            command = "printf 'foo\\033,\\033[1mbar\\033[0m'"
-            on_fragment = "c8y_Command"
-            result_format = "csv"
-            "#,
-        );
-
-    let config = C8yMapperConfig {
-        smartrest_use_operation_id: true,
-        ..test_mapper_config(&ttd)
-    };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    let input_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
-        json!({
-            "status":"PENDING",
-            "id": "1234",
-            "c8y_Command": {},
-            "externalSource":{
-                "externalId":"test-device",
-                "type":"c8y_Serial"
-            }
-        })
-        .to_string(),
-    );
-    mqtt.send(input_message).await.expect("Send failed");
+    let (_mapper, mut mqtt) = send_c8y_command(
+        r#"[exec]
+        command = "printf 'foo\\033,\\033[1mbar\\033[0m'"
+        on_fragment = "c8y_Command"
+        result_format = "csv"
+        "#,
+        |config| C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..config
+        },
+        "c8y/devicecontrol/notifications",
+        json!({}),
+    )
+    .await;
 
     // The comma following the escape character is kept as a CSV delimiter
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
@@ -425,41 +358,20 @@ async fn custom_operation_csv_result_is_reported_without_escape_sequences() {
 
 #[tokio::test]
 async fn custom_operation_result_escape_sequences_do_not_count_toward_the_size_limit() {
-    let ttd = TempTedgeDir::new();
     // 1818 lines of 11 bytes, i.e. 19998 bytes, but only 3636 bytes without the escape sequences
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(
-            r#"[exec]
-            command = '''sh -c 'for i in $(seq 1818); do printf "\033[31mX\033[0m\n"; done' '''
-            on_fragment = "c8y_Command"
-            "#,
-        );
-
-    let config = C8yMapperConfig {
-        smartrest_use_operation_id: true,
-        ..test_mapper_config(&ttd)
-    };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    let input_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
-        json!({
-            "status":"PENDING",
-            "id": "1234",
-            "c8y_Command": {},
-            "externalSource":{
-                "externalId":"test-device",
-                "type":"c8y_Serial"
-            }
-        })
-        .to_string(),
-    );
-    mqtt.send(input_message).await.expect("Send failed");
+    let (_mapper, mut mqtt) = send_c8y_command(
+        r#"[exec]
+        command = '''sh -c 'for i in $(seq 1818); do printf "\033[31mX\033[0m\n"; done' '''
+        on_fragment = "c8y_Command"
+        "#,
+        |config| C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..config
+        },
+        "c8y/devicecontrol/notifications",
+        json!({}),
+    )
+    .await;
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
     let expected = format!("506,1234,\"{}\"", "X\n".repeat(1818));
@@ -468,43 +380,22 @@ async fn custom_operation_result_escape_sequences_do_not_count_toward_the_size_l
 
 #[tokio::test]
 async fn json_custom_operation_without_cloud_profile_receives_no_env() {
-    let ttd = TempTedgeDir::new();
     // The script wraps the profile in BEGIN/END markers so an empty value is
     // distinguishable from a leaked one under the substring-based assertion.
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(
-            r#"[exec]
-            command = "sh -c 'printf BEGIN%sEND \"$TEDGE_CLOUD_PROFILE\"'"
-            on_fragment = "c8y_Command"
-            "#,
-        );
-
-    let config = C8yMapperConfig {
-        cloud_profile: None,
-        smartrest_use_operation_id: true,
-        ..test_mapper_config(&ttd)
-    };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-    let input_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
-        json!({
-            "status":"PENDING",
-            "id": "1234",
-            "c8y_Command": {},
-            "externalSource":{
-                "externalId":"test-device",
-                "type":"c8y_Serial"
-            }
-        })
-        .to_string(),
-    );
-    mqtt.send(input_message).await.expect("Send failed");
+    let (_mapper, mut mqtt) = send_c8y_command(
+        r#"[exec]
+        command = "sh -c 'printf BEGIN%sEND \"$TEDGE_CLOUD_PROFILE\"'"
+        on_fragment = "c8y_Command"
+        "#,
+        |config| C8yMapperConfig {
+            cloud_profile: None,
+            smartrest_use_operation_id: true,
+            ..config
+        },
+        "c8y/devicecontrol/notifications",
+        json!({}),
+    )
+    .await;
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234,BEGINEND")]).await;
@@ -605,44 +496,19 @@ async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() 
 
 #[tokio::test]
 async fn json_custom_operation_status_update_with_operation_name() {
-    let ttd = TempTedgeDir::new();
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(
-            r#"[exec]
-            command = "echo ${.payload.c8y_Command.text}"
-            on_fragment = "c8y_Command"
-            "#,
-        );
-
-    let config = C8yMapperConfig {
-        smartrest_use_operation_id: false,
-        ..test_mapper_config(&ttd)
-    };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    // Simulate c8y_Command SmartREST request
-    let input_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
-        json!({
-                 "status":"PENDING",
-                 "id": "1234",
-                 "c8y_Command": {
-                     "text": "do something"
-                 },
-            "externalSource":{
-           "externalId":"test-device",
-           "type":"c8y_Serial"
-        }
-             })
-        .to_string(),
-    );
-    mqtt.send(input_message).await.expect("Send failed");
+    let (_mapper, mut mqtt) = send_c8y_command(
+        r#"[exec]
+        command = "echo ${.payload.c8y_Command.text}"
+        on_fragment = "c8y_Command"
+        "#,
+        |config| C8yMapperConfig {
+            smartrest_use_operation_id: false,
+            ..config
+        },
+        "c8y/devicecontrol/notifications",
+        json!({ "text": "do something" }),
+    )
+    .await;
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
     assert_received_contains_str(
@@ -654,45 +520,20 @@ async fn json_custom_operation_status_update_with_operation_name() {
 
 #[tokio::test]
 async fn json_custom_operation_skip_status_update() {
-    let ttd = TempTedgeDir::new();
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(
-            r#"[exec]
-            command = "echo ${.payload.c8y_Command.text}"
-            on_fragment = "c8y_Command"
-            skip_status_update = true
-            "#,
-        );
-
-    let config = C8yMapperConfig {
-        smartrest_use_operation_id: true,
-        ..test_mapper_config(&ttd)
-    };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    // Simulate c8y_Command SmartREST request
-    let input_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
-        json!({
-                 "status":"PENDING",
-                 "id": "1234",
-                 "c8y_Command": {
-                     "text": "do something"
-                 },
-            "externalSource":{
-           "externalId":"TST_haul_searing_set",
-           "type":"c8y_Serial"
-        }
-             })
-        .to_string(),
-    );
-    mqtt.send(input_message).await.expect("Send failed");
+    let (_mapper, mut mqtt) = send_c8y_command(
+        r#"[exec]
+        command = "echo ${.payload.c8y_Command.text}"
+        on_fragment = "c8y_Command"
+        skip_status_update = true
+        "#,
+        |config| C8yMapperConfig {
+            smartrest_use_operation_id: true,
+            ..config
+        },
+        "c8y/devicecontrol/notifications",
+        json!({ "text": "do something" }),
+    )
+    .await;
 
     // No MQTT message should be sent related to the operation
     assert_received_not_contains_str(&mut mqtt, [("c8y/s/us", "1234")]).await;
@@ -700,45 +541,20 @@ async fn json_custom_operation_skip_status_update() {
 
 #[tokio::test]
 async fn json_custom_operation_status_update_with_custom_topic() {
-    let ttd = TempTedgeDir::new();
-    ttd.dir("operations")
-        .dir("c8y")
-        .file("c8y_Command")
-        .with_raw_content(
-            r#"[exec]
-            topic = "${.bridge.topic_prefix}/custom/operation/one"
-            command = "echo ${.payload.c8y_Command.text}"
-            on_fragment = "c8y_Command"
-            "#,
-        );
-
-    let config = C8yMapperConfig {
-        smartrest_use_operation_id: false,
-        ..test_mapper_config(&ttd)
-    };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
-
-    // Simulate c8y_Command SmartREST request
-    let input_message = MqttMessage::new(
-        &Topic::new_unchecked("c8y/custom/operation/one"),
-        json!({
-                 "status":"PENDING",
-                 "id": "1234",
-                 "c8y_Command": {
-                     "text": "do something"
-                 },
-            "externalSource":{
-           "externalId":"test-device",
-           "type":"c8y_Serial"
-        }
-             })
-        .to_string(),
-    );
-    mqtt.send(input_message).await.expect("Send failed");
+    let (_mapper, mut mqtt) = send_c8y_command(
+        r#"[exec]
+        topic = "${.bridge.topic_prefix}/custom/operation/one"
+        command = "echo ${.payload.c8y_Command.text}"
+        on_fragment = "c8y_Command"
+        "#,
+        |config| C8yMapperConfig {
+            smartrest_use_operation_id: false,
+            ..config
+        },
+        "c8y/custom/operation/one",
+        json!({ "text": "do something" }),
+    )
+    .await;
 
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
     assert_received_contains_str(
@@ -1451,4 +1267,51 @@ pub(super) fn create_custom_op_file(
 
 pub(super) fn create_custom_cmd(custom_cmd: &Utf8Path, content: &str) {
     with_exec_permission(custom_cmd, content);
+}
+
+/// Sends a `c8y_Command` operation, with the ID 1234 and the given fragment, on the given topic,
+/// to a mapper with a `c8y_Command` operation file of the given content
+async fn send_c8y_command(
+    operation_file: &str,
+    configure: impl FnOnce(C8yMapperConfig) -> C8yMapperConfig,
+    topic: &str,
+    c8y_command: serde_json::Value,
+) -> (
+    TestMapper,
+    TestMqttBox<TimedMessageBox<MockMqttBoxUnbuffered>>,
+) {
+    let dir = TempTedgeDir::new();
+    dir.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(operation_file);
+
+    let config = configure(test_mapper_config(&dir));
+    let TestHandle {
+        mqtt,
+        http,
+        fs,
+        ul,
+        dl,
+        avail,
+    } = spawn_c8y_mapper_actor_with_config(&dir, config, true).await;
+    spawn_dummy_c8y_http_proxy(http);
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    let operation = json!({
+        "status": "PENDING",
+        "id": "1234",
+        "c8y_Command": c8y_command,
+        "externalSource": {
+            "externalId": "test-device",
+            "type": "c8y_Serial"
+        }
+    });
+    publish(&mut mqtt, topic, operation.to_string()).await;
+
+    let mapper = TestMapper {
+        dir,
+        _boxes: Box::new((fs, ul, dl, avail)),
+    };
+    (mapper, mqtt)
 }
