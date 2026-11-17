@@ -1815,6 +1815,92 @@ async fn json_custom_operation_receives_cloud_profile_env() {
 }
 
 #[tokio::test]
+async fn custom_operation_csv_result_is_reported_without_escape_sequences() {
+    let ttd = TempTedgeDir::new();
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            command = "printf 'foo\\033,\\033[1mbar\\033[0m'"
+            on_fragment = "c8y_Command"
+            result_format = "csv"
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        smartrest_use_operation_id: true,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+            "status":"PENDING",
+            "id": "1234",
+            "c8y_Command": {},
+            "externalSource":{
+                "externalId":"test-device",
+                "type":"c8y_Serial"
+            }
+        })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    // The comma following the escape character is kept as a CSV delimiter
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "506,1234,foo,bar")]).await;
+}
+
+#[tokio::test]
+async fn custom_operation_result_escape_sequences_do_not_count_toward_the_size_limit() {
+    let ttd = TempTedgeDir::new();
+    // 1818 lines of 11 bytes, i.e. 19998 bytes, but only 3636 bytes without the escape sequences
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(
+            r#"[exec]
+            command = '''sh -c 'for i in $(seq 1818); do printf "\033[31mX\033[0m\n"; done' '''
+            on_fragment = "c8y_Command"
+            "#,
+        );
+
+    let config = C8yMapperConfig {
+        smartrest_use_operation_id: true,
+        ..test_mapper_config(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let input_message = MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        json!({
+            "status":"PENDING",
+            "id": "1234",
+            "c8y_Command": {},
+            "externalSource":{
+                "externalId":"test-device",
+                "type":"c8y_Serial"
+            }
+        })
+        .to_string(),
+    );
+    mqtt.send(input_message).await.expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+    let expected = format!("506,1234,\"{}\"", "X\n".repeat(1818));
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", expected.as_str())]).await;
+}
+
+#[tokio::test]
 async fn json_custom_operation_without_cloud_profile_receives_no_env() {
     let ttd = TempTedgeDir::new();
     // The script wraps the profile in BEGIN/END markers so an empty value is

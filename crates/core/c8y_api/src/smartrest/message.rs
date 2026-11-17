@@ -1,8 +1,20 @@
+use std::iter::Peekable;
+use std::ops::RangeInclusive;
+use std::str::Chars;
 use tracing::error;
 
 // The actual limit defined by c8y is 16184 including header and body.
 // We need a buffer, therefore here sets smaller size than the actual limit.
 pub const MAX_PAYLOAD_LIMIT_IN_BYTES: usize = 16000;
+
+// The ECMA-48 characters and byte ranges used to recognize the terminal escape sequences
+const ESC: char = '\x1b';
+const BEL: char = '\x07';
+const ST: char = '\u{9c}';
+const INTERMEDIATE: RangeInclusive<char> = '\x20'..='\x2f';
+const FINAL: RangeInclusive<char> = '\x30'..='\x7e';
+const CSI_PARAMETER_OR_INTERMEDIATE: RangeInclusive<char> = '\x20'..='\x3f';
+const CSI_FINAL: RangeInclusive<char> = '\x40'..='\x7e';
 
 /// Extract the Device ID from the SmartREST payload.
 ///
@@ -27,25 +39,10 @@ pub fn get_smartrest_template_id(payload: &str) -> String {
     payload.split(',').next().unwrap().to_string()
 }
 
-/// Sanitize the input to be SmartREST compatible.
-/// If the input contains invalid UTF-8, it returns an empty String.
-/// - Remove all control characters except for `\n`, `\t`, `\r`.
-/// - Double quote is escaped as `\"\"`.
-/// - Strip the input according to `max_size`.
-// TODO: make this return Result
-// TODO: make a variant which assumes `max_size = MAX_PAYLOAD_LIMIT_IN_BYTES`
-pub fn sanitize_bytes_for_smartrest(input: &[u8], max_size: usize) -> String {
-    let input = std::str::from_utf8(input).unwrap_or_else(|err| {
-        error!("The input contains invalid UTF-8: {err}");
-        ""
-    });
-    sanitize_for_smartrest(input, max_size)
-}
-
-pub fn sanitize_for_smartrest(input: &str, max_size: usize) -> String {
+/// Truncates the input to `max_size` bytes, on a character boundary.
+pub fn truncate_for_smartrest(input: &str, max_size: usize) -> String {
     input
         .chars()
-        .filter(|&c| c == '\r' || c == '\n' || c == '\t' || !c.is_control())
         .scan(0, |bytes_count, c| {
             *bytes_count += c.len_utf8();
             Some((*bytes_count, c))
@@ -55,6 +52,60 @@ pub fn sanitize_for_smartrest(input: &str, max_size: usize) -> String {
         .collect()
 }
 
+/// Removes the characters Cumulocity rejects in a SmartREST message.
+///
+/// - Removes all control characters except for `\n`, `\t`, `\r`.
+/// - Removes the terminal escape sequences, e.g. colors, introduced by an `ESC` control character,
+///   so that no meaningless leftovers, e.g. `[31m`, are kept.
+pub(crate) fn strip_unsupported_chars(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == ESC {
+            skip_escape_sequence(&mut chars);
+        } else if c == '\r' || c == '\n' || c == '\t' || !c.is_control() {
+            output.push(c);
+        }
+    }
+    output
+}
+
+/// Skips the escape sequence following an `ESC` character, as defined by ECMA-48.
+///
+/// Consumes the longest prefix matching an escape sequence:
+/// a sequence missing its final byte is dropped up to where it stops matching.
+fn skip_escape_sequence(chars: &mut Peekable<Chars>) {
+    match chars.peek() {
+        // Control Sequence, e.g. the colors: parameter and intermediate bytes, then a final byte
+        Some('[') => {
+            chars.next();
+            while chars
+                .next_if(|c| CSI_PARAMETER_OR_INTERMEDIATE.contains(c))
+                .is_some()
+            {}
+            chars.next_if(|c| CSI_FINAL.contains(c));
+        }
+        // Control String, e.g. a hyperlink or a window title: terminated by `BEL`, `ST` or `ESC \`.
+        // An unterminated string is not skipped past the end of the line,
+        // so a stray escape character doesn't remove the following lines.
+        Some(']' | 'P' | 'X' | '^' | '_') => {
+            chars.next();
+            // The loop stops before an `ESC` and leaves it to the caller:
+            // `ESC \` ends the string, any other `ESC` starts a new sequence
+            while let Some(c) = chars.next_if(|c| *c != '\n' && *c != ESC) {
+                if c == BEL || c == ST {
+                    break;
+                }
+            }
+        }
+        // Other escape sequences: intermediate bytes, then a final byte
+        _ => {
+            while chars.next_if(|c| INTERMEDIATE.contains(c)).is_some() {}
+            chars.next_if(|c| FINAL.contains(c));
+        }
+    }
+}
+
 /// Generate a failure reason of operation with the following format.
 /// <Last line of input>
 /// (line break)
@@ -62,7 +113,10 @@ pub fn sanitize_for_smartrest(input: &str, max_size: usize) -> String {
 ///
 /// If the input has only one line, returns the line only.
 /// If the input is empty or contains invalid UTF-8, it returns an empty String.
-/// The output is ensured to be SmartREST compatible.
+/// The output is truncated to `max_size` bytes, on a character boundary.
+/// The characters rejected by Cumulocity are removed by [`fail_operation_with_id`].
+///
+/// [`fail_operation_with_id`]: crate::smartrest::smartrest_serializer::fail_operation_with_id
 pub fn get_failure_reason_for_smartrest(input: &[u8], max_size: usize) -> String {
     let input_string = std::str::from_utf8(input).unwrap_or_else(|err| {
         error!("The input contains invalid UTF-8: {err}");
@@ -70,8 +124,8 @@ pub fn get_failure_reason_for_smartrest(input: &[u8], max_size: usize) -> String
     });
     let last_line = input_string.trim_end().lines().last().unwrap_or_default();
     match input_string.lines().count() {
-        0 | 1 => sanitize_for_smartrest(last_line, max_size),
-        _ => sanitize_for_smartrest(&format!("{last_line}\n\n{input_string}"), max_size),
+        0 | 1 => truncate_for_smartrest(last_line, max_size),
+        _ => truncate_for_smartrest(&format!("{last_line}\n\n{input_string}"), max_size),
     }
 }
 
@@ -139,6 +193,7 @@ pub fn collect_smartrest_messages(data: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use test_case::test_case;
 
     #[test_case("512,device_id", Some("device_id"); "valid")]
@@ -166,27 +221,18 @@ mod tests {
 
     #[test]
     fn selected_control_chars_remain() {
-        let input = b"\0\t\n\r";
-        let sanitized = sanitize_bytes_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
-        assert_eq!(sanitized, "\t\n\r".to_string());
+        let stripped = strip_unsupported_chars("\0\t\n\r");
+        assert_eq!(stripped, "\t\n\r");
     }
 
     #[test]
     fn control_chars_are_removed() {
-        let input: Vec<u8> = (0x00..=0x7f).collect();
-        let sanitized = sanitize_bytes_for_smartrest(&input, MAX_PAYLOAD_LIMIT_IN_BYTES);
+        let input: String = ('\x00'..='\x7f').collect();
+        let stripped = strip_unsupported_chars(&input);
         assert_eq!(
-            sanitized,
+            stripped,
             "\t\n\r !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
         );
-    }
-
-    #[test]
-    fn invalid_utf8_is_contained() {
-        let invalid_sparkle_heart = vec![0, 159, 146, 150];
-        let sanitized =
-            sanitize_bytes_for_smartrest(&invalid_sparkle_heart, MAX_PAYLOAD_LIMIT_IN_BYTES);
-        assert_eq!(sanitized, "");
     }
 
     #[test]
@@ -198,20 +244,43 @@ mod tests {
     }
 
     #[test_case("foo bar baz\n", "foo bar baz\n"; "standard")]
-    #[test_case("foo\r\nbar\tbaz\0\"", "foo\r\nbar\tbaz\""; "with control chars")]
+    #[test_case("foo\r\nbar\tbaz\0\"", "foo\r\nbar\tbaz\0\""; "control chars are kept")]
     #[test_case("baz", "baz"; "no new line")]
     #[test_case("", ""; "empty")]
     #[test_case("こんにちは", "こんにちは"; "no ascii")]
-    #[test_case("こんにちは\"\n\0こんにちは", "こんにちは\"\nこんにちは"; "no ascii and control chars")]
-    fn u8_vec_is_sanitized(input: &str, expected_output: &str) {
-        let sanitized = sanitize_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
-        assert_eq!(sanitized, expected_output.to_string());
+    fn u8_vec_is_truncated(input: &str, expected_output: &str) {
+        let truncated = truncate_for_smartrest(input, MAX_PAYLOAD_LIMIT_IN_BYTES);
+        assert_eq!(truncated, expected_output.to_string());
+    }
+
+    #[rstest]
+    #[case::colors("\x1b[31mhello\x1b[0m\n", "hello\n")]
+    #[case::two_character_escape_sequence("a\x1bb", "a")]
+    #[case::control_sequence_with_parameters("\x1b[1;38;5;196mbold\x1b[m", "bold")]
+    #[case::control_sequence_without_final_byte("\x1b[12\nnext", "\nnext")]
+    #[case::hyperlink("\x1b]8;;https://example.com\x07link\x1b]8;;\x1b\\", "link")]
+    #[case::control_string_terminated_by_st("\x1b]0;title\u{9c}visible", "visible")]
+    #[case::escape_sequence_inside_control_string("\x1b]0;t\x1b[31mred", "red")]
+    #[case::unterminated_control_string("\x1b]0;title\nnext line", "\nnext line")]
+    #[case::trailing_escape("trailing\x1b", "trailing")]
+    #[case::non_ascii_printable_chars("✓ ├╴╰─▶", "✓ ├╴╰─▶")]
+    #[case::non_ascii_and_control_chars("こんにちは\"\n\0こんにちは", "こんにちは\"\nこんにちは")]
+    fn unsupported_chars_are_removed(#[case] input: &str, #[case] expected_output: &str) {
+        let stripped = strip_unsupported_chars(input);
+        assert_eq!(stripped, expected_output);
+    }
+
+    #[test]
+    fn many_nested_escape_sequences_do_not_overflow_the_stack() {
+        let input = format!("{}\nvisible", "\x1b]".repeat(1_000_000));
+        let stripped = strip_unsupported_chars(&input);
+        assert_eq!(stripped, "\nvisible");
     }
 
     #[test_case("foo bar bye", "foo bar by"; "ascii")]
     #[test_case("こんにちは", "こんに"; "no ascii")]
     fn size_u8_vec_is_stripped(input: &str, expected_output: &str) {
-        let stripped = sanitize_for_smartrest(input, 10);
+        let stripped = truncate_for_smartrest(input, 10);
         assert_eq!(stripped, expected_output.to_string());
     }
     #[test_case("baz\n", "baz"; "one line")]
