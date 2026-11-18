@@ -95,32 +95,6 @@ mod script_operations;
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
-impl CumulocityConverter {
-    pub async fn convert(&mut self, input: &MqttMessage) -> Vec<MqttMessage> {
-        self.try_convert(input).await.unwrap_or_else(|error| {
-            let topic = input.topic.name.clone();
-            vec![self.new_error_message(MessageConversionError { error, topic })]
-        })
-    }
-
-    pub fn new_error_message(&self, error: impl std::error::Error) -> MqttMessage {
-        error!("Mapping error: {}", error);
-        MqttMessage::new(&self.errors_topic, error.to_string())
-    }
-
-    /// This function will be the first method that's called on the converter after it's instantiated.
-    /// Return any initialization messages that must be processed before the converter starts converting regular messages.
-    pub fn init_messages(&mut self) -> Vec<MqttMessage> {
-        self.try_init_messages()
-            .unwrap_or_else(|error| vec![self.new_error_message(error)])
-    }
-
-    pub fn process_operation_update_message(&mut self, message: DiscoverOp) -> Option<MqttMessage> {
-        self.try_process_operation_update_message(&message)
-            .unwrap_or_else(|err| Some(self.new_error_message(err)))
-    }
-}
-
 /// Converts the messages received by the Cumulocity mapper, see the [module documentation](self)
 pub struct CumulocityConverter {
     pub config: Arc<C8yMapperConfig>,
@@ -208,6 +182,45 @@ impl CumulocityConverter {
         })
     }
 
+    // Entry points, called by the actor
+
+    /// This function will be the first method that's called on the converter after it's instantiated.
+    /// Return any initialization messages that must be processed before the converter starts converting regular messages.
+    pub fn init_messages(&mut self) -> Vec<MqttMessage> {
+        self.try_init_messages()
+            .unwrap_or_else(|error| vec![self.new_error_message(error)])
+    }
+
+    fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
+        let main_device_xid = self.config.device_id.clone();
+        Ok(vec![
+            self.load_and_create_supported_operations_message(&main_device_xid)?,
+            create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix),
+        ])
+    }
+
+    pub async fn convert(&mut self, input: &MqttMessage) -> Vec<MqttMessage> {
+        self.try_convert(input).await.unwrap_or_else(|error| {
+            let topic = input.topic.name.clone();
+            vec![self.new_error_message(MessageConversionError { error, topic })]
+        })
+    }
+
+    pub async fn try_convert(
+        &mut self,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        debug!("Mapping message on topic: {}", message.topic.name);
+        trace!("Message content: {:?}", message.payload_str());
+        match self.mqtt_schema.entity_channel_of(&message.topic) {
+            Ok((source, Channel::EntityMetadata)) => {
+                self.convert_entity_registration(source, message)
+            }
+            Ok((source, channel)) => self.convert_data_message(source, channel, message).await,
+            Err(_) => self.convert_c8y_message(message).await,
+        }
+    }
+
     /// Try to register the target entity and any of its pending children for the incoming message,
     /// if that target entity is not already registered with the entity store.
     ///
@@ -235,6 +248,59 @@ impl CumulocityConverter {
             EntityRegistrationMessage::try_from(topic_id, message.payload_bytes())?;
         Ok(self.entity_cache.upsert(register_message)?)
     }
+
+    pub(crate) fn append_id_if_not_given(
+        &mut self,
+        register_message: &mut EntityRegistrationMessage,
+    ) {
+        let source = &register_message.topic_id;
+
+        if register_message.external_id.is_none() {
+            if let Some(metadata) = self.entity_cache.get(source) {
+                register_message.external_id = Some(metadata.external_id.clone());
+            }
+        }
+    }
+
+    pub fn process_operation_update_message(&mut self, message: DiscoverOp) -> Option<MqttMessage> {
+        self.try_process_operation_update_message(&message)
+            .unwrap_or_else(|err| Some(self.new_error_message(err)))
+    }
+
+    fn try_process_operation_update_message(
+        &mut self,
+        message: &DiscoverOp,
+    ) -> Result<Option<MqttMessage>, ConversionError> {
+        let needs_cloud_update = self
+            .supported_operations
+            .load_from_dir(&message.ops_dir, &self.config.bridge_config)?;
+        if !needs_cloud_update {
+            return Ok(None);
+        }
+
+        let device_xid = self.supported_operations.xid_from_path(&message.ops_dir)?;
+        let prefix = &self.config.bridge_config.c8y_prefix;
+        Ok(Some(
+            self.supported_operations
+                .create_supported_operations(&device_xid, prefix)?,
+        ))
+    }
+
+    pub fn has_deferred_software_list_requests(&self) -> bool {
+        self.commands.has_deferred_software_list_requests()
+    }
+
+    /// Requests a software list from each target registered for software update,
+    /// unless a request issued by this mapper is still pending for that target
+    pub fn take_software_list_requests(&mut self) -> Vec<MqttMessage> {
+        self.commands
+            .take_deferred_software_list_requests()
+            .iter()
+            .map(|target| self.request_software_list(target))
+            .collect()
+    }
+
+    // Messages received on thin-edge topics
 
     /// Convert an entity registration message into its C8y counterpart
     fn convert_entity_registration(
@@ -314,87 +380,247 @@ impl CumulocityConverter {
         Ok(messages)
     }
 
-    /// Return the SmartREST publish topic for the given entity
-    /// derived from its ancestors.
-    pub fn smartrest_publish_topic_for_entity(
-        &self,
-        entity_topic_id: &EntityTopicId,
-    ) -> Result<Topic, ConversionError> {
-        let entity = self.entity_cache.try_get(entity_topic_id)?;
-        let topic = C8yTopic::smartrest_response_topic(
-            &entity.external_id,
-            &entity.r#type(),
-            &self.config.bridge_config.c8y_prefix,
-        )
-        .expect("Topic must have been valid as the external id is pre-validated");
-        Ok(topic)
-    }
+    async fn convert_data_message(
+        &mut self,
+        source: EntityTopicId,
+        channel: Channel,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if self.entity_cache.get(&source).is_none() {
+            // On receipt of an unregistered entity data message,
+            // since it is received before the entity itself is registered,
+            // cache it in the unregistered entity store to be processed after the entity is registered
+            self.entity_cache.cache_early_data_message(message.clone());
+            return Ok(vec![]);
+        }
 
-    /// Generates external ID of the given entity.
-    ///
-    /// The external id is generated by transforming the EntityTopicId
-    /// by replacing the `/` characters with `:` and then adding the
-    /// main device id as a prefix, to namespace all the entities under that device.
-    ///
-    /// # Examples
-    /// - `device/main//` => `DEVICE_COMMON_NAME`
-    /// - `device/child001//` => `DEVICE_COMMON_NAME:device:child001`
-    /// - `device/child001/service/service001` => `DEVICE_COMMON_NAME:device:child001:service:service001`
-    /// - `factory01/hallA/packaging/belt001` => `DEVICE_COMMON_NAME:factory01:hallA:packaging:belt001`
-    pub fn map_to_c8y_external_id(
-        entity_topic_id: &EntityTopicId,
-        main_device_xid: &EntityExternalId,
-    ) -> EntityExternalId {
-        if entity_topic_id.is_default_main_device() {
-            main_device_xid.clone()
-        } else {
-            format!(
-                "{}:{}",
-                main_device_xid.as_ref(),
-                entity_topic_id
-                    .to_string()
-                    .trim_end_matches('/')
-                    .replace('/', ":")
-            )
-            .into()
+        let entity_type = self.entity_cache.try_get(&source)?.r#type();
+        match &channel {
+            Channel::EntityTwinData { fragment_key } => {
+                self.try_convert_entity_twin_data(&source, &entity_type, message, fragment_key)
+            }
+
+            Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
+                // The command has been fully processed
+                self.commands.completed(cmd_id);
+                Ok(vec![])
+            }
+
+            Channel::CommandMetadata {
+                operation: OperationType::Control,
+            } if entity_type == EntityType::Service => {
+                self.convert_control_metadata(&source, message).await
+            }
+
+            Channel::CommandMetadata { operation } => {
+                self.convert_command_metadata(&source, operation, message)
+                    .await
+            }
+
+            Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
+                self.commands.resumed(cmd_id, operation, &source);
+
+                let entity = self.entity_cache.try_get(&source)?;
+                let entity = operations::EntityTarget {
+                    topic_id: entity.topic_id().clone(),
+                    external_id: entity.external_id.clone(),
+                    smartrest_publish_topic: self
+                        .smartrest_publish_topic_for_entity(entity.topic_id())?,
+                };
+
+                self.operation_handler.handle(entity, message.clone()).await;
+                Ok(vec![])
+            }
+
+            Channel::Signal { signal_type } => self.process_signal_message(&source, signal_type),
+
+            // Measurements, events, alarms and health statuses are converted by flows
+            _ => Ok(vec![]),
         }
     }
 
-    /// Validates if the provided id contains any invalid characters and
-    /// returns a valid EntityExternalId if the validation passes,
-    /// else returns InvalidExternalIdError
-    pub fn validate_external_id(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
-        match id.chars().find(|c| FORBIDDEN_ID_CHARS.contains(c)) {
-            Some(invalid_char) => Err(InvalidExternalIdError {
-                external_id: id.into(),
-                invalid_char,
-            }),
-            None => Ok(id.into()),
+    /// Registers the capability declared by an entity for an operation
+    async fn convert_command_metadata(
+        &mut self,
+        source: &EntityTopicId,
+        operation: &OperationType,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        // https://github.com/thin-edge/thin-edge.io/issues/2739
+        if message.payload().is_empty() {
+            warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing device capabilities is not currently supported");
+            return Ok(vec![]);
+        }
+        match operation {
+            OperationType::Restart => self.register_restart_operation(source).await,
+            OperationType::SoftwareList => {
+                self.register_software_list_operation(source, message).await
+            }
+            OperationType::SoftwareUpdate => {
+                self.register_software_update_operation(source, message)
+                    .await
+            }
+            OperationType::LogUpload => self.convert_log_metadata(source, message).await,
+            OperationType::ConfigSnapshot => {
+                self.convert_config_snapshot_metadata(source, message).await
+            }
+            OperationType::ConfigUpdate => {
+                self.convert_config_update_metadata(source, message).await
+            }
+            OperationType::FirmwareUpdate => self.register_firmware_update_operation(source).await,
+            OperationType::DeviceProfile => self.register_device_profile_operation(source).await,
+            OperationType::Custom(command_name) => {
+                self.register_custom_operation(source, command_name).await
+            }
+            _ => Ok(vec![]),
         }
     }
 
-    async fn post_event_over_http(&mut self, message: &MqttMessage) -> Result<(), ConversionError> {
-        let c8y_event = C8yCreateEvent::from_slice(message.payload_bytes())?;
-        let device_id = message
-            .topic
-            .as_ref()
-            .rsplit_once('/')
-            .map(|(_, id)| id.to_string())
-            .unwrap_or_else(|| {
-                self.entity_cache
-                    .main_device_external_id()
-                    .as_ref()
-                    .to_string()
-            });
-        let create_event = CreateEvent {
-            event_type: c8y_event.event_type,
-            time: c8y_event.time,
-            text: c8y_event.text,
-            extras: c8y_event.extras,
-            device_id,
+    async fn register_restart_operation(
+        &mut self,
+        target: &EntityTopicId,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if !self.config.capabilities.device_restart {
+            warn!("Received restart metadata, however, device restart feature is disabled");
+            return Ok(vec![]);
+        }
+
+        Ok(self
+            .register_operation(target, "c8y_Restart")
+            .await
+            .unwrap_or_else(|err| {
+                error!("Failed to register the c8y_Restart operation for {target}: {err}");
+                vec![]
+            }))
+    }
+
+    async fn register_custom_operation(
+        &mut self,
+        target: &EntityTopicId,
+        command_name: &str,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if self.is_disabled_command(command_name) {
+            warn!(
+                "Received {command_name} metadata, however, the shell_execute feature is disabled"
+            );
+            return Ok(vec![]);
+        }
+
+        let Some(c8y_op_name) = self
+            .supported_operations
+            .operation_name_for_workflow(command_name)
+        else {
+            warn!("Failed to find the template file for `{command_name}`. Registration skipped");
+            return Ok(vec![]);
         };
-        self.http_proxy.send_event(create_event).await?;
-        Ok(())
+        Ok(self
+            .register_operation(target, &c8y_op_name)
+            .await
+            .unwrap_or_else(|err| {
+                error!("Failed to register the {c8y_op_name} operation for {target}: {err}");
+                vec![]
+            }))
+    }
+
+    async fn register_software_list_operation(
+        &self,
+        target: &EntityTopicId,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if !self.config.software_management_with_types {
+            debug!("Publishing c8y_SupportedSoftwareTypes is disabled. To enable it, run `tedge config set c8y.software_management.with_types true`.");
+            return Ok(vec![]);
+        }
+
+        // Send c8y_SupportedSoftwareTypes, which is introduced in c8y >= 10.14
+        let data = SoftwareCommandMetadata::from_json(message.payload_str()?)?;
+        let payload = json!({"c8y_SupportedSoftwareTypes": data.types}).to_string();
+        let topic = self.inventory_update_topic(target)?;
+
+        Ok(vec![MqttMessage::new(&topic, payload)])
+    }
+
+    async fn register_software_update_operation(
+        &mut self,
+        target: &EntityTopicId,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        if !self.config.capabilities.software_update {
+            warn!(
+                "Received software update metadata, however, software update feature is disabled"
+            );
+            return Ok(vec![]);
+        }
+        let mut registration = match self.register_operation(target, "c8y_SoftwareUpdate").await {
+            Ok(messages) => messages,
+            Err(err) => {
+                error!("Failed to register the c8y_SoftwareUpdate operation for {target}: {err}");
+                return Ok(vec![]);
+            }
+        };
+
+        if message.retain {
+            self.commands.defer_software_list_request(target);
+        } else {
+            // A live capability message is published by an agent that has just (re)started
+            self.commands.reset_software_list_requests(target);
+            registration.push(self.request_software_list(target));
+        }
+        Ok(registration)
+    }
+
+    // Messages received on Cumulocity topics
+
+    async fn convert_c8y_message(
+        &mut self,
+        message: &MqttMessage,
+    ) -> Result<Vec<MqttMessage>, ConversionError> {
+        self.commands.remove_expired();
+
+        match &message.topic {
+            topic
+                if C8yDeviceControlTopic::accept(topic, &self.config.bridge_config.c8y_prefix) =>
+            {
+                self.convert_device_control_operations(message).await
+            }
+            topic
+                if self
+                    .supported_operations
+                    .json_custom_operation_topics()?
+                    .accept_topic(topic) =>
+            {
+                self.convert_json_custom_operation(message).await
+            }
+            topic
+                if self
+                    .supported_operations
+                    .smartrest_custom_operation_topics()?
+                    .accept_topic(topic) =>
+            {
+                self.run_smartrest_operations(message).await
+            }
+            topic
+                if topic.name
+                    == C8yTopic::SmartRestRequest
+                        .with_prefix(&self.config.bridge_config.c8y_prefix) =>
+            {
+                // We receive SmartREST operation notifications regardless of whether any custom
+                // operations are configured to use it. This branch exists to prevent us logging
+                // an error for this message we expect
+                Ok(vec![])
+            }
+            topic if self.http_event_topic.accept_topic(topic) => {
+                self.post_event_over_http(message).await?;
+                Ok(vec![])
+            }
+            _ => {
+                warn!(
+                    "Received message on subscribed topic '{}' but no handler matched.",
+                    message.topic.name
+                );
+                Ok(vec![])
+            }
+        }
     }
 
     async fn convert_device_control_operations(
@@ -495,52 +721,41 @@ impl CumulocityConverter {
         Ok(msgs)
     }
 
-    /// The Cumulocity operation name and the feature it requires, if that feature is disabled
-    fn disabled_feature_for(
-        &self,
-        operation: &C8yDeviceControlOperation,
-    ) -> Option<(&'static str, &'static str)> {
-        let capabilities = &self.config.capabilities;
-        let (c8y_operation, feature, enabled) = match operation {
-            C8yDeviceControlOperation::Restart(_) => {
-                ("c8y_Restart", "device_restart", capabilities.device_restart)
-            }
-            C8yDeviceControlOperation::SoftwareUpdate(_) => (
-                "c8y_SoftwareUpdate",
-                "software_update",
-                capabilities.software_update,
-            ),
-            C8yDeviceControlOperation::LogfileRequest(_) => {
-                ("c8y_LogfileRequest", "log_upload", capabilities.log_upload)
-            }
-            C8yDeviceControlOperation::UploadConfigFile(_) => (
-                "c8y_UploadConfigFile",
-                "config_snapshot",
-                capabilities.config_snapshot,
-            ),
-            C8yDeviceControlOperation::DownloadConfigFile(_) => (
-                "c8y_DownloadConfigFile",
-                "config_update",
-                capabilities.config_update,
-            ),
-            C8yDeviceControlOperation::Firmware(_) => (
-                "c8y_Firmware",
-                "firmware_update",
-                capabilities.firmware_update,
-            ),
-            C8yDeviceControlOperation::DeviceProfile(_) => (
-                "c8y_DeviceProfile",
-                "device_profile",
-                capabilities.device_profile,
-            ),
-            C8yDeviceControlOperation::ServiceCommand(_) => (
-                "c8y_ServiceCommand",
-                "service_control",
-                capabilities.service_control,
-            ),
-            C8yDeviceControlOperation::Custom => return None,
-        };
-        (!enabled).then_some((c8y_operation, feature))
+    fn convert_restart_request(
+        &mut self,
+        device_xid: String,
+        cmd_id: String,
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let entity_xid: EntityExternalId = device_xid.into();
+        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
+        let command = RestartCommand::new(target.topic_id(), cmd_id);
+        let message = command.command_message(&self.mqtt_schema);
+        Ok(vec![message])
+    }
+
+    async fn convert_software_update_request(
+        &mut self,
+        device_xid: String,
+        cmd_id: String,
+        software_update_request: C8ySoftwareUpdate,
+    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
+        let entity_xid: EntityExternalId = device_xid.into();
+        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
+        let mut command =
+            software_update_request.into_software_update_command(target.topic_id(), cmd_id)?;
+
+        command.payload.update_list.iter_mut().for_each(|modules| {
+            modules.modules.iter_mut().for_each(|module| {
+                if let Some(url) = &mut module.url {
+                    if let Ok(package_url) = self.http_proxy.local_proxy_url(url.url()) {
+                        *url = DownloadInfo::new(package_url.as_str());
+                    }
+                }
+            });
+        });
+
+        let message = command.command_message(&self.mqtt_schema);
+        Ok(vec![message])
     }
 
     async fn convert_json_custom_operation(
@@ -655,302 +870,32 @@ impl CumulocityConverter {
         }
     }
 
-    async fn convert_software_update_request(
-        &mut self,
-        device_xid: String,
-        cmd_id: String,
-        software_update_request: C8ySoftwareUpdate,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let entity_xid: EntityExternalId = device_xid.into();
-        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
-        let mut command =
-            software_update_request.into_software_update_command(target.topic_id(), cmd_id)?;
-
-        command.payload.update_list.iter_mut().for_each(|modules| {
-            modules.modules.iter_mut().for_each(|module| {
-                if let Some(url) = &mut module.url {
-                    if let Ok(package_url) = self.http_proxy.local_proxy_url(url.url()) {
-                        *url = DownloadInfo::new(package_url.as_str());
-                    }
-                }
+    async fn post_event_over_http(&mut self, message: &MqttMessage) -> Result<(), ConversionError> {
+        let c8y_event = C8yCreateEvent::from_slice(message.payload_bytes())?;
+        let device_id = message
+            .topic
+            .as_ref()
+            .rsplit_once('/')
+            .map(|(_, id)| id.to_string())
+            .unwrap_or_else(|| {
+                self.entity_cache
+                    .main_device_external_id()
+                    .as_ref()
+                    .to_string()
             });
-        });
-
-        let message = command.command_message(&self.mqtt_schema);
-        Ok(vec![message])
+        let create_event = CreateEvent {
+            event_type: c8y_event.event_type,
+            time: c8y_event.time,
+            text: c8y_event.text,
+            extras: c8y_event.extras,
+            device_id,
+        };
+        self.http_proxy.send_event(create_event).await?;
+        Ok(())
     }
 
-    fn convert_restart_request(
-        &mut self,
-        device_xid: String,
-        cmd_id: String,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let entity_xid: EntityExternalId = device_xid.into();
-        let target = self.entity_cache.try_get_by_external_id(&entity_xid)?;
-        let command = RestartCommand::new(target.topic_id(), cmd_id);
-        let message = command.command_message(&self.mqtt_schema);
-        Ok(vec![message])
-    }
+    // Helpers
 
-    pub fn has_deferred_software_list_requests(&self) -> bool {
-        self.commands.has_deferred_software_list_requests()
-    }
-
-    /// Requests a software list from each target registered for software update,
-    /// unless a request issued by this mapper is still pending for that target
-    pub fn take_software_list_requests(&mut self) -> Vec<MqttMessage> {
-        self.commands
-            .take_deferred_software_list_requests()
-            .iter()
-            .map(|target| self.request_software_list(target))
-            .collect()
-    }
-
-    fn request_software_list(&mut self, target: &EntityTopicId) -> MqttMessage {
-        let cmd_id = self.command_id.new_id();
-        let request = SoftwareListCommand::new(target, cmd_id.clone());
-        self.commands.software_list_requested(cmd_id, target);
-        request.command_message(&self.mqtt_schema)
-    }
-}
-
-#[derive(Error, Debug)]
-pub enum CumulocityConverterBuildError {
-    #[error(transparent)]
-    InvalidConfig(#[from] TEdgeConfigError),
-
-    #[error(transparent)]
-    OperationsError(#[from] OperationsError),
-
-    #[error(transparent)]
-    OperationLogsError(#[from] OperationLogsError),
-
-    #[error(transparent)]
-    FileError(#[from] FileError),
-}
-
-impl CumulocityConverter {
-    pub async fn try_convert(
-        &mut self,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        debug!("Mapping message on topic: {}", message.topic.name);
-        trace!("Message content: {:?}", message.payload_str());
-        match self.mqtt_schema.entity_channel_of(&message.topic) {
-            Ok((source, Channel::EntityMetadata)) => {
-                self.convert_entity_registration(source, message)
-            }
-            Ok((source, channel)) => self.convert_data_message(source, channel, message).await,
-            Err(_) => self.convert_c8y_message(message).await,
-        }
-    }
-
-    pub(crate) fn append_id_if_not_given(
-        &mut self,
-        register_message: &mut EntityRegistrationMessage,
-    ) {
-        let source = &register_message.topic_id;
-
-        if register_message.external_id.is_none() {
-            if let Some(metadata) = self.entity_cache.get(source) {
-                register_message.external_id = Some(metadata.external_id.clone());
-            }
-        }
-    }
-
-    async fn convert_data_message(
-        &mut self,
-        source: EntityTopicId,
-        channel: Channel,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if self.entity_cache.get(&source).is_none() {
-            // On receipt of an unregistered entity data message,
-            // since it is received before the entity itself is registered,
-            // cache it in the unregistered entity store to be processed after the entity is registered
-            self.entity_cache.cache_early_data_message(message.clone());
-            return Ok(vec![]);
-        }
-
-        let entity_type = self.entity_cache.try_get(&source)?.r#type();
-        match &channel {
-            Channel::EntityTwinData { fragment_key } => {
-                self.try_convert_entity_twin_data(&source, &entity_type, message, fragment_key)
-            }
-
-            Channel::Command { cmd_id, .. } if message.payload_bytes().is_empty() => {
-                // The command has been fully processed
-                self.commands.completed(cmd_id);
-                Ok(vec![])
-            }
-
-            Channel::CommandMetadata {
-                operation: OperationType::Control,
-            } if entity_type == EntityType::Service => {
-                self.convert_control_metadata(&source, message).await
-            }
-
-            Channel::CommandMetadata { operation } => {
-                self.convert_command_metadata(&source, operation, message)
-                    .await
-            }
-
-            Channel::Command { operation, cmd_id } if self.command_id.is_generator_of(cmd_id) => {
-                self.commands.resumed(cmd_id, operation, &source);
-
-                let entity = self.entity_cache.try_get(&source)?;
-                let entity = operations::EntityTarget {
-                    topic_id: entity.topic_id().clone(),
-                    external_id: entity.external_id.clone(),
-                    smartrest_publish_topic: self
-                        .smartrest_publish_topic_for_entity(entity.topic_id())?,
-                };
-
-                self.operation_handler.handle(entity, message.clone()).await;
-                Ok(vec![])
-            }
-
-            Channel::Signal { signal_type } => self.process_signal_message(&source, signal_type),
-
-            // Measurements, events, alarms and health statuses are converted by flows
-            _ => Ok(vec![]),
-        }
-    }
-
-    /// Registers the capability declared by an entity for an operation
-    async fn convert_command_metadata(
-        &mut self,
-        source: &EntityTopicId,
-        operation: &OperationType,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        // https://github.com/thin-edge/thin-edge.io/issues/2739
-        if message.payload().is_empty() {
-            warn!(topic = ?message.topic.name, "Ignoring command metadata clearing message: clearing device capabilities is not currently supported");
-            return Ok(vec![]);
-        }
-        match operation {
-            OperationType::Restart => self.register_restart_operation(source).await,
-            OperationType::SoftwareList => {
-                self.register_software_list_operation(source, message).await
-            }
-            OperationType::SoftwareUpdate => {
-                self.register_software_update_operation(source, message)
-                    .await
-            }
-            OperationType::LogUpload => self.convert_log_metadata(source, message).await,
-            OperationType::ConfigSnapshot => {
-                self.convert_config_snapshot_metadata(source, message).await
-            }
-            OperationType::ConfigUpdate => {
-                self.convert_config_update_metadata(source, message).await
-            }
-            OperationType::FirmwareUpdate => self.register_firmware_update_operation(source).await,
-            OperationType::DeviceProfile => self.register_device_profile_operation(source).await,
-            OperationType::Custom(command_name) => {
-                self.register_custom_operation(source, command_name).await
-            }
-            _ => Ok(vec![]),
-        }
-    }
-
-    async fn convert_c8y_message(
-        &mut self,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        self.commands.remove_expired();
-
-        match &message.topic {
-            topic
-                if C8yDeviceControlTopic::accept(topic, &self.config.bridge_config.c8y_prefix) =>
-            {
-                self.convert_device_control_operations(message).await
-            }
-            topic
-                if self
-                    .supported_operations
-                    .json_custom_operation_topics()?
-                    .accept_topic(topic) =>
-            {
-                self.convert_json_custom_operation(message).await
-            }
-            topic
-                if self
-                    .supported_operations
-                    .smartrest_custom_operation_topics()?
-                    .accept_topic(topic) =>
-            {
-                self.run_smartrest_operations(message).await
-            }
-            topic
-                if topic.name
-                    == C8yTopic::SmartRestRequest
-                        .with_prefix(&self.config.bridge_config.c8y_prefix) =>
-            {
-                // We receive SmartREST operation notifications regardless of whether any custom
-                // operations are configured to use it. This branch exists to prevent us logging
-                // an error for this message we expect
-                Ok(vec![])
-            }
-            topic if self.http_event_topic.accept_topic(topic) => {
-                self.post_event_over_http(message).await?;
-                Ok(vec![])
-            }
-            _ => {
-                warn!(
-                    "Received message on subscribed topic '{}' but no handler matched.",
-                    message.topic.name
-                );
-                Ok(vec![])
-            }
-        }
-    }
-
-    fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
-        let main_device_xid = self.config.device_id.clone();
-        Ok(vec![
-            self.load_and_create_supported_operations_message(&main_device_xid)?,
-            create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix),
-        ])
-    }
-
-    pub fn load_and_create_supported_operations_message(
-        &mut self,
-        external_id: &str,
-    ) -> Result<MqttMessage, ConversionError> {
-        self.supported_operations
-            .load_all(external_id, &self.config.bridge_config)?;
-        Ok(self
-            .supported_operations
-            .create_supported_operations(external_id, &self.config.bridge_config.c8y_prefix)?)
-    }
-
-    fn try_process_operation_update_message(
-        &mut self,
-        message: &DiscoverOp,
-    ) -> Result<Option<MqttMessage>, ConversionError> {
-        let needs_cloud_update = self
-            .supported_operations
-            .load_from_dir(&message.ops_dir, &self.config.bridge_config)?;
-        if !needs_cloud_update {
-            return Ok(None);
-        }
-
-        let device_xid = self.supported_operations.xid_from_path(&message.ops_dir)?;
-        let prefix = &self.config.bridge_config.c8y_prefix;
-        Ok(Some(
-            self.supported_operations
-                .create_supported_operations(&device_xid, prefix)?,
-        ))
-    }
-}
-
-pub fn create_get_pending_operations_message(prefix: &TopicPrefix) -> MqttMessage {
-    let topic = C8yTopic::upstream_topic(prefix);
-    MqttMessage::new(&topic, request_pending_operations())
-}
-
-impl CumulocityConverter {
     /// Register on C8y an operation capability for a device.
     ///
     /// Additionally when the target is a child device, operation directory for the device will be loaded and operations
@@ -998,22 +943,63 @@ impl CumulocityConverter {
         Ok(vec![])
     }
 
-    async fn register_restart_operation(
+    pub fn load_and_create_supported_operations_message(
         &mut self,
-        target: &EntityTopicId,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if !self.config.capabilities.device_restart {
-            warn!("Received restart metadata, however, device restart feature is disabled");
-            return Ok(vec![]);
-        }
-
+        external_id: &str,
+    ) -> Result<MqttMessage, ConversionError> {
+        self.supported_operations
+            .load_all(external_id, &self.config.bridge_config)?;
         Ok(self
-            .register_operation(target, "c8y_Restart")
-            .await
-            .unwrap_or_else(|err| {
-                error!("Failed to register the c8y_Restart operation for {target}: {err}");
-                vec![]
-            }))
+            .supported_operations
+            .create_supported_operations(external_id, &self.config.bridge_config.c8y_prefix)?)
+    }
+
+    /// The Cumulocity operation name and the feature it requires, if that feature is disabled
+    fn disabled_feature_for(
+        &self,
+        operation: &C8yDeviceControlOperation,
+    ) -> Option<(&'static str, &'static str)> {
+        let capabilities = &self.config.capabilities;
+        let (c8y_operation, feature, enabled) = match operation {
+            C8yDeviceControlOperation::Restart(_) => {
+                ("c8y_Restart", "device_restart", capabilities.device_restart)
+            }
+            C8yDeviceControlOperation::SoftwareUpdate(_) => (
+                "c8y_SoftwareUpdate",
+                "software_update",
+                capabilities.software_update,
+            ),
+            C8yDeviceControlOperation::LogfileRequest(_) => {
+                ("c8y_LogfileRequest", "log_upload", capabilities.log_upload)
+            }
+            C8yDeviceControlOperation::UploadConfigFile(_) => (
+                "c8y_UploadConfigFile",
+                "config_snapshot",
+                capabilities.config_snapshot,
+            ),
+            C8yDeviceControlOperation::DownloadConfigFile(_) => (
+                "c8y_DownloadConfigFile",
+                "config_update",
+                capabilities.config_update,
+            ),
+            C8yDeviceControlOperation::Firmware(_) => (
+                "c8y_Firmware",
+                "firmware_update",
+                capabilities.firmware_update,
+            ),
+            C8yDeviceControlOperation::DeviceProfile(_) => (
+                "c8y_DeviceProfile",
+                "device_profile",
+                capabilities.device_profile,
+            ),
+            C8yDeviceControlOperation::ServiceCommand(_) => (
+                "c8y_ServiceCommand",
+                "service_control",
+                capabilities.service_control,
+            ),
+            C8yDeviceControlOperation::Custom => return None,
+        };
+        (!enabled).then_some((c8y_operation, feature))
     }
 
     /// The built-in `shell_execute` command is only mapped to Cumulocity
@@ -1022,80 +1008,96 @@ impl CumulocityConverter {
         command_name == SHELL_EXECUTE_OPERATION && !self.config.capabilities.shell_execute
     }
 
-    async fn register_custom_operation(
-        &mut self,
-        target: &EntityTopicId,
-        command_name: &str,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if self.is_disabled_command(command_name) {
-            warn!(
-                "Received {command_name} metadata, however, the shell_execute feature is disabled"
-            );
-            return Ok(vec![]);
-        }
-
-        let Some(c8y_op_name) = self
-            .supported_operations
-            .operation_name_for_workflow(command_name)
-        else {
-            warn!("Failed to find the template file for `{command_name}`. Registration skipped");
-            return Ok(vec![]);
-        };
-        Ok(self
-            .register_operation(target, &c8y_op_name)
-            .await
-            .unwrap_or_else(|err| {
-                error!("Failed to register the {c8y_op_name} operation for {target}: {err}");
-                vec![]
-            }))
+    fn request_software_list(&mut self, target: &EntityTopicId) -> MqttMessage {
+        let cmd_id = self.command_id.new_id();
+        let request = SoftwareListCommand::new(target, cmd_id.clone());
+        self.commands.software_list_requested(cmd_id, target);
+        request.command_message(&self.mqtt_schema)
     }
 
-    async fn register_software_list_operation(
+    /// Return the SmartREST publish topic for the given entity
+    /// derived from its ancestors.
+    pub fn smartrest_publish_topic_for_entity(
         &self,
-        target: &EntityTopicId,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if !self.config.software_management_with_types {
-            debug!("Publishing c8y_SupportedSoftwareTypes is disabled. To enable it, run `tedge config set c8y.software_management.with_types true`.");
-            return Ok(vec![]);
-        }
-
-        // Send c8y_SupportedSoftwareTypes, which is introduced in c8y >= 10.14
-        let data = SoftwareCommandMetadata::from_json(message.payload_str()?)?;
-        let payload = json!({"c8y_SupportedSoftwareTypes": data.types}).to_string();
-        let topic = self.inventory_update_topic(target)?;
-
-        Ok(vec![MqttMessage::new(&topic, payload)])
+        entity_topic_id: &EntityTopicId,
+    ) -> Result<Topic, ConversionError> {
+        let entity = self.entity_cache.try_get(entity_topic_id)?;
+        let topic = C8yTopic::smartrest_response_topic(
+            &entity.external_id,
+            &entity.r#type(),
+            &self.config.bridge_config.c8y_prefix,
+        )
+        .expect("Topic must have been valid as the external id is pre-validated");
+        Ok(topic)
     }
 
-    async fn register_software_update_operation(
-        &mut self,
-        target: &EntityTopicId,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        if !self.config.capabilities.software_update {
-            warn!(
-                "Received software update metadata, however, software update feature is disabled"
-            );
-            return Ok(vec![]);
-        }
-        let mut registration = match self.register_operation(target, "c8y_SoftwareUpdate").await {
-            Ok(messages) => messages,
-            Err(err) => {
-                error!("Failed to register the c8y_SoftwareUpdate operation for {target}: {err}");
-                return Ok(vec![]);
-            }
-        };
-
-        if message.retain {
-            self.commands.defer_software_list_request(target);
+    /// Generates external ID of the given entity.
+    ///
+    /// The external id is generated by transforming the EntityTopicId
+    /// by replacing the `/` characters with `:` and then adding the
+    /// main device id as a prefix, to namespace all the entities under that device.
+    ///
+    /// # Examples
+    /// - `device/main//` => `DEVICE_COMMON_NAME`
+    /// - `device/child001//` => `DEVICE_COMMON_NAME:device:child001`
+    /// - `device/child001/service/service001` => `DEVICE_COMMON_NAME:device:child001:service:service001`
+    /// - `factory01/hallA/packaging/belt001` => `DEVICE_COMMON_NAME:factory01:hallA:packaging:belt001`
+    pub fn map_to_c8y_external_id(
+        entity_topic_id: &EntityTopicId,
+        main_device_xid: &EntityExternalId,
+    ) -> EntityExternalId {
+        if entity_topic_id.is_default_main_device() {
+            main_device_xid.clone()
         } else {
-            // A live capability message is published by an agent that has just (re)started
-            self.commands.reset_software_list_requests(target);
-            registration.push(self.request_software_list(target));
+            format!(
+                "{}:{}",
+                main_device_xid.as_ref(),
+                entity_topic_id
+                    .to_string()
+                    .trim_end_matches('/')
+                    .replace('/', ":")
+            )
+            .into()
         }
-        Ok(registration)
     }
+
+    /// Validates if the provided id contains any invalid characters and
+    /// returns a valid EntityExternalId if the validation passes,
+    /// else returns InvalidExternalIdError
+    pub fn validate_external_id(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
+        match id.chars().find(|c| FORBIDDEN_ID_CHARS.contains(c)) {
+            Some(invalid_char) => Err(InvalidExternalIdError {
+                external_id: id.into(),
+                invalid_char,
+            }),
+            None => Ok(id.into()),
+        }
+    }
+
+    pub fn new_error_message(&self, error: impl std::error::Error) -> MqttMessage {
+        error!("Mapping error: {}", error);
+        MqttMessage::new(&self.errors_topic, error.to_string())
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum CumulocityConverterBuildError {
+    #[error(transparent)]
+    InvalidConfig(#[from] TEdgeConfigError),
+
+    #[error(transparent)]
+    OperationsError(#[from] OperationsError),
+
+    #[error(transparent)]
+    OperationLogsError(#[from] OperationLogsError),
+
+    #[error(transparent)]
+    FileError(#[from] FileError),
+}
+
+pub fn create_get_pending_operations_message(prefix: &TopicPrefix) -> MqttMessage {
+    let topic = C8yTopic::upstream_topic(prefix);
+    MqttMessage::new(&topic, request_pending_operations())
 }
 
 #[cfg(test)]
