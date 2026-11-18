@@ -82,9 +82,8 @@ pub struct C8yMapperConfig {
 
     pub max_mqtt_payload_size: u32,
     pub alarm_sync_interval: &'static str,
-    /// How long a killed custom operation command is given to exit,
-    /// by default [`DEFAULT_EXIT_WAIT_AFTER_KILL`],
-    /// see [`LoggingChild::with_exit_wait_after_kill`](tedge_api::workflow::log::logged_command::LoggingChild::with_exit_wait_after_kill)
+    /// How long a killed custom operation command is given to exit, by default
+    /// [`DEFAULT_EXIT_WAIT_AFTER_KILL`]
     pub custom_operation_exit_wait_after_kill: Duration,
 }
 

@@ -1,25 +1,30 @@
 //! The conversion of the messages received by the Cumulocity mapper
 //!
 //! The [`C8yMapperActor`](crate::actor::C8yMapperActor) registers the entities,
-//! passes every other MQTT message it receives to [`CumulocityConverter::convert`]
-//! and publishes the messages that returns.
+//! passes every other MQTT message it receives to
+//! [`CumulocityConverter::convert`] and publishes the messages that returns.
 //!
 //! On thin-edge topics, the converter handles:
 //! - entity registrations and twin data, which update the Cumulocity inventory
-//! - command metadata, which declares a capability of an entity as a Cumulocity supported operation
-//! - the commands created by this mapper, which are passed to the `OperationHandler`
-//!   to report their progress to Cumulocity and to clear them once completed
+//! - command metadata, which declares a capability of an entity as a Cumulocity
+//!   supported operation
+//! - the commands created by this mapper, which are passed to the
+//!   `OperationHandler` to report their progress to Cumulocity and to clear
+//!   them once completed
 //!
 //! Measurements, events, alarms and health statuses are converted by flows,
-//! except that events too large for MQTT come back to the converter to be posted over HTTP.
+//! except that events too large for MQTT come back to the converter to be
+//! posted over HTTP.
 //!
-//! On Cumulocity topics, the converter handles operations,
-//! as defined by the operation files loaded in `SupportedOperations`:
-//! - built-in operations, and custom operations with a workflow, are converted into thin-edge commands
-//! - custom operations with a script are run by the mapper itself, see `script_operations`
+//! On Cumulocity topics, the converter handles operations, as defined by the
+//! operation files loaded in `SupportedOperations`:
+//! - built-in operations, and custom operations with a workflow, are converted
+//!   into thin-edge commands
+//! - custom operations without a workflow are run by the mapper itself,
+//!   executing the command of their operation file, see `script_operations`
 //!
-//! The `CommandTracker` remembers the commands created for Cumulocity operations,
-//! so that an operation received twice creates a single command.
+//! The `CommandTracker` remembers the commands created for Cumulocity
+//! operations, so that an operation received twice creates a single command.
 
 use super::config::C8yMapperConfig;
 use super::error::CumulocityMapperError;
@@ -95,7 +100,8 @@ mod script_operations;
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
-/// Converts the messages received by the Cumulocity mapper, see the [module documentation](self)
+/// Converts the messages received by the Cumulocity mapper, see the
+/// [module documentation](self)
 pub struct CumulocityConverter {
     pub config: Arc<C8yMapperConfig>,
     http_event_topic: TopicFilter,
@@ -107,11 +113,12 @@ pub struct CumulocityConverter {
     pub(crate) entity_cache: EntityCache,
 
     pub command_id: IdGenerator,
+    /// The commands created by this mapper, see `CommandTracker`
     pub(crate) commands: CommandTracker,
 
     pub supported_operations: SupportedOperations,
     pub operation_handler: OperationHandler,
-    // Keep the service actions declared by the services of this device and its children
+    /// The actions declared by each service of this device and its children
     pub(crate) service_actions: HashMap<EntityTopicId, Vec<ActionName>>,
 }
 
@@ -184,8 +191,8 @@ impl CumulocityConverter {
 
     // Entry points, called by the actor
 
-    /// This function will be the first method that's called on the converter after it's instantiated.
-    /// Return any initialization messages that must be processed before the converter starts converting regular messages.
+    /// Returns the messages to publish before any conversion: the main device's
+    /// supported operations and a request for its pending operations
     pub fn init_messages(&mut self) -> Vec<MqttMessage> {
         self.try_init_messages()
             .unwrap_or_else(|error| vec![self.new_error_message(error)])
@@ -199,6 +206,8 @@ impl CumulocityConverter {
         ])
     }
 
+    /// Converts a message received by the mapper into the messages to publish,
+    /// replacing any error with a message on the errors topic
     pub async fn convert(&mut self, input: &MqttMessage) -> Vec<MqttMessage> {
         self.try_convert(input).await.unwrap_or_else(|error| {
             let topic = input.topic.name.clone();
@@ -221,16 +230,9 @@ impl CumulocityConverter {
         }
     }
 
-    /// Try to register the target entity and any of its pending children for the incoming message,
-    /// if that target entity is not already registered with the entity store.
-    ///
-    /// For an entity metadata message (aka registration message),
-    /// an attempt is made to register that entity and any previously cached children of that entity.
-    /// If the entity can not be registered due to missing parents, it is cached with the entity store to be registered later.
-    ///
-    /// For any other data messages, auto-registration of the target entities are attempted when enabled.
-    ///
-    /// In both cases, the successfully registered entities, along with their cached data, is returned.
+    /// Registers the entity described by a registration message, or deletes it on
+    /// an empty payload. See `EntityCache::upsert` for how entities with an unknown
+    /// parent are handled.
     pub async fn process_entity_metadata_message(
         &mut self,
         message: &MqttMessage,
@@ -302,7 +304,8 @@ impl CumulocityConverter {
 
     // Messages received on thin-edge topics
 
-    /// Convert an entity registration message into its C8y counterpart
+    /// Converts an entity registration into the Cumulocity messages creating the
+    /// entity and its twin data
     fn convert_entity_registration(
         &mut self,
         source: EntityTopicId,
@@ -365,7 +368,8 @@ impl CumulocityConverter {
 
         for (fragment_key, fragment_value) in input.twin_data.iter() {
             if fragment_key == "name" || fragment_key == "type" {
-                // Skip converting the name and type fields as they are already included in the registration message
+                // Skip converting the name and type fields as they are already included in the
+                // registration message
                 continue;
             }
             let twin_messages = self.convert_twin_fragment(
@@ -387,9 +391,9 @@ impl CumulocityConverter {
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         if self.entity_cache.get(&source).is_none() {
-            // On receipt of an unregistered entity data message,
-            // since it is received before the entity itself is registered,
-            // cache it in the unregistered entity store to be processed after the entity is registered
+            // On receipt of an unregistered entity data message, since it is received
+            // before the entity itself is registered, cache it in the unregistered entity
+            // store to be processed after the entity is registered
             self.entity_cache.cache_early_data_message(message.clone());
             return Ok(vec![]);
         }
@@ -623,12 +627,12 @@ impl CumulocityConverter {
         }
     }
 
+    /// Converts the operations received on `c8y/devicecontrol/notifications`, one
+    /// per line
     async fn convert_device_control_operations(
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
-        // JSON over MQTT messages on c8y/devicecontrol/notifications can contain multiple operations in a single MQTT
-        // message, so split them
         let operation_payloads = message.payload_str()?.lines();
 
         let mut output = vec![];
@@ -641,7 +645,8 @@ impl CumulocityConverter {
                 continue;
             }
 
-            // wrap operation payload in a dummy MqttMessage wrapper because the code below assumes 1 MQTT message = 1 operation
+            // wrap operation payload in a dummy MqttMessage wrapper because the code below
+            // assumes 1 MQTT message = 1 operation
             // TODO: refactor to avoid this intermediate step and extra copies
             let operation_message = MqttMessage::new(&message.topic, operation_payload);
 
@@ -660,6 +665,8 @@ impl CumulocityConverter {
         Ok(output)
     }
 
+    /// Converts a built-in operation into a thin-edge command, or hands a custom
+    /// operation over
     async fn process_json_over_mqtt(
         &mut self,
         c8y_operation: &C8yOperation,
@@ -784,6 +791,8 @@ impl CumulocityConverter {
         Ok(output)
     }
 
+    /// Converts a custom operation into a workflow command, or runs the command of
+    /// its operation file
     async fn process_json_custom_operation(
         &self,
         c8y_operation: &C8yOperation,
@@ -831,6 +840,8 @@ impl CumulocityConverter {
         Ok(vec![])
     }
 
+    /// Passes the messages through, or reports the error to Cumulocity by setting
+    /// the operation to executing then failed
     fn operation_result_messages(
         &self,
         result: Result<Vec<MqttMessage>, CumulocityMapperError>,
@@ -860,6 +871,8 @@ impl CumulocityConverter {
                     self.config.smartrest_use_operation_id,
                     operation.to_owned(),
                 );
+                // Without an operation ID, Cumulocity fails the oldest executing
+                // operation of this type, so the operation is set to executing first
                 vec![
                     MqttMessage::new(&topic, c8y_operation.executing()),
                     MqttMessage::new(&topic, c8y_operation.failed(&err.to_string())),
@@ -898,11 +911,12 @@ impl CumulocityConverter {
 
     /// Register on C8y an operation capability for a device.
     ///
-    /// Additionally when the target is a child device, operation directory for the device will be loaded and operations
-    /// not already registered will be registered.
+    /// Additionally when the target is a child device, operation directory for the
+    /// device will be loaded and operations not already registered will be
+    /// registered.
     ///
-    /// Returns a Set Supported Operations (114) message if among registered operations there were new operations that
-    /// were not announced to the cloud.
+    /// Returns a Set Supported Operations (114) message if among registered
+    /// operations there were new operations that were not announced to the cloud.
     pub async fn register_operation(
         &mut self,
         target: &EntityTopicId,
@@ -915,14 +929,15 @@ impl CumulocityConverter {
             .await?;
 
         let need_cloud_update = match device.r#type() {
-            // for devices other than the main device and services, dynamic update of supported operations via file events is
-            // disabled, so we have to additionally load new operations from the c8y operations for that device
+            // for devices other than the main device and services, dynamic update of
+            // supported operations via file events is disabled, so we have to additionally
+            // load new operations from the c8y operations for that device
             EntityType::ChildDevice | EntityType::Service => self
                 .supported_operations
                 .load_all(device.external_id.as_ref(), &self.config.bridge_config)?,
 
-            // for main devices new operation files are loaded dynamically as they are created, so only register one
-            // operation we need
+            // for main devices new operation files are loaded dynamically as they are
+            // created, so only register one operation we need
             EntityType::MainDevice => self.supported_operations.load(
                 device.external_id.as_ref(),
                 c8y_operation_name,
@@ -954,7 +969,8 @@ impl CumulocityConverter {
             .create_supported_operations(external_id, &self.config.bridge_config.c8y_prefix)?)
     }
 
-    /// The Cumulocity operation name and the feature it requires, if that feature is disabled
+    /// The Cumulocity operation name and the feature it requires, if that feature
+    /// is disabled
     fn disabled_feature_for(
         &self,
         operation: &C8yDeviceControlOperation,
@@ -1002,8 +1018,8 @@ impl CumulocityConverter {
         (!enabled).then_some((c8y_operation, feature))
     }
 
-    /// The built-in `shell_execute` command is only mapped to Cumulocity
-    /// when the `c8y.enable.shell_execute` feature is enabled
+    /// The built-in `shell_execute` command is only mapped to Cumulocity when the
+    /// `c8y.enable.shell_execute` feature is enabled
     fn is_disabled_command(&self, command_name: &str) -> bool {
         command_name == SHELL_EXECUTE_OPERATION && !self.config.capabilities.shell_execute
     }
@@ -1015,8 +1031,8 @@ impl CumulocityConverter {
         request.command_message(&self.mqtt_schema)
     }
 
-    /// Return the SmartREST publish topic for the given entity
-    /// derived from its ancestors.
+    /// The SmartREST topic to publish on for the given entity: `c8y/s/us` for the
+    /// main device, `c8y/s/us/<external id>` for any other
     pub fn smartrest_publish_topic_for_entity(
         &self,
         entity_topic_id: &EntityTopicId,
@@ -1033,15 +1049,17 @@ impl CumulocityConverter {
 
     /// Generates external ID of the given entity.
     ///
-    /// The external id is generated by transforming the EntityTopicId
-    /// by replacing the `/` characters with `:` and then adding the
-    /// main device id as a prefix, to namespace all the entities under that device.
+    /// The external id is generated by transforming the EntityTopicId by replacing
+    /// the `/` characters with `:` and then adding the main device id as a prefix,
+    /// to namespace all the entities under that device.
     ///
     /// # Examples
     /// - `device/main//` => `DEVICE_COMMON_NAME`
     /// - `device/child001//` => `DEVICE_COMMON_NAME:device:child001`
-    /// - `device/child001/service/service001` => `DEVICE_COMMON_NAME:device:child001:service:service001`
-    /// - `factory01/hallA/packaging/belt001` => `DEVICE_COMMON_NAME:factory01:hallA:packaging:belt001`
+    /// - `device/child001/service/service001` =>
+    ///   `DEVICE_COMMON_NAME:device:child001:service:service001`
+    /// - `factory01/hallA/packaging/belt001` =>
+    ///   `DEVICE_COMMON_NAME:factory01:hallA:packaging:belt001`
     pub fn map_to_c8y_external_id(
         entity_topic_id: &EntityTopicId,
         main_device_xid: &EntityExternalId,
@@ -1061,9 +1079,8 @@ impl CumulocityConverter {
         }
     }
 
-    /// Validates if the provided id contains any invalid characters and
-    /// returns a valid EntityExternalId if the validation passes,
-    /// else returns InvalidExternalIdError
+    /// Rejects IDs containing `/`, `+` or `#`, which would break the MQTT topics
+    /// named after them
     pub fn validate_external_id(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
         match id.chars().find(|c| FORBIDDEN_ID_CHARS.contains(c)) {
             Some(invalid_char) => Err(InvalidExternalIdError {
@@ -1074,12 +1091,15 @@ impl CumulocityConverter {
         }
     }
 
+    /// Logs the error and wraps it in a message for the errors topic
     pub fn new_error_message(&self, error: impl std::error::Error) -> MqttMessage {
         error!("Mapping error: {}", error);
         MqttMessage::new(&self.errors_topic, error.to_string())
     }
 }
 
+/// The ways the converter can fail to start: an invalid configuration or
+/// unreadable operation files
 #[derive(Error, Debug)]
 pub enum CumulocityConverterBuildError {
     #[error(transparent)]

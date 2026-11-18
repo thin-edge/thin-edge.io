@@ -20,19 +20,19 @@ pub fn request_pending_operations() -> SmartrestPayload {
         .expect("shouldn't put payload over size limit")
 }
 
-/// The operation a SmartREST status update is about, named by its ID or by its type
+/// The operation a SmartREST status update refers to, by its ID or its type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OperationReference {
     /// The ID of the operation, used when `smartrest.use_operation_id` is enabled
     Id(String),
-    /// The type of the operation, e.g. `c8y_Restart`,
-    /// for Cumulocity to update the oldest matching operation of that type
+    /// The type of the operation, e.g. `c8y_Restart`, for Cumulocity to update
+    /// the oldest matching operation of that type
     Name(String),
 }
 
 impl OperationReference {
-    /// Refers to the operation by `op_id` when known and `use_operation_id` is set,
-    /// otherwise by `name`
+    /// Refers to the operation by `op_id` when known and `use_operation_id` is
+    /// set, otherwise by `name`
     pub fn new(op_id: Option<String>, use_operation_id: bool, name: String) -> Self {
         match op_id {
             Some(op_id) if use_operation_id => OperationReference::Id(op_id),
@@ -48,7 +48,8 @@ impl OperationReference {
         }
     }
 
-    /// Generates a SmartREST message to set the operation to failed with the given reason
+    /// Generates a SmartREST message to set the operation to failed with the
+    /// given reason
     pub fn failed(&self, reason: &str) -> SmartrestPayload {
         match self {
             OperationReference::Id(op_id) => fail_operation_with_id(op_id, reason),
@@ -56,11 +57,11 @@ impl OperationReference {
         }
     }
 
-    /// Generates a SmartREST message to set the operation to successful with a text or CSV result,
-    /// as [`succeed_operation`] does
+    /// Generates a SmartREST message to set the operation to successful with a
+    /// text or CSV result, as [`succeed_operation`] does
     ///
     /// # Errors
-    /// Returns an error if the result is a CSV with multiple records, or an empty CSV
+    /// Returns an error if the result is an empty CSV, or one with several records
     pub fn succeeded(
         &self,
         result: impl Into<TextOrCsv>,

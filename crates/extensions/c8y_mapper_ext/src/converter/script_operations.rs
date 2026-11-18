@@ -1,5 +1,6 @@
-//! The operations executed by the mapper itself, running the script of an operation file:
-//! for SmartREST templates, and for JSON custom operations without a workflow
+//! The operations executed by the mapper itself, running the command of an
+//! operation file: for SmartREST templates, and for JSON custom operations
+//! without a workflow
 
 use super::CumulocityConverter;
 use crate::error::ConversionError;
@@ -30,6 +31,8 @@ use tracing::error;
 use tracing::Instrument;
 
 impl CumulocityConverter {
+    /// Runs the operations received as SmartREST messages, for the templates of the
+    /// operation files
     pub(super) async fn run_smartrest_operations(
         &mut self,
         message: &MqttMessage,
@@ -47,6 +50,7 @@ impl CumulocityConverter {
         Ok(output)
     }
 
+    /// Runs the command of a JSON custom operation that has no workflow
     pub(super) async fn execute_custom_operation(
         &self,
         custom_handler: &Operation,
@@ -72,6 +76,8 @@ impl CumulocityConverter {
             .await
     }
 
+    /// Runs the command of the operation file matching a SmartREST template, for
+    /// the main device only
     async fn process_smartrest(
         &mut self,
         payload: &str,
@@ -103,6 +109,12 @@ impl CumulocityConverter {
         }
     }
 
+    /// Spawns the operation's command and returns once it is running. Unless the
+    /// operation skips them, a background task publishes the executing and final
+    /// statuses.
+    ///
+    /// # Errors
+    /// Returns an error if the command or its log file cannot be created
     pub(super) async fn execute_operation(
         &self,
         script: ShellScript,
@@ -196,8 +208,8 @@ fn final_status(
         return c8y_operation.failed(&reason);
     }
 
-    // Not truncated here, as the characters rejected by Cumulocity
-    // are removed before the result is truncated to fit the message
+    // Not truncated here, as the characters rejected by Cumulocity are removed
+    // before the result is truncated to fit the message
     let stdout = String::from_utf8(output.stdout).unwrap_or_else(|err| {
         error!("The output contains invalid UTF-8: {err}");
         String::new()
@@ -261,7 +273,8 @@ mod tests {
         );
     }
 
-    /// The files in the given directory and its subdirectories whose names start with the given prefix
+    /// The files in the given directory and its subdirectories whose names start
+    /// with the given prefix
     fn log_files(dir: &Utf8Path, prefix: &str) -> Vec<String> {
         let mut found = vec![];
         for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {

@@ -69,7 +69,8 @@ impl SupportedOperations {
     /// Loads the supported operations of the main device and of its child devices
     ///
     /// # Errors
-    /// Returns an error if an operations directory or an operation file cannot be read or parsed
+    /// Returns an error if an operations directory or an operation file cannot
+    /// be read or parsed
     pub fn load_all_devices<C: Record + C8yPrefix>(
         device_id: String,
         base_ops_dir: Arc<ManagedDir>,
