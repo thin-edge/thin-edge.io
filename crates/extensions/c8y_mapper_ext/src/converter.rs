@@ -23,6 +23,7 @@
 
 use super::config::C8yMapperConfig;
 use super::error::CumulocityMapperError;
+use crate::actor::CmdId;
 use crate::actor::IdDownloadRequest;
 use crate::actor::IdDownloadResult;
 use crate::command_tracker::CommandTracker;
@@ -53,7 +54,6 @@ use c8y_http_proxy::handle::C8YHttpProxy;
 use c8y_http_proxy::messages::CreateEvent;
 use serde_json::json;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 use tedge_actors::ClientMessageBox;
 use tedge_actors::LoggingSender;
@@ -95,65 +95,37 @@ mod script_operations;
 const FORBIDDEN_ID_CHARS: [char; 3] = ['/', '+', '#'];
 const EARLY_MESSAGE_BUFFER_SIZE: usize = 100;
 
-#[derive(Debug)]
-pub struct MapperConfig {
-    pub http_event_topic: TopicFilter,
-    pub errors_topic: Topic,
-}
-
 impl CumulocityConverter {
     pub async fn convert(&mut self, input: &MqttMessage) -> Vec<MqttMessage> {
-        let messages_or_err = self.try_convert(input).await;
-        self.wrap_errors_with_input(messages_or_err, input)
-    }
-
-    pub fn wrap_errors_with_input(
-        &self,
-        messages_or_err: Result<Vec<MqttMessage>, ConversionError>,
-        input: &MqttMessage,
-    ) -> Vec<MqttMessage> {
-        messages_or_err
-            .map_err(|error| MessageConversionError {
-                error,
-                topic: input.topic.name.clone(),
-            })
-            .unwrap_or_else(|error| vec![self.new_error_message(error)])
+        self.try_convert(input).await.unwrap_or_else(|error| {
+            let topic = input.topic.name.clone();
+            vec![self.new_error_message(MessageConversionError { error, topic })]
+        })
     }
 
     pub fn new_error_message(&self, error: impl std::error::Error) -> MqttMessage {
         error!("Mapping error: {}", error);
-        MqttMessage::new(&self.get_mapper_config().errors_topic, error.to_string())
+        MqttMessage::new(&self.errors_topic, error.to_string())
     }
 
     /// This function will be the first method that's called on the converter after it's instantiated.
     /// Return any initialization messages that must be processed before the converter starts converting regular messages.
     pub fn init_messages(&mut self) -> Vec<MqttMessage> {
-        match self.try_init_messages() {
-            Ok(messages) => messages,
-            Err(error) => {
-                error!("Mapping error: {}", error);
-                vec![MqttMessage::new(
-                    &self.get_mapper_config().errors_topic,
-                    error.to_string(),
-                )]
-            }
-        }
+        self.try_init_messages()
+            .unwrap_or_else(|error| vec![self.new_error_message(error)])
     }
 
     pub fn process_operation_update_message(&mut self, message: DiscoverOp) -> Option<MqttMessage> {
-        let message_or_err = self.try_process_operation_update_message(&message);
-        match message_or_err {
-            Ok(Some(msg)) => Some(msg),
-            Ok(None) => None,
-            Err(err) => Some(self.new_error_message(err)),
-        }
+        self.try_process_operation_update_message(&message)
+            .unwrap_or_else(|err| Some(self.new_error_message(err)))
     }
 }
 
 /// Converts the messages received by the Cumulocity mapper, see the [module documentation](self)
 pub struct CumulocityConverter {
     pub config: Arc<C8yMapperConfig>,
-    pub(crate) mapper_config: MapperConfig,
+    http_event_topic: TopicFilter,
+    errors_topic: Topic,
     pub device_name: String,
     mqtt_publisher: LoggingSender<MqttMessage>,
     pub http_proxy: C8YHttpProxy,
@@ -197,10 +169,7 @@ impl CumulocityConverter {
         let mqtt_schema = config.mqtt_schema.clone();
         let http_event_topic =
             EventConverter::http_event_topic_filter(&config.bridge_config.c8y_prefix);
-        let mapper_config = MapperConfig {
-            http_event_topic,
-            errors_topic: mqtt_schema.error_topic(),
-        };
+        let errors_topic = mqtt_schema.error_topic();
 
         let entity_cache = EntityCache::new(
             flow_context,
@@ -225,13 +194,14 @@ impl CumulocityConverter {
 
         Ok(CumulocityConverter {
             config: Arc::new(config),
-            mapper_config,
+            http_event_topic,
+            errors_topic,
             device_name: device_id,
             supported_operations: operation_manager,
             http_proxy,
             mqtt_publisher,
             service_type,
-            mqtt_schema: mqtt_schema.clone(),
+            mqtt_schema,
             entity_cache,
             command_id,
             commands: CommandTracker::default(),
@@ -265,7 +235,7 @@ impl CumulocityConverter {
 
         let register_message =
             EntityRegistrationMessage::try_from(topic_id, message.payload_bytes())?;
-        Ok(self.entity_cache.upsert(register_message.clone())?)
+        Ok(self.entity_cache.upsert(register_message)?)
     }
 
     /// Convert an entity registration message into its C8y counterpart
@@ -275,7 +245,6 @@ impl CumulocityConverter {
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let input = EntityRegistrationMessage::try_from(source, message.payload_bytes())?;
-        let mut messages = vec![];
 
         // Parse the optional fields
         let display_name = input.twin_data.get("name").and_then(|v| v.as_str());
@@ -283,25 +252,28 @@ impl CumulocityConverter {
 
         let entity_topic_id = &input.topic_id;
         let external_id = self.entity_cache.try_get_external_id(entity_topic_id)?;
-        let reg_message = match input.r#type {
-            EntityType::MainDevice => None,
+        let mut messages = vec![];
+        match input.r#type {
+            // Created by `tedge connect c8y`, or when the device first sends data
+            EntityType::MainDevice => {}
             EntityType::ChildDevice => {
                 let parent_xid: Option<&EntityExternalId> =
                     self.entity_cache.parent_external_id(entity_topic_id)?;
                 let display_name = display_name.unwrap_or(external_id.as_ref());
                 let display_type = display_type.unwrap_or("thin-edge.io-child");
 
-                let child_creation_message = child_device_creation_message(
-                    external_id.as_ref(),
-                    Some(display_name),
-                    Some(display_type),
-                    parent_xid.map(|xid| xid.as_ref()),
-                    &self.device_name,
-                    &self.config.bridge_config.c8y_prefix,
-                    self.config.smartrest_child_device_create_with_device_marker,
-                )
-                .context("Could not create device creation message")?;
-                Some(child_creation_message)
+                messages.push(
+                    child_device_creation_message(
+                        external_id.as_ref(),
+                        Some(display_name),
+                        Some(display_type),
+                        parent_xid.map(|xid| xid.as_ref()),
+                        &self.device_name,
+                        &self.config.bridge_config.c8y_prefix,
+                        self.config.smartrest_child_device_create_with_device_marker,
+                    )
+                    .context("Could not create device creation message")?,
+                );
             }
             EntityType::Service => {
                 let parent_xid = self.entity_cache.parent_external_id(entity_topic_id)?;
@@ -312,22 +284,19 @@ impl CumulocityConverter {
                 });
                 let display_type = display_type.unwrap_or(&self.service_type);
 
-                let service_creation_message = service_creation_message(
-                    external_id.as_ref(),
-                    display_name,
-                    display_type,
-                    "up",
-                    parent_xid.map(|xid| xid.as_ref()),
-                    &self.device_name,
-                    &self.config.bridge_config.c8y_prefix,
-                )
-                .context("Could not create service creation message")?;
-                Some(service_creation_message)
+                messages.push(
+                    service_creation_message(
+                        external_id.as_ref(),
+                        display_name,
+                        display_type,
+                        "up",
+                        parent_xid.map(|xid| xid.as_ref()),
+                        &self.device_name,
+                        &self.config.bridge_config.c8y_prefix,
+                    )
+                    .context("Could not create service creation message")?,
+                );
             }
-        };
-
-        if let Some(reg_message) = reg_message {
-            messages.push(reg_message);
         }
 
         for (fragment_key, fragment_value) in input.twin_data.iter() {
@@ -397,16 +366,13 @@ impl CumulocityConverter {
     /// returns a valid EntityExternalId if the validation passes,
     /// else returns InvalidExternalIdError
     pub fn validate_external_id(id: &str) -> Result<EntityExternalId, InvalidExternalIdError> {
-        let forbidden_chars = HashSet::from(FORBIDDEN_ID_CHARS);
-        for c in id.chars() {
-            if forbidden_chars.contains(&c) {
-                return Err(InvalidExternalIdError {
-                    external_id: id.into(),
-                    invalid_char: c,
-                });
-            }
+        match id.chars().find(|c| FORBIDDEN_ID_CHARS.contains(c)) {
+            Some(invalid_char) => Err(InvalidExternalIdError {
+                external_id: id.into(),
+                invalid_char,
+            }),
+            None => Ok(id.into()),
         }
-        Ok(id.into())
     }
 
     async fn post_event_over_http(&mut self, message: &MqttMessage) -> Result<(), ConversionError> {
@@ -456,10 +422,10 @@ impl CumulocityConverter {
             let operation_message = MqttMessage::new(&message.topic, operation_payload);
 
             let result = self
-                .process_json_over_mqtt(&operation, &operation_message)
+                .process_json_over_mqtt(&operation, cmd_id.clone(), &operation_message)
                 .await;
             let result = self.handle_c8y_operation_result(
-                &result,
+                result,
                 &operation.external_source.external_id,
                 Some(operation.op_id.clone()),
             );
@@ -473,9 +439,9 @@ impl CumulocityConverter {
     async fn process_json_over_mqtt(
         &mut self,
         c8y_operation: &C8yOperation,
+        cmd_id: CmdId,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        let cmd_id = self.command_id.new_id_with_str(&c8y_operation.op_id);
         let device_xid = c8y_operation.external_source.external_id.clone();
         let extras = &c8y_operation.extras;
 
@@ -523,7 +489,7 @@ impl CumulocityConverter {
             }
             C8yDeviceControlOperation::Custom => {
                 return self
-                    .process_json_custom_operation(c8y_operation, message)
+                    .process_json_custom_operation(c8y_operation, cmd_id, message)
                     .await;
             }
         };
@@ -592,11 +558,11 @@ impl CumulocityConverter {
         }
 
         let result = self
-            .process_json_custom_operation(&operation, message)
+            .process_json_custom_operation(&operation, cmd_id.clone(), message)
             .await;
 
         let output = self.handle_c8y_operation_result(
-            &result,
+            result,
             &operation.external_source.external_id,
             Some(operation.op_id),
         );
@@ -608,10 +574,10 @@ impl CumulocityConverter {
     async fn process_json_custom_operation(
         &self,
         c8y_operation: &C8yOperation,
+        cmd_id: CmdId,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         let operation_id = &c8y_operation.op_id;
-        let cmd_id = self.command_id.new_id_with_str(operation_id);
         let device_xid = c8y_operation.external_source.external_id.clone();
         let handlers = self.supported_operations.get_operation_handlers(
             &device_xid,
@@ -654,7 +620,7 @@ impl CumulocityConverter {
 
     fn handle_c8y_operation_result(
         &self,
-        result: &Result<Vec<MqttMessage>, CumulocityMapperError>,
+        result: Result<Vec<MqttMessage>, CumulocityMapperError>,
         target_xid: &str,
         op_id: Option<String>,
     ) -> Vec<MqttMessage> {
@@ -687,7 +653,7 @@ impl CumulocityConverter {
                 ]
             }
 
-            Ok(msgs) => msgs.to_owned(),
+            Ok(msgs) => msgs,
         }
     }
 
@@ -766,10 +732,6 @@ pub enum CumulocityConverterBuildError {
 }
 
 impl CumulocityConverter {
-    fn get_mapper_config(&self) -> &MapperConfig {
-        &self.mapper_config
-    }
-
     pub async fn try_convert(
         &mut self,
         message: &MqttMessage,
@@ -777,23 +739,14 @@ impl CumulocityConverter {
         debug!("Mapping message on topic: {}", message.topic.name);
         trace!("Message content: {:?}", message.payload_str());
         match self.mqtt_schema.entity_channel_of(&message.topic) {
-            Ok((source, channel)) => self.try_convert_te_topics(source, channel, message).await,
-            Err(_) => self.try_convert_tedge_and_c8y_topics(message).await,
-        }
-    }
-
-    async fn try_convert_te_topics(
-        &mut self,
-        source: EntityTopicId,
-        channel: Channel,
-        message: &MqttMessage,
-    ) -> Result<Vec<MqttMessage>, ConversionError> {
-        match &channel {
-            Channel::EntityMetadata => self.try_convert_entity_registration(source, message),
-            _ => {
+            Ok((source, Channel::EntityMetadata)) => {
+                self.try_convert_entity_registration(source, message)
+            }
+            Ok((source, channel)) => {
                 self.try_convert_data_message(source, channel, message)
                     .await
             }
+            Err(_) => self.try_convert_tedge_and_c8y_topics(message).await,
         }
     }
 
@@ -912,7 +865,7 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         self.commands.expire();
 
-        let messages = match &message.topic {
+        match &message.topic {
             topic
                 if C8yDeviceControlTopic::accept(topic, &self.config.bridge_config.c8y_prefix) =>
             {
@@ -944,7 +897,7 @@ impl CumulocityConverter {
                 // an error for this message we expect
                 Ok(vec![])
             }
-            topic if self.mapper_config.http_event_topic.accept_topic(topic) => {
+            topic if self.http_event_topic.accept_topic(topic) => {
                 self.post_event_over_http(message).await?;
                 Ok(vec![])
             }
@@ -955,25 +908,15 @@ impl CumulocityConverter {
                 );
                 Ok(vec![])
             }
-        }?;
-
-        Ok(messages)
+        }
     }
 
     fn try_init_messages(&mut self) -> Result<Vec<MqttMessage>, ConversionError> {
-        let mut messages = vec![];
-
-        // supported operations for the main device
-        let supported_operations_message =
-            self.load_and_create_supported_operations_messages(&self.config.device_id.clone())?;
-        let pending_operations_message =
-            create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix);
-
-        messages.append(&mut vec![
-            supported_operations_message,
-            pending_operations_message,
-        ]);
-        Ok(messages)
+        let main_device_xid = self.config.device_id.clone();
+        Ok(vec![
+            self.load_and_create_supported_operations_messages(&main_device_xid)?,
+            create_get_pending_operations_message(&self.config.bridge_config.c8y_prefix),
+        ])
     }
 
     pub fn load_and_create_supported_operations_messages(
@@ -982,11 +925,9 @@ impl CumulocityConverter {
     ) -> Result<MqttMessage, ConversionError> {
         self.supported_operations
             .load_all(external_id, &self.config.bridge_config)?;
-        let supported_operations_message = self
+        Ok(self
             .supported_operations
-            .create_supported_operations(external_id, &self.config.bridge_config.c8y_prefix)?;
-
-        Ok(supported_operations_message)
+            .create_supported_operations(external_id, &self.config.bridge_config.c8y_prefix)?)
     }
 
     fn try_process_operation_update_message(
@@ -996,18 +937,16 @@ impl CumulocityConverter {
         let needs_cloud_update = self
             .supported_operations
             .load_from_dir(&message.ops_dir, &self.config.bridge_config)?;
-
-        if needs_cloud_update {
-            let device_xid = self.supported_operations.xid_from_path(&message.ops_dir)?;
-            Ok(Some(
-                self.supported_operations.create_supported_operations(
-                    &device_xid,
-                    &self.config.bridge_config.c8y_prefix,
-                )?,
-            ))
-        } else {
-            Ok(None)
+        if !needs_cloud_update {
+            return Ok(None);
         }
+
+        let device_xid = self.supported_operations.xid_from_path(&message.ops_dir)?;
+        let prefix = &self.config.bridge_config.c8y_prefix;
+        Ok(Some(
+            self.supported_operations
+                .create_supported_operations(&device_xid, prefix)?,
+        ))
     }
 }
 

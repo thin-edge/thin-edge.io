@@ -38,7 +38,7 @@ impl CumulocityConverter {
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
             let result = self.process_smartrest(smartrest_message.as_str()).await;
             let mut msgs = self.handle_c8y_operation_result(
-                &result,
+                result,
                 self.entity_cache.main_device_external_id().as_ref(),
                 None,
             );
@@ -52,19 +52,26 @@ impl CumulocityConverter {
         payload: &str,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         match get_smartrest_device_id(payload) {
-            Some(device_id) => {
-                match get_smartrest_template_id(payload).as_str() {
-                    template if device_id == self.device_name => {
-                        self.forward_operation_request(payload, template).await
-                    }
-                    _ => {
-                        // Ignore any other child device incoming request as not yet supported
-                        debug!("Ignored. Message not yet supported: {payload}");
-                        Ok(vec![])
-                    }
+            Some(device_id) if device_id == self.device_name => {
+                let template = get_smartrest_template_id(payload);
+                let Some(operation) = self
+                    .supported_operations
+                    .matching_smartrest_template(&template)
+                else {
+                    return Ok(vec![]);
+                };
+                if let Some(command) = operation.command() {
+                    let script = ShellScript {
+                        command,
+                        args: vec![payload.to_owned()],
+                    };
+                    self.execute_operation(script, operation, None).await?;
                 }
+                // The statuses are published by the task that execute_operation spawns
+                Ok(vec![])
             }
-            None => {
+            // Child devices are not supported yet
+            _ => {
                 debug!("Ignored. Message not yet supported: {payload}");
                 Ok(vec![])
             }
@@ -77,51 +84,23 @@ impl CumulocityConverter {
         message: &MqttMessage,
         operation_id: &str,
     ) -> Result<(), CumulocityMapperError> {
+        let handler_error =
+            |err_msg: String| CumulocityMapperError::JsonCustomOperationHandlerError {
+                operation: custom_handler.name.clone(),
+                err_msg,
+            };
         let state = GenericCommandState::from_command_message(message).map_err(|e| {
-            CumulocityMapperError::JsonCustomOperationHandlerError {
-                operation: custom_handler.name.clone(),
-                err_msg: format!("Invalid JSON message, {e}. Message: {message:?}"),
-            }
+            handler_error(format!("Invalid JSON message, {e}. Message: {message:?}"))
         })?;
-        let command_value = custom_handler.command().ok_or(
-            CumulocityMapperError::JsonCustomOperationHandlerError {
-                operation: custom_handler.name.clone(),
-                err_msg: "'command' is missing".to_string(),
-            },
-        )?;
-        let script_template = ShellScript::from_str(&command_value).map_err(|e| {
-            CumulocityMapperError::JsonCustomOperationHandlerError {
-                operation: custom_handler.name.clone(),
-                err_msg: format!("Fail to parse the script {command_value}: {e}"),
-            }
-        })?;
+        let command_value = custom_handler
+            .command()
+            .ok_or_else(|| handler_error("'command' is missing".to_owned()))?;
+        let script_template = ShellScript::from_str(&command_value)
+            .map_err(|e| handler_error(format!("Fail to parse the script {command_value}: {e}")))?;
         let script = script_template.inject_values(&state);
 
         self.execute_operation(script, custom_handler, Some(operation_id.into()))
-            .await?;
-
-        Ok(())
-    }
-
-    async fn forward_operation_request(
-        &mut self,
-        payload: &str,
-        template: &str,
-    ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
-        if let Some(operation) = self
-            .supported_operations
-            .matching_smartrest_template(template)
-        {
-            if let Some(command) = operation.command() {
-                let script = ShellScript {
-                    command,
-                    args: vec![payload.to_string()],
-                };
-                self.execute_operation(script, operation, None).await?;
-            }
-        }
-        // MQTT messages will be sent during the operation execution
-        Ok(vec![])
+            .await
     }
 
     pub(super) async fn execute_operation(
