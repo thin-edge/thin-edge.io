@@ -1073,13 +1073,13 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        match self.register_operation(target, "c8y_Restart").await {
-            Err(_) => {
-                error!("Fail to register `restart` operation for unknown device: {target}");
-                Ok(vec![])
-            }
-            Ok(messages) => Ok(messages),
-        }
+        Ok(self
+            .register_operation(target, "c8y_Restart")
+            .await
+            .unwrap_or_else(|err| {
+                error!("Failed to register the c8y_Restart operation for {target}: {err}");
+                vec![]
+            }))
     }
 
     /// The built-in `shell_execute` command is only mapped to Cumulocity
@@ -1100,21 +1100,20 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
 
-        if let Some(c8y_op_name) = self
+        let Some(c8y_op_name) = self
             .supported_operations
             .get_operation_name_by_workflow_operation(command_name)
-        {
-            match self.register_operation(target, &c8y_op_name).await {
-                Err(_) => {
-                    error!("Fail to register `{c8y_op_name}` operation for entity: {target}");
-                    Ok(vec![])
-                }
-                Ok(messages) => Ok(messages),
-            }
-        } else {
+        else {
             warn!("Failed to find the template file for `{command_name}`. Registration skipped");
-            Ok(vec![])
-        }
+            return Ok(vec![]);
+        };
+        Ok(self
+            .register_operation(target, &c8y_op_name)
+            .await
+            .unwrap_or_else(|err| {
+                error!("Failed to register the {c8y_op_name} operation for {target}: {err}");
+                vec![]
+            }))
     }
 
     async fn register_software_list_operation(
@@ -1147,11 +1146,11 @@ impl CumulocityConverter {
             return Ok(vec![]);
         }
         let mut registration = match self.register_operation(target, "c8y_SoftwareUpdate").await {
-            Err(_) => {
-                error!("Fail to register `software-list` operation for unknown device: {target}");
+            Ok(messages) => messages,
+            Err(err) => {
+                error!("Failed to register the c8y_SoftwareUpdate operation for {target}: {err}");
                 return Ok(vec![]);
             }
-            Ok(messages) => messages,
         };
 
         if message.retain {
