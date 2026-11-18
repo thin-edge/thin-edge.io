@@ -1802,6 +1802,31 @@ config = "KeepOld"
         );
     }
 
+    #[test_case::test_case("[c8y.mapper.mqtt]\nmax_payload_size = 0" ; "c8y zero")]
+    #[test_case::test_case("[c8y.mapper.mqtt]\nmax_payload_size = 268435456" ; "c8y above max")]
+    #[test_case::test_case("[az.mapper.mqtt]\nmax_payload_size = 0" ; "az zero")]
+    #[test_case::test_case("[aws.mapper.mqtt]\nmax_payload_size = 268435456" ; "aws above max")]
+    #[tokio::test]
+    async fn out_of_range_max_payload_size_in_tedge_toml_is_rejected(toml: &str) {
+        let (_dir, t) = create_temp_tedge_config(toml).unwrap();
+        let err = t.load_dto_with_warnings::<FileOnly>().await.unwrap_err();
+        let TEdgeConfigError::FromTOMLParse(err) = err else {
+            panic!("expected a TOML parse error, got {err:?}");
+        };
+        assert!(
+            err.to_string().contains("Invalid MQTT payload size limit"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn max_payload_size_in_range_is_read_from_tedge_toml() {
+        let (_dir, t) =
+            create_temp_tedge_config("[c8y.mapper.mqtt]\nmax_payload_size = 16384").unwrap();
+        let (_dto, warnings) = t.load_dto_with_warnings::<FileOnly>().await.unwrap();
+        assert_eq!(warnings.0, &[] as &[&'static str]);
+    }
+
     #[tokio::test]
     async fn apt_dpk_is_migrated_to_apt_dpkg_from_v1_config() {
         let (_dir, t) =

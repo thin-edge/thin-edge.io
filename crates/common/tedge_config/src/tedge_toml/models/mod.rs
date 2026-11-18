@@ -123,8 +123,15 @@ impl FromStr for AutoLogUpload {
 
 pub const MQTT_MAX_PAYLOAD_SIZE: u32 = 268435455;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Document)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
 pub struct MqttPayloadLimit(pub u32);
+
+impl Document for MqttPayloadLimit {
+    fn ty() -> doku::Type {
+        u32::ty()
+    }
+}
 
 impl Default for MqttPayloadLimit {
     fn default() -> Self {
@@ -188,5 +195,55 @@ mod tests {
         // Anything less than that is also valid
         let res = MqttPayloadLimit::try_from(268435455 - 1);
         assert_matches!(res.unwrap().0, 268435454);
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    struct MqttConfig {
+        max_payload_size: MqttPayloadLimit,
+    }
+
+    #[test]
+    fn mqtt_payload_limit_is_range_checked_when_deserialized_from_toml() {
+        for invalid in [0, 268435455 + 1] {
+            let toml = format!("max_payload_size = {invalid}");
+            let err = toml::from_str::<MqttConfig>(&toml).unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains(&format!("Invalid MQTT payload size limit: {invalid}")),
+                "unexpected error for {invalid}: {err}"
+            );
+        }
+
+        for valid in [268435455, 16384] {
+            let toml = format!("max_payload_size = {valid}");
+            let config = toml::from_str::<MqttConfig>(&toml).unwrap();
+            assert_eq!(config.max_payload_size, MqttPayloadLimit(valid));
+        }
+
+        // Negative values are not even a valid u32
+        assert!(toml::from_str::<MqttConfig>("max_payload_size = -1").is_err());
+    }
+
+    #[test]
+    fn mqtt_payload_limit_is_range_checked_when_deserialized_from_json() {
+        for invalid in [0, 268435455 + 1] {
+            let err = serde_json::from_str::<MqttPayloadLimit>(&invalid.to_string()).unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains(&format!("Invalid MQTT payload size limit: {invalid}")),
+                "unexpected error for {invalid}: {err}"
+            );
+        }
+
+        for valid in [268435455, 1024] {
+            let limit = serde_json::from_str::<MqttPayloadLimit>(&valid.to_string()).unwrap();
+            assert_eq!(limit, MqttPayloadLimit(valid));
+        }
+    }
+
+    #[test]
+    fn mqtt_payload_limit_is_serialized_as_a_plain_integer() {
+        let json = serde_json::to_string(&MqttPayloadLimit(16384)).unwrap();
+        assert_eq!(json, "16384");
     }
 }
