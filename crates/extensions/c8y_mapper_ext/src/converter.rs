@@ -448,7 +448,7 @@ impl CumulocityConverter {
 
             if self.commands.is_known(&cmd_id) {
                 info!("{cmd_id} is already addressed");
-                return Ok(vec![]);
+                continue;
             }
 
             // wrap operation payload in a dummy MqttMessage wrapper because the code below assumes 1 MQTT message = 1 operation

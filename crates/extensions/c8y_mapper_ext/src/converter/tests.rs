@@ -865,6 +865,41 @@ async fn operations_are_deduplicated_after_completion() {
 }
 
 #[tokio::test]
+async fn a_repeated_operation_does_not_hide_the_other_operations_of_its_message() {
+    let tmp_dir = TempTedgeDir::new();
+    let (mut converter, _http_proxy) = create_c8y_converter(&tmp_dir);
+    let repeated = json!({
+        "id": "16574089",
+        "status": "PENDING",
+        "c8y_Restart": {},
+        "externalSource": {"externalId": "test-device", "type": "c8y_Serial"}
+    });
+    let new = json!({
+        "id": "16574090",
+        "status": "PENDING",
+        "c8y_Restart": {},
+        "externalSource": {"externalId": "test-device", "type": "c8y_Serial"}
+    });
+    let topic = Topic::new_unchecked("c8y/devicecontrol/notifications");
+    converter
+        .try_convert(&MqttMessage::new(&topic, repeated.to_string()))
+        .await
+        .unwrap();
+
+    let both = MqttMessage::new(&topic, format!("{repeated}\n{new}"));
+
+    assert_eq!(
+        converter.try_convert(&both).await.unwrap(),
+        vec![MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/restart/c8y-mapper-16574090"),
+            json!({"status":"init"}).to_string(),
+        )
+        .with_qos(QoS::AtLeastOnce)
+        .with_retain()]
+    );
+}
+
+#[tokio::test]
 async fn custom_operations_are_deduplicated() {
     let tmp_dir = TempTedgeDir::new();
     let custom_op = r#"exec.topic = "my/custom/topic"
