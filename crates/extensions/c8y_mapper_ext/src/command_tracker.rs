@@ -72,7 +72,7 @@ impl CommandTracker {
     }
 
     /// Forgets the expired commands, checking at most once per [`EXPIRY_CHECK_INTERVAL`]
-    pub fn expire(&mut self) {
+    pub fn remove_expired(&mut self) {
         if self.last_expiry_check.elapsed() <= EXPIRY_CHECK_INTERVAL {
             return;
         }
@@ -149,7 +149,7 @@ mod tests {
         commands.completed("c8y-mapper-1");
 
         tokio::time::advance(EXPIRY_CHECK_INTERVAL + Duration::from_secs(1)).await;
-        commands.expire();
+        commands.remove_expired();
 
         assert!(!commands.is_known("c8y-mapper-1"));
     }
@@ -163,7 +163,7 @@ mod tests {
 
         // Past the hourly check, but only 30 minutes after the completion
         tokio::time::advance(Duration::from_secs(1801)).await;
-        commands.expire();
+        commands.remove_expired();
 
         assert!(commands.is_known("c8y-mapper-1"));
     }
@@ -176,7 +176,7 @@ mod tests {
         commands.resumed("c8y-mapper-2", &OperationType::Restart, &main);
 
         tokio::time::advance(ACTIVE_COMMAND_EXPIRY + Duration::from_secs(1)).await;
-        commands.expire();
+        commands.remove_expired();
 
         assert!(!commands.is_known("c8y-mapper-1"));
         assert!(commands.is_known("c8y-mapper-2"));

@@ -1393,7 +1393,7 @@ async fn handle_operations_for_child_device() {
         .to_string(),
     );
     let command = converter
-        .parse_c8y_devicecontrol_topic(&mqtt_message)
+        .convert_device_control_operations(&mqtt_message)
         .await
         .unwrap()
         .get(0)
@@ -1532,7 +1532,7 @@ async fn handles_empty_service_type_2383() {
         smartrest_fields.next().unwrap(),
         format!(
             "{}:device:main:service:service1",
-            converter.c8y_converter.device_name
+            converter.c8y_converter.config.device_id
         )
     );
     assert_eq!(smartrest_fields.next().unwrap(), "service");
