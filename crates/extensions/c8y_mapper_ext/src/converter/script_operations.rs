@@ -30,14 +30,14 @@ use tracing::error;
 use tracing::Instrument;
 
 impl CumulocityConverter {
-    pub(super) async fn parse_c8y_smartrest_topics(
+    pub(super) async fn run_smartrest_operations(
         &mut self,
         message: &MqttMessage,
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let mut output: Vec<MqttMessage> = Vec::new();
         for smartrest_message in collect_smartrest_messages(message.payload_str()?) {
             let result = self.process_smartrest(smartrest_message.as_str()).await;
-            let mut msgs = self.handle_c8y_operation_result(
+            let mut msgs = self.operation_result_messages(
                 result,
                 self.entity_cache.main_device_external_id().as_ref(),
                 None,
@@ -52,7 +52,7 @@ impl CumulocityConverter {
         payload: &str,
     ) -> Result<Vec<MqttMessage>, CumulocityMapperError> {
         match get_smartrest_device_id(payload) {
-            Some(device_id) if device_id == self.device_name => {
+            Some(device_id) if device_id == self.config.device_id => {
                 let template = get_smartrest_template_id(payload);
                 let Some(operation) = self
                     .supported_operations

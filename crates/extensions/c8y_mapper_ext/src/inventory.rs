@@ -84,7 +84,7 @@ impl CumulocityConverter {
         source: &EntityTopicId,
         fragment_value: JsonValue,
     ) -> Result<MqttMessage, ConversionError> {
-        let inventory_update_topic = self.get_inventory_update_topic(source)?;
+        let inventory_update_topic = self.inventory_update_topic(source)?;
 
         Ok(MqttMessage::new(
             &inventory_update_topic,
@@ -93,10 +93,7 @@ impl CumulocityConverter {
     }
 
     /// Returns the JSON over MQTT inventory update topic
-    pub fn get_inventory_update_topic(
-        &self,
-        source: &EntityTopicId,
-    ) -> Result<Topic, ConversionError> {
+    pub fn inventory_update_topic(&self, source: &EntityTopicId) -> Result<Topic, ConversionError> {
         let entity_external_id = self.entity_cache.try_get(source)?.external_id.as_ref();
         let topic =
             inventory_update_topic(&self.config.bridge_config.c8y_prefix, entity_external_id);
