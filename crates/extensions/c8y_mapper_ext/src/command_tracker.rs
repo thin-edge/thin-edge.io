@@ -8,13 +8,14 @@ use tokio::time::Instant;
 
 /// How often the commands are checked for expiry
 const EXPIRY_CHECK_INTERVAL: Duration = Duration::from_secs(3600);
-/// How long a command received from Cumulocity is remembered, if never completed
+/// How long a command received from Cumulocity is remembered if never completed
 const ACTIVE_COMMAND_EXPIRY: Duration = Duration::from_secs(12 * 3600);
 /// How long a completed command is remembered, to ignore a late duplicate
 const COMPLETED_COMMAND_EXPIRY: Duration = Duration::from_secs(3600);
 
-/// Tracks the commands of the mapper, to avoid creating a command twice for the same operation
-/// and to avoid requesting a software list while an equivalent request is still pending
+/// Tracks the commands of the mapper, to avoid creating a command twice for the
+/// same operation and to avoid requesting a software list while an equivalent
+/// request is still pending
 pub(crate) struct CommandTracker {
     /// The commands in progress, with the time they were received from Cumulocity,
     /// or `None` for those received as retained messages, which never expire
@@ -23,8 +24,9 @@ pub(crate) struct CommandTracker {
     last_expiry_check: Instant,
     /// The software list commands issued by this mapper, until they are cleared
     pending_software_list_requests: HashMap<CmdId, EntityTopicId>,
-    /// The targets for which a software list has to be requested, once the pending requests are known.
-    /// A capability message can be received before the retained requests issued before a restart.
+    /// The targets for which a software list has to be requested, once the pending
+    /// requests are known. A capability message can be received before the retained
+    /// requests issued before a restart.
     deferred_software_list_requests: HashSet<EntityTopicId>,
 }
 
@@ -51,8 +53,8 @@ impl CommandTracker {
         self.active.insert(cmd_id, Some(Instant::now()));
     }
 
-    /// Records a command of this mapper received as a retained message,
-    /// possibly issued before a restart of the mapper
+    /// Records a command of this mapper received as a retained message, possibly
+    /// issued before a restart of the mapper
     pub fn resumed(&mut self, cmd_id: &str, operation: &OperationType, target: &EntityTopicId) {
         // Overrides any insertion time, disabling the time-based expiry
         self.active.insert(cmd_id.to_owned(), None);
@@ -71,7 +73,7 @@ impl CommandTracker {
         self.pending_software_list_requests.remove(cmd_id);
     }
 
-    /// Forgets the expired commands, checking at most once per [`EXPIRY_CHECK_INTERVAL`]
+    /// Removes the expired commands, at most once per [`EXPIRY_CHECK_INTERVAL`]
     pub fn remove_expired(&mut self) {
         if self.last_expiry_check.elapsed() <= EXPIRY_CHECK_INTERVAL {
             return;
@@ -93,9 +95,9 @@ impl CommandTracker {
         self.deferred_software_list_requests.insert(target.clone());
     }
 
-    /// Forgets the software list requests for a target whose agent has just (re)started.
-    /// Those pending since before are not reliable anymore:
-    /// some might never be completed or cleared, e.g. a cleared request resumed by the agent.
+    /// Forgets the software list requests for a target whose agent has just
+    /// (re)started. Those pending since before are not reliable anymore: some might
+    /// never be completed or cleared, e.g. a cleared request resumed by the agent.
     pub fn reset_software_list_requests(&mut self, target: &EntityTopicId) {
         self.pending_software_list_requests
             .retain(|_, pending_target| pending_target != target);
@@ -106,8 +108,8 @@ impl CommandTracker {
         !self.deferred_software_list_requests.is_empty()
     }
 
-    /// Takes the targets for which a software list has to be requested,
-    /// skipping those with a request issued by this mapper still pending
+    /// Takes the targets for which a software list has to be requested, skipping
+    /// those with a request issued by this mapper still pending
     pub fn take_deferred_software_list_requests(&mut self) -> Vec<EntityTopicId> {
         std::mem::take(&mut self.deferred_software_list_requests)
             .into_iter()

@@ -25,9 +25,8 @@ pub enum CmdStatus {
     KilledWithInterrupt,
 }
 
-/// How long a killed command is given to exit,
-/// before waiting for its output is abandoned with an error,
-/// see [`LoggingChild::wait_for_output_with_timeout`]
+/// How long a killed command is given to exit, before waiting for its output
+/// fails, see [`LoggingChild::wait_for_output_with_timeout`]
 pub const DEFAULT_EXIT_WAIT_AFTER_KILL: Duration = Duration::from_secs(120);
 
 #[derive(Debug)]
@@ -44,12 +43,12 @@ impl LoggingChild {
         self
     }
 
-    /// Waits for the command output, killing the command if it runs past `graceful_timeout`,
-    /// and logs the command and its output to `command_log`
+    /// Waits for the command output, killing the command if it runs past
+    /// `graceful_timeout`, and logs the command and its output to `command_log`
     ///
     /// # Errors
-    /// Returns an error if the output cannot be read,
-    /// or if the command has not exited [`Self::with_exit_wait_after_kill`] after being killed
+    /// Returns an error if the output cannot be read, or if the command has not
+    /// exited [`Self::with_exit_wait_after_kill`] after being killed
     pub async fn wait_for_output_with_timeout(
         self,
         command_log: &mut CommandLog,
