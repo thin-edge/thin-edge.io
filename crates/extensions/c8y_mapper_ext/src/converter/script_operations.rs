@@ -47,6 +47,31 @@ impl CumulocityConverter {
         Ok(output)
     }
 
+    pub(super) async fn execute_custom_operation(
+        &self,
+        custom_handler: &Operation,
+        message: &MqttMessage,
+        operation_id: &str,
+    ) -> Result<(), CumulocityMapperError> {
+        let handler_error =
+            |err_msg: String| CumulocityMapperError::JsonCustomOperationHandlerError {
+                operation: custom_handler.name.clone(),
+                err_msg,
+            };
+        let state = GenericCommandState::from_command_message(message).map_err(|e| {
+            handler_error(format!("Invalid JSON message, {e}. Message: {message:?}"))
+        })?;
+        let command_value = custom_handler
+            .command()
+            .ok_or_else(|| handler_error("'command' is missing".to_owned()))?;
+        let script_template = ShellScript::from_str(&command_value)
+            .map_err(|e| handler_error(format!("Fail to parse the script {command_value}: {e}")))?;
+        let script = script_template.inject_values(&state);
+
+        self.execute_operation(script, custom_handler, Some(operation_id.into()))
+            .await
+    }
+
     async fn process_smartrest(
         &mut self,
         payload: &str,
@@ -76,31 +101,6 @@ impl CumulocityConverter {
                 Ok(vec![])
             }
         }
-    }
-
-    pub(super) async fn execute_custom_operation(
-        &self,
-        custom_handler: &Operation,
-        message: &MqttMessage,
-        operation_id: &str,
-    ) -> Result<(), CumulocityMapperError> {
-        let handler_error =
-            |err_msg: String| CumulocityMapperError::JsonCustomOperationHandlerError {
-                operation: custom_handler.name.clone(),
-                err_msg,
-            };
-        let state = GenericCommandState::from_command_message(message).map_err(|e| {
-            handler_error(format!("Invalid JSON message, {e}. Message: {message:?}"))
-        })?;
-        let command_value = custom_handler
-            .command()
-            .ok_or_else(|| handler_error("'command' is missing".to_owned()))?;
-        let script_template = ShellScript::from_str(&command_value)
-            .map_err(|e| handler_error(format!("Fail to parse the script {command_value}: {e}")))?;
-        let script = script_template.inject_values(&state);
-
-        self.execute_operation(script, custom_handler, Some(operation_id.into()))
-            .await
     }
 
     pub(super) async fn execute_operation(
