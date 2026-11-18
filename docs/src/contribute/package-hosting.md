@@ -271,22 +271,26 @@ The version is automatically generated from the source code management tool, git
 Every official release publishes [CycloneDX](https://cyclonedx.org) Software Bill of Materials (SBOM) documents
 as assets on the [GitHub release page](https://github.com/thin-edge/thin-edge.io/releases).
 
-%%te%% is distributed as two executables, and each one is described by its own SBOM.
+%%te%% is distributed as two executables, and each one is described by its own SBOM for each target it is released for
+(e.g. `aarch64-unknown-linux-musl`).
 
 |File|Describes|
 |----|---------|
-|`tedge.cdx.json`|The `tedge` multicall binary, which also provides `tedge-mapper`, `tedge-agent`, `tedge-watchdog`, `tedge-apt-plugin`, `tedge-flows-plugin`, `c8y-firmware-plugin`, `c8y-remote-access-plugin`, `tedge-write`, `tedge-file-config-plugin` and `tedge-file-log-plugin`|
-|`tedge-p11-server.cdx.json`|The `tedge-p11-server` executable|
+|`tedge-<target>.cdx.json`|The `tedge` multicall binary, which also provides `tedge-mapper`, `tedge-agent`, `tedge-watchdog`, `tedge-apt-plugin`, `tedge-flows-plugin`, `c8y-firmware-plugin`, `c8y-remote-access-plugin`, `tedge-write`, `tedge-file-config-plugin` and `tedge-file-log-plugin`|
+|`tedge-p11-server-<target>.cdx.json`|The `tedge-p11-server` executable. It is built for the `gnu` variant of the Linux targets, e.g. `aarch64-unknown-linux-gnu`|
 
-The SBOMs cover all of the platforms that %%te%% is released for,
-and are generated from the resolved dependency graph rather than from the graph of an individual build.
-They are therefore a superset of what is linked into any single release artifact:
-dependencies which only apply to another platform, optional dependencies, and dev-dependencies are all listed.
+The SBOMs are generated with [sbom-attest](https://crates.io/crates/sbom-attest) from the dependency graph that cargo
+resolves for the given target with the features of the release build.
+Dependencies which only apply to another platform, unused optional dependencies and dev-dependencies are therefore not listed.
+Build dependencies and proc-macros are listed with the `excluded` scope, as they are not linked into the executable.
 
 The SBOM of any commit can also be generated locally using:
 
 ```sh
 just generate-sbom
+
+# or only for some targets
+just generate-sbom aarch64-unknown-linux-musl
 ```
 
 # How is this made possible?

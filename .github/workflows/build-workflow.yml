@@ -277,11 +277,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: taiki-e/install-action@just
-      - name: Install cargo-cyclonedx
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-cyclonedx@0.5.9
 
+      # Note: the recipe installs the pinned version of sbom-attest
       - name: Generate sbom
         run: just generate-sbom
 

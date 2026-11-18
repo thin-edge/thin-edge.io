@@ -250,53 +250,45 @@ publish-linux-target TARGET=DEFAULT_TARGET *ARGS='':
 generate-changelog *ARGS:
     ./ci/changelog/changelog.sh {{ARGS}}
 
-# Generate Software Bill Of Materials (sbom), one per released binary, under target/sbom
-generate-sbom:
+# Generate Software Bill Of Materials (sbom), one per released binary and target, under target/sbom
+# Usage: just generate-sbom [TARGET...] (defaults to all of the release targets)
+generate-sbom *TARGETS:
     #!/usr/bin/env bash
     set -e
     OUTPUT_DIR="target/sbom"
 
-    # Note: keep the version in sync with the sbom job of .github/workflows/build-workflow.yml
-    # so that a locally generated sbom matches the released one
-    CYCLONEDX_VERSION="0.5.9"
-    if ! cargo cyclonedx --version 2>/dev/null | grep -qw "$CYCLONEDX_VERSION"; then
-        cargo install --locked --version "$CYCLONEDX_VERSION" cargo-cyclonedx
+    # Note: the sbom job of .github/workflows/build-workflow.yml installs sbom-attest via
+    # this recipe, so this is the only place where its version is pinned
+    SBOM_ATTEST_VERSION="0.2.0"
+    if ! sbom-attest --version 2>/dev/null | grep -qw "$SBOM_ATTEST_VERSION"; then
+        cargo install --locked --version "$SBOM_ATTEST_VERSION" sbom-attest
     fi
 
-    # Remove any sbom left behind by a previous (interrupted) run so that a stale sbom
-    # is never collected below
-    find crates plugins -name '*.cdx.json' -delete
+    source ./ci/package_list.sh
+    TARGETS=({{TARGETS}})
+    if [ ${#TARGETS[@]} -eq 0 ]; then
+        TARGETS=("${RELEASE_TARGETS[@]}")
+    fi
 
-    # Note: '--target all' is used as the binaries are released for several platforms
-    # (e.g. musl, darwin) whose dependencies differ. Without it the sbom would only
-    # describe the host platform and silently omit, say, the macOS specific dependencies.
-    #
-    # Note: cargo-cyclonedx describes the resolved dependency graph rather than the graph
-    # which is actually built, so the sbom is a superset of what is linked into the
-    # binaries. This is not affected by the feature flags: the output is identical with
-    # and without --all-features.
-    cargo cyclonedx --describe binaries --all-features --all --no-build-deps --format json --target all -v
-
-    # cargo-cyclonedx emits an sbom for every crate with a binary target, writes it next
-    # to that crate and suffixes it with '_bin', so keep only the sboms of the released
-    # binaries and collect them under their binary name to make publishing them easier.
+    # Each sbom describes one binary built for one target. The dependencies are resolved by
+    # cargo for that target with the features of the release build (cargo build --bin <name>),
+    # so the dependencies of other platforms, dev-dependencies and unused optional
+    # dependencies are not listed. Build dependencies and proc-macros are listed with the
+    # "excluded" scope, as they are not linked into the binary.
     # Note: `tedge` is a multicall binary, so its sbom already covers the components
     # which are not built as a standalone binary (e.g. tedge-mapper, tedge-write)
-    source ./ci/package_list.sh
-
     mkdir -p "$OUTPUT_DIR"
     rm -f "$OUTPUT_DIR"/*.cdx.json
-    for name in "${BINARIES[@]}"; do
-        sbom=$(find crates plugins -name "${name}_bin.cdx.json")
-        if [ -z "$sbom" ]; then
-            echo "No sbom was generated for the '$name' binary" >&2
-            exit 1
-        fi
-        mv -f "$sbom" "$OUTPUT_DIR/${name}.cdx.json"
+    for target in "${TARGETS[@]}"; do
+        for name in "${BINARIES[@]}"; do
+            binary_target="$target"
+            # Note: keep in sync with get_target_for_binary of ci/build_scripts/build.sh
+            if [ "$name" = "tedge-p11-server" ]; then
+                binary_target="${target//musl/gnu}"
+            fi
+            sbom-attest generate --locked --package "$name" --target "$binary_target"                 --cdx "$OUTPUT_DIR/${name}-${binary_target}.cdx.json"
+        done
     done
-
-    # Discard the sboms of the components which are covered by a multicall binary
-    find crates plugins -name '*.cdx.json' -delete
 
     ls -l "$OUTPUT_DIR"
 
