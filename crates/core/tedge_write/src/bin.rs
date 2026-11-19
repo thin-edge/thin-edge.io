@@ -66,17 +66,9 @@ pub fn run(args: Args) -> anyhow::Result<()> {
         &args.common.config_dir,
     )?;
 
-    // /etc/sudoers can contain rules where sudo permissions are given to `tedge` user depending on
-    // the files we write to, e.g:
-    //
-    // `tedge    ALL = (ALL) NOPASSWD: /usr/bin/tedge-write /etc/*`
-    //
-    // If the destination path contains `..` then we can "escape" outside the directory we're
-    // allowed to write to. For that reason, we require paths to be canonical.
-    //
-    // Ideally this would be solved by a more expressive filesystem permissions system, e.g. ACL,
-    // but unfortunately they're not standard on Linux, so we're stuck with trying to do next best
-    // thing with sudo.
+    // tedge-write usually runs with elevated privileges, so the file it writes to must be the one
+    // the caller sees in its arguments. A relative path or a path containing `..` could resolve to
+    // a different location, so we require the path to be absolute and canonical.
     if !args.destination_path.is_absolute() {
         bail!("Destination path has to be absolute");
     }
