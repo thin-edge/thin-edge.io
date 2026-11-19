@@ -82,6 +82,7 @@ RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
 # Install base files to help with bootstrapping and common settings
 WORKDIR /setup
 COPY files/bootstrap.sh .
+COPY files/use-tedge-run-all.sh .
 COPY files/system.toml /etc/tedge/
 COPY files/tedge.toml /etc/tedge/tedge.toml
 COPY files/tedge-configuration-plugin.toml /etc/tedge/plugins/

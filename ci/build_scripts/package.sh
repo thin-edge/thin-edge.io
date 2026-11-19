@@ -185,9 +185,17 @@ build_package() {
     echo
     echo "Building: name=$name pkg_arch=$PKG_ARCH, source=$source_dir"
 
+    manifest="configuration/package_manifests/nfpm.$name.yaml"
+    if [ "${BUILD_PROFILE:-release}" != "release" ]; then
+        # Non-release packages are only used locally, so skip xz, which is slow on large binaries.
+        # nfpm doesn't expand env vars in `compression`, so use a copy of the manifest instead
+        sed 's/compression: xz/compression: none/' "$manifest" > "$OUTPUT_DIR/.nfpm.$name.yaml"
+        manifest="$OUTPUT_DIR/.nfpm.$name.yaml"
+    fi
+
     COMMON_ARGS=(
         package
-        -f "configuration/package_manifests/nfpm.$name.yaml"
+        -f "$manifest"
         --target "$OUTPUT_DIR"
     )
 
@@ -219,6 +227,8 @@ build_package() {
     if [[ "$PACKAGE_TYPES" =~ ipk ]]; then
         env GIT_SEMVER="${IPK_VERSION:-$GIT_SEMVER}" PKG_ARCH="${IPK_ARCH:-$package_arch}" RELEASE="r0" nfpm "${COMMON_ARGS[@]}" --packager ipk
     fi
+
+    rm -f "$OUTPUT_DIR/.nfpm.$name.yaml"
 }
 
 build_virtual_package() {

@@ -14,6 +14,9 @@ CARGO := `command -V cargo-zigbuild >/dev/null 2>&1 && printf "cargo-zigbuild" |
 # Available values: [release, dev-stripped, debug]
 BUILD_PROFILE := env("BUILD_PROFILE", "release")
 
+# Default name of the dev device container, derived from the current branch (or commit when detached)
+DEV_DEVICE := `(git symbolic-ref --short -q HEAD || git rev-parse --short HEAD) | tr -c 'a-zA-Z0-9\n' '-'`
+
 # Print project and host machine info
 info:
     @echo "OS:             {{os()}}"
@@ -179,7 +182,7 @@ setup-integration-test *ARGS:
     tests/RobotFramework/bin/setup.sh {{ARGS}}
 
 # Build the integration test image
-build-integration-test: build
+build-integration-test *ARGS: (build "--package-types deb" ARGS)
     #!/usr/bin/env bash
     set -e
     if [ ! -d tests/RobotFramework/.venv ]; then
@@ -187,7 +190,7 @@ build-integration-test: build
     fi
     cd tests/RobotFramework
     source .venv/bin/activate
-    invoke build
+    invoke build --name "${INTTEST_IMAGE:-debian-systemd}"
 
 # Run integration tests (using local build)
 integration-test *ARGS: build-integration-test
@@ -199,6 +202,55 @@ integration-test *ARGS: build-integration-test
     cd tests/RobotFramework
     source .venv/bin/activate
     invoke tests {{ARGS}}
+
+# Start an isolated tedge container running the current checkout; args starting with `-` go to the build
+dev-device-up *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    set -- {{ARGS}}
+    name="{{DEV_DEVICE}}"
+    if [ $# -gt 0 ] && [[ "$1" != -* ]]; then
+        name="$1"
+        shift
+    fi
+    # Default to dev-stripped. `release` is also the justfile's default, so only honour it when set in the environment
+    profile="{{BUILD_PROFILE}}"
+    if [ "$profile" = release ] && [ -z "${BUILD_PROFILE:-}" ]; then
+        profile=dev-stripped
+    fi
+    # A per-device image, so a parallel build in another worktree can't retag the image before `docker run`
+    image="tedge-dev-${name,,}"
+    BUILD_PROFILE="$profile" INTTEST_IMAGE="$image" just -f {{justfile()}} build-integration-test "$@"
+    docker run -d --tty --privileged --tmpfs /tmp:size=64m --tmpfs /run:size=64m --name "tedge-dev-$name" --hostname "$name" "$image"
+    docker exec -w /setup "tedge-dev-$name" ./bootstrap.sh
+    docker exec "tedge-dev-$name" systemctl enable --now tedge-agent
+    echo "Open a shell with: just dev-device-shell $name"
+
+# Register a dev device with Cumulocity using the current go-c8y-cli session
+dev-device-c8y NAME=DEV_DEVICE:
+    c8y tedge bootstrap-container "tedge-dev-{{NAME}}" "tedge-dev-{{NAME}}"
+
+# Switch a dev device to a single `tedge` service running `tedge run all`
+dev-device-run-all NAME=DEV_DEVICE:
+    docker exec "tedge-dev-{{NAME}}" /setup/use-tedge-run-all.sh
+
+# Open a shell in a dev device
+dev-device-shell NAME=DEV_DEVICE:
+    docker exec -it "tedge-dev-{{NAME}}" bash
+
+# Remove a dev device
+dev-device-down NAME=DEV_DEVICE:
+    docker rm -f "tedge-dev-{{NAME}}"
+    -docker rmi "tedge-dev-{{lowercase(NAME)}}"
+
+# List all dev devices
+dev-device-list:
+    docker ps -a --filter "name=^tedge-dev-" --format "table {{{{.Names}}\t{{{{.Status}}\t{{{{.CreatedAt}}"
+
+# Remove all dev devices
+dev-device-prune:
+    docker ps -aq --filter "name=^tedge-dev-" | xargs -r docker rm -f
+    docker images -q --filter "reference=tedge-dev-*" | xargs -r docker rmi
 
 # All arguments are forwarded as-is to the `invoke flake-finder` task.
 # See `invoke --help flake-finder` (from tests/RobotFramework) for the full list of options.

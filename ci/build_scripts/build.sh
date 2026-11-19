@@ -58,6 +58,7 @@ Flags:
     --build-with <auto|zig|clang|native>    Choose which tooling to use to build the binaries. If set to 'auto',
                                             then the build tool will be selected based on the binary
     --bin <name>    Override which binary to build. By default the binaries form the package_list.sh will be used
+    --features <list>   Cargo features to enable, e.g. 'tedge/mapper-config'
     --glibc-version <version>   GLIBC version to use when compiling for libc targets
     --profile <release|debug|dev-stripped>   Cargo build profile to use. Defaults to release. Use 'debug' for unoptimized builds with debug info, or 'dev-stripped' for unoptimized builds with symbols stripped
     --skip-build    Skip building the binaries and only package them (e.g. just create the linux packages)
@@ -133,6 +134,10 @@ do
             ;;
         --bin)
             OVERRIDE_BINARIES=( "$2" )
+            shift
+            ;;
+        --features)
+            COMMON_BUILD_OPTIONS+=("--features" "$2")
             shift
             ;;
         --toolchain)
@@ -289,7 +294,10 @@ mkdir -p "$ARTIFACT_DIR"
 
 if [ "$BUILD_PROFILE" = "release" ]; then
     COMMON_BUILD_OPTIONS+=("--release")
-elif [ "$BUILD_PROFILE" != "debug" ]; then
+elif [ "$BUILD_PROFILE" = "debug" ]; then
+    # The unstripped binaries are hundreds of MB, so the (uncompressed) packages are large and slow to install
+    echo "WARNING: The 'debug' profile keeps debug info in the packaged binaries. Use 'dev-stripped' for much smaller packages unless you need it" >&2
+else
     COMMON_BUILD_OPTIONS+=("--profile" "$BUILD_PROFILE")
 fi
 
