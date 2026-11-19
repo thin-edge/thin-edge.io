@@ -5,6 +5,7 @@ use std::sync::Arc;
 use axum::extract::FromRequestParts;
 use axum::extract::Path;
 use axum::http::request::Parts;
+use axum::http::Method;
 use camino::Utf8Path;
 use camino::Utf8PathBuf;
 use tedge_api::path::DataDir;
@@ -70,20 +71,37 @@ impl FromRequestParts<FileTransferDir> for FileTransferPath {
         state: &FileTransferDir,
     ) -> Result<Self, Self::Rejection> {
         let Path(request_path) = Path::<Utf8PathBuf>::from_request_parts(parts, state).await?;
-        local_path_for_file(
-            RequestPath(request_path),
-            state.file_transfer_dir.clone(),
-            state.data_dir.clone(),
-        )
+        let method = parts.method.clone();
+        let file_transfer_dir = state.file_transfer_dir.clone();
+        let data_dir = state.data_dir.clone();
+        let path_for_error = request_path.clone();
+
+        // The containment check resolves symlinks with blocking filesystem calls
+        tokio::task::spawn_blocking(move || {
+            local_path_for_file(
+                RequestPath(request_path),
+                &method,
+                file_transfer_dir,
+                data_dir,
+            )
+        })
+        .await
+        .map_err(|e| {
+            std::io::Error::other(format!(
+                "Checking the file transfer path {path_for_error:?} failed: {e}"
+            ))
+        })?
     }
 }
 
-/// Return the path of the file associated to the given `uri`
+/// Returns the path on disk that `request_path` refers to
 ///
 /// This cleans up the path using [path_clean::clean] and then verifies that this
-/// path is actually under `file_transfer_dir`
+/// path is lexically under `file_transfer_dir`, and that it stays inside a root
+/// permitted for `method` once symlinks have been resolved (see [is_within_permitted_roots]).
 fn local_path_for_file(
     request_path: RequestPath,
+    method: &Method,
     file_transfer_dir: Arc<ManagedDir>,
     data_dir: Arc<DataDir>,
 ) -> Result<FileTransferPath, HttpRequestError> {
@@ -91,14 +109,97 @@ fn local_path_for_file(
 
     let clean_path = clean_utf8_path(&full_path);
 
-    if clean_path.starts_with(file_transfer_dir.path()) {
-        Ok(FileTransferPath {
-            full: clean_path,
-            request: request_path,
-            data_dir,
-        })
+    if !clean_path.starts_with(file_transfer_dir.path())
+        || !is_within_permitted_roots(&clean_path, method, &file_transfer_dir, &data_dir)
+    {
+        return Err(HttpRequestError::InvalidPath { path: request_path });
+    }
+
+    Ok(FileTransferPath {
+        full: clean_path,
+        request: request_path,
+        data_dir,
+    })
+}
+
+/// Checks that `path`, once symlinks are resolved, stays inside a directory the
+/// File Transfer Service is allowed to access with `method`
+///
+/// `path_clean` is purely lexical, so it cannot see symlinks: without this check,
+/// a symlink inside the file transfer directory would let a request read, overwrite
+/// or delete a file outside of it.
+///
+/// DELETE removes the final component itself, and never what a symlink there points
+/// to, so only its parent is resolved. This lets a client delete a symlink, such as
+/// the one created for `config_update`, without being able to delete its target.
+///
+/// Two roots are permitted:
+///
+/// - the file transfer directory itself, for any method, and
+/// - the file cache directory, for read-only methods only. The agent symlinks from
+///   the file transfer directory into the cache so that a downloaded config file can
+///   be served over this API (see `create_symlink_for_config_update`), but nothing
+///   needs to write to or delete from the cache through this API. Only the agent
+///   writes cached files; letting clients populate the cache needs its own endpoint.
+fn is_within_permitted_roots(
+    path: &Utf8Path,
+    method: &Method,
+    file_transfer_dir: &ManagedDir,
+    data_dir: &DataDir,
+) -> bool {
+    let resolved = if method == Method::DELETE {
+        path.parent()
+            .zip(path.file_name())
+            .and_then(|(parent, name)| Some(resolve_path(parent)?.join(name)))
     } else {
-        Err(HttpRequestError::InvalidPath { path: request_path })
+        resolve_path(path)
+    };
+    let Some(resolved) = resolved else {
+        return false;
+    };
+
+    let cache_dir = data_dir.cache_dir();
+    let read_only_root = method.is_safe().then(|| cache_dir.path());
+
+    // The roots are resolved the same way as the path itself: canonicalising only one
+    // side would make every comparison fail wherever the data directory sits behind a
+    // symlink, or has yet to be created.
+    std::iter::once(file_transfer_dir.path())
+        .chain(read_only_root)
+        .filter_map(resolve_path)
+        .any(|root| resolved.starts_with(root))
+}
+
+/// Resolves `path` against the filesystem, tolerating components that don't exist yet
+///
+/// An upload creates the file, and any missing parent directories, so the path
+/// being checked is frequently not present on disk. The deepest existing ancestor
+/// is resolved with [Utf8Path::canonicalize_utf8] and the remaining components are
+/// appended unchanged. That is safe because `path` has already been through
+/// [path_clean::clean], so it holds no `.` or `..` component, and because a
+/// component that exists but cannot be resolved is rejected (see below).
+///
+/// Returns [None] if no ancestor can be resolved at all, or if a component exists
+/// but cannot be resolved.
+fn resolve_path(path: &Utf8Path) -> Option<Utf8PathBuf> {
+    let mut not_yet_created = Vec::new();
+    let mut ancestor = path;
+
+    loop {
+        if let Ok(mut resolved) = ancestor.canonicalize_utf8() {
+            resolved.extend(not_yet_created.iter().rev());
+            return Some(resolved);
+        }
+
+        // A component that exists but cannot be canonicalised is a dangling symlink
+        // or a loop, not a component waiting to be created: `File::create` would
+        // follow it to wherever it points.
+        if ancestor.symlink_metadata().is_ok() {
+            return None;
+        }
+
+        not_yet_created.push(ancestor.file_name()?);
+        ancestor = ancestor.parent()?;
     }
 }
 

@@ -182,9 +182,11 @@ async fn stream_request_body_to_path(path: &Utf8Path, body: Body) -> anyhow::Res
 mod tests {
     use super::*;
     use axum::response::Response;
+    use camino::Utf8PathBuf;
     use http_body_util::BodyExt as _;
     use hyper::Method;
     use hyper::StatusCode;
+    use std::os::unix::fs::symlink;
     use tedge_test_utils::fs::TempTedgeDir;
     use tedge_utils::paths::TedgePaths;
     use test_case::test_case;
@@ -297,6 +299,178 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
+    // A symlink planted inside the file transfer directory must not become a way to
+    // read, overwrite or delete files outside of it.
+    #[test_matrix([Method::GET, Method::PUT, Method::DELETE])]
+    #[tokio::test]
+    async fn access_is_denied_if_request_resolves_through_a_symlinked_directory(method: Method) {
+        let (ttd, mut app) = app();
+        let outside = ttd.dir("outside");
+        let secret = outside
+            .file("secret.txt")
+            .with_raw_content("secret contents");
+        symlink(
+            outside.path(),
+            ttd.dir("file-transfer").path().join("escape"),
+        )
+        .unwrap();
+
+        let response = request_with(method, &mut app, "escape/secret.txt", "overwritten").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            std::fs::read_to_string(secret.path()).unwrap(),
+            "secret contents",
+            "the file outside the file transfer directory was modified"
+        );
+    }
+
+    // Same as above, but where the final component is itself the symlink
+    #[test_matrix([Method::GET, Method::PUT], ["escape-file", "escape-dir"])]
+    #[tokio::test]
+    async fn access_is_denied_if_the_target_itself_is_an_escaping_symlink(
+        method: Method,
+        link: &str,
+    ) {
+        let (ttd, mut app) = app();
+        let links = EscapingLinks::new(&ttd);
+
+        let response = request_with(method, &mut app, link, "overwritten").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        links.assert_outside_is_unchanged();
+    }
+
+    // An upload must not follow a dangling symlink and create a file outside the directory
+    #[test_matrix([Method::GET, Method::PUT])]
+    #[tokio::test]
+    async fn access_is_denied_if_the_target_is_a_dangling_escaping_symlink(method: Method) {
+        let (ttd, mut app) = app();
+        let links = EscapingLinks::new(&ttd);
+
+        let response = request_with(method, &mut app, "dangling", "planted contents").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        links.assert_outside_is_unchanged();
+    }
+
+    // A symlink loop is an invalid path, not an internal error
+    #[test_matrix([Method::GET, Method::PUT])]
+    #[tokio::test]
+    async fn access_is_denied_if_the_target_is_a_symlink_loop(method: Method) {
+        let (ttd, mut app) = app();
+        let _links = EscapingLinks::new(&ttd);
+
+        let response = request_with(method, &mut app, "loop", "some content").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    // DELETE removes the link itself, never what it points to, so a client can still
+    // clean up a symlink in the file transfer directory, wherever it points.
+    #[test_case("escape-file")]
+    #[test_case("escape-dir")]
+    #[test_case("dangling")]
+    #[test_case("loop")]
+    #[tokio::test]
+    async fn deleting_an_escaping_symlink_removes_only_the_link(link: &str) {
+        let (ttd, mut app) = app();
+        let links = EscapingLinks::new(&ttd);
+
+        let response = delete_file(&mut app, link).await;
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        assert!(
+            ttd.dir("file-transfer")
+                .path()
+                .join(link)
+                .symlink_metadata()
+                .is_err(),
+            "the symlink was not deleted"
+        );
+        links.assert_outside_is_unchanged();
+    }
+
+    // The agent symlinks from the file transfer directory into the cache directory so
+    // that a downloaded config file can be served over this API. Containment must not
+    // break `config_update`.
+    #[tokio::test]
+    async fn a_symlink_into_the_cache_directory_can_still_be_downloaded() {
+        let (ttd, mut app) = app();
+        link_cached_file(&ttd);
+
+        let response = download_file(&mut app, "config-link").await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&*body, b"cached config");
+    }
+
+    // A client may delete the `config_update` symlink once it has downloaded the file
+    #[tokio::test]
+    async fn deleting_a_symlink_into_the_cache_directory_keeps_the_cached_file() {
+        let (ttd, mut app) = app();
+        let cached_file = link_cached_file(&ttd);
+
+        let response = delete_file(&mut app, "config-link").await;
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        assert!(!ttd.dir("file-transfer").path().join("config-link").exists());
+        assert_eq!(
+            std::fs::read_to_string(cached_file).unwrap(),
+            "cached config"
+        );
+    }
+
+    // The cache only needs to be readable through this API. Later operations reuse
+    // cached files, so a client must not be able to overwrite or delete them.
+    #[test_case(Method::PUT, "config-link")]
+    #[test_case(Method::PUT, "cache-link/d3b07384d113edec49eaa6238ad5ff00")]
+    #[test_case(Method::DELETE, "cache-link/d3b07384d113edec49eaa6238ad5ff00")]
+    #[tokio::test]
+    async fn files_in_the_cache_directory_cannot_be_modified(method: Method, path: &str) {
+        let (ttd, mut app) = app();
+        let cached_file = link_cached_file(&ttd);
+        symlink(
+            ttd.dir("cache").path(),
+            ttd.dir("file-transfer").path().join("cache-link"),
+        )
+        .unwrap();
+
+        let response = request_with(method, &mut app, path, "overwritten").await;
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            std::fs::read_to_string(cached_file).unwrap(),
+            "cached config",
+            "the cached file was modified"
+        );
+    }
+
+    // The containment check resolves both the request path and the permitted roots.
+    // If only the request path were resolved, every request would be rejected
+    // whenever the data directory is reached through a symlink.
+    #[tokio::test]
+    async fn files_can_be_transferred_when_the_data_dir_is_behind_a_symlink() {
+        let ttd = TempTedgeDir::new();
+        let real_root = ttd.dir("real");
+        let linked_root = ttd.path().join("linked");
+        symlink(real_root.path(), &linked_root).unwrap();
+        let mut app = app_with_root(&linked_root);
+
+        let response = upload_file(&mut app, "some/file", "content").await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let response = download_file(&mut app, "some/file").await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&*body, b"content");
+
+        let response = delete_file(&mut app, "some/file").await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        assert!(!real_root.path().join("file-transfer/some/file").exists());
+    }
+
     const VALID_TEST_URI: &str = "/v1/files/another/dir/test-file";
     const INVALID_TEST_URI: &str = "/wrong/place/test-file";
 
@@ -406,10 +580,73 @@ mod tests {
 
     fn app() -> (TempTedgeDir, Router) {
         let ttd = TempTedgeDir::new();
-        let data_dir: DataDir = TedgePaths::from_root_with_defaults(ttd.path_buf(), "", "").into();
-        let file_transfer_dir = data_dir.file_transfer_dir();
-        let router = file_transfer_router(file_transfer_dir, data_dir);
+        let router = app_with_root(ttd.path());
         (ttd, router)
+    }
+
+    /// Symlinks in the file transfer directory that point outside of it:
+    /// `escape-file` and `escape-dir` to an existing file and directory, `dangling`
+    /// to a file that doesn't exist, and `loop` to itself through a second link
+    struct EscapingLinks {
+        secret: Utf8PathBuf,
+        dangling_target: Utf8PathBuf,
+    }
+
+    impl EscapingLinks {
+        fn new(ttd: &TempTedgeDir) -> Self {
+            let dir = ttd.dir("file-transfer").path_buf();
+            let outside = ttd.dir("outside");
+            let secret = outside
+                .file("secret.txt")
+                .with_raw_content("secret contents")
+                .path_buf();
+            let dangling_target = outside.path().join("planted.txt");
+
+            symlink(&secret, dir.join("escape-file")).unwrap();
+            symlink(outside.path(), dir.join("escape-dir")).unwrap();
+            symlink(&dangling_target, dir.join("dangling")).unwrap();
+            symlink(dir.join("loop-back"), dir.join("loop")).unwrap();
+            symlink(dir.join("loop"), dir.join("loop-back")).unwrap();
+
+            Self {
+                secret,
+                dangling_target,
+            }
+        }
+
+        fn assert_outside_is_unchanged(&self) {
+            assert_eq!(
+                std::fs::read_to_string(&self.secret).unwrap(),
+                "secret contents",
+                "the file outside the file transfer directory was modified"
+            );
+            assert!(
+                !self.dangling_target.exists(),
+                "a file was created outside the file transfer directory"
+            );
+        }
+    }
+
+    /// Creates a file in the cache directory, and a `config-link` symlink to it in
+    /// the file transfer directory, as `config_update` does
+    fn link_cached_file(ttd: &TempTedgeDir) -> Utf8PathBuf {
+        let cached_file = ttd
+            .dir("cache")
+            .file("d3b07384d113edec49eaa6238ad5ff00")
+            .with_raw_content("cached config")
+            .path_buf();
+        symlink(
+            &cached_file,
+            ttd.dir("file-transfer").path().join("config-link"),
+        )
+        .unwrap();
+        cached_file
+    }
+
+    fn app_with_root(root: &Utf8Path) -> Router {
+        let data_dir: DataDir = TedgePaths::from_root_with_defaults(root, "", "").into();
+        let file_transfer_dir = data_dir.file_transfer_dir();
+        file_transfer_router(file_transfer_dir, data_dir)
     }
 
     // canonicalised client PUT request to create a file in `VALID_TEST_URI`
