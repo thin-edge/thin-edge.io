@@ -20,7 +20,7 @@ pub trait PubChannel: SinkExt<MqttMessage> + Unpin + Send {
 }
 
 #[async_trait]
-impl SubChannel for mpsc::UnboundedReceiver<MqttMessage> {}
+impl SubChannel for mpsc::Receiver<MqttMessage> {}
 
 #[async_trait]
 impl PubChannel for mpsc::UnboundedSender<MqttMessage> {}

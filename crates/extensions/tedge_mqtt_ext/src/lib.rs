@@ -595,7 +595,7 @@ impl FromPeers {
 impl ToPeers {
     async fn relay_messages_from(
         mut self,
-        incoming_mqtt: &mut mpsc::UnboundedReceiver<MqttMessage>,
+        incoming_mqtt: &mut mpsc::Receiver<MqttMessage>,
         rx_from_peers: &mut mpsc::UnboundedReceiver<(ClientId, MqttMessage)>,
         dynamic_connection_request: &mut mpsc::Receiver<(
             TrieInsertRequest,
@@ -1089,7 +1089,7 @@ mod unit_tests {
         req_tx: mpsc::Sender<MqttRequest>,
         sent_to_channel: mpsc::UnboundedReceiver<MqttMessage>,
         sent_to_clients: HashMap<usize, mpsc::Receiver<MqttMessage>>,
-        inject_received_message: mpsc::UnboundedSender<MqttMessage>,
+        inject_received_message: mpsc::Sender<MqttMessage>,
         from_peers: Option<tokio::task::JoinHandle<Result<(), RuntimeError>>>,
         to_peers: Option<tokio::task::JoinHandle<Result<(), RuntimeError>>>,
         waited: bool,
@@ -1109,7 +1109,7 @@ mod unit_tests {
             let (req_tx, req_rx) = mpsc::channel(10);
             let (_sig_tx, sig_rx) = mpsc::channel(10);
             let (mut outgoing_mqtt, sent_messages) = mpsc::unbounded();
-            let (inject_received_message, mut incoming_messages) = mpsc::unbounded();
+            let (inject_received_message, mut incoming_messages) = mpsc::channel(1024);
             let input_combiner = InputCombiner {
                 signal_receiver: sig_rx,
                 request_receiver: req_rx,

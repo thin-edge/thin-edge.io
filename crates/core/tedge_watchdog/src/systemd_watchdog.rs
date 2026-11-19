@@ -240,7 +240,7 @@ async fn monitor_tedge_service(
 
 async fn get_latest_health_status_message(
     request_timestamp: OffsetDateTime,
-    messages: &mut mpsc::UnboundedReceiver<MqttMessage>,
+    messages: &mut mpsc::Receiver<MqttMessage>,
 ) -> Result<HealthStatusExt, WatchdogError> {
     while let Some(message) = messages.next().await {
         if let Ok(message) = message.payload_str() {
@@ -321,7 +321,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_latest_health_status_message() -> Result<()> {
-        let (mut sender, mut receiver) = mpsc::unbounded::<MqttMessage>();
+        let (mut sender, mut receiver) = mpsc::channel::<MqttMessage>(100);
         let health_topic =
             Topic::new("te/device/main/service/test-service/status/health").expect("Valid topic");
         let base_timestamp = OffsetDateTime::now_utc();
@@ -337,7 +337,7 @@ mod tests {
             })
             .to_string();
             let health_message = MqttMessage::new(&health_topic, health_status);
-            sender.publish(health_message).await?;
+            sender.send(health_message).await?;
         }
 
         let request_timestamp = base_timestamp + Duration::from_secs(3);
@@ -361,7 +361,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_latest_health_status_message_unix() {
-        let (mut sender, mut receiver) = mpsc::unbounded::<MqttMessage>();
+        let (mut sender, mut receiver) = mpsc::channel::<MqttMessage>(100);
         let health_topic =
             Topic::new("te/device/main/service/test-service/status/health").expect("Valid topic");
 
@@ -376,7 +376,7 @@ mod tests {
         })
         .to_string();
         let health_message = MqttMessage::new(&health_topic, health_status);
-        sender.publish(health_message).await.unwrap();
+        sender.send(health_message).await.unwrap();
         sender.close_channel();
 
         let health_status =

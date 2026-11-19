@@ -29,7 +29,7 @@ use tracing::Instrument;
 /// A connection to some MQTT server
 pub struct Connection {
     /// The channel of the input messages received by this connection.
-    pub received: mpsc::UnboundedReceiver<MqttMessage>,
+    pub received: mpsc::Receiver<MqttMessage>,
 
     /// The channel of the output messages to be published on this connection.
     pub published: mpsc::UnboundedSender<MqttMessage>,
@@ -143,7 +143,7 @@ impl Connection {
     ///     Connection::new(&config).await
     /// # }
     pub async fn new(config: &Config) -> Result<Connection, MqttError> {
-        let (received_sender, received_receiver) = mpsc::unbounded();
+        let (received_sender, received_receiver) = mpsc::channel(config.queue_capacity);
         let (published_sender, published_receiver) = mpsc::unbounded();
         let (error_sender, error_receiver) = mpsc::unbounded();
         let (pub_done_sender, pub_done_receiver) = oneshot::channel();
@@ -201,7 +201,7 @@ impl Connection {
 
     async fn open(
         config: &Config,
-        mut message_sender: mpsc::UnboundedSender<MqttMessage>,
+        mut message_sender: mpsc::Sender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         subscriptions: Arc<Mutex<TopicFilter>>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
@@ -312,7 +312,7 @@ impl Connection {
         mqtt_client: AsyncClient,
         config: Config,
         mut event_loop: EventLoop,
-        mut message_sender: mpsc::UnboundedSender<MqttMessage>,
+        mut message_sender: mpsc::Sender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         done: oneshot::Sender<()>,
         permits: Arc<Semaphore>,
