@@ -1,9 +1,6 @@
 use crate::Config;
-use crate::ErrChannel;
 use crate::MqttError;
 use crate::MqttMessage;
-use crate::PubChannel;
-use crate::SubChannel;
 use crate::TopicFilter;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
@@ -115,21 +112,6 @@ impl SubscriberOps for SubscriberHandle {
 }
 
 impl Connection {
-    /// The stream of events received from this MQTT connection and forwarded to the client
-    pub fn sub_channel(&self) -> &impl SubChannel {
-        &self.received
-    }
-
-    /// The stream of actions sent by the client to this MQTT connection
-    pub fn pub_channel(&self) -> &impl PubChannel {
-        &self.published
-    }
-
-    /// The stream of errors received from this MQTT connection and forwarded to the client
-    pub fn err_channel(&self) -> &impl ErrChannel {
-        &self.errors
-    }
-
     /// Establish a connection to the MQTT broker defined by the given `config`.
     ///
     /// This connection is associated to an MQTT session with the given `name` and `subscription`.

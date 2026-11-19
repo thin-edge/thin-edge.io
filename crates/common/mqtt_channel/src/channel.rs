@@ -9,9 +9,6 @@ use futures::StreamExt;
 pub trait SubChannel: StreamExt<Item = MqttMessage> + Unpin + Send {}
 
 #[async_trait]
-pub trait ErrChannel: StreamExt<Item = MqttError> + Unpin + Send {}
-
-#[async_trait]
 pub trait PubChannel: SinkExt<MqttMessage> + Unpin + Send {
     /// Publish a message - unless the pub channel has been closed.
     async fn publish(&mut self, message: MqttMessage) -> Result<(), MqttError> {
@@ -24,9 +21,6 @@ pub trait PubChannel: SinkExt<MqttMessage> + Unpin + Send {
 
 #[async_trait]
 impl SubChannel for mpsc::UnboundedReceiver<MqttMessage> {}
-
-#[async_trait]
-impl ErrChannel for mpsc::UnboundedReceiver<MqttError> {}
 
 #[async_trait]
 impl PubChannel for mpsc::UnboundedSender<MqttMessage> {}
