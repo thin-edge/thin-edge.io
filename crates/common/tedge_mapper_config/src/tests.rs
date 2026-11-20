@@ -450,6 +450,28 @@ async fn set_is_refused_when_mapper_file_has_unknown_key() {
 }
 
 #[tokio::test]
+async fn set_is_refused_when_a_known_key_holds_a_table() {
+    let original = "[url]\nfoo = \"x\"\n";
+    let dir = config_dir_with_mapper("thingsboard", original);
+    let mut fed = load_without_env(&dir).await;
+
+    let err = fed
+        .mutate(
+            "mappers.thingsboard.bridge.clean_session",
+            Action::Set("true".into()),
+        )
+        .await
+        .unwrap_err();
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("mappers/thingsboard/mapper.toml"),
+        "error should name the file: {msg}"
+    );
+    assert_eq!(read_mapper_file(&dir, "thingsboard"), original);
+}
+
+#[tokio::test]
 async fn get_still_works_when_mapper_file_has_unknown_key() {
     let dir = config_dir_with_mapper(
         "c8y",
