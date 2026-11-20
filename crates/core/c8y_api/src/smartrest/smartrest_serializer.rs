@@ -20,6 +20,59 @@ pub fn request_pending_operations() -> SmartrestPayload {
         .expect("shouldn't put payload over size limit")
 }
 
+/// The operation a SmartREST status update refers to, by its ID or its type
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OperationReference {
+    /// The ID of the operation, used when `smartrest.use_operation_id` is enabled
+    Id(String),
+    /// The type of the operation, e.g. `c8y_Restart`, for Cumulocity to update
+    /// the oldest matching operation of that type
+    Name(String),
+}
+
+impl OperationReference {
+    /// Refers to the operation by `op_id` when known and `use_operation_id` is
+    /// set, otherwise by `name`
+    pub fn new(op_id: Option<String>, use_operation_id: bool, name: String) -> Self {
+        match op_id {
+            Some(op_id) if use_operation_id => OperationReference::Id(op_id),
+            _ => OperationReference::Name(name),
+        }
+    }
+
+    /// Generates a SmartREST message to set the operation to executing
+    pub fn executing(&self) -> SmartrestPayload {
+        match self {
+            OperationReference::Id(op_id) => set_operation_executing_with_id(op_id),
+            OperationReference::Name(name) => set_operation_executing_with_name(name),
+        }
+    }
+
+    /// Generates a SmartREST message to set the operation to failed with the
+    /// given reason
+    pub fn failed(&self, reason: &str) -> SmartrestPayload {
+        match self {
+            OperationReference::Id(op_id) => fail_operation_with_id(op_id, reason),
+            OperationReference::Name(name) => fail_operation_with_name(name, reason),
+        }
+    }
+
+    /// Generates a SmartREST message to set the operation to successful with a
+    /// text or CSV result, as [`succeed_operation`] does
+    ///
+    /// # Errors
+    /// Returns an error if the result is an empty CSV, or one with several records
+    pub fn succeeded(
+        &self,
+        result: impl Into<TextOrCsv>,
+    ) -> Result<SmartrestPayload, SmartRestSerializerError> {
+        match self {
+            OperationReference::Id(op_id) => succeed_operation_with_id(op_id, result),
+            OperationReference::Name(name) => succeed_operation_with_name(name, result),
+        }
+    }
+}
+
 /// Generates a SmartREST message to set the provided operation to executing
 pub fn set_operation_executing_with_name(operation: impl C8yOperation) -> SmartrestPayload {
     SmartrestPayload::serialize((SET_OPERATION_TO_EXECUTING, operation.name()))
@@ -438,10 +491,25 @@ mod tests {
     use crate::smartrest::message::MAX_PAYLOAD_LIMIT_IN_BYTES;
 
     use super::*;
+    use rstest::rstest;
     use tedge_api::commands::SoftwareListCommandPayload;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::Jsonify;
     use test_case::test_case;
+
+    #[rstest]
+    #[case::by_id_when_known_and_enabled(Some("123"), true, "504,123")]
+    #[case::by_name_when_ids_are_disabled(Some("123"), false, "501,c8y_Command")]
+    #[case::by_name_when_the_id_is_unknown(None, true, "501,c8y_Command")]
+    fn operation_status_refers_to_the_operation(
+        #[case] op_id: Option<&str>,
+        #[case] use_id: bool,
+        #[case] expected: &str,
+    ) {
+        let operation =
+            OperationReference::new(op_id.map(str::to_owned), use_id, "c8y_Command".to_owned());
+        assert_eq!(operation.executing().as_str(), expected);
+    }
 
     #[test]
     fn serialize_smartrest_supported_operations() {

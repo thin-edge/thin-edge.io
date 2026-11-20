@@ -20,7 +20,7 @@ impl CumulocityConverter {
             SignalType::Sync => {
                 for external_id in self.entity_cache.get_all_external_ids() {
                     if let Ok(message) =
-                        self.load_and_create_supported_operations_messages(external_id.as_ref())
+                        self.load_and_create_supported_operations_message(external_id.as_ref())
                     {
                         messages.push(message);
                     }
