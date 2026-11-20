@@ -46,8 +46,6 @@ pub use errors::*;
 pub use messages::*;
 pub use topics::*;
 
-pub use futures::channel::mpsc::UnboundedReceiver;
-pub use futures::channel::mpsc::UnboundedSender;
 pub use futures::Sink;
 pub use futures::SinkExt;
 pub use futures::Stream;
