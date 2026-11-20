@@ -2,7 +2,6 @@ use crate::command::Command;
 use crate::log::MaybeFancy;
 use base64::prelude::*;
 use mqtt_channel::QoS;
-use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
 use std::time::Duration;
 use tedge_config::TEdgeConfig;

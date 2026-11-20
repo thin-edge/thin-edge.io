@@ -452,6 +452,12 @@ impl Config {
             mqtt_options.set_last_will(last_will_message);
         }
 
+        // When configured with a low max inflight count of messages,
+        // rumqttc might reuse the pkid of message not acknowledged yet
+        // To prevent that, rumqttc inflight is set far bigger than the number of expected inflight messages.
+        mqtt_options.set_inflight(u16::MAX);
+        mqtt_options.set_manual_acks(true);
+
         Ok(mqtt_options)
     }
 }

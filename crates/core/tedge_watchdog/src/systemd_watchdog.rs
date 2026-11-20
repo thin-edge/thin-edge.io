@@ -1,9 +1,7 @@
 use anyhow::Context;
 use freedesktop_entry_parser::parse_entry;
-use futures::channel::mpsc;
 use futures::stream::FuturesUnordered;
 use futures::SinkExt;
-use futures::StreamExt;
 use mqtt_channel::MqttMessage;
 use mqtt_channel::PubChannel;
 use mqtt_channel::Topic;
@@ -240,7 +238,7 @@ async fn monitor_tedge_service(
 
 async fn get_latest_health_status_message(
     request_timestamp: OffsetDateTime,
-    messages: &mut mpsc::Receiver<MqttMessage>,
+    messages: &mut impl mqtt_channel::SubChannel,
 ) -> Result<HealthStatusExt, WatchdogError> {
     while let Some(message) = messages.next().await {
         if let Ok(message) = message.payload_str() {
@@ -314,6 +312,7 @@ fn get_watchdog_sec(service_file: &str) -> Result<u64, WatchdogError> {
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
+    use futures::channel::mpsc;
     use serde_json::json;
     use tedge_utils::timestamp::TimeFormat;
 

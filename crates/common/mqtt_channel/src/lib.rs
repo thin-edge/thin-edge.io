@@ -1,7 +1,7 @@
 //! A library to connect the local MQTT bus, publish messages and subscribe topics.
 //!
 //! ```no_run
-//! use mqtt_channel::{Config, Connection, MqttMessage, Topic, MqttError, StreamExt, SinkExt};
+//! use mqtt_channel::{Config, Connection, MqttMessage, Topic, MqttError, SubChannel, StreamExt, SinkExt};
 //! use std::convert::TryInto;
 //!
 //! #[tokio::main]
