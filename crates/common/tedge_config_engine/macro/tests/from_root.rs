@@ -11,6 +11,7 @@ use tedge_config_engine::federated::FederatedConfig;
 use tedge_config_engine::ops::ConfigOps;
 use tedge_config_engine::ops::TypedConfigOps;
 use tedge_config_engine::ConfigError;
+use tedge_utils::paths::TedgePaths;
 
 mod root {
     use tedge_config_engine::*;
@@ -232,7 +233,10 @@ mod mounting_into_a_federated_config {
 
 fn typed_source<T>(manager: tedge_config_engine::ConfigManager) -> Box<dyn ConfigOps>
 where
-    T: for<'a> facet::Facet<'a> + Default + 'static,
+    T: for<'a> facet::Facet<'a> + Default + Send + Sync + 'static,
 {
-    Box::new(TypedConfigOps::<T>::new(manager, "/nonexistent/tedge/config.toml".into()).unwrap())
+    let file = TedgePaths::from_root_with_defaults("/nonexistent/tedge", "", "")
+        .file("config.toml")
+        .unwrap();
+    Box::new(TypedConfigOps::<T>::empty(manager, file))
 }

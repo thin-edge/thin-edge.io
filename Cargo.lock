@@ -5347,6 +5347,7 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rpassword",
+ "rstest",
  "rumqttc",
  "serde",
  "serde_json",
@@ -5548,18 +5549,21 @@ dependencies = [
  "futures",
  "mqtt_channel",
  "rcgen",
+ "rstest",
  "serde",
  "serde_json",
  "strum",
  "tedge_actors",
  "tedge_api",
  "tedge_config",
+ "tedge_config_engine",
  "tedge_config_ext",
  "tedge_downloader_ext",
  "tedge_file_system_ext",
  "tedge_flows",
  "tedge_health_ext",
  "tedge_http_ext",
+ "tedge_mapper_config",
  "tedge_mqtt_bridge",
  "tedge_mqtt_ext",
  "tedge_supervisor",
@@ -5766,13 +5770,17 @@ dependencies = [
 name = "tedge_config_engine"
 version = "2.1.0"
 dependencies = [
+ "async-trait",
  "camino",
  "facet",
  "facet-reflect",
  "facet-toml",
  "tedge_config_engine-macro",
+ "tedge_utils",
  "tempfile",
  "thiserror 2.0.21",
+ "tokio",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]
@@ -5798,6 +5806,7 @@ dependencies = [
  "facet-value",
  "tedge_config_engine",
  "tedge_config_engine-impl",
+ "tedge_utils",
  "trybuild",
 ]
 
@@ -6017,13 +6026,20 @@ dependencies = [
 name = "tedge_mapper_config"
 version = "2.1.0"
 dependencies = [
+ "assert_matches",
+ "async-trait",
  "camino",
  "facet",
  "facet-toml",
  "humantime",
+ "rstest",
+ "tedge_config",
  "tedge_config_engine",
  "tedge_config_engine-macro",
- "tempfile",
+ "tedge_test_utils",
+ "tedge_utils",
+ "tokio",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]

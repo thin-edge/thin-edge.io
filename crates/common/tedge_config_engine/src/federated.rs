@@ -67,15 +67,6 @@ impl FederatedConfig {
         Ok(())
     }
 
-    /// Reads values explicitly set in the mounted source.
-    pub fn get(&self, full_key: &str) -> Result<Option<String>, ConfigError> {
-        let (mount, local_key) = self.route(full_key)?;
-        mount
-            .source
-            .get(&local_key)
-            .map_err(|e| self.contextualize(full_key, e))
-    }
-
     /// Reads the effective value, including defaults that may fall back to root config.
     pub fn read(&self, full_key: &str) -> Result<Option<String>, ConfigError> {
         let (mount, local_key) = self.route(full_key)?;
@@ -100,12 +91,13 @@ impl FederatedConfig {
     }
 
     /// Routes a write operation to the mounted source and persists that source.
-    pub fn mutate(&mut self, full_key: &str, action: Action) -> Result<(), ConfigError> {
+    pub async fn mutate(&mut self, full_key: &str, action: Action) -> Result<(), ConfigError> {
         let err_key = full_key.to_owned();
         let (mount, local_key) = self.route_mut(full_key)?;
         mount
             .source
             .mutate(&local_key, action)
+            .await
             .map_err(|e| Self::contextualize_with(&err_key, e, &self.config_dir, &self.mounts))
     }
 
@@ -168,6 +160,11 @@ impl FederatedConfig {
     ) -> ConfigError {
         match err {
             ConfigError::UnknownKey(_) => make_unknown_key_error(full_key, config_dir, mounts),
+            // The source only knows its local key, which isn't what the user typed
+            ConfigError::ParseError(reason) => ConfigError::InvalidKeyValue {
+                key: full_key.to_owned(),
+                reason,
+            },
             other => other,
         }
     }
