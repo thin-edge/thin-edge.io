@@ -23,7 +23,6 @@ use futures::SinkExt;
 use futures::Stream;
 use futures::StreamExt;
 use http_body::Frame;
-use http_body_util::Full;
 use http_body_util::StreamBody;
 use hyper::header::AUTHORIZATION;
 use hyper::header::HOST;
@@ -528,19 +527,16 @@ async fn respond_to(
     {
         certificate_monitor.seen(certificate);
     }
-    let te_header = res.headers_mut().remove("transfer-encoding");
+    // The framing of the response to the client is decided by hyper: it uses the
+    // forwarded Content-Length header if there is one, and chunked encoding otherwise
+    res.headers_mut().remove("transfer-encoding");
     let status = res.status();
     let headers = std::mem::take(res.headers_mut());
 
-    let body = if te_header.is_some_and(|h| h.to_str().unwrap_or_default().contains("chunked")) {
-        axum::body::Body::new(StreamBody::new(
-            res.bytes_stream().map(|b| b.map(Frame::data)),
-        ))
-    } else {
-        axum::body::Body::new(Full::new(
-            res.bytes().await.context("reading proxy response bytes")?,
-        ))
-    };
+    // Always stream the response body, so large downloads are not held in memory
+    let body = axum::body::Body::new(StreamBody::new(
+        res.bytes_stream().map(|b| b.map(Frame::data)),
+    ));
 
     Ok((status, headers, body).into_response())
 }
@@ -1528,6 +1524,139 @@ mod tests {
             .unwrap();
         assert_eq!(res.status(), 200);
         assert_eq!(res.bytes().await.unwrap(), Bytes::from("Succeeded"));
+    }
+
+    #[tokio::test]
+    async fn forwards_large_responses_with_content_length() {
+        let _ = env_logger::try_init();
+        let body: Vec<u8> = (0..16 * 1024 * 1024).map(|i| (i % 251) as u8).collect();
+        let mut server = mockito::Server::new_async().await;
+        server
+            .mock("GET", "/inventory/binaries/1234")
+            .match_header("Authorization", "Bearer test-token")
+            .with_status(200)
+            .with_header("Content-Type", "application/octet-stream")
+            .with_body(&body)
+            .create_async()
+            .await;
+
+        let port = start_server(&server, vec!["test-token"]);
+
+        let res = reqwest_client()
+            .get(format!(
+                "https://localhost:{port}/c8y/inventory/binaries/1234"
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 200);
+        let content_length = body.len().to_string();
+        assert_eq!(
+            res.headers().get("content-length").unwrap(),
+            content_length.as_str()
+        );
+        assert_eq!(res.headers().get("transfer-encoding"), None);
+        assert_eq!(
+            res.headers().get("content-type").unwrap(),
+            "application/octet-stream"
+        );
+        assert!(res.bytes().await.unwrap() == body);
+    }
+
+    #[tokio::test]
+    async fn streams_responses_with_content_length_before_they_are_complete() {
+        let _ = env_logger::try_init();
+        let target_host = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let target = target_host.local_addr().unwrap();
+        let proxy_port = start_server_port(target.port(), vec!["test-token"]);
+        let (first_part_received, wait_for_first_part) = tokio::sync::oneshot::channel();
+
+        let chunk = vec![b'a'; 64 * 1024];
+        let target_chunk = chunk.clone();
+        tokio::spawn(async move {
+            let (mut tcp_stream, _) = target_host.accept().await.unwrap();
+            parse_raw_request(&mut tcp_stream).await;
+            let headers = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+                2 * target_chunk.len()
+            );
+            tcp_stream.write_all(headers.as_bytes()).await.unwrap();
+            tcp_stream.write_all(&target_chunk).await.unwrap();
+            // Only finish the body once the client has received the first part,
+            // so a proxy that buffers the whole response cannot respond in time
+            wait_for_first_part.await.unwrap();
+            tcp_stream.write_all(&target_chunk).await.unwrap();
+        });
+
+        let mut res = timeout(
+            reqwest_client()
+                .get(format!("https://localhost:{proxy_port}/c8y/test"))
+                .send(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(res.status(), 200);
+        assert_eq!(
+            res.headers().get("content-length").unwrap(),
+            (2 * chunk.len()).to_string().as_str()
+        );
+
+        let mut received = Vec::new();
+        while received.len() < chunk.len() {
+            received.extend(timeout(res.chunk()).await.unwrap().unwrap());
+        }
+        first_part_received.send(()).unwrap();
+        while let Some(bytes) = timeout(res.chunk()).await.unwrap() {
+            received.extend(bytes);
+        }
+        assert_eq!(received.len(), 2 * chunk.len());
+    }
+
+    #[test_case::test_case(None; "with proxy token")]
+    #[test_case::test_case(Some("Basic dXNlcjpwYXNz"); "with user supplied authorization")]
+    #[tokio::test]
+    async fn follows_redirects_without_forwarding_authorization_header(user_auth: Option<&str>) {
+        let _ = env_logger::try_init();
+        let mut storage = mockito::Server::new_async().await;
+        let storage_mock = storage
+            .mock("GET", "/bucket/firmware.bin")
+            .match_query(mockito::Matcher::UrlEncoded(
+                "X-Amz-Signature".into(),
+                "abc".into(),
+            ))
+            .match_header("Authorization", mockito::Matcher::Missing)
+            .with_status(200)
+            .with_body("firmware contents")
+            .create_async()
+            .await;
+        // Use a different host name for the redirect target, as an S3 presigned URL would
+        let storage_url = format!(
+            "http://localhost:{}/bucket/firmware.bin?X-Amz-Signature=abc",
+            storage.socket_address().port()
+        );
+
+        let mut c8y = mockito::Server::new_async().await;
+        let expected_auth = user_auth.unwrap_or("Bearer test-token");
+        c8y.mock("GET", "/service/my-microservice/firmware")
+            .match_header("Authorization", expected_auth)
+            .with_status(307)
+            .with_header("Location", &storage_url)
+            .create_async()
+            .await;
+
+        let port = start_server(&c8y, vec!["test-token"]);
+
+        let mut req = reqwest_client().get(format!(
+            "https://localhost:{port}/c8y/service/my-microservice/firmware"
+        ));
+        if let Some(auth) = user_auth {
+            req = req.header("Authorization", auth);
+        }
+        let res = req.send().await.unwrap();
+
+        assert_eq!(res.status(), 200);
+        assert_eq!(res.bytes().await.unwrap(), Bytes::from("firmware contents"));
+        storage_mock.assert_async().await;
     }
 
     #[allow(clippy::disallowed_methods)]
