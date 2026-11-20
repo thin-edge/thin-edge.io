@@ -62,7 +62,6 @@ The following endpoints are currently supported:
 * `te/device/main/service/tedge-mapper-c8y/status/health`
 * `te/device/main/service/tedge-mapper-az/status/health`
 * `te/device/main/service/tedge-mapper-aws/status/health`
-* `te/device/main/service/tedge-mapper-collectd/status/health`
 
 All future tedge services will also follow the same topic naming scheme convention.
 

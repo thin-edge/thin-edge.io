@@ -47,21 +47,7 @@ journalctl -u tedge-mapper-aws
 ```
 
 :::note
-Run `tedge_mapper --debug aws` to log more debug messages
-:::
-
-### Device monitoring logs {#device-logs}
-The %%te%% device monitoring component logs can be found as below
-
-#### Collectd mapper logs {#collectd-mapper}
-The log messages of the collectd mapper that sends the monitoring data to the cloud can be accessed as below
-
-```sh
-journalctl -u tedge-mapper-collectd
-```
-
-:::note
-Run `tedge-mapper --debug collectd` to log more debug messages
+Run `tedge-mapper --debug aws` to log more debug messages
 :::
 
 ### Operations logs {#software-management}
@@ -113,7 +99,7 @@ Run `tedge-agent --debug` to log more debug messages
 :::
 
 ## Third-party component logs {#thirdparty}
-%%te%% uses the third-party components `Mosquitto` as the mqtt broker and `Collectd` for monitoring purpose.
+%%te%% uses the third-party components `Mosquitto` as the mqtt broker.
 The logs that are created by these components can be accessed on a %%te%% device as below.
 
 ### Mosquitto logs {#mosquitto}
@@ -124,15 +110,6 @@ The `Mosquitto` logs can be found in `/var/log/mosquitto/mosquitto.log`.
 :::note
 Set `log_type debug` or `log_type all` on `/etc/mosquitto/mosquitto.conf`, to capture more debug information.
 :::
-
-### Collectd logs {#collectd}
-`Collectd` is used for monitoring the resource status of a %%te%% device.
-Collectd logs all the messages at `/var/log/syslog`.
-So, the collectd specific logs can be accessed using the `journalctl` as below
-
-```sh
-journalctl -u collectd
-```
 
 ## Configuring log levels in %%te%% {#configure-log-levels}
 
