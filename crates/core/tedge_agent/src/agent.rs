@@ -65,6 +65,7 @@ use tedge_log_manager::PluginConfig;
 use tedge_mqtt_ext::MqttActorBuilder;
 use tedge_mqtt_ext::MqttConfig;
 use tedge_script_ext::ScriptActor;
+use tedge_timer_ext::TimerActor;
 use tedge_uploader_ext::UploaderActor;
 use tedge_utils::paths::ManagedDir;
 use tedge_utils::paths::TedgePaths;
@@ -307,6 +308,9 @@ impl Agent {
         // Mqtt actor
         let mut mqtt_actor_builder = MqttActorBuilder::new(self.config.mqtt_config.clone());
 
+        // Timer actor
+        let mut timer_actor = TimerActor::builder();
+
         let mut downloader_actor_builder = DownloaderActor::new(
             self.config.identity.clone(),
             self.config.cloud_root_certs.clone(),
@@ -387,6 +391,7 @@ impl Agent {
             &mut fs_watch_actor_builder,
             &mut downloader_actor_builder,
             &mut uploader_actor_builder,
+            &mut timer_actor,
             entity_store,
         );
         workflow_actor_builder.register_builtin_operation(&mut restart_actor_builder);
@@ -498,6 +503,7 @@ impl Agent {
         runtime.spawn(twin_manager_builder).await?;
         runtime.spawn(downloader_actor_builder).await?;
         runtime.spawn(uploader_actor_builder).await?;
+        runtime.spawn(timer_actor).await?;
         if let Some(config_actor_builder) = config_actor_builder {
             runtime.spawn(config_actor_builder).await?;
         }

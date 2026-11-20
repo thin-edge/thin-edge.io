@@ -1,5 +1,7 @@
 use crate::operation_workflows::actor::AgentInput;
 use crate::operation_workflows::actor::InternalCommandState;
+use crate::operation_workflows::actor::SetTimeout;
+use crate::operation_workflows::actor::Timeout;
 use crate::operation_workflows::actor::WorkflowActor;
 use crate::operation_workflows::config::OperationConfig;
 use crate::operation_workflows::entity_store_client::EntityStoreClient;
@@ -62,6 +64,7 @@ pub struct WorkflowActorBuilder {
     sync_signal_dispatcher: SyncSignalDispatcher,
     command_sender: DynSender<InternalCommandState>,
     mqtt_publisher: LoggingSender<MqttMessage>,
+    timer: LoggingSender<SetTimeout>,
     script_runner: ClientMessageBox<Execute, std::io::Result<Output>>,
     signal_sender: mpsc::Sender<RuntimeRequest>,
     downloader: ClientMessageBox<DownloaderRequest, DownloaderResult>,
@@ -74,6 +77,7 @@ pub struct WorkflowActorBuilder {
 }
 
 impl WorkflowActorBuilder {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: OperationConfig,
         mqtt_actor: &mut (impl MessageSource<MqttMessage, TopicFilter> + MessageSink<MqttMessage>),
@@ -81,6 +85,7 @@ impl WorkflowActorBuilder {
         fs_notify: &mut impl MessageSource<FsWatchEvent, PathBuf>,
         downloader: &mut impl Service<DownloaderRequest, DownloaderResult>,
         uploader: &mut impl Service<UploaderRequest, UploaderResult>,
+        timer: &mut impl Service<SetTimeout, Timeout>,
         entity_store: EntityStoreClient,
     ) -> Self {
         let (input_sender, input_receiver) = mpsc::unbounded();
@@ -105,6 +110,9 @@ impl WorkflowActorBuilder {
         );
         let mqtt_publisher = LoggingSender::new("MqttPublisher".into(), mqtt_publisher);
 
+        let timeout_sender = timer.connect_client(input_sender.sender_clone());
+        let timer = LoggingSender::new("WorkflowTimer".into(), timeout_sender);
+
         let script_runner = ClientMessageBox::new(script_runner);
 
         let downloader = ClientMessageBox::new(downloader);
@@ -120,6 +128,7 @@ impl WorkflowActorBuilder {
             sync_signal_dispatcher,
             command_sender,
             mqtt_publisher,
+            timer,
             signal_sender,
             script_runner,
             downloader,
@@ -222,6 +231,7 @@ impl Builder<WorkflowActor> for WorkflowActorBuilder {
             builtin_operation_step_executor: self.builtin_operation_step_executor,
             sync_signal_dispatcher: self.sync_signal_dispatcher,
             mqtt_publisher: self.mqtt_publisher,
+            timer: self.timer,
             command_sender: self.command_sender,
             resolved_target_sender: self.input_sender.sender_clone(),
             script_runner: self.script_runner,

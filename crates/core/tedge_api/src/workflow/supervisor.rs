@@ -189,7 +189,9 @@ impl WorkflowSupervisor {
         } else if command_state.is_init() {
             // This is a new command request
             if let Some(current_version) = workflow_versions.use_current_version() {
-                let updated_state = command_state.with_workflow_version(current_version);
+                let updated_state = command_state
+                    .with_workflow_version(current_version)
+                    .with_timestamp();
                 self.commands.insert(entity_type, updated_state.clone())?;
                 Ok(Some(updated_state))
             } else {
@@ -394,7 +396,7 @@ impl WorkflowSupervisor {
             }
 
             _ => {
-                // TODO: Use the timestamp to filter out action pending since too long
+                // The command is resumed, running the current state actions and timeout handlers.
                 Some(command)
             }
         }
@@ -781,12 +783,16 @@ mod tests {
         // The invoking command of the level_2 command, is the previous level_1 command
         // The later is also the root invoking command
         assert_eq!(
-            workflows.invoking_command_state(&level_2_cmd),
-            Some(&level_1_cmd)
+            workflows
+                .invoking_command_state(&level_2_cmd)
+                .map(|cmd| cmd.clone().without_key("@time")),
+            Some(level_1_cmd.clone())
         );
         assert_eq!(
-            workflows.root_invoking_command_state(&level_2_cmd),
-            Some(&level_1_cmd)
+            workflows
+                .root_invoking_command_state(&level_2_cmd)
+                .map(|cmd| cmd.clone().without_key("@time")),
+            Some(level_1_cmd.clone())
         );
 
         // Start a level_3 operation, sub-command of the previous level_2 command
@@ -802,12 +808,16 @@ mod tests {
         // The invoking command of the level_3 command, is the previous level_2 command
         // The root invoking command of the level_3 command, is the original level_1 command
         assert_eq!(
-            workflows.invoking_command_state(&level_3_cmd),
-            Some(&level_2_cmd)
+            workflows
+                .invoking_command_state(&level_3_cmd)
+                .map(|cmd| cmd.clone().without_key("@time")),
+            Some(level_2_cmd.clone())
         );
         assert_eq!(
-            workflows.root_invoking_command_state(&level_2_cmd),
-            Some(&level_1_cmd)
+            workflows
+                .root_invoking_command_state(&level_2_cmd)
+                .map(|cmd| cmd.clone().without_key("@time")),
+            Some(level_1_cmd)
         );
     }
 

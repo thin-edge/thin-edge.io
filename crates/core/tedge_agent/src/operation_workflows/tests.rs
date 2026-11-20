@@ -1,3 +1,5 @@
+use crate::operation_workflows::actor::SetTimeout;
+use crate::operation_workflows::actor::Timeout;
 use crate::operation_workflows::builder::DownloaderRequest;
 use crate::operation_workflows::builder::DownloaderResult;
 use crate::operation_workflows::builder::UploaderRequest;
@@ -12,6 +14,7 @@ use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
 use tedge_actors::test_helpers::FakeServerBox;
+use tedge_actors::test_helpers::FakeServerBoxBuilder;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::test_helpers::TimedMessageBox;
 use tedge_actors::Actor;
@@ -2438,6 +2441,8 @@ async fn spawn_workflow_actor_with_sudo(
         NoMessage,
     > = SimpleMessageBoxBuilder::new("Uploader", 5);
     let mut http_builder = FakeServerBox::<HttpRequest, HttpResult>::builder();
+    let mut timer_builder: FakeServerBoxBuilder<SetTimeout, Timeout> =
+        FakeServerBoxBuilder::default();
 
     let tmp_path = tmp_dir.path();
     let config_root = TedgePaths::from_root_with_defaults(tmp_path, "", "");
@@ -2479,6 +2484,7 @@ async fn spawn_workflow_actor_with_sudo(
         &mut inotify_builder,
         &mut downloade_builder,
         &mut uploader_builder,
+        &mut timer_builder,
         entity_store_client,
     );
     workflow_actor_builder.register_builtin_operation(&mut restart_builder);
