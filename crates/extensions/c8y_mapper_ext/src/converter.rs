@@ -200,11 +200,7 @@ impl CumulocityConverter {
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
 
-        let service_type = if config.service.ty.is_empty() {
-            "service".to_owned()
-        } else {
-            config.service.ty.clone()
-        };
+        let service_type = config.service.type_or_default().to_owned();
 
         let ops_dir = config.ops_dir.path();
         let operations_by_xid = {

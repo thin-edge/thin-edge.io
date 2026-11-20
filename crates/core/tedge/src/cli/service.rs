@@ -38,7 +38,7 @@ pub struct TEdgeServiceOpt {
     /// The action to run on the service, e.g. start, stop or restart
     ///
     /// Which actions are supported is decided depending on the service type.
-    /// Init system for the default service type, a service plugin for any other type.
+    /// The type is handled by the init system or by a service plugin.
     #[arg(add(ArgValueCandidates::new(action_completions)))]
     action: ActionName,
 
@@ -47,11 +47,14 @@ pub struct TEdgeServiceOpt {
 
     /// The type of the service
     ///
-    /// The default type is handled by the init system configured in system.toml.
+    /// The type `service` and the type set in `service.type`
+    /// are handled by the init system configured in system.toml.
     /// Any other type is handled by the service plugin.
+    /// A service plugin with the same name as one of these two types
+    /// is used instead of the init system.
     #[clap(long("type"), default_value = DEFAULT_SERVICE_TYPE)]
     #[arg(add(ArgValueCandidates::new(service_type_completions)))]
-    service_type: ServiceType,
+    service_type: String,
 
     /// Timeout for the action to complete, after which a graceful termination starts
     // The default covers a restart by systemd,
@@ -92,7 +95,7 @@ impl BuildCommand for TEdgeServiceOpt {
 pub struct ServiceActionCommand {
     action: ActionName,
     service_name: ServiceName,
-    service_type: ServiceType,
+    service_type: String,
     plugin_paths: Vec<Utf8PathBuf>,
     graceful_timeout: Duration,
     forceful_timeout: Duration,
@@ -125,10 +128,22 @@ impl Command for ServiceActionCommand {
 
 impl ServiceActionCommand {
     async fn run(&self, config: &TEdgeConfig) -> Result<(), ServiceActionError> {
-        if self.service_type.is_default() {
-            self.run_init_system_action(config.root_dir()).await
-        } else {
-            self.run_plugin_action().await
+        let service_type = config
+            .service
+            .service_type(&self.service_type)
+            .map_err(|err| ServiceActionError::NotSupported(err.to_string()))?;
+        match self.find_plugin(&service_type).await {
+            Some(plugin) => self.run_plugin_action(plugin).await,
+            None if service_type.is_init_system_type() => {
+                self.run_init_system_action(config.root_dir()).await
+            }
+            None => {
+                let dirs: Vec<&str> = self.plugin_paths.iter().map(|dir| dir.as_str()).collect();
+                Err(ServiceActionError::NotSupported(format!(
+                    "No service plugin for the service type '{service_type}': no '{service_type}' file in {dirs}",
+                    dirs = dirs.join(", ")
+                )))
+            }
         }
     }
 
@@ -181,9 +196,7 @@ impl ServiceActionCommand {
         }
     }
 
-    async fn run_plugin_action(&self) -> Result<(), ServiceActionError> {
-        let plugin = self.find_plugin().await?;
-
+    async fn run_plugin_action(&self, plugin: Utf8PathBuf) -> Result<(), ServiceActionError> {
         let mut command = LoggedCommand::from_command(std::process::Command::new(&plugin), ".");
         command
             .arg(self.action.as_str())
@@ -252,23 +265,18 @@ impl ServiceActionCommand {
     }
 
     /// Returns the first plugin file found in the configured plugin paths for the service type.
-    async fn find_plugin(&self) -> Result<Utf8PathBuf, ServiceActionError> {
+    async fn find_plugin(&self, service_type: &ServiceType) -> Option<Utf8PathBuf> {
+        let plugin_name = service_type.checked_plugin_name()?;
         for dir in &self.plugin_paths {
-            let plugin = dir.join(self.service_type.as_str());
-            if let Ok(metadata) = tokio::fs::metadata(&plugin).await {
-                if metadata.is_file() {
-                    return Ok(plugin);
-                }
+            let plugin = dir.join(plugin_name);
+            if tokio::fs::metadata(&plugin)
+                .await
+                .is_ok_and(|metadata| metadata.is_file())
+            {
+                return Some(plugin);
             }
         }
-
-        let dirs: Vec<&str> = self.plugin_paths.iter().map(|dir| dir.as_str()).collect();
-        Err(ServiceActionError::NotSupported(format!(
-            "No service plugin for the service type '{}': no '{}' file in {}",
-            self.service_type,
-            self.service_type,
-            dirs.join(", ")
-        )))
+        None
     }
 }
 
@@ -416,6 +424,7 @@ async fn service_type_completions_for_config_dir(
 ) -> Vec<CompletionCandidate> {
     let mut types = BTreeSet::from([DEFAULT_SERVICE_TYPE.to_string()]);
     if let Ok(config) = TEdgeConfig::load(config_dir).await {
+        types.insert(config.service.type_or_default().to_string());
         for dir in &config.service.plugin_paths.0 {
             let Ok(mut entries) = tokio::fs::read_dir(dir).await else {
                 continue;
@@ -425,7 +434,7 @@ async fn service_type_completions_for_config_dir(
                     .await
                     .is_ok_and(|metadata| metadata.is_file());
                 let name = entry.file_name().to_string_lossy().into_owned();
-                if is_file && name.parse::<ServiceType>().is_ok() {
+                if is_file && ServiceType::is_plugin_name(&name) {
                     types.insert(name);
                 }
             }
@@ -461,11 +470,12 @@ mod tests {
         let dir = TempTedgeDir::new();
         let plugin_dir = dir.path();
         service_plugin(plugin_dir, "container");
+        let config = TEdgeConfig::load_toml_str_with_root_dir(dir.path(), "");
 
         let mut cmd = command("reload", "nodered", "container");
         cmd.plugin_paths = vec![plugin_dir.to_path_buf()];
 
-        let err = cmd.run_plugin_action().await.unwrap_err();
+        let err = cmd.run(&config).await.unwrap_err();
 
         assert_matches!(err, ServiceActionError::NotSupported(_));
         assert_eq!(
@@ -479,11 +489,12 @@ mod tests {
         let dir = TempTedgeDir::new();
         let plugin_dir = dir.path();
         let plugin = service_plugin(plugin_dir, "container");
+        let config = TEdgeConfig::load_toml_str_with_root_dir(dir.path(), "");
 
         let mut cmd = command("stop", "nodered", "container");
         cmd.plugin_paths = vec![plugin_dir.to_path_buf()];
 
-        let err = cmd.run_plugin_action().await.unwrap_err();
+        let err = cmd.run(&config).await.unwrap_err();
 
         assert_matches!(err, ServiceActionError::PluginFailed { .. });
         assert_eq!(
@@ -524,13 +535,14 @@ disable = ["/bin/true", "{}"]
         let dir = TempTedgeDir::new();
         let plugin = dir.path().join("container");
         with_exec_permission(&plugin, "#!/bin/sh\nsleep 60\n");
+        let config = TEdgeConfig::load_toml_str_with_root_dir(dir.path(), "");
 
         let mut cmd = command("start", "nodered", "container");
         cmd.plugin_paths = vec![dir.path().to_path_buf()];
         cmd.graceful_timeout = Duration::from_millis(100);
         cmd.forceful_timeout = Duration::from_secs(1);
 
-        let err = tokio::time::timeout(Duration::from_secs(10), cmd.run_plugin_action())
+        let err = tokio::time::timeout(Duration::from_secs(10), cmd.run(&config))
             .await
             .expect("the plugin to be terminated on timeout")
             .unwrap_err();
@@ -549,13 +561,14 @@ disable = ["/bin/true", "{}"]
         let dir = TempTedgeDir::new();
         let plugin = dir.path().join("container");
         with_exec_permission(&plugin, "#!/bin/sh\ntrap '' TERM\nsleep 60\n");
+        let config = TEdgeConfig::load_toml_str_with_root_dir(dir.path(), "");
 
         let mut cmd = command("start", "nodered", "container");
         cmd.plugin_paths = vec![dir.path().to_path_buf()];
         cmd.graceful_timeout = Duration::from_secs(1);
         cmd.forceful_timeout = Duration::from_millis(200);
 
-        let err = tokio::time::timeout(Duration::from_secs(10), cmd.run_plugin_action())
+        let err = tokio::time::timeout(Duration::from_secs(10), cmd.run(&config))
             .await
             .expect("the plugin to be killed on timeout")
             .unwrap_err();
@@ -639,6 +652,96 @@ is_active = ["/bin/true", "{}"]
     }
 
     #[tokio::test]
+    async fn the_configured_service_type_runs_the_action_through_the_init_system() {
+        let config_dir = TempTedgeDir::new();
+        let done = init_system(&config_dir);
+        let config = TEdgeConfig::load_toml_str_with_root_dir(
+            config_dir.path(),
+            "service.type = \"systemd\"",
+        );
+
+        let cmd = command("restart", "collectd", "systemd");
+        cmd.run(&config).await.unwrap();
+
+        assert!(Utf8PathBuf::from(format!("{done}.restart.collectd")).exists());
+    }
+
+    #[tokio::test]
+    async fn a_configured_service_type_not_valid_as_plugin_name_is_not_looked_up_in_the_plugin_directories(
+    ) {
+        let config_dir = TempTedgeDir::new();
+        let done = init_system(&config_dir);
+        let config = TEdgeConfig::load_toml_str_with_root_dir(
+            config_dir.path(),
+            "service.type = \"../outside\"",
+        );
+        let plugin_dir = config_dir.dir("service-plugins");
+        service_plugin(config_dir.path(), "outside");
+
+        let mut cmd = command("stop", "collectd", "../outside");
+        cmd.plugin_paths = vec![plugin_dir.path().to_path_buf()];
+        cmd.run(&config).await.unwrap();
+
+        assert!(Utf8PathBuf::from(format!("{done}.stop.collectd")).exists());
+    }
+
+    #[tokio::test]
+    async fn a_type_not_valid_as_plugin_name_is_not_looked_up_in_the_plugin_directories() {
+        let dir = TempTedgeDir::new();
+        let plugin_dir = dir.dir("service-plugins");
+        service_plugin(dir.path(), "outside");
+        let config = TEdgeConfig::load_toml_str_with_root_dir(dir.path(), "");
+
+        let mut cmd = command("restart", "nodered", "../outside");
+        cmd.plugin_paths = vec![plugin_dir.path().to_path_buf()];
+
+        let err = cmd.run(&config).await.unwrap_err();
+
+        assert_matches!(err, ServiceActionError::NotSupported(_));
+        assert_eq!(
+            err.to_string(),
+            "Invalid service type '../outside': \
+            a service type must only hold lowercase letters, digits, '_' and '-'"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_default_type_runs_the_init_system_when_another_service_type_is_configured() {
+        let config_dir = TempTedgeDir::new();
+        let done = init_system(&config_dir);
+        let config = TEdgeConfig::load_toml_str_with_root_dir(
+            config_dir.path(),
+            "service.type = \"systemd\"",
+        );
+
+        let cmd = command("restart", "collectd", "service");
+        cmd.run(&config).await.unwrap();
+
+        assert!(Utf8PathBuf::from(format!("{done}.restart.collectd")).exists());
+    }
+
+    #[test_case("service", ""; "default type")]
+    #[test_case("systemd", "service.type = \"systemd\""; "configured service type")]
+    #[tokio::test]
+    async fn a_plugin_with_the_same_name_as_an_init_system_type_runs_instead_of_the_init_system(
+        service_type: &str,
+        tedge_toml: &str,
+    ) {
+        let config_dir = TempTedgeDir::new();
+        init_system(&config_dir);
+        let config = TEdgeConfig::load_toml_str_with_root_dir(config_dir.path(), tedge_toml);
+        let plugin_dir = config_dir.dir("service-plugins");
+        service_plugin(plugin_dir.path(), service_type);
+
+        let mut cmd = command("stop", "collectd", service_type);
+        cmd.plugin_paths = vec![plugin_dir.path().to_path_buf()];
+
+        let err = cmd.run(&config).await.unwrap_err();
+
+        assert_matches!(err, ServiceActionError::PluginFailed { .. });
+    }
+
+    #[tokio::test]
     async fn a_custom_action_template_is_run_by_the_init_system() {
         let config_dir = TempTedgeDir::new();
         let done = init_system(&config_dir);
@@ -695,16 +798,21 @@ is_active = ["/bin/true", "{}"]
 
     #[tokio::test]
     async fn a_missing_plugin_is_reported_as_not_supported() {
+        let config_dir = TempTedgeDir::new();
+        let done = init_system(&config_dir);
+        let config = TEdgeConfig::load_toml_str_with_root_dir(config_dir.path(), "");
+
         let mut cmd = command("restart", "nodered", "container");
         cmd.plugin_paths = vec!["/no/such/directory".into(), "/nor/this/one".into()];
 
-        let err = cmd.run_plugin_action().await.unwrap_err();
+        let err = cmd.run(&config).await.unwrap_err();
 
         assert_matches!(err, ServiceActionError::NotSupported(_));
         assert_eq!(
             err.to_string(),
             "No service plugin for the service type 'container': no 'container' file in /no/such/directory, /nor/this/one"
         );
+        assert!(!Utf8PathBuf::from(format!("{done}.restart.nodered")).exists());
     }
 
     #[tokio::test]
@@ -718,7 +826,9 @@ is_active = ["/bin/true", "{}"]
         let mut cmd = command("restart", "nodered", "container");
         cmd.plugin_paths = vec![first.path().to_path_buf(), second.path().to_path_buf()];
 
-        assert_eq!(cmd.find_plugin().await.unwrap(), plugin);
+        let service_type = ServiceType::new("container", "service").unwrap();
+
+        assert_eq!(cmd.find_plugin(&service_type).await.unwrap(), plugin);
     }
 
     #[test]
@@ -802,11 +912,43 @@ is_active = ["/bin/true", "{}"]
         assert_eq!(types, ["container", "lxc", "service"]);
     }
 
+    #[tokio::test]
+    async fn the_configured_service_type_is_completed() {
+        let config_dir = TempTedgeDir::new();
+        config_dir
+            .file("tedge.toml")
+            .with_raw_content("service.type = \"systemd\"\nservice.plugin_paths = []");
+
+        let types: Vec<_> = service_type_completions_for_config_dir(config_dir.path())
+            .await
+            .iter()
+            .map(|candidate| candidate.get_value().to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(types, ["service", "systemd"]);
+    }
+
+    #[tokio::test]
+    async fn an_empty_configured_service_type_is_not_completed() {
+        let config_dir = TempTedgeDir::new();
+        config_dir
+            .file("tedge.toml")
+            .with_raw_content("service.type = \"\"\nservice.plugin_paths = []");
+
+        let types: Vec<_> = service_type_completions_for_config_dir(config_dir.path())
+            .await
+            .iter()
+            .map(|candidate| candidate.get_value().to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(types, ["service"]);
+    }
+
     fn command(action: &str, service_name: &str, service_type: &str) -> ServiceActionCommand {
         ServiceActionCommand {
             action: action.parse().unwrap(),
             service_name: service_name.parse().unwrap(),
-            service_type: service_type.parse().unwrap(),
+            service_type: service_type.to_string(),
             plugin_paths: vec![],
             graceful_timeout: Duration::from_secs(10),
             forceful_timeout: Duration::from_secs(10),

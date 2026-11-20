@@ -69,6 +69,9 @@ use std::net::Ipv4Addr;
 use std::num::NonZeroU16;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tedge_api::control::InvalidServiceType;
+use tedge_api::control::ServiceType;
+use tedge_api::control::DEFAULT_SERVICE_TYPE;
 use tedge_api::http_url::EntityStoreUrls;
 use tedge_api::http_url::FileTransferUrls;
 use tedge_api::http_url::Protocol;
@@ -1895,6 +1898,22 @@ where
     type Output = Out;
     fn call(self, data: &T, location: &TEdgeConfigLocation) -> Self::Output {
         (self)(data, location)
+    }
+}
+
+impl TEdgeConfigReaderService {
+    /// Returns the `service.type` value, or `service` when it is empty.
+    pub fn type_or_default(&self) -> &str {
+        if self.ty.is_empty() {
+            DEFAULT_SERVICE_TYPE
+        } else {
+            &self.ty
+        }
+    }
+
+    /// Returns an error when `ty` is neither this `service.type` value nor a valid plugin name.
+    pub fn service_type(&self, ty: &str) -> Result<ServiceType, InvalidServiceType> {
+        ServiceType::new(ty, self.type_or_default())
     }
 }
 

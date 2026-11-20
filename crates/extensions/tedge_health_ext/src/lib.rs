@@ -53,7 +53,7 @@ impl HealthMonitorBuilder {
         mqtt_schema: &MqttSchema,
         service_config: &TEdgeConfigReaderService,
     ) -> Self {
-        let mut service_type = service_config.ty.as_str();
+        let service_type = service_config.type_or_default();
         let time_format = service_config.timestamp_format;
         let service_topic_id = &service.service_topic_id;
 
@@ -85,9 +85,6 @@ impl HealthMonitorBuilder {
         mqtt.connect_sink(subscriptions, &box_builder);
         box_builder.connect_sink(NoConfig, mqtt);
 
-        if service_type.is_empty() {
-            service_type = "service"
-        }
         let mut twin_data = Map::new();
         twin_data.insert("type".to_string(), json!(service_type));
 
