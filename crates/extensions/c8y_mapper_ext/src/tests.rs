@@ -14,6 +14,7 @@ use c8y_api::json_c8y_deserializer::C8yDeviceControlTopic;
 use c8y_api::proxy_url::Protocol;
 use c8y_api::smartrest::topic::C8yTopic;
 use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
@@ -1654,6 +1655,133 @@ EOF
 ";
 
     assert_command_exec_log_content(ttd, expected_content);
+}
+
+#[tokio::test]
+async fn custom_operation_fails_when_its_command_output_stays_open_after_kill() {
+    let ttd = TempTedgeDir::new();
+    let cmd_file = create_command_whose_output_outlives_it(&ttd);
+    create_custom_op_file(&ttd, cmd_file.as_path(), Some(1), Some(1));
+
+    let config = config_waiting_one_second_after_kill(&ttd);
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
+        "511,test-device,c8y_Command",
+    ))
+    .await
+    .expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "502,c8y_Command,\"the command did not exit or its output stayed open",
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn json_custom_operation_fails_by_id_when_its_command_output_stays_open_after_kill() {
+    let ttd = TempTedgeDir::new();
+    let cmd_file = create_command_whose_output_outlives_it(&ttd);
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(&format!(
+            r#"[exec]
+            command = "{cmd_file}"
+            on_fragment = "c8y_Command"
+            timeout = 1
+            forceful_timeout = 1
+            "#
+        ));
+
+    let config = C8yMapperConfig {
+        smartrest_use_operation_id: true,
+        ..config_waiting_one_second_after_kill(&ttd)
+    };
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    let operation = json!({
+        "status": "PENDING",
+        "id": "1234",
+        "c8y_Command": {},
+        "externalSource": {"externalId": "test-device", "type": "c8y_Serial"}
+    });
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+        operation.to_string(),
+    ))
+    .await
+    .expect("Send failed");
+
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "c8y/s/us",
+            "505,1234,the command did not exit or its output stayed open",
+        )],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn custom_operation_skipping_status_updates_is_not_failed_when_its_command_output_stays_open_after_kill(
+) {
+    let ttd = TempTedgeDir::new();
+    let cmd_file = create_command_whose_output_outlives_it(&ttd);
+    ttd.dir("operations")
+        .dir("c8y")
+        .file("c8y_Command")
+        .with_raw_content(&format!(
+            r#"[exec]
+            topic = "c8y/s/ds"
+            on_message = "511"
+            command = "{cmd_file}"
+            timeout = 1
+            forceful_timeout = 1
+            skip_status_update = true
+            "#
+        ));
+
+    let config = config_waiting_one_second_after_kill(&ttd);
+    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
+    let TestHandle { mqtt, http, .. } = test_handle;
+    spawn_dummy_c8y_http_proxy(http);
+
+    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &C8yTopic::downstream_topic(&"c8y".try_into().unwrap()),
+        "511,test-device,c8y_Command",
+    ))
+    .await
+    .expect("Send failed");
+
+    // The failure is logged just before it would be published
+    wait_for_command_log(&ttd, "the command did not exit or its output stayed open").await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_received_not_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "501,c8y_Command"),
+            ("c8y/s/us", "502,c8y_Command"),
+        ],
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -3859,4 +3987,49 @@ impl Sender<MqttMessage> for MockMqttBoxUnbuffered {
         }
         Ok(())
     }
+}
+
+/// Creates a command whose output stays open after it is killed on timeout: its `setsid` child is
+/// outside the process group that is killed and keeps stdout open, so the mapper never sees the
+/// output close
+fn create_command_whose_output_outlives_it(ttd: &TempTedgeDir) -> Utf8PathBuf {
+    let cmd_file = ttd.path().join("command");
+    // The `setsid` child outlives the 3 seconds the mapper waits for the command: 2 timeouts of 1 second and the exit wait
+    let content = r#"#!/bin/sh
+    setsid sleep 5 &
+    sleep 10
+    "#;
+    create_custom_cmd(cmd_file.as_path(), content);
+    cmd_file
+}
+
+/// The test configuration of the mapper, giving a killed command one second to exit and close its
+/// output
+fn config_waiting_one_second_after_kill(ttd: &TempTedgeDir) -> C8yMapperConfig {
+    C8yMapperConfig {
+        custom_operation_exit_wait_after_kill: Duration::from_secs(1),
+        ..test_mapper_config(ttd)
+    }
+}
+
+/// Waits for a command log of the mapper to contain the given text
+async fn wait_for_command_log(ttd: &TempTedgeDir, expected: &str) {
+    let log_dir = ttd.path();
+    let found = tokio::time::timeout(TEST_TIMEOUT_MS, async {
+        loop {
+            let logged = fs::read_dir(log_dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .any(|entry| {
+                    fs::read_to_string(entry.path()).is_ok_and(|log| log.contains(expected))
+                });
+            if logged {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await;
+    assert!(found.is_ok(), "No command log contains {expected:?}");
 }

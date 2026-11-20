@@ -952,14 +952,16 @@ impl CumulocityConverter {
         }
         logged.args(script.args);
 
-        let maybe_child_process =
-            logged
-                .spawn()
-                .map_err(|e| CumulocityMapperError::ExecuteFailed {
-                    error_message: e.to_string(),
-                    command: command.to_string(),
-                    operation_name: operation_name.to_string(),
-                });
+        let maybe_child_process = logged
+            .spawn()
+            .map(|child| {
+                child.with_exit_wait_after_kill(self.config.custom_operation_exit_wait_after_kill)
+            })
+            .map_err(|e| CumulocityMapperError::ExecuteFailed {
+                error_message: e.to_string(),
+                command: command.to_string(),
+                operation_name: operation_name.to_string(),
+            });
 
         let mut command_log = self
             .config
@@ -1000,13 +1002,34 @@ impl CumulocityConverter {
 
                         // execute the command and wait until it finishes
                         // mqtt client publishes failed or successful depending on the exit code
-                        if let Ok(output) = child_process
+                        let output = match child_process
                             .wait_for_output_with_timeout(
                                 &mut command_log,
                                 graceful_timeout,
                                 forceful_timeout,
                             )
                             .await
+                        {
+                            Ok(output) => output,
+                            Err(err) => {
+                                error!("Failed to run the {op_name} operation: {err}");
+                                if !skip_status_update {
+                                    let reason = err.to_string();
+                                    let payload = if use_id {
+                                        fail_operation_with_id(&op_id, &reason)
+                                    } else {
+                                        fail_operation_with_name(op_name, &reason)
+                                    };
+                                    mqtt_publisher
+                                        .send(MqttMessage::new(&topic, payload.as_str()))
+                                        .await
+                                        .unwrap_or_else(|err| {
+                                            error!("Failed to publish a message: {payload}. Error: {err}")
+                                        });
+                                }
+                                return;
+                            }
+                        };
                         {
                             match output.status.code() {
                                 Some(0) => {

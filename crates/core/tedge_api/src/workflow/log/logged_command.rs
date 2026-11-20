@@ -24,13 +24,33 @@ pub enum CmdStatus {
     KilledWithSigKill,
     KilledWithInterrupt,
 }
+
+/// How long a killed command is given to exit and close its output,
+/// before waiting for its output is abandoned with an error,
+/// see [`LoggingChild::wait_for_output_with_timeout`]
+pub const DEFAULT_EXIT_WAIT_AFTER_KILL: Duration = Duration::from_secs(120);
+
 #[derive(Debug)]
 pub struct LoggingChild {
     command_line: String,
     pub inner_child: Child,
+    exit_wait_after_kill: Duration,
 }
 
 impl LoggingChild {
+    /// Overrides [`DEFAULT_EXIT_WAIT_AFTER_KILL`]
+    pub fn with_exit_wait_after_kill(mut self, exit_wait_after_kill: Duration) -> Self {
+        self.exit_wait_after_kill = exit_wait_after_kill;
+        self
+    }
+
+    /// Waits for the command output, killing the command if it runs past `graceful_timeout`,
+    /// and logs the command and its output to `command_log`
+    ///
+    /// # Errors
+    /// Returns an error if the output cannot be read,
+    /// or if, after SIGKILL, the command has not exited or its output is still open
+    /// at the end of the wait set by [`Self::with_exit_wait_after_kill`]
     pub async fn wait_for_output_with_timeout(
         self,
         command_log: &mut CommandLog,
@@ -66,13 +86,16 @@ impl LoggingChild {
     ) -> Result<(Output, CmdStatus), std::io::Error> {
         let cid = self.inner_child.id();
         let cmd_line = self.command_line;
+        let exit_wait = self.exit_wait_after_kill;
         let mut status = CmdStatus::Successful;
         tokio::select! {
             outcome = self.inner_child.wait_with_output() => {
                 outcome.map(|output| (output, status))
             }
-            _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout, interrupt) => {
-                Err(std::io::Error::other(format!("failed to kill the process: {cmd_line}")))
+            _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout, exit_wait, interrupt) => {
+                Err(std::io::Error::other(format!(
+                    "the command did not exit or its output stayed open after SIGKILL: {cmd_line}"
+                )))
             }
         }
     }
@@ -95,6 +118,7 @@ impl LoggingChild {
         child_id: Option<u32>,
         graceful_timeout: Duration,
         forceful_timeout: Duration,
+        exit_wait: Duration,
         interrupt: impl Future<Output = ()>,
     ) -> Result<(), std::io::Error> {
         *status = CmdStatus::Successful;
@@ -118,7 +142,7 @@ impl LoggingChild {
         }
 
         // wait for the process to exit after signal
-        tokio::time::sleep(Duration::from_secs(120)).await;
+        tokio::time::sleep(exit_wait).await;
 
         Ok(())
     }
@@ -266,6 +290,7 @@ impl LoggedCommand {
         Ok(LoggingChild {
             command_line: self.to_string(),
             inner_child: child,
+            exit_wait_after_kill: DEFAULT_EXIT_WAIT_AFTER_KILL,
         })
     }
 
