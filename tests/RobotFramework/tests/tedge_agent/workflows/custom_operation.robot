@@ -439,6 +439,7 @@ Copy Configuration Files
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-3079.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-4397.toml    /etc/tedge/operations/
     ThinEdgeIO.Transfer To Device    ${CURDIR}/issue-4397-bis.toml    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/sleep.toml    /etc/tedge/operations/
 
 Execute Operation Workflow
     [Arguments]    ${operation}    ${cmd_id}
