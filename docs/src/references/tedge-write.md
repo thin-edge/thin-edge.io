@@ -23,14 +23,20 @@ file's parent directory.
 For example, when using following `sudoers` entry:
 
 ```sudoers title="file: /etc/sudoers.d/tedge"
-tedge   ALL = (ALL) NOPASSWD: /usr/bin/tedge-write /etc/*
+tedge   ALL = (ALL) NOPASSWD:SETENV: /usr/bin/tedge-write
 ```
 
 Permissions are granted when:
 
 - calling user is `tedge`
 - binary is `/usr/bin/tedge-write`
-- the 1st argument is `/etc/*`, i.e. the files `tedge-write` will be writing to are inside `/etc`
+
+The entry does not restrict the arguments,
+so `tedge-write` can write to any file path.
+Earlier versions restricted the destination to `/etc/*`,
+but wildcards in command arguments are not supported by all `sudo` implementations
+(for example, [sudo-rs](https://github.com/trifectatechfoundation/sudo-rs)),
+and the restriction gave little protection since the `tedge` user can already run `tedge` itself with `sudo`.
 
 The entry grants privileges without authentication, which is required when `tedge-write` is spawned
 by `tedge-agent`.
