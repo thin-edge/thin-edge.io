@@ -1,7 +1,7 @@
 //! A library to connect the local MQTT bus, publish messages and subscribe topics.
 //!
 //! ```no_run
-//! use mqtt_channel::{Config, Connection, MqttMessage, Topic, MqttError, StreamExt, SinkExt};
+//! use mqtt_channel::{Config, Connection, MqttMessage, Topic, MqttError, SubChannel, StreamExt, SinkExt};
 //! use std::convert::TryInto;
 //!
 //! #[tokio::main]
@@ -46,8 +46,6 @@ pub use errors::*;
 pub use messages::*;
 pub use topics::*;
 
-pub use futures::channel::mpsc::UnboundedReceiver;
-pub use futures::channel::mpsc::UnboundedSender;
 pub use futures::Sink;
 pub use futures::SinkExt;
 pub use futures::Stream;

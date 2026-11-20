@@ -1,9 +1,8 @@
 use crate::Config;
-use crate::ErrChannel;
 use crate::MqttError;
 use crate::MqttMessage;
-use crate::PubChannel;
-use crate::SubChannel;
+use crate::SubChannelReceiver;
+use crate::SubChannelSender;
 use crate::TopicFilter;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
@@ -14,6 +13,7 @@ use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
+use rumqttc::Publish;
 use rumqttc::SubscribeFilter;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
@@ -32,7 +32,7 @@ use tracing::Instrument;
 /// A connection to some MQTT server
 pub struct Connection {
     /// The channel of the input messages received by this connection.
-    pub received: mpsc::UnboundedReceiver<MqttMessage>,
+    pub received: SubChannelReceiver,
 
     /// The channel of the output messages to be published on this connection.
     pub published: mpsc::UnboundedSender<MqttMessage>,
@@ -115,21 +115,6 @@ impl SubscriberOps for SubscriberHandle {
 }
 
 impl Connection {
-    /// The stream of events received from this MQTT connection and forwarded to the client
-    pub fn sub_channel(&self) -> &impl SubChannel {
-        &self.received
-    }
-
-    /// The stream of actions sent by the client to this MQTT connection
-    pub fn pub_channel(&self) -> &impl PubChannel {
-        &self.published
-    }
-
-    /// The stream of errors received from this MQTT connection and forwarded to the client
-    pub fn err_channel(&self) -> &impl ErrChannel {
-        &self.errors
-    }
-
     /// Establish a connection to the MQTT broker defined by the given `config`.
     ///
     /// This connection is associated to an MQTT session with the given `name` and `subscription`.
@@ -161,7 +146,7 @@ impl Connection {
     ///     Connection::new(&config).await
     /// # }
     pub async fn new(config: &Config) -> Result<Connection, MqttError> {
-        let (received_sender, received_receiver) = mpsc::unbounded();
+        let (received_sender, received_receiver) = mpsc::channel(config.queue_capacity);
         let (published_sender, published_receiver) = mpsc::unbounded();
         let (error_sender, error_receiver) = mpsc::unbounded();
         let (pub_done_sender, pub_done_receiver) = oneshot::channel();
@@ -204,7 +189,7 @@ impl Connection {
         );
 
         Ok(Connection {
-            received: received_receiver,
+            received: SubChannelReceiver::new(received_receiver, mqtt_client.clone()),
             published: published_sender,
             errors: error_receiver,
             pub_done: pub_done_receiver,
@@ -219,7 +204,7 @@ impl Connection {
 
     async fn open(
         config: &Config,
-        mut message_sender: mpsc::UnboundedSender<MqttMessage>,
+        message_sender: mpsc::Sender<Publish>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         subscriptions: Arc<Mutex<TopicFilter>>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
@@ -235,6 +220,7 @@ impl Connection {
 
         let mqtt_options = config.rumqttc_options()?;
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
+        let mut message_sender = SubChannelSender::new(message_sender, mqtt_client.clone());
 
         info!(target: "MQTT",
             "Connecting to broker: host={}:{}, session_name={:?}",
@@ -292,9 +278,10 @@ impl Connection {
                     if msg.payload.len() > config.max_packet_size {
                         error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
                             msg.topic, msg.payload.len(), config.max_packet_size);
-                        continue;
+                        message_sender.drop(msg).await;
+                    } else {
+                        message_sender.send(msg).await;
                     }
-                    let _ = message_sender.send(msg.into()).await;
                 }
 
                 Err(err) => {
@@ -330,7 +317,7 @@ impl Connection {
         mqtt_client: AsyncClient,
         config: Config,
         mut event_loop: EventLoop,
-        mut message_sender: mpsc::UnboundedSender<MqttMessage>,
+        message_sender: mpsc::Sender<Publish>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         done: oneshot::Sender<()>,
         permits: Arc<Semaphore>,
@@ -340,6 +327,7 @@ impl Connection {
         let mut triggered_disconnect = false;
         let mut disconnect_permit = None;
         let mut awaiting_ack = HashSet::new();
+        let mut message_sender = SubChannelSender::new(message_sender, mqtt_client.clone());
 
         loop {
             // Check if we are ready to disconnect. Due to ownership of the
@@ -380,11 +368,10 @@ impl Connection {
                     if msg.payload.len() > config.max_packet_size {
                         error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
                             msg.topic, msg.payload.len(), config.max_packet_size);
-                        continue;
+                        message_sender.drop(msg).await;
+                    } else {
+                        message_sender.send(msg).await;
                     }
-                    // Errors on send are ignored: it just means the client has closed the receiving channel.
-                    // One has to continue the loop though, because rumqttc relies on this polling.
-                    let _ = message_sender.send(msg.into()).await;
                 }
 
                 Ok(Event::Incoming(Packet::ConnAck(ack))) => {

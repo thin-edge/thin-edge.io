@@ -1,6 +1,5 @@
 use crate::*;
 use futures::SinkExt;
-use futures::StreamExt;
 use std::convert::TryInto;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -63,7 +62,7 @@ fn message(t: &str, p: &str) -> MqttMessage {
     MqttMessage::new(&topic, payload)
 }
 
-async fn next_message(received: &mut (impl StreamExt<Item = MqttMessage> + Unpin)) -> MaybeMessage {
+async fn next_message(received: &mut SubChannelReceiver) -> MaybeMessage {
     match tokio::time::timeout(TIMEOUT, received.next()).await {
         Ok(Some(msg)) => MaybeMessage::Next(msg),
         Ok(None) => MaybeMessage::Eos,
