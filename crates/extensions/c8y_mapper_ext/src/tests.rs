@@ -215,6 +215,88 @@ async fn child_device_registration_mapping() {
 }
 
 #[tokio::test]
+async fn reregistration_with_unknown_parent_is_rejected() {
+    let ttd = TempTedgeDir::new();
+    let test_handle =
+        spawn_c8y_mapper_actor_with_config(&ttd, test_mapper_config(&ttd), true).await;
+    let mut mqtt = test_handle.mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1//"),
+        r#"{ "@type": "child-device" }"#,
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "101,test-device:device:child1")]).await;
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child1//"),
+        r#"{ "@type": "child-device", "@parent": "device/unknown//" }"#,
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(
+        &mut mqtt,
+        [(
+            "te/errors",
+            r#"The specified parent "device/unknown//" does not exist in the entity store"#,
+        )],
+    )
+    .await;
+
+    // The mapper keeps processing messages
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child2//"),
+        r#"{ "@type": "child-device" }"#,
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "101,test-device:device:child2")]).await;
+}
+
+#[tokio::test]
+async fn pending_child_of_a_service_is_rejected_when_the_service_is_registered() {
+    let ttd = TempTedgeDir::new();
+    let test_handle =
+        spawn_c8y_mapper_actor_with_config(&ttd, test_mapper_config(&ttd), true).await;
+    let mut mqtt = test_handle.mqtt.with_timeout(TEST_TIMEOUT_MS);
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child0//"),
+        r#"{ "@type": "child-device", "@parent": "device/main/service/foo" }"#,
+    ))
+    .await
+    .unwrap();
+
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/main/service/foo"),
+        r#"{ "@type": "service" }"#,
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(
+        &mut mqtt,
+        [
+            ("c8y/s/us", "102,test-device:device:main:service:foo"),
+            (
+                "te/errors",
+                "Rejected the pending registration of child-device: device/child0// due to: Entity: 'device/main/service/foo' can not be a parent of 'device/child0//' because it is a service",
+            ),
+        ],
+    )
+    .await;
+
+    // The rejected child can still be registered with a valid parent
+    mqtt.send(MqttMessage::new(
+        &Topic::new_unchecked("te/device/child0//"),
+        r#"{ "@type": "child-device" }"#,
+    ))
+    .await
+    .unwrap();
+    assert_received_contains_str(&mut mqtt, [("c8y/s/us", "101,test-device:device:child0")]).await;
+}
+
+#[tokio::test]
 async fn custom_topic_scheme_registration_mapping() {
     let ttd = TempTedgeDir::new();
     let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
