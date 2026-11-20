@@ -14,6 +14,7 @@ pub use mqtt_channel::MqttMessage;
 pub use mqtt_channel::QoS;
 use mqtt_channel::SinkExt;
 use mqtt_channel::StreamExt;
+use mqtt_channel::SubChannel;
 use mqtt_channel::SubscriberOps;
 pub use mqtt_channel::Topic;
 pub use mqtt_channel::TopicFilter;
@@ -595,7 +596,7 @@ impl FromPeers {
 impl ToPeers {
     async fn relay_messages_from(
         mut self,
-        incoming_mqtt: &mut mpsc::Receiver<MqttMessage>,
+        incoming_mqtt: &mut impl SubChannel,
         rx_from_peers: &mut mpsc::UnboundedReceiver<(ClientId, MqttMessage)>,
         dynamic_connection_request: &mut mpsc::Receiver<(
             TrieInsertRequest,
@@ -1236,7 +1237,7 @@ mod unit_tests {
         }
 
         pub async fn next_message_for(&mut self, id: usize) -> MqttMessage {
-            let fut = self.sent_to_clients.get_mut(&id).unwrap().next();
+            let fut = self.sent_to_clients.get_mut(&id).unwrap().recv();
             tokio::time::timeout(Duration::from_secs(5), fut)
                 .await
                 .unwrap()

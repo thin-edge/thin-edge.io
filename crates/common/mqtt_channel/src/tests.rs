@@ -1,7 +1,5 @@
 use crate::*;
-use futures::channel::mpsc;
 use futures::SinkExt;
-use futures::StreamExt;
 use std::convert::TryInto;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -64,7 +62,7 @@ fn message(t: &str, p: &str) -> MqttMessage {
     MqttMessage::new(&topic, payload)
 }
 
-async fn next_message(received: &mut (impl StreamExt<Item = MqttMessage> + Unpin)) -> MaybeMessage {
+async fn next_message(received: &mut SubChannelReceiver) -> MaybeMessage {
     match tokio::time::timeout(TIMEOUT, received.next()).await {
         Ok(Some(msg)) => MaybeMessage::Next(msg),
         Ok(None) => MaybeMessage::Eos,
@@ -246,7 +244,7 @@ async fn testing_an_mqtt_client_without_mqtt() -> Result<(), anyhow::Error> {
     static OUT_TOPIC: &str = uniquify!("out/topic");
     static IN_TOPIC: &str = uniquify!("in/topic");
     // Given an mqtt client
-    async fn run(mut input: mpsc::Receiver<MqttMessage>, mut output: impl PubChannel) {
+    async fn run(mut input: impl SubChannel, mut output: impl PubChannel) {
         while let Some(msg) = input.next().await {
             let req = msg.payload_str().expect("utf8 payload");
             let res = req.to_uppercase();
