@@ -25,7 +25,7 @@ pub enum CmdStatus {
     KilledWithInterrupt,
 }
 
-/// How long a killed command is given to exit,
+/// How long a killed command is given to exit and close its output,
 /// before waiting for its output is abandoned with an error,
 /// see [`LoggingChild::wait_for_output_with_timeout`]
 pub const DEFAULT_EXIT_WAIT_AFTER_KILL: Duration = Duration::from_secs(120);
@@ -49,7 +49,8 @@ impl LoggingChild {
     ///
     /// # Errors
     /// Returns an error if the output cannot be read,
-    /// or if the command has not exited [`Self::with_exit_wait_after_kill`] after being killed
+    /// or if, after SIGKILL, the command has not exited or its output is still open
+    /// at the end of the wait set by [`Self::with_exit_wait_after_kill`]
     pub async fn wait_for_output_with_timeout(
         self,
         command_log: &mut CommandLog,
@@ -92,7 +93,9 @@ impl LoggingChild {
                 outcome.map(|output| (output, status))
             }
             _ = Self::timeout_operation(&mut status, cid, graceful_timeout, forceful_timeout, exit_wait, interrupt) => {
-                Err(std::io::Error::other(format!("failed to kill the process: {cmd_line}")))
+                Err(std::io::Error::other(format!(
+                    "the command did not exit or its output stayed open after SIGKILL: {cmd_line}"
+                )))
             }
         }
     }
