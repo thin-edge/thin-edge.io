@@ -604,7 +604,7 @@ impl CumulocityConverter {
 
         let service_name = Some(request.service_name.as_str())
             .filter(|name| !name.is_empty())
-            .or_else(|| target.registered_name())
+            .or_else(|| target.twin_str_with_default("name"))
             .ok_or_else(|| {
                 format!("{xid} cannot run the '{action}' action: neither the operation nor the registration of the service gives a service name")
             })?;
@@ -616,7 +616,7 @@ impl CumulocityConverter {
 
         let service_type = Some(request.service_type.as_str())
             .filter(|ty| !ty.is_empty())
-            .or_else(|| target.registered_type())
+            .or_else(|| target.twin_str_with_default("type"))
             .unwrap_or(DEFAULT_SERVICE_TYPE)
             .parse::<ServiceType>()
             .map_err(|err| format!("{xid} cannot run the '{action}' action: {err}"))?;

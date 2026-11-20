@@ -54,6 +54,18 @@ Update nested child device inventory fragments via twin topics
 
     Validate inventory fragment updates via twin topics    ${nested_child}
 
+Clearing the type of a service sets the default service type in Cumulocity
+    Execute Command    tedge config set service.type systemd
+    ThinEdgeIO.Restart Service    tedge-mapper-c8y
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main/service/type-clear '{"@type":"service","type":"container"}'
+    Cumulocity.Device Should Exist    ${DEVICE_SN}:device:main:service:type-clear    show_info=False
+    Cumulocity.Device Should Have Fragment Values    serviceType\=container
+
+    Execute Command    tedge mqtt pub --retain te/device/main/service/type-clear/twin/type ''
+
+    Cumulocity.Device Should Have Fragment Values    serviceType\=systemd
+
 Update main device inventory fragments via twin topics using built-in bridge
     ThinEdgeIO.Execute Command    tedge config set mqtt.bridge.built_in true
     ThinEdgeIO.Execute Command    tedge config set c8y.bridge.topic_prefix custom-c8y-prefix

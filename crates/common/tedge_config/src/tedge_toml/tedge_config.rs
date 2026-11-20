@@ -1405,7 +1405,7 @@ define_tedge_config! {
     },
 
     service: {
-        /// The thin-edge.io service's service type
+        /// The service type of the thin-edge.io services and of the services registered without a type
         #[tedge_config(rename = "type", example = "systemd", default(value = "service"))]
         ty: String,
 

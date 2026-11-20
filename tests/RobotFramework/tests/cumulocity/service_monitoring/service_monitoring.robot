@@ -142,6 +142,18 @@ Check health status of child device service
     Should Be Equal    ${SERVICE["status"]}    unknown
     Should Be Equal    ${SERVICE["type"]}    c8y_Service
 
+Health status keeps the default service type of a service registered without type
+    Execute Command    tedge config set service.type systemd
+    ThinEdgeIO.Restart Service    tedge-mapper-c8y
+    Execute Command    tedge mqtt pub --retain te/device/main/service/type-check '{"@type":"service"}'
+    Device Should Exist    ${DEVICE_SN}:device:main:service:type-check    show_info=False
+    Device Should Have Fragment Values    serviceType\=systemd
+
+    Execute Command    tedge mqtt pub te/device/main/service/type-check/status/health '{"status":"down"}'
+
+    ${SERVICE}=    Device Should Have Fragment Values    status\=down
+    Should Be Equal    ${SERVICE["serviceType"]}    systemd
+
 tedge-mapper-c8y service tracks network connectivity with built-in bridge
     [Documentation]    Test tedge-mapper-c8y service status with built-in bridge after network outage
 

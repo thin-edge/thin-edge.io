@@ -54,6 +54,25 @@ Takes the service name and type from the registered entity when the operation gi
     ...    message_contains="serviceType":"${SERVICE_TYPE}"
     Plugin Should Have Been Called With    restart ${SERVICE_NAME}
 
+Takes the default service name and type when neither the operation nor the registration gives them
+    Execute Command    tedge config set service.type ${SERVICE_TYPE}
+    ThinEdgeIO.Restart Service    tedge-mapper-c8y
+    Execute Command    tedge mqtt pub --retain te/device/main/service/default-check '{"@type":"service"}'
+    Execute Command
+    ...    tedge mqtt pub -q 1 --retain te/device/main/service/default-check/cmd/control '{"actions":["restart"]}'
+    Cumulocity.External Identity Should Exist    ${DEVICE_SN}:device:main:service:default-check    show_info=${False}
+
+    ${operation}=    Cumulocity.Create Operation
+    ...    fragments={"c8y_ServiceCommand":{"command":"restart"}}
+    ...    description=Service command
+    Cumulocity.Operation Should Be SUCCESSFUL    ${operation}    timeout=120
+
+    ${operation_id}=    Set Variable    ${operation.to_json()["id"]}
+    Should Have MQTT Messages
+    ...    te/device/main/service/default-check/cmd/control/c8y-mapper-${operation_id}
+    ...    message_contains="serviceName":"default-check","serviceType":"${SERVICE_TYPE}"
+    Plugin Should Have Been Called With    restart default-check
+
 
 *** Keywords ***
 Custom Setup
