@@ -1658,9 +1658,9 @@ EOF
 }
 
 #[tokio::test]
-async fn custom_operation_fails_when_its_command_cannot_be_killed() {
+async fn custom_operation_fails_when_its_command_output_stays_open_after_kill() {
     let ttd = TempTedgeDir::new();
-    let cmd_file = create_unkillable_command(&ttd);
+    let cmd_file = create_command_whose_output_outlives_it(&ttd);
     create_custom_op_file(&ttd, cmd_file.as_path(), Some(1), Some(1));
 
     let config = config_waiting_one_second_after_kill(&ttd);
@@ -1680,15 +1680,18 @@ async fn custom_operation_fails_when_its_command_cannot_be_killed() {
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "501,c8y_Command")]).await;
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "502,c8y_Command,\"failed to kill the process")],
+        [(
+            "c8y/s/us",
+            "502,c8y_Command,\"the command did not exit or its output stayed open",
+        )],
     )
     .await;
 }
 
 #[tokio::test]
-async fn json_custom_operation_fails_by_id_when_its_command_cannot_be_killed() {
+async fn json_custom_operation_fails_by_id_when_its_command_output_stays_open_after_kill() {
     let ttd = TempTedgeDir::new();
-    let cmd_file = create_unkillable_command(&ttd);
+    let cmd_file = create_command_whose_output_outlives_it(&ttd);
     ttd.dir("operations")
         .dir("c8y")
         .file("c8y_Command")
@@ -1727,16 +1730,19 @@ async fn json_custom_operation_fails_by_id_when_its_command_cannot_be_killed() {
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "504,1234")]).await;
     assert_received_contains_str(
         &mut mqtt,
-        [("c8y/s/us", "505,1234,failed to kill the process")],
+        [(
+            "c8y/s/us",
+            "505,1234,the command did not exit or its output stayed open",
+        )],
     )
     .await;
 }
 
 #[tokio::test]
-async fn custom_operation_skipping_status_updates_is_not_failed_when_its_command_cannot_be_killed()
-{
+async fn custom_operation_skipping_status_updates_is_not_failed_when_its_command_output_stays_open_after_kill(
+) {
     let ttd = TempTedgeDir::new();
-    let cmd_file = create_unkillable_command(&ttd);
+    let cmd_file = create_command_whose_output_outlives_it(&ttd);
     ttd.dir("operations")
         .dir("c8y")
         .file("c8y_Command")
@@ -1766,7 +1772,7 @@ async fn custom_operation_skipping_status_updates_is_not_failed_when_its_command
     .expect("Send failed");
 
     // The failure is logged just before it would be published
-    wait_for_command_log(&ttd, "failed to kill the process").await;
+    wait_for_command_log(&ttd, "the command did not exit or its output stayed open").await;
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_received_not_contains_str(
         &mut mqtt,
@@ -3983,9 +3989,10 @@ impl Sender<MqttMessage> for MockMqttBoxUnbuffered {
     }
 }
 
-/// Creates a command that cannot be killed on timeout: its `setsid` child leaves the process group
-/// killed on timeout and keeps stdout open, so the mapper never sees the command exit
-fn create_unkillable_command(ttd: &TempTedgeDir) -> Utf8PathBuf {
+/// Creates a command whose output stays open after it is killed on timeout: its `setsid` child is
+/// outside the process group that is killed and keeps stdout open, so the mapper never sees the
+/// output close
+fn create_command_whose_output_outlives_it(ttd: &TempTedgeDir) -> Utf8PathBuf {
     let cmd_file = ttd.path().join("command");
     // The `setsid` child outlives the 3 seconds the mapper waits for the command: 2 timeouts of 1 second and the exit wait
     let content = r#"#!/bin/sh
@@ -3996,7 +4003,8 @@ fn create_unkillable_command(ttd: &TempTedgeDir) -> Utf8PathBuf {
     cmd_file
 }
 
-/// The test configuration of the mapper, giving a killed command one second to exit
+/// The test configuration of the mapper, giving a killed command one second to exit and close its
+/// output
 fn config_waiting_one_second_after_kill(ttd: &TempTedgeDir) -> C8yMapperConfig {
     C8yMapperConfig {
         custom_operation_exit_wait_after_kill: Duration::from_secs(1),
