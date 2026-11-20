@@ -3,10 +3,6 @@ use crate::MqttMessage;
 use async_trait::async_trait;
 use futures::channel::mpsc;
 use futures::SinkExt;
-use futures::StreamExt;
-
-#[async_trait]
-pub trait SubChannel: StreamExt<Item = MqttMessage> + Unpin + Send {}
 
 #[async_trait]
 pub trait PubChannel: SinkExt<MqttMessage> + Unpin + Send {
@@ -18,9 +14,6 @@ pub trait PubChannel: SinkExt<MqttMessage> + Unpin + Send {
             .map_err(|_| MqttError::SendOnClosedConnection)?)
     }
 }
-
-#[async_trait]
-impl SubChannel for mpsc::Receiver<MqttMessage> {}
 
 #[async_trait]
 impl PubChannel for mpsc::UnboundedSender<MqttMessage> {}

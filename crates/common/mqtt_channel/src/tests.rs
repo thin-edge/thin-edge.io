@@ -1,4 +1,5 @@
 use crate::*;
+use futures::channel::mpsc;
 use futures::SinkExt;
 use futures::StreamExt;
 use std::convert::TryInto;
@@ -245,7 +246,7 @@ async fn testing_an_mqtt_client_without_mqtt() -> Result<(), anyhow::Error> {
     static OUT_TOPIC: &str = uniquify!("out/topic");
     static IN_TOPIC: &str = uniquify!("in/topic");
     // Given an mqtt client
-    async fn run(mut input: impl SubChannel, mut output: impl PubChannel) {
+    async fn run(mut input: mpsc::Receiver<MqttMessage>, mut output: impl PubChannel) {
         while let Some(msg) = input.next().await {
             let req = msg.payload_str().expect("utf8 payload");
             let res = req.to_uppercase();
