@@ -123,8 +123,15 @@ impl FromStr for AutoLogUpload {
 
 pub const MQTT_MAX_PAYLOAD_SIZE: u32 = 268435455;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Document)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
 pub struct MqttPayloadLimit(pub u32);
+
+impl Document for MqttPayloadLimit {
+    fn ty() -> doku::Type {
+        u32::ty()
+    }
+}
 
 impl Default for MqttPayloadLimit {
     fn default() -> Self {
@@ -133,7 +140,7 @@ impl Default for MqttPayloadLimit {
 }
 
 #[derive(thiserror::Error, Debug)]
-#[error("Invalid MQTT payload size limit: {0}. Provide a value between 0 and 268435455 bytes")]
+#[error("Invalid MQTT payload size limit: {0}. Provide a value between 1 and 268435455 bytes")]
 pub struct InvalidMqttPayloadLimit(String);
 
 impl FromStr for MqttPayloadLimit {
@@ -169,7 +176,9 @@ impl Display for MqttPayloadLimit {
 mod tests {
     use super::InvalidMqttPayloadLimit;
     use super::MqttPayloadLimit;
+    use super::MQTT_MAX_PAYLOAD_SIZE;
     use assert_matches::assert_matches;
+    use rstest::rstest;
 
     #[test]
     fn test_mqtt_payload_limit() {
@@ -188,5 +197,25 @@ mod tests {
         // Anything less than that is also valid
         let res = MqttPayloadLimit::try_from(268435455 - 1);
         assert_matches!(res.unwrap().0, 268435454);
+    }
+
+    #[rstest]
+    #[case::zero(0)]
+    #[case::above_max(MQTT_MAX_PAYLOAD_SIZE + 1)]
+    fn out_of_range_payload_limit_is_rejected_when_deserialized(#[case] limit: u32) {
+        let err = serde_json::from_str::<MqttPayloadLimit>(&limit.to_string()).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains(&format!("Invalid MQTT payload size limit: {limit}")),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[rstest]
+    #[case::min(1)]
+    #[case::max(MQTT_MAX_PAYLOAD_SIZE)]
+    fn in_range_payload_limit_is_accepted_when_deserialized(#[case] limit: u32) {
+        let parsed = serde_json::from_str::<MqttPayloadLimit>(&limit.to_string()).unwrap();
+        assert_eq!(parsed, MqttPayloadLimit(limit));
     }
 }

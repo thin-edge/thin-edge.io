@@ -684,10 +684,12 @@ enum StoreEmptyConfig {
 #[cfg(test)]
 mod tests {
     use crate::models::AbsolutePath;
+    use crate::models::MqttPayloadLimit;
     use crate::tedge_toml::mapper_config::AzMapperSpecificConfig;
     use crate::tedge_toml::mapper_config::C8yMapperSpecificConfig;
     use crate::tedge_toml::Cloud;
     use once_cell::sync::Lazy;
+    use rstest::rstest;
     use tedge_config_macros::ProfileName;
     use tedge_test_utils::fs::TempTedgeDir;
     use tokio::sync::Mutex;
@@ -1816,6 +1818,35 @@ config = "KeepOld"
         assert_eq!(
             tedge_config.apt.dpkg.options.config,
             crate::models::AptConfig::KeepOld
+        );
+    }
+
+    #[rstest]
+    #[case::c8y_zero("[c8y.mapper.mqtt]\nmax_payload_size = 0")]
+    #[case::c8y_above_max("[c8y.mapper.mqtt]\nmax_payload_size = 268435456")]
+    #[case::az_zero("[az.mapper.mqtt]\nmax_payload_size = 0")]
+    #[case::aws_above_max("[aws.mapper.mqtt]\nmax_payload_size = 268435456")]
+    #[tokio::test]
+    async fn out_of_range_max_payload_size_in_tedge_toml_is_rejected(#[case] toml: &str) {
+        let (_dir, t) = create_temp_tedge_config(toml).unwrap();
+        let err = t.load_dto_with_warnings::<FileOnly>().await.unwrap_err();
+        let TEdgeConfigError::FromTOMLParse(err) = err else {
+            panic!("expected a TOML parse error, got {err:?}");
+        };
+        assert!(
+            err.to_string().contains("Invalid MQTT payload size limit"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn max_payload_size_in_range_is_read_from_tedge_toml() {
+        let (_dir, t) =
+            create_temp_tedge_config("[c8y.mapper.mqtt]\nmax_payload_size = 16384").unwrap();
+        let (dto, _warnings) = t.load_dto_with_warnings::<FileOnly>().await.unwrap();
+        assert_eq!(
+            dto.c8y.non_profile.mapper.mqtt.max_payload_size,
+            Some(MqttPayloadLimit(16384))
         );
     }
 
