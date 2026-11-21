@@ -140,7 +140,7 @@ impl Default for MqttPayloadLimit {
 }
 
 #[derive(thiserror::Error, Debug)]
-#[error("Invalid MQTT payload size limit: {0}. Provide a value between 0 and 268435455 bytes")]
+#[error("Invalid MQTT payload size limit: {0}. Provide a value between 1 and 268435455 bytes")]
 pub struct InvalidMqttPayloadLimit(String);
 
 impl FromStr for MqttPayloadLimit {
