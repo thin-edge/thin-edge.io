@@ -2,13 +2,13 @@ use super::payload::SmartrestPayload;
 use super::payload::SmartrestPayloadError;
 use crate::smartrest::csv::fields_to_csv_string;
 use crate::smartrest::error::SmartRestSerializerError;
-use crate::smartrest::message::strip_unsupported_chars;
 use csv::StringRecord;
 use serde::ser::SerializeSeq;
 use serde::Serialize;
 use serde::Serializer;
 use tedge_api::SoftwareListCommand;
 use tedge_api::SoftwareModule;
+use tedge_utils::control_chars::strip_control_chars;
 use tracing::warn;
 
 use super::message_ids::*;
@@ -43,7 +43,7 @@ pub fn fail_operation_with_id(op_id: &str, reason: &str) -> SmartrestPayload {
 }
 
 fn fail_operation(template_id: usize, operation: &str, reason: &str) -> SmartrestPayload {
-    let reason = &strip_unsupported_chars(reason);
+    let reason = &strip_control_chars(reason);
 
     // If the failure reason exceeds 500 bytes, truncate it
     if reason.len() <= 500 {
@@ -369,7 +369,7 @@ impl Serialize for TextOrCsv {
         S: Serializer,
     {
         match self {
-            TextOrCsv::Text(text) => serializer.serialize_str(&strip_unsupported_chars(text)),
+            TextOrCsv::Text(text) => serializer.serialize_str(&strip_control_chars(text)),
             TextOrCsv::Csv(csv) => csv.serialize(serializer),
         }
     }
@@ -405,7 +405,7 @@ impl Serialize for EmbeddedCsv {
         let record = parse_single_record(&self.0)?;
         let mut seq = serializer.serialize_seq(Some(record.len()))?;
         for field in record.iter() {
-            seq.serialize_element(&strip_unsupported_chars(field))?;
+            seq.serialize_element(&strip_control_chars(field))?;
         }
         seq.end()
     }
@@ -748,7 +748,7 @@ mod tests {
     }
 
     #[test]
-    fn succeed_operation_removes_unsupported_chars() {
+    fn succeed_operation_removes_control_chars() {
         let smartrest = succeed_operation_with_id(
             "1234",
             TextOrCsv::Text("\x1b[31mhello\x1b[0m\n\0world".into()),
@@ -759,7 +759,7 @@ mod tests {
     }
 
     #[test]
-    fn succeed_operation_removes_unsupported_chars_from_csv() {
+    fn succeed_operation_removes_control_chars_from_csv() {
         let smartrest =
             succeed_operation_with_id("1234", EmbeddedCsv::new("\x1b[1mfoo\x1b[0m,bar\x07".into()))
                 .unwrap();
@@ -776,7 +776,7 @@ mod tests {
     }
 
     #[test]
-    fn fail_operation_removes_unsupported_chars() {
+    fn fail_operation_removes_control_chars() {
         let smartrest = fail_operation_with_id("1234", "\x1b[31merror\x1b[0m: a\x1bb");
 
         assert_eq!(smartrest.as_str(), "505,1234,error: a");
