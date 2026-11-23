@@ -136,20 +136,27 @@ impl<'a> Pkcs11Uri<'a> {
     ///
     /// Attributes present in only one of the URIs don't conflict. The PIN is not an attribute
     /// identifying a slot/token/key, so it is ignored.
-    pub fn conflicts_with(&self, other: &Self) -> bool {
+    pub fn conflicts_with(&self, config: &Self) -> bool {
         fn differs<T: PartialEq>(a: &Option<T>, b: &Option<T>) -> bool {
             matches!((a, b), (Some(a), Some(b)) if a != b)
         }
 
-        differs(&self.token, &other.token)
-            || differs(&self.serial, &other.serial)
-            || differs(&self.id, &other.id)
-            || differs(&self.object, &other.object)
-            || differs(&self.slot_id, &other.slot_id)
+        if (config.object.is_some() && self.object.is_none())
+            || (config.id.is_some() && self.id.is_none())
+        {
+            // config targets key object but request targets token
+            return true;
+        }
+
+        differs(&self.token, &config.token)
+            || differs(&self.serial, &config.serial)
+            || differs(&self.id, &config.id)
+            || differs(&self.object, &config.object)
+            || differs(&self.slot_id, &config.slot_id)
             || self
                 .other
                 .iter()
-                .any(|(k, v)| other.other.get(k).is_some_and(|o| o != v))
+                .any(|(k, v)| config.other.get(k).is_some_and(|o| o != v))
     }
 
     /// Check if a PKCS11 URIs matches the other URI.

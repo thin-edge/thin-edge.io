@@ -45,6 +45,8 @@ List all keys on token
     ${stdout}=    Execute Command    cmd=tedge hsm list-keys --pin ${pin} "pkcs11:token=${token}"
     RETURN    ${stdout}
 
+# not broken
+# TODO: should CLI filter and show how many where hidden, like list-keys?
 List tokens ignoring the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2
     ${stdout}=    Execute Command    cmd=tedge hsm list-tokens
@@ -120,13 +122,11 @@ Create a key when the configured URI selects an empty token
 
 Create a key whose label is overridden by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2;object=token2-key
-    ${stderr}=    Execute Command
-    ...    cmd=tedge hsm create-key --type ecdsa --label new-key "pkcs11:token=token2"
-    ...    stdout=False
-    ...    stderr=True
-    Should Contain    ${stderr}    New keypair was successfully created
+    Command Should Fail With
+    ...    tedge hsm create-key --type ecdsa --label new-key "pkcs11:token=token2"
+    ...    conflicts with the configured device.cryptoki.uri
     ${keys}=    List all keys on token    token2
-    Should Contain    ${keys}    Label: new-key
+    Should Not Contain    ${keys}    Label: new-key
 
 Change the PIN of a token excluded by the configured URI
     Set tedge-p11-server Uri    pkcs11:token=token2

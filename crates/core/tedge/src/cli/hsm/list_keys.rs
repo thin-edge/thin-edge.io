@@ -130,18 +130,12 @@ impl Command for ListKeysCmd {
             .filter(|k| matches_uri(&uri_attributes, &k.uri))
             .collect();
 
-        let keys_not_shown = keys.len() - matching_keys.len();
-        if keys_not_shown > 0 {
-            warn_filtered(keys_not_shown);
-        }
-
         if matching_keys.is_empty() {
             if label_filter.is_some() || id_filter.is_some() {
                 eprintln!("No keys matching the given filters were found on the token.");
             } else {
                 eprintln!("No keys were found on the token.");
             }
-            return Ok(());
         }
 
         for (i, key) in matching_keys.iter().enumerate() {
@@ -164,6 +158,11 @@ impl Command for ListKeysCmd {
                 println!("  Type:  {}", key.key_type);
             }
             println!("  URI:   {}", key.uri);
+        }
+
+        let keys_not_shown = keys.len() - matching_keys.len();
+        if keys_not_shown > 0 {
+            warn_filtered(keys_not_shown);
         }
 
         Ok(())
