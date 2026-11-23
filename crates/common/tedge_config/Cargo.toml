@@ -50,6 +50,7 @@ yansi = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 figment = { workspace = true, features = ["test"] }
+rstest = { workspace = true }
 tedge_config = { path = ".", features = ["test"] }
 tedge_test_utils = { workspace = true }
 tempfile = { workspace = true }

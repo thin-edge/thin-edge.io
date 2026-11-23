@@ -5743,6 +5743,7 @@ dependencies = [
  "path-clean",
  "regex",
  "reqwest",
+ "rstest",
  "rustls",
  "serde",
  "serde_json",
