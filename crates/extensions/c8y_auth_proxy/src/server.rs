@@ -418,23 +418,29 @@ where
 
 /// Does this request target the Cumulocity frontend UI?
 ///
-/// Cumulocity revokes the device token when the frontend UI is accessed, so these
-/// requests are denied before they are proxied.
-///
-/// The check runs on the parsed URL rather than on the raw request path, because the
-/// raw path is neither normalized nor decoded at the point the request arrives, and so
-/// does not show what Cumulocity will ultimately act on:
-///
-/// - [reqwest::Url] resolves `.` and `..` segments, so a raw path of `../../apps/x`
-///   is sent as `/apps/x`;
-/// - Cumulocity percent-decodes the path it receives, so a raw path of `app%73/x`
-///   or `x%2Ejs` arrives there as `apps/x` or `x.js`.
-///
-/// Matching is case-insensitive as a further precaution. No Cumulocity REST endpoint
-/// the proxy is expected to carry begins with `apps/` or ends in `.js` in any casing.
+/// Cumulocity revokes the device token when the frontend UI is accessed, so
+/// these requests are denied before they are proxied.
+//
+/// We can't just allow API requests and deny everything else, because there is
+/// no sensible common API prefix for the different endpoints like
+/// `https://<TENANT_DOMAIN>/event`, `<TENANT_DOMAIN>/inventory`,
+/// `TENANT_DOMAIN/devicecontrol`, etc. and new APIs can get added so we can
+/// only try to deny frontend requests by checking the request path after
+/// canonicalizing it.
 fn targets_frontend_ui(destination: &reqwest::Url) -> bool {
-    let path = percent_encoding::percent_decode_str(destination.path()).decode_utf8_lossy();
-    let path = path.trim_start_matches('/').to_ascii_lowercase();
+    let decoded = percent_encoding::percent_decode_str(destination.path()).decode_utf8_lossy();
+
+    // Resolve the decoded path again, since decoding re-introduces separators and
+    // dot segments. `set_path` parses only a path: `.` and `..` are resolved as in the
+    // first parse, while `?` and `#` stay in the path (re-encoded) rather than being
+    // read as a query or a fragment, and the host can never change.
+    let mut normalized = destination.clone();
+    normalized.set_path(&decoded);
+
+    let path = normalized
+        .path()
+        .trim_start_matches('/')
+        .to_ascii_lowercase();
 
     path.starts_with("apps/") || path.ends_with(".js")
 }
@@ -651,7 +657,6 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
-    use test_case::test_case;
     use tokio::io::AsyncRead;
     use tokio::io::AsyncReadExt;
     use tokio::io::AsyncWrite;
@@ -959,81 +964,199 @@ mod tests {
         reqwest::Url::parse(&format!("https://tenant.cumulocity.com/{raw_path}")).unwrap()
     }
 
-    #[test_case("apps/foo" ; "plain frontend app")]
-    #[test_case("foo.js" ; "plain script")]
-    #[test_case("some/nested/script.js" ; "nested script")]
+    #[rstest::rstest]
+    #[case::plain_frontend_app("apps/foo")]
+    #[case::plain_script("foo.js")]
+    #[case::nested_script("some/nested/script.js")]
     // `.` and `..` segments are resolved by `Url::parse`, so a check on the raw path
     // would let these through and Cumulocity would still see `/apps/...`.
-    #[test_case("../../apps/foo" ; "frontend app behind parent segments")]
-    #[test_case("./apps/foo" ; "frontend app behind a current-directory segment")]
-    #[test_case("foo/../apps/bar" ; "frontend app behind a sibling segment")]
-    #[test_case("a/b/../../foo.js" ; "script behind parent segments")]
-    // Cumulocity percent-decodes the path, so a check on the raw path would miss these.
-    #[test_case("app%73/foo" ; "frontend app with an encoded letter")]
-    #[test_case("apps%2Ffoo" ; "frontend app with an encoded slash")]
-    #[test_case("foo%2Ejs" ; "script with an encoded dot")]
+    #[case::frontend_app_behind_parent_segments("../../apps/foo")]
+    #[case::frontend_app_behind_a_current_directory_segment("./apps/foo")]
+    #[case::frontend_app_behind_a_sibling_segment("foo/../apps/bar")]
+    #[case::script_behind_parent_segments("a/b/../../foo.js")]
+    // A decoding server would see these as the frontend UI, so a check on the raw path
+    // would miss them.
+    #[case::frontend_app_with_an_encoded_letter("app%73/foo")]
+    #[case::frontend_app_with_an_encoded_slash("apps%2Ffoo")]
+    #[case::script_with_an_encoded_dot("foo%2Ejs")]
+    // Decoding re-introduces separators and dot segments that the first resolution
+    // already removed, so the decoded path has to be resolved again.
+    #[case::frontend_app_behind_an_encoded_parent_segment("..%2Fapps/foo")]
+    #[case::frontend_app_behind_encoded_parent_segments("..%2F..%2Fapps/foo")]
+    #[case::frontend_app_behind_lower_case_encoded_parent_segments("a/..%2f..%2fapps/foo")]
+    #[case::frontend_app_behind_a_fully_encoded_path("a%2F..%2F..%2Fapps%2Ffoo")]
+    #[case::script_behind_an_encoded_parent_segment("..%2Ffoo.js")]
+    // The URL standard treats `\` as a path separator for a special scheme, so these
+    // decode to a path that resolves to `/apps/...` or ends in `.js`.
+    #[case::frontend_app_behind_an_encoded_backslash("%5Capps/foo")]
+    #[case::frontend_app_behind_encoded_backslashes("%5C%5Capps/foo")]
+    #[case::frontend_app_behind_mixed_encoded_separators("%2F%5Capps/foo")]
+    #[case::frontend_app_behind_an_encoded_parent_segment_and_backslash("..%2F%5Capps/foo")]
+    #[case::script_behind_an_encoded_backslash("%5Cfoo.js")]
+    // Tab, CR and LF are dropped when the decoded path is parsed, so they cannot hide
+    // the separators that follow them.
+    #[case::frontend_app_behind_a_tab_and_an_encoded_backslash("%09%5Capps/foo")]
+    #[case::frontend_app_behind_a_tab_and_a_separator("%09/apps/foo")]
+    #[case::frontend_app_behind_a_newline_and_an_encoded_backslash("%0A%5Capps/foo")]
+    #[case::frontend_app_behind_a_carriage_return_and_an_encoded_backslash("%0D%5Capps/foo")]
+    // A decoded `?` or `#` must stay part of the path, or everything after it would be
+    // read as a query or a fragment and escape the check.
+    #[case::frontend_app_behind_an_encoded_question_mark("x%3F/..%2Fapps/foo")]
+    #[case::frontend_app_behind_an_encoded_hash("x%23/..%2Fapps/foo")]
+    #[case::script_behind_an_encoded_question_mark("x%3F/..%2Ffoo.js")]
+    #[case::script_with_an_encoded_question_mark("x%3F.js")]
     // Casing
-    #[test_case("APPS/foo" ; "frontend app in upper case")]
-    #[test_case("foo.JS" ; "script in upper case")]
+    #[case::frontend_app_in_upper_case("APPS/foo")]
+    #[case::script_in_upper_case("foo.JS")]
     // A leading empty segment still resolves to the frontend UI
-    #[test_case("/apps/foo" ; "frontend app behind an empty segment")]
-    fn requests_to_the_frontend_ui_are_denied(raw_path: &str) {
+    #[case::frontend_app_behind_an_empty_segment("/apps/foo")]
+    fn requests_to_the_frontend_ui_are_denied(#[case] raw_path: &str) {
         assert!(
             targets_frontend_ui(&proxied_url(raw_path)),
             "{raw_path:?} should have been recognised as a frontend UI request"
         );
     }
 
-    #[test_case("" ; "empty path")]
-    #[test_case("inventory/managedObjects" ; "inventory")]
-    #[test_case("tenant/currentTenant" ; "current tenant")]
-    #[test_case("measurement/measurements" ; "measurements")]
-    #[test_case("service/applications" ; "a path merely containing apps")]
-    #[test_case("inventory/apps/foo" ; "apps below another segment")]
-    #[test_case("foo.json" ; "a json document")]
-    #[test_case("foo.js.txt" ; "a path containing but not ending in .js")]
-    fn ordinary_api_requests_are_not_denied(raw_path: &str) {
+    #[rstest::rstest]
+    #[case::empty_path("")]
+    #[case::inventory("inventory/managedObjects")]
+    #[case::current_tenant("tenant/currentTenant")]
+    #[case::measurements("measurement/measurements")]
+    #[case::a_path_merely_containing_apps("service/applications")]
+    #[case::apps_below_another_segment("inventory/apps/foo")]
+    #[case::a_json_document("foo.json")]
+    #[case::a_path_containing_but_not_ending_in_js("foo.js.txt")]
+    #[case::an_encoded_slash_inside_an_identifier("identity/externalIds/c8y_Serial%2F123")]
+    #[case::an_encoded_backslash_before_an_api_path("%5Cinventory/managedObjects")]
+    #[case::an_encoded_question_mark_inside_an_identifier("identity/externalIds/c8y_Serial%3F123")]
+    fn ordinary_api_requests_are_not_denied(#[case] raw_path: &str) {
         assert!(
             !targets_frontend_ui(&proxied_url(raw_path)),
             "{raw_path:?} should have been proxied"
         );
     }
 
-    /// End-to-end proof over a raw socket. A normal HTTP client resolves `..` before the
-    /// request leaves, so the bypass can only be reproduced by writing the request line
-    /// directly.
-    #[test_case("/c8y/apps/foo" ; "plain frontend app")]
-    #[test_case("/c8y/../../apps/foo" ; "frontend app behind parent segments")]
-    #[test_case("/c8y/app%73/foo" ; "frontend app with an encoded letter")]
-    #[test_case("/c8y/foo%2Ejs" ; "script with an encoded dot")]
-    #[tokio::test]
-    async fn frontend_ui_requests_are_denied_before_reaching_cumulocity(request_target: &str) {
-        // The upstream is a listener that accepts nothing: if the proxy were to forward
-        // the request, it could not answer 403.
-        let unreachable_target = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let proxy_port =
-            start_plain_http_proxy(unreachable_target.local_addr().unwrap().port()).await;
+    #[derive(Debug, Clone, Copy)]
+    enum Upgrade {
+        None,
+        WebSocket,
+    }
 
-        let mut stream = TcpStream::connect(("127.0.0.1", proxy_port)).await.unwrap();
+    /// Drive a raw request line through the proxy
+    ///
+    /// Returns the head of the proxy's response and the request line that reached the
+    /// upstream, if the proxy forwarded anything at all.
+    async fn raw_request(request_target: &str, upgrade: Upgrade) -> (String, Option<String>) {
+        let upstream = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .unwrap();
+        let proxy_port = start_plain_http_proxy(upstream.local_addr().unwrap().port()).await;
+
+        let (mut forwarded_tx, mut forwarded_rx) = mpsc::channel(1);
+        tokio::spawn(async move {
+            if let Ok((mut upstream, _)) = upstream.accept().await {
+                let mut received = Vec::new();
+                let _ = upstream.read_buf(&mut received).await;
+                let _ = upstream.write_all(b"HTTP/1.1 204 No Content\r\n\r\n").await;
+                let request_line = String::from_utf8_lossy(&received)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_owned();
+                let _ = forwarded_tx.send(request_line).await;
+            }
+        });
+
+        let headers = match upgrade {
+            Upgrade::None => "Connection: close\r\n",
+            Upgrade::WebSocket => {
+                "Connection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            }
+        };
+        let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, proxy_port))
+            .await
+            .unwrap();
         stream
             .write_all(
-                format!(
-                    "GET {request_target} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
-                )
-                .as_bytes(),
+                format!("GET {request_target} HTTP/1.1\r\nHost: localhost\r\n{headers}\r\n")
+                    .as_bytes(),
             )
             .await
             .unwrap();
 
-        let mut response = String::new();
-        tokio::time::timeout(Duration::from_secs(5), stream.read_to_string(&mut response))
+        // An upgraded connection stays open, so read only the response head rather than
+        // waiting for the proxy to close the connection.
+        let mut response = Vec::new();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !response.windows(4).any(|w| w == b"\r\n\r\n") {
+                if stream.read_buf(&mut response).await.unwrap() == 0 {
+                    break;
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for the proxy to respond");
+
+        // The proxy answers a denied request without touching the network, so anything
+        // it did forward has already been sent by the time it replies, or, for an
+        // upgrade, is sent straight after. The bounded wait covers that handover.
+        let forwarded = tokio::time::timeout(Duration::from_secs(1), forwarded_rx.next())
             .await
-            .expect("timed out waiting for the proxy to respond")
-            .unwrap();
+            .ok()
+            .flatten();
+
+        (String::from_utf8_lossy(&response).into_owned(), forwarded)
+    }
+
+    // End-to-end proof over a raw socket. A normal HTTP client resolves `..` before the
+    // request leaves, so the bypasses can only be reproduced by writing the request line
+    // directly. A websocket upgrade is proxied by a separate branch, so each case is
+    // also sent as an upgrade.
+    #[rstest::rstest]
+    #[case::plain_frontend_app("/c8y/apps/foo")]
+    #[case::frontend_app_behind_parent_segments("/c8y/../../apps/foo")]
+    #[case::frontend_app_with_an_encoded_letter("/c8y/app%73/foo")]
+    #[case::script_with_an_encoded_dot("/c8y/foo%2Ejs")]
+    #[case::frontend_app_behind_an_encoded_parent_segment("/c8y/..%2Fapps/foo")]
+    #[case::frontend_app_behind_lower_case_encoded_parent_segments("/c8y/a/..%2f..%2fapps/foo")]
+    #[case::frontend_app_behind_an_encoded_backslash("/c8y/%5Capps/foo")]
+    #[case::frontend_app_behind_a_tab_and_an_encoded_backslash("/c8y/%09%5Capps/foo")]
+    #[case::frontend_app_behind_an_encoded_question_mark("/c8y/x%3F/..%2Fapps/foo")]
+    #[tokio::test]
+    async fn frontend_ui_requests_do_not_reach_cumulocity(
+        #[case] request_target: &str,
+        #[values(Upgrade::None, Upgrade::WebSocket)] upgrade: Upgrade,
+    ) {
+        let (response, forwarded) = raw_request(request_target, upgrade).await;
 
         assert!(
             response.starts_with("HTTP/1.1 403 Forbidden"),
             "expected 403 for {request_target:?}, got: {response}"
+        );
+        assert_eq!(
+            forwarded, None,
+            "{request_target:?} was forwarded to Cumulocity instead of being denied"
+        );
+    }
+
+    // Positive control: proves the harness above can actually observe a forwarded
+    // request, so asserting that nothing was forwarded is not vacuous. It also checks
+    // that what is forwarded is the path that was checked, not the raw path.
+    #[rstest::rstest]
+    #[case::api_path("/c8y/inventory/managedObjects", "/inventory/managedObjects")]
+    #[case::api_path_behind_a_resolved_frontend_segment("/c8y/apps/../inventory", "/inventory")]
+    #[tokio::test]
+    async fn ordinary_requests_are_forwarded_to_cumulocity(
+        #[case] request_target: &str,
+        #[case] expected_path: &str,
+        #[values(Upgrade::None, Upgrade::WebSocket)] upgrade: Upgrade,
+    ) {
+        let (_response, forwarded) = raw_request(request_target, upgrade).await;
+
+        assert_eq!(
+            forwarded,
+            Some(format!("GET {expected_path} HTTP/1.1")),
+            "{request_target:?} was not forwarded as the path that was checked"
         );
     }
 
