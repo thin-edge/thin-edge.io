@@ -331,6 +331,44 @@ Reject a workflow setting sudo on a state that runs no script
     ...    Execute Command    rm -f /etc/tedge/operations/elevated-proceed.toml
     ...    AND    Get Logs
 
+Pass the empty string for a twin fragment the entity does not have
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/entity-data.toml    /etc/tedge/operations/
+    Wait Until Keyword Succeeds
+    ...    30s
+    ...    1s
+    ...    Should Have Retained MQTT Messages
+    ...    te/device/main///cmd/entity-data
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/entity-data/robot-entity-1 '{"status":"init"}'
+    ${messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/entity-data/robot-entity-1
+    ...    message_pattern=.*successful.*
+    ...    maximum=1
+    Should Contain    ${messages[0]}    item="version":""
+
+Pass the data of the target entity to a workflow script
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/echo-as-json.sh    /etc/tedge/operations/
+    ThinEdgeIO.Transfer To Device    ${CURDIR}/entity-data.toml    /etc/tedge/operations/
+    Wait Until Keyword Succeeds
+    ...    30s
+    ...    1s
+    ...    Should Have Retained MQTT Messages
+    ...    te/device/main///cmd/entity-data
+    Execute Command    tedge http put /te/v1/entities/device/main///twin/robot_version '"1.2.3"'
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/main///cmd/entity-data/robot-entity-2 '{"status":"init"}'
+    ${messages}    Should Have MQTT Messages
+    ...    te/device/main///cmd/entity-data/robot-entity-2
+    ...    message_pattern=.*successful.*
+    ...    maximum=1
+    Should Contain    ${messages[0]}    item="topic_id":"device/main//"
+    Should Contain    ${messages[0]}    item="type":"device"
+    Should Contain    ${messages[0]}    item="version":"1.2.3"
+    [Teardown]    Run Keywords
+    ...    Execute Command    tedge http delete /te/v1/entities/device/main///twin/robot_version
+    ...    AND    Get Logs
+
 
 *** Keywords ***
 Custom Test Setup

@@ -1859,6 +1859,357 @@ async fn a_sub_operation_is_triggered_on_the_same_entity_as_the_calling_command(
 }
 
 #[tokio::test]
+async fn a_service_workflow_reads_the_twin_of_the_service_its_command_targets() {
+    let mut nodered = EntityMetadata::new(
+        "device/main/service/nodered".parse().unwrap(),
+        EntityType::Service,
+    )
+    .with_parent("device/main//".parse().unwrap());
+    nodered
+        .twin_data
+        .insert("name".to_string(), "Node-RED".into());
+
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![(
+            "service-restart.toml".to_string(),
+            SERVICE_RESTART_PASSING_ENTITY_DATA.to_string(),
+        )],
+        FakeEntityStore::Entities(vec![nodered]),
+    )
+    .await
+    .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/nodered/cmd/restart/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let sub_command = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main/service/nodered/cmd/software_update/sub:restart:1",
+        "init",
+    )
+    .await;
+
+    assert_eq!(sub_command["name"], json!("Node-RED"));
+    assert_eq!(sub_command["parent"], json!("device/main//"));
+}
+
+#[tokio::test]
+async fn a_device_workflow_reads_the_data_of_the_device_its_command_targets() {
+    let main_device = EntityMetadata::main_device(Some("test-device".into()));
+
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![(
+            "device-restart.toml".to_string(),
+            DEVICE_RESTART_PASSING_ENTITY_DATA.to_string(),
+        )],
+        FakeEntityStore::Entities(vec![main_device]),
+    )
+    .await
+    .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/restart/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let sub_command = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/software_update/sub:restart:1",
+        "init",
+    )
+    .await;
+
+    assert_eq!(sub_command["id"], json!("test-device"));
+}
+
+#[tokio::test]
+async fn the_output_of_a_sub_operation_reads_the_entity_data_of_the_calling_command() {
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![
+            (
+                "deploy.toml".to_string(),
+                DEPLOY_WRITING_ENTITY_DATA_IN_SUB_OPERATION_OUTPUT.to_string(),
+            ),
+            ("check.toml".to_string(), CHECK.to_string()),
+        ],
+        FakeEntityStore::Entities(vec![EntityMetadata::main_device(None)]),
+    )
+    .await
+    .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/deploy/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+
+    // The MQTT broker sends the sub-command back to the agent
+    let sub_topic = "te/device/main///cmd/check/sub:deploy:1";
+    let sub_command =
+        recv_command_state_with_status(&mut mqtt_box, &mut actor_handle, sub_topic, "init").await;
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked(sub_topic),
+            sub_command.to_string(),
+        ))
+        .await
+        .unwrap();
+
+    let command = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/deploy/1",
+        "successful",
+    )
+    .await;
+
+    assert_eq!(command["target"], json!("device/main//"));
+}
+
+#[tokio::test]
+async fn a_value_missing_from_the_entity_data_is_passed_as_the_empty_string() {
+    let nodered = EntityMetadata::new(
+        "device/main/service/nodered".parse().unwrap(),
+        EntityType::Service,
+    )
+    .with_parent("device/main//".parse().unwrap());
+
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![(
+            "service-restart.toml".to_string(),
+            SERVICE_RESTART_PASSING_ENTITY_DATA.to_string(),
+        )],
+        FakeEntityStore::Entities(vec![nodered]),
+    )
+    .await
+    .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main/service/nodered/cmd/restart/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let sub_command = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main/service/nodered/cmd/software_update/sub:restart:1",
+        "init",
+    )
+    .await;
+
+    assert_eq!(sub_command["name"], json!(""));
+}
+
+#[tokio::test]
+async fn a_command_fails_when_the_entity_data_its_workflow_uses_cannot_be_read() {
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![(
+            "device-restart.toml".to_string(),
+            DEVICE_RESTART_PASSING_ENTITY_DATA.to_string(),
+        )],
+        FakeEntityStore::Failing,
+    )
+    .await
+    .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/main///cmd/restart/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let failed = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/main///cmd/restart/1",
+        "failed",
+    )
+    .await;
+
+    assert!(
+        failed["reason"]
+            .as_str()
+            .unwrap()
+            .starts_with("The registration data of device/main// cannot be read"),
+        "{failed}"
+    );
+}
+
+#[tokio::test]
+async fn a_command_fails_when_the_twin_data_its_workflow_uses_cannot_be_read() {
+    let nodered = EntityMetadata::new(
+        "device/child01/service/nodered".parse().unwrap(),
+        EntityType::Service,
+    )
+    .with_parent("device/child01//".parse().unwrap());
+
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/child01//",
+        vec![(
+            "service-restart.toml".to_string(),
+            SERVICE_RESTART_PASSING_ENTITY_DATA.to_string(),
+        )],
+        FakeEntityStore::FailingTwin(vec![nodered]),
+    )
+    .await
+    .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01/service/nodered/cmd/restart/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let failed = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/child01/service/nodered/cmd/restart/1",
+        "failed",
+    )
+    .await;
+
+    assert!(
+        failed["reason"]
+            .as_str()
+            .unwrap()
+            .starts_with("The twin data of device/child01/service/nodered cannot be read"),
+        "{failed}"
+    );
+}
+
+#[tokio::test]
+async fn a_command_fails_when_the_entity_its_workflow_reads_is_not_registered() {
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/child01//",
+        vec![(
+            "device-restart.toml".to_string(),
+            DEVICE_RESTART_PASSING_ENTITY_DATA.to_string(),
+        )],
+        FakeEntityStore::Entities(vec![]),
+    )
+    .await
+    .unwrap();
+
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked("te/device/child01///cmd/restart/1"),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+
+    let failed = recv_command_state_with_status(
+        &mut mqtt_box,
+        &mut actor_handle,
+        "te/device/child01///cmd/restart/1",
+        "failed",
+    )
+    .await;
+
+    assert_eq!(
+        failed["reason"],
+        json!("No entity is registered as device/child01//")
+    );
+}
+
+#[tokio::test]
+async fn a_command_that_cannot_read_its_entity_data_moves_to_failed_only_once() {
+    let TestHandler {
+        mut mqtt_box,
+        mut actor_handle,
+        ..
+    } = spawn_workflow_actor(
+        Arc::new(TempTedgeDir::new()),
+        "device/main//",
+        vec![(
+            "device-restart.toml".to_string(),
+            DEVICE_RESTART_PASSING_ENTITY_DATA.to_string(),
+        )],
+        FakeEntityStore::Failing,
+    )
+    .await
+    .unwrap();
+
+    let topic = "te/device/main///cmd/restart/1";
+    mqtt_box
+        .send(MqttMessage::new(
+            &Topic::new_unchecked(topic),
+            r#"{"status":"init"}"#,
+        ))
+        .await
+        .unwrap();
+    recv_command_state_with_status(&mut mqtt_box, &mut actor_handle, topic, "failed").await;
+
+    while let Some(msg) = mqtt_box.recv().await {
+        if msg.topic.name == topic {
+            assert!(
+                !msg.payload_str().unwrap().contains(r#""status":"failed""#),
+                "the command moved to failed again: {msg:?}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn restarting_the_agent_restarts_the_process_once() {
     let TestHandler {
         tmp_dir,
@@ -2343,6 +2694,7 @@ enum FakeEntityStore {
     /// Answer `500` to every request, as an entity store that cannot be queried
     Failing,
     FailingOnce(Vec<EntityMetadata>),
+    FailingTwin(Vec<EntityMetadata>),
     Unresponsive,
 }
 
@@ -2357,16 +2709,28 @@ impl FakeEntityStore {
                     failed_once = true;
                     HttpResponseBuilder::new().status(500).build()
                 }
-                FakeEntityStore::Entities(entities) | FakeEntityStore::FailingOnce(entities) => {
-                    let target = request
-                        .uri()
-                        .path()
+                FakeEntityStore::FailingTwin(_) if request.uri().path().ends_with("/twin") => {
+                    HttpResponseBuilder::new().status(500).build()
+                }
+                FakeEntityStore::Entities(entities)
+                | FakeEntityStore::FailingOnce(entities)
+                | FakeEntityStore::FailingTwin(entities) => {
+                    let path = request.uri().path();
+                    let (path, twin_requested) = match path.strip_suffix("/twin") {
+                        Some(path) => (path, true),
+                        None => (path, false),
+                    };
+                    let target = path
                         .strip_prefix("/te/v1/entities/")
                         .and_then(|path| path.parse::<EntityTopicId>().ok());
                     match entities
                         .iter()
                         .find(|entity| Some(&entity.topic_id) == target.as_ref())
                     {
+                        Some(entity) if twin_requested => HttpResponseBuilder::new()
+                            .status(200)
+                            .json(&entity.twin_data)
+                            .build(),
                         Some(entity) => HttpResponseBuilder::new().status(200).json(entity).build(),
                         None => HttpResponseBuilder::new().status(404).build(),
                     }
@@ -2851,4 +3215,68 @@ action = "cleanup"
 
 [failed]
 action = "cleanup"
+"#;
+
+const SERVICE_RESTART_PASSING_ENTITY_DATA: &str = r#"
+operation = "restart"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+operation = "software_update"
+input.name = "${.entity.twin.name}"
+input.parent = "${.entity.parent}"
+on_exec = "awaiting_sub_command"
+
+[awaiting_sub_command]
+action = "await-operation-completion"
+on_success = "successful"
+on_error = "failed"
+"#;
+
+const DEVICE_RESTART_PASSING_ENTITY_DATA: &str = r#"
+operation = "restart"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+operation = "software_update"
+input.id = "${.entity.id}"
+on_exec = "awaiting_sub_command"
+
+[awaiting_sub_command]
+action = "await-operation-completion"
+on_success = "successful"
+on_error = "failed"
+"#;
+
+const DEPLOY_WRITING_ENTITY_DATA_IN_SUB_OPERATION_OUTPUT: &str = r#"
+operation = "deploy"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+operation = "check"
+on_exec = "awaiting_sub_command"
+
+[awaiting_sub_command]
+action = "await-operation-completion"
+output.target = "${.entity.topic_id}"
+on_success = "successful"
+on_error = "failed"
+"#;
+
+const CHECK: &str = r#"
+operation = "check"
+
+[init]
+action = "proceed"
+on_success = "successful"
 "#;

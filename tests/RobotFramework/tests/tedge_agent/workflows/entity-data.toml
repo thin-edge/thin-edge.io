@@ -1,0 +1,15 @@
+operation = "entity-data"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "/etc/tedge/operations/echo-as-json.sh topic_id ${.entity.topic_id} type ${.entity.type} version ${.entity.twin.robot_version}"
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"

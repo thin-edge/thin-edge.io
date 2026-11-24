@@ -33,6 +33,30 @@ Run workflow on child device
     ${workflow_log}=    Execute Command    cat /var/log/tedge/agent/workflow-user-command-child-test-1.log
     Should Contain    ${workflow_log}    item="user-command":"first-version"
 
+Pass the data of the target entity to a workflow on child device
+    Service Health Status Should Be Up    tedge-agent    device=${CHILD_SN}
+
+    Set Device Context    ${CHILD_SN}
+    Transfer To Device    ${CURDIR}/echo-as-json.sh    /etc/tedge/operations/
+    Transfer To Device    ${CURDIR}/entity-data.toml    /etc/tedge/operations/
+
+    Set Device Context    ${PARENT_SN}
+    Wait Until Keyword Succeeds
+    ...    30s
+    ...    1s
+    ...    Should Have Retained MQTT Messages
+    ...    te/device/${CHILD_SN}///cmd/entity-data
+    Execute Command    tedge http put /te/v1/entities/device/${CHILD_SN}///twin/robot_version '"1.2.3"'
+    Execute Command
+    ...    tedge mqtt pub --retain te/device/${CHILD_SN}///cmd/entity-data/child-entity-1 '{"status":"init"}'
+    ${messages}=    Should Have MQTT Messages
+    ...    te/device/${CHILD_SN}///cmd/entity-data/child-entity-1
+    ...    message_pattern=.*successful.*
+    ...    maximum=1
+    Should Contain    ${messages[0]}    item="topic_id":"device/${CHILD_SN}//"
+    Should Contain    ${messages[0]}    item="type":"child-device"
+    Should Contain    ${messages[0]}    item="version":"1.2.3"
+
 Run control command on child device
     Set Device Context    ${CHILD_SN}
     ${pid_before}=    Get Service PID    sleeper

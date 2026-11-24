@@ -597,6 +597,13 @@ impl WorkflowRepository {
     ) -> GenericCommandState {
         self.workflows.adapt_builtin_response(command_state)
     }
+
+    pub fn uses_entity_data(
+        &self,
+        command_state: &GenericCommandState,
+    ) -> Result<bool, WorkflowExecutionError> {
+        self.workflows.uses_entity_data(command_state)
+    }
 }
 
 async fn read_operation_workflows(

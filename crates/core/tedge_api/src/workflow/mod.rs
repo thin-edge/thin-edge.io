@@ -11,6 +11,7 @@ use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
 use crate::script::ShellScript;
+use crate::substitution;
 use crate::substitution::Record;
 pub use error::*;
 pub use handlers::*;
@@ -495,6 +496,11 @@ impl OperationWorkflow {
             })
             .map(|action| action.inject_state(command_state))
     }
+
+    /// Returns `true` when an action of this workflow uses a `${.entity.*}` expression
+    pub(crate) fn uses_entity_data(&self) -> bool {
+        self.states.values().any(OperationAction::uses_entity_data)
+    }
 }
 
 impl OperationAction {
@@ -519,6 +525,39 @@ impl OperationAction {
                 )
             }
             _ => self.clone(),
+        }
+    }
+
+    /// Returns `true` when this action uses a `${.entity.*}` expression
+    ///
+    /// Each new action has to be added here, or the data it reads is never fetched.
+    fn uses_entity_data(&self) -> bool {
+        match self {
+            OperationAction::MoveTo(_)
+            | OperationAction::BuiltIn(_, _)
+            | OperationAction::AwaitingAgentRestart(_)
+            | OperationAction::RestartAgent(_)
+            | OperationAction::BuiltInOperation(_, _)
+            | OperationAction::Clear => false,
+
+            OperationAction::Script(script, _, _) | OperationAction::BgScript(script, _, _) => {
+                script.uses_entity_data()
+            }
+
+            OperationAction::Download(input, _)
+            | OperationAction::Upload(input, _)
+            | OperationAction::BuiltInOperationStep(_, _, input, _)
+            | OperationAction::AwaitOperationCompletion(_, input) => input.uses_entity_data(),
+
+            OperationAction::Operation(operation, input_script, input, _) => {
+                substitution::uses_entity_data(operation)
+                    || input_script
+                        .as_ref()
+                        .is_some_and(ShellScript::uses_entity_data)
+                    || input.uses_entity_data()
+            }
+
+            OperationAction::Iterate(json_path, _) => substitution::is_entity_path(json_path),
         }
     }
 
@@ -667,6 +706,7 @@ mod tests {
     use super::IterateHandlers;
     use super::IterationError;
     use super::OperationAction;
+    use super::OperationWorkflow;
     use assert_json_diff::assert_json_eq;
     use assert_json_diff::assert_json_include;
     use assert_matches::assert_matches;
@@ -1088,5 +1128,66 @@ mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn a_workflow_with_an_entity_path_in_a_script_uses_entity_data() {
+        let workflow = OperationWorkflow::from_toml(
+            r#"
+operation = "restart"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "tedge service restart ${.entity.twin.name} --type ${.entity.twin.type}"
+on_success = "successful"
+"#,
+        );
+
+        assert!(workflow.uses_entity_data());
+    }
+
+    #[test]
+    fn a_workflow_with_an_entity_path_in_a_sub_operation_input_uses_entity_data() {
+        let workflow = OperationWorkflow::from_toml(
+            r#"
+operation = "restart"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "report"
+
+[report]
+operation = "log_upload"
+input.device = "${.entity.parent}"
+input.name = "${.payload.name}"
+on_exec = "successful"
+"#,
+        );
+
+        assert!(workflow.uses_entity_data());
+    }
+
+    #[test]
+    fn a_workflow_with_no_entity_path_does_not_use_entity_data() {
+        let workflow = OperationWorkflow::from_toml(
+            r#"
+operation = "restart"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "sudo systemctl restart ${.payload.name}"
+on_success = "successful"
+"#,
+        );
+
+        assert!(!workflow.uses_entity_data());
     }
 }

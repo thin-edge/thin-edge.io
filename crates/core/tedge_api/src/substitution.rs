@@ -14,15 +14,7 @@ pub trait Record {
     /// `"prefix-${.payload.x}-separator-${.payload.y}-suffix"` is replaced by
     /// `"prefix-X-separator-Y-suffix"` in a context where the payload is `{"x":"X", "y":"Y"}`
     fn inject_values_into_template(&self, target: &str) -> String {
-        target
-            .split_inclusive('}')
-            .flat_map(|s| match s.find("${") {
-                None => vec![s],
-                Some(i) => {
-                    let (prefix, template) = s.split_at(i);
-                    vec![prefix, template]
-                }
-            })
+        template_segments(target)
             .map(|s| self.replace_path_with_value(s))
             .collect()
     }
@@ -52,7 +44,7 @@ pub trait Record {
     ///
     /// Return None if the input is not a path expression
     fn extract_path(input: &str) -> Option<&str> {
-        input.strip_prefix("${").and_then(|s| s.strip_suffix('}'))
+        extract_path(input)
     }
 }
 
@@ -62,6 +54,7 @@ impl Record for GenericCommandState {
     /// Return None if the path contains unknown fields,
     /// with the exception that the empty string is returned for an unknown path below the `.payload`,
     /// the rational being that the payload object represents a free-form value.
+    /// An unknown path below the `.entity` also returns the empty string, when the command holds entity data.
     fn extract_value(&self, path: &str) -> Option<Value> {
         match path {
             "." => Some(json!({
@@ -74,6 +67,12 @@ impl Record for GenericCommandState {
             ".topic.operation" => self.operation().map(|s| s.into()),
             ".topic.cmd_id" => self.cmd_id().map(|s| s.into()),
             ".payload" => Some(self.payload.clone()),
+            path if is_entity_path(path) => {
+                let value = extract_entity_value(self.entity_data()?, path)
+                    .cloned()
+                    .unwrap_or_else(|| String::new().into());
+                Some(value)
+            }
             path => {
                 let value_path = path.strip_prefix(".payload.")?;
                 let value = json_excerpt(&self.payload, value_path)
@@ -137,12 +136,54 @@ fn json_array_excerpt<'a>(value: &'a Value, path: &'a str) -> Option<&'a Value> 
     }
 }
 
+const ENTITY: &str = ".entity";
+const ENTITY_PREFIX: &str = ".entity.";
+
+pub(crate) fn is_entity_path(path: &str) -> bool {
+    path == ENTITY || path.starts_with(ENTITY_PREFIX)
+}
+
+/// Returns `true` when `template` uses a `${.entity.*}` expression
+pub(crate) fn uses_entity_data(template: &str) -> bool {
+    template_segments(template)
+        .filter_map(extract_path)
+        .any(is_entity_path)
+}
+
+/// Splits a template into plain text and `${...}` expressions
+fn template_segments(template: &str) -> impl Iterator<Item = &str> {
+    template
+        .split_inclusive('}')
+        .flat_map(|s| match s.find("${") {
+            None => vec![s],
+            Some(i) => {
+                let (prefix, expression) = s.split_at(i);
+                vec![prefix, expression]
+            }
+        })
+}
+
+fn extract_entity_value<'a>(entity: &'a Value, path: &'a str) -> Option<&'a Value> {
+    match path {
+        ENTITY => Some(entity),
+        path => json_excerpt(entity, path.strip_prefix(ENTITY_PREFIX)?),
+    }
+}
+
+fn extract_path(input: &str) -> Option<&str> {
+    input.strip_prefix("${").and_then(|s| s.strip_suffix('}'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entity::EntityMetadata;
+    use crate::entity::EntityType;
+    use crate::mqtt_topics::EntityTopicId;
     use crate::workflow::GenericCommandState;
     use mqtt_channel::Topic;
     use serde_json::json;
+    use serde_json::Map;
 
     #[test]
     fn inject_json_into_parameters() {
@@ -289,6 +330,96 @@ mod tests {
         );
         assert_eq!(cmd.inject_values_into_template("${.payload.bar[}"), "");
         assert_eq!(cmd.inject_values_into_template("${.payload.bar]}"), "");
+    }
+
+    #[test]
+    fn inject_entity_data_into_parameters() {
+        let cmd = command_with_entity_data();
+
+        assert_eq!(
+            cmd.inject_values_into_template("${.entity.topic_id}"),
+            "device/main/service/nodered"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.entity.type}"),
+            "service"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.entity.parent}"),
+            "device/main//"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.entity.twin.name}"),
+            "Node-RED"
+        );
+        assert_eq!(
+            cmd.inject_values_into_template("${.entity}").to_json(),
+            json!({
+                "topic_id": "device/main/service/nodered",
+                "type": "service",
+                "parent": "device/main//",
+                "twin": { "name": "Node-RED" },
+            })
+        );
+    }
+
+    #[test]
+    fn a_path_the_entity_has_no_value_for_is_substituted_for_the_empty_string() {
+        let cmd = command_with_entity_data();
+
+        assert_eq!(cmd.inject_values_into_template("${.entity.id}"), "");
+        assert_eq!(cmd.inject_values_into_template("${.entity.twin.type}"), "");
+    }
+
+    #[test]
+    fn a_command_with_no_entity_data_leaves_the_template_unresolved() {
+        let cmd = command_without_entity_data();
+
+        assert_eq!(
+            cmd.inject_values_into_template("${.entity.topic_id}"),
+            "${.entity.topic_id}"
+        );
+    }
+
+    #[test]
+    fn the_whole_state_carries_no_entity_data() {
+        let cmd = command_with_entity_data();
+
+        assert_eq!(
+            cmd.inject_values_into_template("${.}").to_json(),
+            json!({
+                "topic": "te/device/main/service/nodered/cmd/restart/123",
+                "payload": { "status": "init" },
+            })
+        );
+    }
+
+    #[test]
+    fn only_a_template_with_an_entity_path_uses_entity_data() {
+        assert!(uses_entity_data(
+            "tedge service restart ${.entity.twin.name}"
+        ));
+        assert!(uses_entity_data("${.payload.x}-${.entity.id}"));
+        assert!(uses_entity_data("/usr/bin/handle.sh ${.entity}"));
+        assert!(!uses_entity_data("/usr/bin/handle.sh ${.payload.x}"));
+        assert!(!uses_entity_data("no path at all"));
+    }
+
+    fn command_without_entity_data() -> GenericCommandState {
+        let topic = Topic::new_unchecked("te/device/main/service/nodered/cmd/restart/123");
+        let message = mqtt_channel::MqttMessage::new(&topic, json!({"status": "init"}).to_string());
+        GenericCommandState::from_command_message(&message).expect("parsing error")
+    }
+
+    fn command_with_entity_data() -> GenericCommandState {
+        let entity = EntityMetadata::new(
+            "device/main/service/nodered".parse().unwrap(),
+            EntityType::Service,
+        )
+        .with_parent(EntityTopicId::default_main_device());
+        let twin = Map::from_iter([("name".to_string(), json!("Node-RED"))]);
+
+        command_without_entity_data().with_entity_data(&entity, twin)
     }
 
     trait JsonContent {

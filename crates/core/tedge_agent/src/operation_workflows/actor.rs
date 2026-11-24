@@ -447,6 +447,15 @@ impl WorkflowActor {
 
         let mut log_file = self.open_command_log(&state, &operation, &cmd_id).await;
 
+        let state = match self.load_entity_data(&target, state).await {
+            Ok(state) => state,
+            Err(failed_state) => {
+                return self
+                    .publish_command_state(failed_state, &mut log_file)
+                    .await
+            }
+        };
+
         let action = match self.workflow_repository.get_action(&state) {
             Ok(action) => action,
             Err(WorkflowExecutionError::UnknownStep { operation, step }) => {
@@ -845,7 +854,13 @@ impl WorkflowActor {
                                     "=> {sub_operation} sub-operation is successful"
                                 ))
                                 .await;
-                            let sub_cmd_output = output_excerpt.extract_value_from(&sub_state);
+                            // A sub-command holds entity data only when its own workflow reads it.
+                            // The data is the same, because a sub-command targets the same entity.
+                            let sub_cmd_output = output_excerpt.extract_value_from(
+                                &sub_state
+                                    .clone()
+                                    .with_entity_data_value(state.entity_data().cloned()),
+                            );
                             state
                                 .update_with_json(sub_cmd_output)
                                 .update(handlers.on_success)
@@ -1001,6 +1016,41 @@ impl WorkflowActor {
         Ok(())
     }
 
+    /// Attaches to a command the data of the entity it is addressed to
+    ///
+    /// The data is read only at the `init` state, and only when the workflow of the command uses
+    /// `${.entity.*}`.
+    async fn load_entity_data(
+        &mut self,
+        target: &EntityTopicId,
+        state: GenericCommandState,
+    ) -> Result<GenericCommandState, GenericCommandState> {
+        if !state.is_init() || state.entity_data().is_some() {
+            return Ok(state);
+        }
+        let Ok(true) = self.workflow_repository.uses_entity_data(&state) else {
+            return Ok(state);
+        };
+
+        let entity = match self.entity_store.get(target).await {
+            Ok(Some(entity)) => entity,
+            Ok(None) => return Err(fail(state, format!("No entity is registered as {target}"))),
+            Err(err) => {
+                let reason = format!("The registration data of {target} cannot be read: {err}");
+                return Err(fail(state, reason));
+            }
+        };
+        let twin = match self.entity_store.get_twin(target).await {
+            Ok(twin) => twin,
+            Err(err) => {
+                let reason = format!("The twin data of {target} cannot be read: {err}");
+                return Err(fail(state, reason));
+            }
+        };
+
+        Ok(state.with_entity_data(&entity, twin))
+    }
+
     /// Reload from disk the current state of the pending command requests
     async fn load_command_board(&mut self) -> Result<(), RuntimeError> {
         match self.state_repository.load().await {
@@ -1112,4 +1162,10 @@ async fn service_of_device(
             None
         }
     }
+}
+
+/// Moves a command to `failed`, reporting the reason
+fn fail(state: GenericCommandState, reason: String) -> GenericCommandState {
+    error!("Command {} cannot be processed: {reason}", state.topic.name);
+    state.update(GenericStateUpdate::failed(reason))
 }

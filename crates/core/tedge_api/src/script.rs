@@ -1,3 +1,4 @@
+use crate::substitution::uses_entity_data;
 use crate::substitution::Record;
 use serde::de::Error;
 use serde::Deserialize;
@@ -26,6 +27,11 @@ impl ShellScript {
             command: record.inject_values_into_template(&self.command),
             args: record.inject_values_into_templates(&self.args),
         }
+    }
+
+    /// Returns `true` when this script uses a `${.entity.*}` expression
+    pub(crate) fn uses_entity_data(&self) -> bool {
+        uses_entity_data(&self.command) || self.args.iter().any(|arg| uses_entity_data(arg))
     }
 }
 

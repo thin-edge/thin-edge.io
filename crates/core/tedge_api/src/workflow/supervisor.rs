@@ -213,6 +213,24 @@ impl WorkflowSupervisor {
         &self,
         command_state: &GenericCommandState,
     ) -> Result<OperationAction, WorkflowExecutionError> {
+        self.get_workflow(command_state)
+            .and_then(|workflow| workflow.get_action(command_state))
+    }
+
+    /// Returns `true` when the workflow that handles a command uses a `${.entity.*}` expression
+    pub fn uses_entity_data(
+        &self,
+        command_state: &GenericCommandState,
+    ) -> Result<bool, WorkflowExecutionError> {
+        self.get_workflow(command_state)
+            .map(OperationWorkflow::uses_entity_data)
+    }
+
+    /// Returns the workflow that handles a command, in the version pinned when the command was created
+    fn get_workflow(
+        &self,
+        command_state: &GenericCommandState,
+    ) -> Result<&OperationWorkflow, WorkflowExecutionError> {
         let Some(operation_name) = command_state.operation() else {
             return Err(WorkflowExecutionError::InvalidCmdTopic {
                 topic: command_state.topic.name.clone(),
@@ -235,7 +253,6 @@ impl WorkflowSupervisor {
                 operation: operation_name.clone(),
             })
             .and_then(|versions| versions.get(version))
-            .and_then(|workflow| workflow.get_action(command_state))
     }
 
     /// Returns the builtin operation triggered just before the current state of a command,
