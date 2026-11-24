@@ -9,7 +9,6 @@ use tedge_config::TEdgeConfig;
 use tedge_config::TEdgeMqttClientAuthConfig;
 use tracing::info;
 
-const DEFAULT_QUEUE_CAPACITY: usize = 10;
 use super::MAX_PACKET_SIZE;
 
 pub struct MqttPublishCommand {
@@ -59,7 +58,6 @@ fn build_config(cmd: &MqttPublishCommand) -> Result<mqtt_channel::Config, anyhow
         .with_session_prefix(cmd.client_id.clone())
         .with_clean_session(true)
         .with_max_packet_size(MAX_PACKET_SIZE)
-        .with_queue_capacity(DEFAULT_QUEUE_CAPACITY)
         .with_connection_timeout(cmd.connection_timeout);
     config.with_client_auth(cmd.auth_config.clone().try_into()?)?;
     Ok(config)
