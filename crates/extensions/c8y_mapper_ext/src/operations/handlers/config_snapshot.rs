@@ -140,9 +140,7 @@ impl OperationContext {
         let smartrest_response = super::get_smartrest_response_for_upload_result(
             upload_result,
             c8y_binary_url.as_str(),
-            CumulocitySupportedOperations::C8yUploadConfigFile,
-            self.smart_rest_use_operation_id,
-            self.get_operation_id(cmd_id),
+            &self.operation_reference(&CumulocitySupportedOperations::C8yUploadConfigFile, cmd_id),
         );
 
         let c8y_notification = MqttMessage::new(smartrest_topic, smartrest_response);

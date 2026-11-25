@@ -19,18 +19,9 @@ use crate::actor::IdUploadRequest;
 use crate::actor::IdUploadResult;
 use crate::Capabilities;
 use c8y_api::smartrest::payload::SmartrestPayload;
-use c8y_api::smartrest::smartrest_serializer::fail_operation_with_id;
-use c8y_api::smartrest::smartrest_serializer::fail_operation_with_name;
-use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_id;
-use c8y_api::smartrest::smartrest_serializer::set_operation_executing_with_name;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_id_no_parameters;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name;
-use c8y_api::smartrest::smartrest_serializer::succeed_operation_with_name_no_parameters;
-use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_id;
-use c8y_api::smartrest::smartrest_serializer::succeed_static_operation_with_name;
 use c8y_api::smartrest::smartrest_serializer::C8yOperation;
 use c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations;
+use c8y_api::smartrest::smartrest_serializer::OperationReference;
 use c8y_api::smartrest::smartrest_serializer::TextOrCsv;
 use c8y_http_proxy::handle::C8YHttpProxy;
 use camino::Utf8Path;
@@ -181,12 +172,9 @@ impl OperationContext {
             OperationOutcome::Ignored => {}
             OperationOutcome::Executing { mut extra_messages } => {
                 info!(target: "C8Y", topic = %message.topic.name, "Notifying c8y: operation set to EXECUTING");
-                let c8y_state_executing_payload = match self.get_operation_id(&cmd_id) {
-                    Some(op_id) if self.smart_rest_use_operation_id => {
-                        set_operation_executing_with_id(&op_id)
-                    }
-                    _ => set_operation_executing_with_name(c8y_operation),
-                };
+                let c8y_state_executing_payload = self
+                    .operation_reference(&c8y_operation, &cmd_id)
+                    .executing();
 
                 let c8y_state_executing_message =
                     MqttMessage::new(&entity.smartrest_publish_topic, c8y_state_executing_payload);
@@ -221,12 +209,8 @@ impl OperationContext {
         operation: CumulocitySupportedOperations,
         cmd_id: &str,
     ) -> SmartrestPayload {
-        match self.get_operation_id(cmd_id) {
-            Some(op_id) if self.smart_rest_use_operation_id => {
-                succeed_operation_with_id_no_parameters(&op_id)
-            }
-            _ => succeed_operation_with_name_no_parameters(operation),
-        }
+        self.operation_reference(&operation, cmd_id)
+            .succeeded_with_payload(None)
     }
 
     pub fn get_smartrest_failed_status_payload(
@@ -235,12 +219,7 @@ impl OperationContext {
         reason: &str,
         cmd_id: &str,
     ) -> SmartrestPayload {
-        match self.get_operation_id(cmd_id) {
-            Some(op_id) if self.smart_rest_use_operation_id => {
-                fail_operation_with_id(&op_id, reason)
-            }
-            _ => fail_operation_with_name(operation, reason),
-        }
+        self.operation_reference(&operation, cmd_id).failed(reason)
     }
 
     pub fn try_get_smartrest_successful_status_payload_with_args(
@@ -249,18 +228,10 @@ impl OperationContext {
         cmd_id: &str,
         text_or_csv: TextOrCsv,
     ) -> SmartrestPayload {
-        let result = match self.get_operation_id(cmd_id) {
-            Some(op_id) if self.smart_rest_use_operation_id => {
-                succeed_operation_with_id(&op_id, text_or_csv)
-            }
-            _ => succeed_operation_with_name(operation.name(), text_or_csv),
-        };
-
-        match result {
+        let c8y_operation = self.operation_reference(&operation, cmd_id);
+        match c8y_operation.succeeded(text_or_csv) {
             Ok(successful_message) => successful_message,
-            Err(err) => {
-                self.get_smartrest_failed_status_payload(operation, &err.to_string(), cmd_id)
-            }
+            Err(err) => c8y_operation.failed(&err.to_string()),
         }
     }
 
@@ -289,6 +260,21 @@ impl OperationContext {
         let messages = vec![set_operation_to_failed_message];
 
         OperationOutcome::Finished { messages }
+    }
+
+    /// Refers to the Cumulocity operation of the command `cmd_id` by its ID
+    /// when known and `smartrest.use_operation_id` is set, otherwise by the
+    /// name of `operation`
+    fn operation_reference(
+        &self,
+        operation: &CumulocitySupportedOperations,
+        cmd_id: &str,
+    ) -> OperationReference {
+        OperationReference::new(
+            self.get_operation_id(cmd_id),
+            self.smart_rest_use_operation_id,
+            operation.name().to_owned(),
+        )
     }
 
     fn get_operation_id(&self, cmd_id: &str) -> Option<String> {
@@ -382,22 +368,10 @@ pub struct EntityTarget {
 pub fn get_smartrest_response_for_upload_result(
     upload_result: tedge_uploader_ext::UploadResult,
     binary_url: &str,
-    operation: c8y_api::smartrest::smartrest_serializer::CumulocitySupportedOperations,
-    use_operation_id: bool,
-    op_id: Option<String>,
+    operation: &OperationReference,
 ) -> SmartrestPayload {
     match upload_result {
-        Ok(_) => match op_id {
-            Some(op_id) if use_operation_id => {
-                succeed_static_operation_with_id(&op_id, Some(binary_url))
-            }
-            _ => succeed_static_operation_with_name(operation, Some(binary_url)),
-        },
-        Err(err) => match op_id {
-            Some(op_id) if use_operation_id => {
-                fail_operation_with_id(&op_id, &format!("Upload failed with {err}"))
-            }
-            _ => fail_operation_with_name(operation, &format!("Upload failed with {err}")),
-        },
+        Ok(_) => operation.succeeded_with_payload(Some(binary_url)),
+        Err(err) => operation.failed(&format!("Upload failed with {err}")),
     }
 }
