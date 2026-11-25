@@ -136,6 +136,8 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
 )]
 #[case::bridge_values("[bridge]\ntopic_prefix = \"c8y-other\"\nkeepalive_interval = \"2m\"\ninclude.local_cleansession = \"True\"")]
 #[case::keepalive_in_seconds("[bridge]\nkeepalive_interval = 90")]
+#[case::software_management("[software_management]\napi = \"advanced\"\nwith_types = true")]
+#[case::software_management_capitalised("[software_management]\napi = \"Advanced\"")]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
@@ -313,6 +315,19 @@ fn seconds_or_human_time_accepts_same_values_as_tedge_config_seconds_or_human_ti
     let theirs = tedge_config::models::SecondsOrHumanTime::from_str(value)
         .ok()
         .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[rstest]
+fn software_management_api_flag_accepts_same_values_as_tedge_config_flag(
+    #[values("legacy", "advanced", "Legacy", "Advanced", "", "auto")] value: &str,
+) {
+    use tedge_config::models::c8y_software_management::SoftwareManagementApiFlag as Theirs;
+
+    let ours = crate::SoftwareManagementApiFlag::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = Theirs::from_str(value).ok().map(|v| v.to_string());
     assert_eq!(ours, theirs);
 }
 

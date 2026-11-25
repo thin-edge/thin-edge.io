@@ -11,6 +11,7 @@ use crate::cloud_type::CloudType;
 use crate::connect_url::ConnectUrl;
 use crate::mqtt_payload_limit::MqttPayloadLimit;
 use crate::seconds::SecondsOrHumanTime;
+use crate::software_management_api_flag::SoftwareManagementApiFlag;
 use crate::templates_set::TemplatesSet;
 use crate::topic_prefix::TopicPrefix;
 
@@ -200,6 +201,16 @@ tedge_config_engine_macro::define_config! {
             /// On a clean start, the whole state of the device, services and child-devices is resent to the cloud
             #[tedge_config(example = "true", default(value = "true"))]
             clean_start: bool,
+        },
+
+        software_management: {
+            /// Switch legacy or advanced software management API to use. Value: legacy or advanced
+            #[tedge_config(example = "advanced", default(value = "legacy"))]
+            api: SoftwareManagementApiFlag,
+
+            /// Enable publishing c8y_SupportedSoftwareTypes fragment to the c8y inventory API
+            #[tedge_config(example = "true", default(value = "false"))]
+            with_types: bool,
         },
     }
 }
