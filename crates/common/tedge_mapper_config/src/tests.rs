@@ -356,6 +356,26 @@ async fn profile_keys_are_overridden_by_env_variables_named_after_the_key() {
 }
 
 #[tokio::test]
+async fn root_device_keys_are_overridden_by_env_variables_and_reach_mapper_defaults() {
+    let dir = config_dir_with_mapper("c8y", "");
+    dir.file("tedge.toml")
+        .with_raw_content("[device]\nid = \"from-file\"\n");
+    let env = EnvOverrides::from_pairs([("TEDGE_DEVICE_ID".into(), "from-env".into())]);
+
+    let fed = crate::schema::load_federated_config_with_env(&config_root(&dir), &env)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        (
+            fed.read("device.id").unwrap(),
+            fed.read("mappers.c8y.device.id").unwrap()
+        ),
+        (Some("from-env".into()), Some("from-env".into()))
+    );
+}
+
+#[tokio::test]
 async fn custom_mapper_keys_are_overridden_by_env_variables() {
     let dir = config_dir_with_mapper("my-mapper", "url = \"file.example.com:8883\"\n");
     let env = EnvOverrides::from_pairs([(

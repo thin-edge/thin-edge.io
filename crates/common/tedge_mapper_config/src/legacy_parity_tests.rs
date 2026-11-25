@@ -101,7 +101,15 @@ fn c8y_keys_have_the_same_docs_and_examples_as_tedge_config() {
         if key == "c8y.cloud_type" {
             continue;
         }
-        assert_eq!(Some(&docs), legacy.get(&key), "docs of {key}");
+        let (doc, examples) = docs;
+        let (legacy_doc, legacy_examples) = &legacy[&key];
+        // device.id goes on to say where its default comes from
+        if key == "c8y.device.id" {
+            assert!(doc.starts_with(legacy_doc), "docs of {key}: {doc}");
+        } else {
+            assert_eq!(&doc, legacy_doc, "docs of {key}");
+        }
+        assert_eq!(&examples, legacy_examples, "examples of {key}");
     }
 }
 
@@ -141,6 +149,8 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
 #[case::auto_log_upload("[operations]\nauto_log_upload = \"always\"")]
 #[case::availability("[availability]\nenable = false\ninterval = \"5m\"")]
 #[case::mqtt_service("[mqtt_service]\nenabled = true\ntopics = [\"incoming/topic\"]")]
+#[case::device_paths("[device]\nkey_path = \"/tmp/key.pem\"\ncert_path = \"/tmp/cert.pem\"\ncsr_path = \"/tmp/x.csr\"")]
+#[case::device_pkcs11("[device]\nkey_uri = \"pkcs11:token=t\"\nkey_pin = \"1234\"")]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
@@ -187,6 +197,71 @@ async fn c8y_entity_store_keys_read_the_mapper_file(
     assert_eq!(
         (legacy.auto_register, legacy.clean_start),
         (auto_register, clean_start)
+    );
+}
+
+#[rstest]
+#[case::from_the_root_certificate(Some("root-cert"), "", "", Some("root-cert"))]
+#[case::from_root_device_id_without_a_certificate(
+    None,
+    "[device]\nid = \"manual\"",
+    "",
+    Some("manual")
+)]
+#[case::unset_without_a_certificate(None, "", "", None)]
+#[case::from_its_own_certificate(
+    Some("root-cert"),
+    "",
+    "[device]\ncert_path = \"CONFIG_DIR/c8y-cert.pem\"",
+    Some("c8y-cert")
+)]
+#[case::from_root_device_id_with_a_corrupt_certificate(
+    None,
+    "[device]\nid = \"manual\"",
+    "[device]\ncert_path = \"CONFIG_DIR/corrupt.pem\"",
+    Some("manual")
+)]
+#[tokio::test]
+async fn c8y_device_id_falls_back_like_tedge_config(
+    #[case] root_cert_cn: Option<&str>,
+    #[case] tedge_toml: &str,
+    #[case] mapper_toml: &str,
+    #[case] expected: Option<&str>,
+) {
+    let dir = TempTedgeDir::new();
+    dir.file("tedge.toml").with_raw_content(tedge_toml);
+    dir.dir("mappers")
+        .dir("c8y")
+        .file("mapper.toml")
+        .with_raw_content(&mapper_toml.replace("CONFIG_DIR", dir.path().as_str()));
+    if let Some(cn) = root_cert_cn {
+        write_certificate(&dir, "device-certs/tedge-certificate.pem", cn);
+    }
+    write_certificate(&dir, "c8y-cert.pem", "c8y-cert");
+    dir.file("corrupt.pem")
+        .with_raw_content("not a certificate");
+
+    let fed = federated_config(&dir).await;
+    let ours = fed.read("mappers.c8y.device.id").unwrap();
+    let keys = ["c8y.device.id".to_owned()];
+    assert_eq!(ours.as_deref(), expected);
+    assert_eq!(ours, read_legacy(&dir, &keys).await["c8y.device.id"]);
+}
+
+#[tokio::test]
+async fn explicit_c8y_device_id_beats_the_certificate_common_name_unlike_tedge_config() {
+    let dir = config_dir_with_c8y_mapper("[device]\nid = \"explicit\"\n");
+    write_certificate(&dir, "device-certs/tedge-certificate.pem", "from-cert");
+
+    let fed = federated_config(&dir).await;
+    let keys = ["c8y.device.id".to_owned()];
+    assert_eq!(
+        fed.read("mappers.c8y.device.id").unwrap().as_deref(),
+        Some("explicit")
+    );
+    assert_eq!(
+        read_legacy(&dir, &keys).await["c8y.device.id"].as_deref(),
+        Some("from-cert")
     );
 }
 

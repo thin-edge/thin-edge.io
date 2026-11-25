@@ -8,6 +8,7 @@ use crate::absolute_path::AbsolutePath;
 use crate::auto_flag::AutoFlag;
 use crate::auto_log_upload::AutoLogUpload;
 use crate::c8y_auth_method::C8yAuthMethod;
+use crate::cert::certificate_common_name;
 use crate::cloud_type::CloudType;
 use crate::connect_url::ConnectUrl;
 use crate::mqtt_payload_limit::MqttPayloadLimit;
@@ -250,6 +251,61 @@ tedge_config_engine_macro::define_config! {
                 exposable
             )]
             topics: TemplatesSet,
+        },
+
+        device: {
+            /// Identifier of the device within the fleet. It must be globally
+            /// unique and is derived from the device certificate.
+            ///
+            /// When not set, it is the common name of the certificate at this
+            /// mapper's device.cert_path, or the root device.id if that
+            /// certificate can't be read.
+            #[tedge_config(
+                example = "Raspberrypi-4d18303a-6d3a-11eb-b1a6-175f6bb72665",
+                exposable,
+                default(
+                    from_key_via(key = "device.cert_path", function = "certificate_common_name"),
+                    from_root = "device.id",
+                )
+            )]
+            id: String,
+
+            /// Path where the device's private key is stored
+            #[tedge_config(
+                example = "/etc/tedge/device-certs/tedge-private-key.pem",
+                default(from_root = "device.key_path")
+            )]
+            key_path: AbsolutePath,
+
+            /// Path where the device's certificate is stored
+            #[tedge_config(
+                example = "/etc/tedge/device-certs/tedge-certificate.pem",
+                default(from_root = "device.cert_path")
+            )]
+            cert_path: AbsolutePath,
+
+            /// Path where the device's certificate signing request is stored
+            #[tedge_config(
+                example = "/etc/tedge/device-certs/tedge.csr",
+                default(from_root = "device.csr_path")
+            )]
+            csr_path: AbsolutePath,
+
+            /// A PKCS#11 URI of the private key.
+            ///
+            /// See RFC #7512.
+            #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
+            key_uri: String,
+
+            /// User PIN value for logging into the PKCS#11 token provided by the consumer.
+            ///
+            /// This differs from cryptoki.pin in that cryptoki.pin is used by PKCS#11 provider, e.g. tedge-p11-server as a
+            /// default PIN for all tokens, but device.key_pin is the PIN provided by the consumer (tedge) with a given
+            /// `key_uri`.
+            ///
+            /// In practice, this can be used to define separate keys and separate PINs for different connection profiles.
+            #[tedge_config(example = "123456", example = "my-pin")]
+            key_pin: String,
         },
     }
 }
