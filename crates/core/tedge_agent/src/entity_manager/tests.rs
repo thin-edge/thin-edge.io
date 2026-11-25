@@ -17,6 +17,7 @@ use tedge_api::entity::EntityType;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
+use tedge_test_utils::fs::TempTedgeDir;
 
 #[tokio::test]
 async fn new_entity_store() {
@@ -198,6 +199,47 @@ async fn delete_entity_tree_clears_entities_bottom_up() {
             MqttMessage::from(("te/device/child0//", "")).with_retain(),
         ])
         .await;
+}
+
+#[tokio::test]
+async fn deregistered_entities_are_not_restored_after_a_restart() {
+    let tmp_dir = TempTedgeDir::default();
+    {
+        let handle = entity::server_with_log_dir("device-under-test", tmp_dir.path(), false);
+        let mut entity_store = handle.entity_store;
+        for entity in [
+            ("device/child0//", EntityType::ChildDevice, None),
+            ("device/child1//", EntityType::ChildDevice, None),
+            (
+                "device/child00//",
+                EntityType::ChildDevice,
+                Some("device/child0//"),
+            ),
+        ] {
+            entity::create_entity(&mut entity_store, entity.0, entity.1, entity.2)
+                .await
+                .unwrap();
+        }
+
+        entity::delete_entity(&mut entity_store, "device/child0//")
+            .await
+            .unwrap();
+    }
+
+    // Restart the entity store using the same persistent log
+    let handle = entity::server_with_log_dir("device-under-test", tmp_dir.path(), false);
+    let mut entity_store = handle.entity_store;
+    assert_eq!(
+        entity::get(&mut entity_store, "device/child0//").await,
+        None
+    );
+    assert_eq!(
+        entity::get(&mut entity_store, "device/child00//").await,
+        None
+    );
+    assert!(entity::get(&mut entity_store, "device/child1//")
+        .await
+        .is_some());
 }
 
 #[tokio::test]
@@ -535,12 +577,18 @@ mod entity {
     }
 
     pub fn server(device_id: &str) -> TestHandle {
+        let tmp_dir = TempTedgeDir::default();
+        server_with_log_dir(device_id, tmp_dir.path(), true)
+    }
+
+    pub fn server_with_log_dir(
+        device_id: &str,
+        log_dir: impl AsRef<std::path::Path>,
+        clean_start: bool,
+    ) -> TestHandle {
         let mqtt_schema = MqttSchema::default();
         let main_device = EntityRegistrationMessage::main_device(Some(device_id.to_string()));
         let telemetry_cache_size = 0;
-        let tmp_dir = TempTedgeDir::default();
-        let log_dir = tmp_dir.path();
-        let clean_start = true;
         let entity_auto_register = true;
         let entity_store = EntityStore::with_main_device(
             mqtt_schema.clone(),

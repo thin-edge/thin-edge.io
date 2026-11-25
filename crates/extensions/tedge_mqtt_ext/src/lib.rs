@@ -522,15 +522,18 @@ impl FromPeers {
                         tf.add_unchecked(sub);
                     }
                     if !tf.is_empty() {
-                        self.forward_retain_messages_to(tx_to_peers.clone(), tf, move |msg| {
-                            (request.client_id, msg)
-                        });
+                        self.forward_retain_messages_to(
+                            tx_to_peers.clone(),
+                            tf,
+                            move |msg| (request.client_id, msg),
+                            "dynamic subscription replay",
+                        );
                     }
                 }
                 MqttRequest::RetrieveRetain(tx, topics) => {
                     // We don't need to create a long-lived subscription, just
                     // forward the retain messages for these topics
-                    self.forward_retain_messages_to(tx, topics, move |msg| msg);
+                    self.forward_retain_messages_to(tx, topics, move |msg| msg, "retained lookup");
                 }
             }
         }
@@ -555,25 +558,42 @@ impl FromPeers {
         Ok(())
     }
 
+    /// Fetch the retained messages for the given topics using a short-lived MQTT connection
+    ///
+    /// The `reason` is attached to the logs of that connection,
+    /// so these can be distinguished from the logs of the main connection.
     fn forward_retain_messages_to<Packet: Send + 'static>(
         &self,
         mut sender: mpsc::UnboundedSender<Packet>,
         topics: TopicFilter,
         prepare_msg: impl (Fn(MqttMessage) -> Packet) + Send + 'static,
+        reason: &'static str,
     ) {
+        let span = tracing::info_span!("retained-messages", reason);
+        tracing::debug!(parent: &span, "Fetching retained messages for: {:?}", topics.patterns());
         let dynamic_connection_config = self.base_config.clone().with_subscriptions(topics);
         tokio::spawn(
             async move {
-                let mut conn = mqtt_channel::Connection::new(&dynamic_connection_config)
-                    .await
-                    .unwrap();
+                let mut conn = match mqtt_channel::Connection::new(&dynamic_connection_config).await
+                {
+                    Ok(conn) => conn,
+                    Err(err) => {
+                        // Dropping the sender notifies the requester that no messages will be sent
+                        tracing::error!("Failed to connect to fetch retained messages: {err}");
+                        return;
+                    }
+                };
+                let mut retained_count = 0;
                 let mut last_retain_message = Instant::now();
                 while let Ok(msg) =
                     tokio::time::timeout(Duration::from_secs(1), conn.received.next()).await
                 {
                     if let Some(msg) = msg {
                         if msg.retain {
-                            SinkExt::send(&mut sender, prepare_msg(msg)).await.unwrap();
+                            if SinkExt::send(&mut sender, prepare_msg(msg)).await.is_err() {
+                                break;
+                            }
+                            retained_count += 1;
                             last_retain_message = Instant::now();
                         }
                     } else {
@@ -585,9 +605,10 @@ impl FromPeers {
                         break;
                     }
                 }
+                tracing::info!("Fetched {retained_count} retained messages");
                 conn.close().await;
             }
-            .instrument(tracing::Span::current()),
+            .instrument(span),
         );
     }
 }
