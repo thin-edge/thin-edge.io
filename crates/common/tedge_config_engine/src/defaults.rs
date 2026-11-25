@@ -39,6 +39,35 @@ pub enum DefaultSpec {
     /// Unlike the same-schema fallbacks above, the key always names a key of
     /// the root config, so mounting a schema under a prefix never rewrites it.
     FromRoot(&'static str),
+
+    /// The first of several sources that gives a value
+    ///
+    /// A source whose function fails is skipped like one that gives nothing,
+    /// and its error surfaces only if no later source gives a value.
+    ///
+    /// Only the last source may always give a value: `define_config!` rejects
+    /// a source listed after one that does, as it would never be tried.
+    FirstOf(Vec<DefaultSpec>),
+}
+
+impl DefaultSpec {
+    /// The single sources this rule is made of, in the order they are tried
+    fn sources(&self) -> &[DefaultSpec] {
+        match self {
+            Self::FirstOf(sources) => sources,
+            single => std::slice::from_ref(single),
+        }
+    }
+
+    /// The keys of the same schema this rule falls back to
+    fn source_keys(&self) -> impl Iterator<Item = &str> {
+        self.sources().iter().filter_map(|source| match source {
+            Self::FromKey(key) | Self::FromOptionalKey(key) | Self::FromKeyVia { key, .. } => {
+                Some(key.as_ref())
+            }
+            Self::Value(_) | Self::Function(_) | Self::FromRoot(_) | Self::FirstOf(_) => None,
+        })
+    }
 }
 
 /// A fallible derivation used by [DefaultSpec::FromKeyVia].
@@ -190,12 +219,14 @@ impl DefaultsRegistry {
     pub fn root_dependencies(&self) -> Vec<RootDependency> {
         self.defaults
             .iter()
-            .filter_map(|d| match d.spec {
-                DefaultSpec::FromRoot(root_key) => Some(RootDependency {
-                    key: d.key.clone(),
-                    root_key,
-                }),
-                _ => None,
+            .flat_map(|d| {
+                d.spec.sources().iter().filter_map(|source| match source {
+                    DefaultSpec::FromRoot(root_key) => Some(RootDependency {
+                        key: d.key.clone(),
+                        root_key,
+                    }),
+                    _ => None,
+                })
             })
             .collect()
     }
@@ -208,19 +239,13 @@ impl DefaultsRegistry {
     /// separately by [validate_root_dependencies].
     pub fn validate_source_keys(&self, known_keys: &[String]) -> Result<(), String> {
         for field in &self.defaults {
-            let source_key = match &field.spec {
-                DefaultSpec::FromKey(source)
-                | DefaultSpec::FromOptionalKey(source)
-                | DefaultSpec::FromKeyVia { key: source, .. } => source.as_ref(),
-                DefaultSpec::Value(_) | DefaultSpec::Function(_) | DefaultSpec::FromRoot(_) => {
-                    continue
+            for source_key in field.spec.source_keys() {
+                if !known_keys.iter().any(|k| k == source_key) {
+                    return Err(format!(
+                        "The default for '{}' falls back to '{source_key}', which is not a key in this schema",
+                        field.key
+                    ));
                 }
-            };
-            if !known_keys.iter().any(|k| k == source_key) {
-                return Err(format!(
-                    "The default for '{}' falls back to '{source_key}', which is not a key in this schema",
-                    field.key
-                ));
             }
         }
         Ok(())
@@ -246,49 +271,42 @@ impl DefaultsRegistry {
         Ok(())
     }
 
-    /// Returns the cycle `key`'s fallback chain runs into, if any
-    ///
-    /// Each rule falls back to at most one key, so following them from `key`
-    /// walks a path: the first key it meets twice closes the cycle.
+    /// Returns a cycle `key`'s fallback chains run into, if any
     fn find_cycle(&self, key: &str) -> Option<Vec<String>> {
-        let mut visited: Vec<String> = Vec::new();
-        let mut current = key.to_owned();
+        self.find_cycle_from(key, &mut Vec::new())
+    }
 
-        loop {
-            if let Some(start) = visited.iter().position(|seen| *seen == current) {
-                let mut cycle = visited[start..].to_vec();
-                cycle.push(current);
-                return Some(cycle);
-            }
-            visited.push(current.clone());
-
-            current = match self.get(&current) {
-                Some(
-                    DefaultSpec::FromKey(source)
-                    | DefaultSpec::FromOptionalKey(source)
-                    | DefaultSpec::FromKeyVia { key: source, .. },
-                ) => source.to_string(),
-                Some(
-                    DefaultSpec::Value(_) | DefaultSpec::Function(_) | DefaultSpec::FromRoot(_),
-                )
-                | None => return None,
-            };
+    fn find_cycle_from(&self, key: &str, path: &mut Vec<String>) -> Option<Vec<String>> {
+        if let Some(start) = path.iter().position(|seen| seen == key) {
+            let mut cycle = path[start..].to_vec();
+            cycle.push(key.to_owned());
+            return Some(cycle);
         }
+        let spec = self.get(key)?;
+        path.push(key.to_owned());
+        let cycle = spec
+            .source_keys()
+            .find_map(|source| self.find_cycle_from(source, path));
+        path.pop();
+        cycle
     }
 
     /// Whether `key`'s chain reaches something that always produces a value
     ///
     /// Only sound on an acyclic chain; [find_cycle] rules that out first.
     fn is_resolvable(&self, key: &str) -> bool {
-        match self.get(key) {
-            Some(DefaultSpec::Value(_) | DefaultSpec::Function(_)) => true,
-            Some(DefaultSpec::FromKey(source)) => self.is_resolvable(source.as_ref()),
-            Some(
-                DefaultSpec::FromOptionalKey(_)
-                | DefaultSpec::FromRoot(_)
-                | DefaultSpec::FromKeyVia { .. },
-            ) => true,
-            None => false,
+        self.get(key)
+            .is_some_and(|spec| self.is_spec_resolvable(spec))
+    }
+
+    fn is_spec_resolvable(&self, spec: &DefaultSpec) -> bool {
+        match spec {
+            DefaultSpec::Value(_) | DefaultSpec::Function(_) => true,
+            DefaultSpec::FromKey(source) => self.is_resolvable(source.as_ref()),
+            DefaultSpec::FromOptionalKey(_)
+            | DefaultSpec::FromRoot(_)
+            | DefaultSpec::FromKeyVia { .. } => true,
+            DefaultSpec::FirstOf(sources) => sources.iter().any(|s| self.is_spec_resolvable(s)),
         }
     }
 }
@@ -416,7 +434,18 @@ fn config_resolve_inner<T: for<'a> Facet<'a>>(
     let Some(spec) = defaults.get(key) else {
         return Ok(None);
     };
+    resolve_spec(dto, key, spec, defaults, root_resolver, chain)
+}
 
+/// Resolves one default rule of `key`
+fn resolve_spec<T: for<'a> Facet<'a>>(
+    dto: &T,
+    key: &str,
+    spec: &DefaultSpec,
+    defaults: &DefaultsRegistry,
+    root_resolver: RootResolver<'_>,
+    chain: &mut Vec<String>,
+) -> Result<Option<ResolvedValue>, ConfigError> {
     match spec {
         DefaultSpec::Value(v) => Ok(Some(ResolvedValue::own(
             key,
@@ -479,6 +508,28 @@ fn config_resolve_inner<T: for<'a> Facet<'a>>(
                 root_key: (*root_key).to_owned(),
             }),
         },
+        DefaultSpec::FirstOf(sources) => {
+            // tedge_config's device ids fall back to the set value when the
+            // certificate can't be read, so a failing derivation must not
+            // stop the later sources
+            let mut derive_error = None;
+            for source in sources {
+                // Each source extends the chain separately, so a key two
+                // sources fall back to is not mistaken for a cycle
+                let depth = chain.len();
+                let resolved = resolve_spec(dto, key, source, defaults, root_resolver, chain);
+                chain.truncate(depth);
+                match resolved {
+                    Ok(Some(value)) => return Ok(Some(value)),
+                    Ok(None) => {}
+                    Err(e @ ConfigError::DerivedValue { .. }) => {
+                        derive_error.get_or_insert(e);
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            derive_error.map_or(Ok(None), Err)
+        }
     }
 }
 
@@ -957,6 +1008,28 @@ mod tests {
     }
 
     #[test]
+    fn a_required_fallback_whose_source_only_falls_back_to_defaultless_keys_is_rejected() {
+        let registry = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "id".into(),
+                spec: DefaultSpec::FromKey("name".into()),
+            },
+            FieldDefault {
+                key: "name".into(),
+                spec: DefaultSpec::FirstOf(vec![DefaultSpec::FromKey("host".into())]),
+            },
+        ]);
+
+        assert_eq!(
+            registry.err(),
+            Some(
+                "FromKey default for 'id' references 'name', which has no default and may not be set"
+                    .to_owned()
+            )
+        );
+    }
+
+    #[test]
     fn a_key_defaulting_to_itself_is_a_cycle() {
         let registry = DefaultsRegistry::new(vec![FieldDefault {
             key: "source".into(),
@@ -1060,6 +1133,105 @@ mod tests {
         assert_eq!(
             registry.err(),
             Some("The default for 'a' is cyclic: a -> b -> a".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_cycle_through_a_later_default_source_is_rejected_when_the_registry_is_built() {
+        let registry = DefaultsRegistry::new(vec![
+            FieldDefault {
+                key: "a".into(),
+                spec: DefaultSpec::FirstOf(vec![
+                    DefaultSpec::FromOptionalKey("b".into()),
+                    DefaultSpec::FromOptionalKey("c".into()),
+                ]),
+            },
+            FieldDefault {
+                key: "c".into(),
+                spec: DefaultSpec::FromOptionalKey("a".into()),
+            },
+        ]);
+
+        assert_eq!(
+            registry.err(),
+            Some("The default for 'a' is cyclic: a -> c -> a".to_owned())
+        );
+    }
+
+    #[test]
+    fn two_default_sources_falling_back_to_the_same_key_are_not_a_cycle() {
+        let defaults = DefaultsRegistry::new(vec![FieldDefault {
+            key: "derived".into(),
+            spec: DefaultSpec::FirstOf(vec![
+                DefaultSpec::FromKeyVia {
+                    key: "source".into(),
+                    function: |_| Ok(None),
+                },
+                DefaultSpec::FromOptionalKey("source".into()),
+            ]),
+        }])
+        .unwrap();
+        let dto = ViaDto {
+            source: Some("value".into()),
+            ..<_>::default()
+        };
+
+        assert_eq!(
+            config_get_with_defaults(&dto, "derived", &defaults, None).unwrap(),
+            Some("value".into())
+        );
+    }
+
+    #[test]
+    fn a_failing_default_source_falls_back_to_the_next_one() {
+        let defaults = DefaultsRegistry::new(vec![FieldDefault {
+            key: "derived".into(),
+            spec: DefaultSpec::FirstOf(vec![
+                DefaultSpec::FromKeyVia {
+                    key: "source".into(),
+                    function: |_| Err("unreadable".into()),
+                },
+                DefaultSpec::FromOptionalKey("source".into()),
+            ]),
+        }])
+        .unwrap();
+        let dto = ViaDto {
+            source: Some("value".into()),
+            ..<_>::default()
+        };
+
+        assert_eq!(
+            config_get_with_defaults(&dto, "derived", &defaults, None).unwrap(),
+            Some("value".into())
+        );
+    }
+
+    #[test]
+    fn a_failing_default_source_is_reported_when_no_later_source_gives_a_value() {
+        let defaults = DefaultsRegistry::new(vec![FieldDefault {
+            key: "derived".into(),
+            spec: DefaultSpec::FirstOf(vec![
+                DefaultSpec::FromKeyVia {
+                    key: "source".into(),
+                    function: |_| Err("unreadable".into()),
+                },
+                DefaultSpec::FromKeyVia {
+                    key: "source".into(),
+                    function: |_| Ok(None),
+                },
+            ]),
+        }])
+        .unwrap();
+        let dto = ViaDto {
+            source: Some("value".into()),
+            ..<_>::default()
+        };
+
+        let err = config_get_with_defaults(&dto, "derived", &defaults, None).unwrap_err();
+
+        assert!(
+            matches!(err, ConfigError::DerivedValue { ref reason, .. } if reason == "unreadable"),
+            "{err:?}"
         );
     }
 

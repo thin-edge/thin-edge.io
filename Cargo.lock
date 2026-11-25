@@ -5807,6 +5807,7 @@ dependencies = [
  "facet-json",
  "facet-toml",
  "facet-value",
+ "rustversion",
  "tedge_config_engine",
  "tedge_config_engine-impl",
  "tedge_test_utils",

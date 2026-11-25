@@ -96,15 +96,12 @@ fn generate_group(group: &GroupModel) -> Vec<TokenStream> {
 }
 
 fn has_concrete_default(field: &ConfigField) -> bool {
-    matches!(
-        &field.default,
-        Some(
-            FieldDefault::Value(_)
-                | FieldDefault::Function(_)
-                | FieldDefault::FromConfigDir(_)
-                | FieldDefault::FromKey(_)
-        )
-    )
+    // Only the last source can always give a value; the macro rejects any
+    // source listed after one that does
+    field
+        .default
+        .last()
+        .is_some_and(FieldDefault::is_infallible)
 }
 
 fn generate_reader_leaf(field: &ConfigField) -> TokenStream {
