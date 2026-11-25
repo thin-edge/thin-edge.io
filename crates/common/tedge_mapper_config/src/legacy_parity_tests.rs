@@ -134,6 +134,8 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
 #[case::proxy_paths(
     "[proxy]\ncert_path = \"/tmp/cert.pem\"\nkey_path = \"/tmp/key.pem\"\nca_path = \"/tmp/ca\""
 )]
+#[case::bridge_values("[bridge]\ntopic_prefix = \"c8y-other\"\nkeepalive_interval = \"2m\"\ninclude.local_cleansession = \"True\"")]
+#[case::keepalive_in_seconds("[bridge]\nkeepalive_interval = 90")]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
@@ -230,6 +232,43 @@ fn mqtt_payload_limit_accepts_same_values_as_tedge_config_mqtt_payload_limit(
         .ok()
         .map(|v| v.to_string());
     let theirs = tedge_config::models::MqttPayloadLimit::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[rstest]
+fn auto_flag_accepts_same_values_as_tedge_config_auto_flag(
+    #[values("true", "false", "auto", "True", "Auto", "", "on")] value: &str,
+) {
+    let ours = crate::AutoFlag::from_str(value).ok().map(|v| v.to_string());
+    let theirs = tedge_config::models::AutoFlag::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[rstest]
+fn topic_prefix_accepts_same_values_as_tedge_config_topic_prefix(
+    #[values("c8y", "c8y/sub", "", "c8y/#", "c8y/+", "c8y-internal")] value: &str,
+) {
+    let ours = crate::TopicPrefix::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = tedge_config::models::TopicPrefix::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[rstest]
+fn seconds_or_human_time_accepts_same_values_as_tedge_config_seconds_or_human_time(
+    #[values("60", "60s", "2m", "1h 30m", "", "soon")] value: &str,
+) {
+    let ours = crate::SecondsOrHumanTime::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = tedge_config::models::SecondsOrHumanTime::from_str(value)
         .ok()
         .map(|v| v.to_string());
     assert_eq!(ours, theirs);

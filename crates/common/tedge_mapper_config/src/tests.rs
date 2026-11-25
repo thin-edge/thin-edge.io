@@ -655,6 +655,24 @@ async fn set_items_are_merged_by_add_and_dropped_by_remove() {
 }
 
 #[tokio::test]
+async fn topic_prefix_is_written_as_set() {
+    let dir = config_dir_with_mapper("c8y", "");
+    let mut fed = load_without_env(&dir).await;
+
+    fed.mutate(
+        "mappers.c8y.bridge.topic_prefix",
+        Action::Set("custom".into()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        read_mapper_file(&dir, "c8y"),
+        "[bridge]\ntopic_prefix = \"custom\"\n"
+    );
+}
+
+#[tokio::test]
 async fn reading_a_mapper_whose_file_cannot_be_read_names_its_file() {
     let dir = TempTedgeDir::new();
     dir.file("tedge.toml");

@@ -2,6 +2,7 @@
 
 mod absolute_path;
 mod auth_method;
+mod auto_flag;
 mod c8y;
 mod c8y_auth_method;
 mod cert;
@@ -15,9 +16,11 @@ mod schema;
 mod seconds;
 mod templates_set;
 mod tls_enable;
+mod topic_prefix;
 
 pub use absolute_path::AbsolutePath;
 pub use auth_method::AuthMethod;
+pub use auto_flag::AutoFlag;
 pub use c8y::C8yMapperConfig;
 pub use c8y::C8yMapperConfigDto;
 pub use c8y_auth_method::C8yAuthMethod;
@@ -41,6 +44,7 @@ pub use schema::BUILTIN_MAPPER_NAMES;
 pub use seconds::SecondsOrHumanTime;
 pub use templates_set::TemplatesSet;
 pub use tls_enable::TlsEnable;
+pub use topic_prefix::TopicPrefix;
 
 #[cfg(test)]
 mod legacy_parity_tests;

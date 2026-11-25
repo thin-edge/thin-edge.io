@@ -5,11 +5,14 @@ use std::net::IpAddr;
 use tedge_config_engine::*;
 
 use crate::absolute_path::AbsolutePath;
+use crate::auto_flag::AutoFlag;
 use crate::c8y_auth_method::C8yAuthMethod;
 use crate::cloud_type::CloudType;
 use crate::connect_url::ConnectUrl;
 use crate::mqtt_payload_limit::MqttPayloadLimit;
+use crate::seconds::SecondsOrHumanTime;
 use crate::templates_set::TemplatesSet;
+use crate::topic_prefix::TopicPrefix;
 
 tedge_config_engine_macro::define_config! {
     C8yMapper {
@@ -167,6 +170,26 @@ tedge_config_engine_macro::define_config! {
             /// trusted when checking incoming client certificates for the Cumulocity Proxy
             #[tedge_config(example = "/etc/ssl/certs")]
             ca_path: AbsolutePath,
+        },
+
+        bridge: {
+            include: {
+                /// Set the bridge local clean session flag (this requires mosquitto >= 2.0.0)
+                ///
+                /// If set to 'auto', this cleans the local session accordingly the detected version of mosquitto.
+                #[tedge_config(example = "auto", default(value = "auto"))]
+                local_cleansession: AutoFlag,
+            },
+
+            /// The topic prefix that will be used for the bridge MQTT topic. For instance,
+            /// if this is set to "c8y", then messages published to `c8y/s/us` will be
+            /// forwarded to Cumulocity on the `s/us` topic
+            #[tedge_config(example = "c8y", default(value = "c8y"), exposable)]
+            topic_prefix: TopicPrefix,
+
+            /// The amount of time after which the bridge should send a ping if no other traffic has occurred
+            #[tedge_config(example = "60s", default(value = "60s"))]
+            keepalive_interval: SecondsOrHumanTime,
         },
     }
 }
