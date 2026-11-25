@@ -224,5 +224,18 @@ tedge_config_engine_macro::define_config! {
             )]
             auto_log_upload: AutoLogUpload,
         },
+
+        availability: {
+            /// Enable sending heartbeat to Cumulocity periodically. If set to false, c8y_RequiredAvailability won't be sent
+            #[tedge_config(example = "true", default(value = "true"))]
+            enable: bool,
+
+            /// Heartbeat interval to be sent to Cumulocity as c8y_RequiredAvailability.
+            /// The value must be greater than 1 minute.
+            /// If set to a lower value or 0, the device is considered in maintenance mode in the Cumulocity context.
+            /// Details: https://cumulocity.com/docs/device-integration/fragment-library/#device-availability
+            #[tedge_config(example = "60m", default(value = "60m"))]
+            interval: SecondsOrHumanTime,
+        },
     }
 }
