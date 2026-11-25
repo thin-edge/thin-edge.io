@@ -71,5 +71,11 @@ tedge_config_engine_macro::define_config! {
                 create_with_device_marker: bool,
             },
         },
+
+        smartrest1: {
+            /// Set of SmartREST 1.0 template IDs the device should subscribe to
+            #[tedge_config(example = "templateId1,templateId2", default(value = "[]"), exposable)]
+            templates: TemplatesSet,
+        },
     }
 }
