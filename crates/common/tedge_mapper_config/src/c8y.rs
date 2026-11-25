@@ -7,6 +7,7 @@ use crate::absolute_path::AbsolutePath;
 use crate::c8y_auth_method::C8yAuthMethod;
 use crate::cloud_type::CloudType;
 use crate::connect_url::ConnectUrl;
+use crate::mqtt_payload_limit::MqttPayloadLimit;
 use crate::templates_set::TemplatesSet;
 
 tedge_config_engine_macro::define_config! {
@@ -114,6 +115,14 @@ tedge_config_engine_macro::define_config! {
             /// Enable service control feature
             #[tedge_config(example = "true", default(value = "true"), exposable)]
             service_control: bool,
+        },
+
+        mapper: {
+            mqtt: {
+                /// The maximum message payload size that can be mapped to the cloud via MQTT
+                #[tedge_config(example = "16184", default(value = "16184"), exposable)]
+                max_payload_size: MqttPayloadLimit,
+            },
         },
     }
 }

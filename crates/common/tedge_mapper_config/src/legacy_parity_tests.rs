@@ -127,6 +127,7 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
 #[case::smartrest1_templates("[smartrest1]\ntemplates = \"a,b\"")]
 #[case::enable_flags("[enable]\nlog_upload = false\nshell_execute = false")]
 #[case::enable_log_management("[enable]\nlog_management = false")]
+#[case::max_payload_size("[mapper.mqtt]\nmax_payload_size = 1024")]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
@@ -210,6 +211,19 @@ fn c8y_auth_method_accepts_same_values_as_tedge_config_auth_method(
         .ok()
         .map(|v| v.to_string());
     let theirs = tedge_config::models::auth_method::AuthMethod::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[rstest]
+fn mqtt_payload_limit_accepts_same_values_as_tedge_config_mqtt_payload_limit(
+    #[values("1", "16184", "268435455", "268435456", "0", "-1", "", "1k")] value: &str,
+) {
+    let ours = crate::MqttPayloadLimit::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = tedge_config::models::MqttPayloadLimit::from_str(value)
         .ok()
         .map(|v| v.to_string());
     assert_eq!(ours, theirs);
