@@ -2,6 +2,8 @@
 
 use camino::Utf8Path;
 use facet::Facet;
+use std::fmt;
+use tedge_config_engine::list_file_aliases;
 use tedge_config_engine::ops::ConfigOps;
 use tedge_config_engine::ops::TypedConfigOps;
 use tedge_config_engine::ConfigManager;
@@ -81,6 +83,26 @@ impl CloudSchema {
             Self::Generic | Self::Az | Self::Aws => entries::<MapperConfig>(config_dir),
         }
     }
+
+    /// Whether this schema has the leaf `key` and accepts its value in
+    /// `table`, a file holding only that key
+    pub(crate) fn accepts(self, config_dir: &Utf8Path, key: &str, table: &toml::Table) -> bool {
+        match self {
+            Self::C8y => accepts::<C8yMapperConfig>(config_dir, key, table),
+            Self::Generic | Self::Az | Self::Aws => accepts::<MapperConfig>(config_dir, key, table),
+        }
+    }
+}
+
+impl fmt::Display for CloudSchema {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Generic => f.write_str("generic mapper"),
+            Self::C8y => f.write_str("c8y"),
+            Self::Az => f.write_str("az"),
+            Self::Aws => f.write_str("aws"),
+        }
+    }
 }
 
 impl From<CloudType> for CloudSchema {
@@ -127,6 +149,18 @@ where
 
 fn entries<S: ConfigSchema>(config_dir: &Utf8Path) -> Vec<KeyEntry> {
     manager::<S>(config_dir).key_entries::<S::Dto>()
+}
+
+fn accepts<S: ConfigSchema>(config_dir: &Utf8Path, key: &str, table: &toml::Table) -> bool {
+    let manager = manager::<S>(config_dir);
+    let known = manager.keys::<S::Dto>().iter().any(|k| k == key)
+        || list_file_aliases(<S::Dto as Facet>::SHAPE, "")
+            .iter()
+            .any(|k| k == key);
+    known
+        && toml::to_string(table)
+            .ok()
+            .is_some_and(|content| facet_toml::from_str::<S::Dto>(&content).is_ok())
 }
 
 fn manager<S: ConfigSchema>(config_dir: &Utf8Path) -> ConfigManager {

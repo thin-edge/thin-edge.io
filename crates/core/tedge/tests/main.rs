@@ -810,6 +810,35 @@ mod mapper_config_tests {
     }
 
     #[test]
+    fn cloud_type_change_that_deletes_keys_needs_force() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        let config_dir = temp_dir.path().to_str().unwrap();
+        setup_mapper(&temp_dir, "tb", "[bridge]\nclean_session = true\n");
+        let set_cloud_type = |force: &[&str]| {
+            let mut args = vec![
+                "--config-dir",
+                config_dir,
+                "config",
+                "set",
+                "mappers.tb.cloud_type",
+                "c8y",
+            ];
+            args.extend(force);
+            tedge_command(args)
+        };
+
+        set_cloud_type(&[])?
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("mappers.tb.bridge.clean_session"));
+        set_cloud_type(&["--force"])?.assert().success();
+
+        let file = std::fs::read_to_string(temp_dir.path().join("mappers/tb/mapper.toml"))?;
+        assert_eq!(file, "cloud_type = \"c8y\"\n");
+        Ok(())
+    }
+
+    #[test]
     fn unknown_mapper_reports_error() -> Result<(), Box<dyn std::error::Error>> {
         let temp_dir = tempfile::tempdir()?;
         let config_dir = temp_dir.path().to_str().unwrap();

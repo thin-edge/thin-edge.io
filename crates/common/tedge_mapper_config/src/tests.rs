@@ -768,6 +768,224 @@ async fn mapper_schema_is_chosen_by_cloud_type_then_by_directory_name(
     assert_eq!(CloudSchema::resolve(name, &file).await, expected);
 }
 
+#[tokio::test]
+async fn changing_cloud_type_that_would_delete_keys_is_refused_naming_every_one() {
+    let original = "url = \"tb.example.com:8883\"\n\n[bridge]\nclean_session = true\n";
+    let dir = config_dir_with_mapper("tb", original);
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap_err();
+
+    let msg = err.to_string();
+    for key in [
+        "mappers.tb.url",
+        "mappers.tb.bridge.clean_session",
+        "--force",
+    ] {
+        assert!(msg.contains(key), "error should name '{key}': {msg}");
+    }
+    assert_eq!(read_mapper_file(&dir, "tb"), original);
+}
+
+#[tokio::test]
+async fn changing_cloud_type_keeps_keys_the_new_schema_knows_by_their_old_name() {
+    let dir = config_dir_with_mapper("tb", "[enable]\nlog_management = false\n");
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap();
+
+    let fed = load_without_env(&dir).await;
+    assert_eq!(
+        fed.read("mappers.tb.enable.log_upload").unwrap().as_deref(),
+        Some("false")
+    );
+}
+
+#[tokio::test]
+async fn forced_cloud_type_change_rewrites_the_file_under_the_new_schema() {
+    let dir = config_dir_with_mapper(
+        "tb",
+        "url = \"tb.example.com:8883\"\ncredentials_path = \"/tmp/creds.toml\"\n\n[bridge]\nclean_session = true\n",
+    );
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("c8y".into()),
+        true,
+    )
+    .await
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "tb").parse().unwrap();
+    assert_eq!(
+        file,
+        toml::toml! {
+            cloud_type = "c8y"
+            credentials_path = "/tmp/creds.toml"
+        }
+    );
+    let fed = load_without_env(&dir).await;
+    assert_eq!(
+        fed.read("mappers.tb.smartrest.use_operation_id")
+            .unwrap()
+            .as_deref(),
+        Some("true")
+    );
+}
+
+#[tokio::test]
+async fn changing_cloud_type_that_keeps_every_key_needs_no_force() {
+    let dir = config_dir_with_mapper("tb", "credentials_path = \"/tmp/creds.toml\"\n");
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "tb").parse().unwrap();
+    assert_eq!(file["cloud_type"].as_str(), Some("c8y"));
+    assert_eq!(file["credentials_path"].as_str(), Some("/tmp/creds.toml"));
+}
+
+#[tokio::test]
+async fn unsetting_cloud_type_returns_to_the_schema_of_the_directory_name() {
+    let original = "cloud_type = \"c8y\"\n\n[smartrest]\ntemplates = [\"a\"]\n";
+    let dir = config_dir_with_mapper("tb", original);
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Unset,
+        false,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("mappers.tb.smartrest.templates"),
+        "error should name the key: {err}"
+    );
+    assert_eq!(read_mapper_file(&dir, "tb"), original);
+}
+
+#[tokio::test]
+async fn removing_the_cloud_type_a_mapper_has_returns_to_the_schema_of_the_directory_name() {
+    let original = "cloud_type = \"c8y\"\n\n[smartrest]\ntemplates = [\"a\"]\n";
+    let dir = config_dir_with_mapper("tb", original);
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Remove("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("mappers.tb.smartrest.templates"),
+        "error should name the key: {err}"
+    );
+    assert_eq!(read_mapper_file(&dir, "tb"), original);
+}
+
+#[tokio::test]
+async fn removing_a_cloud_type_the_mapper_does_not_have_keeps_its_schema() {
+    let dir = config_dir_with_mapper(
+        "tb",
+        "cloud_type = \"c8y\"\n\n[smartrest]\ntemplates = [\"a\"]\n",
+    );
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Remove("az".into()),
+        false,
+    )
+    .await
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "tb").parse().unwrap();
+    assert_eq!(file["cloud_type"].as_str(), Some("c8y"));
+    assert_eq!(file["smartrest"]["templates"][0].as_str(), Some("a"));
+}
+
+#[tokio::test]
+async fn changing_the_cloud_type_of_a_profile_names_the_keys_under_the_profile() {
+    let original = "[smartrest]\ntemplates = [\"a\"]\n";
+    let dir = config_dir_with_mapper("c8y.prod", original);
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.c8y.profiles.prod.cloud_type",
+        Action::Set("az".into()),
+        false,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("mappers.c8y.profiles.prod.smartrest.templates"),
+        "error should name the key under the profile: {err}"
+    );
+    assert_eq!(read_mapper_file(&dir, "c8y.prod"), original);
+}
+
+#[tokio::test]
+async fn setting_the_cloud_type_a_mapper_already_has_is_an_ordinary_write() {
+    let dir = config_dir_with_mapper("c8y", "[smartrest]\ntemplates = [\"a\"]\n");
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.c8y.cloud_type",
+        Action::Set("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "c8y").parse().unwrap();
+    assert_eq!(file["cloud_type"].as_str(), Some("c8y"));
+    assert_eq!(file["smartrest"]["templates"][0].as_str(), Some("a"));
+}
+
+#[tokio::test]
+async fn an_invalid_cloud_type_is_rejected_by_the_ordinary_write() {
+    let dir = config_dir_with_mapper("tb", "");
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("notacloud".into()),
+        true,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("expected one of: c8y, az, aws"),
+        "error should list the cloud types: {err}"
+    );
+}
+
 fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> TempTedgeDir {
     let dir = TempTedgeDir::new();
     dir.file("tedge.toml");

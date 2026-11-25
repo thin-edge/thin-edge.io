@@ -14,6 +14,8 @@ use tedge_utils::paths::ManagedFile;
 use tedge_utils::paths::TedgePaths;
 
 use crate::cloud_schema::CloudSchema;
+use crate::cloud_type_change::change_cloud_type;
+use crate::cloud_type_change::Change;
 use crate::root::RootConfig;
 use crate::root::RootConfigDto;
 
@@ -252,6 +254,42 @@ pub fn mount_builtin_mapper(
     let ops =
         CloudSchema::from_name(&name).empty(config_root.root(), mapper_file(config_root, &name));
     fed.mount(&prefix, ops)
+}
+
+/// Applies `action` to the mapper key `key`, creating the mapper's file if it
+/// is a built-in mapper without one
+///
+/// A change to a mapper's `cloud_type` that changes the schema of its file
+/// rewrites the file under the new schema; one that would delete keys the new
+/// schema doesn't have is refused unless `force` is set.
+pub async fn mutate_mapper_key(
+    config_root: &TedgePaths,
+    key: &str,
+    action: Action,
+    force: bool,
+) -> Result<(), ConfigError> {
+    if let Some(name) = mapper_whose_cloud_type_is(config_root, key).await {
+        let file = mapper_file(config_root, &name);
+        let change =
+            change_cloud_type(config_root.root(), &name, &file, key, &action, force).await?;
+        if let Change::Converted = change {
+            return Ok(());
+        }
+    }
+    let mut fed = load_federated_config(config_root).await?;
+    mount_builtin_mapper(&mut fed, config_root, key)?;
+    fed.mutate(key, action).await
+}
+
+/// The mapper directory `key` is the `cloud_type` of, if it is one
+async fn mapper_whose_cloud_type_is(config_root: &TedgePaths, key: &str) -> Option<String> {
+    let prefix = key.strip_suffix("cloud_type")?;
+    let builtin = extract_builtin_mapper_name(key);
+    mapper_dirs(config_root)
+        .await
+        .into_iter()
+        .chain(builtin)
+        .find(|name| mount_prefix(name) == prefix)
 }
 
 fn mapper_file(config_root: &TedgePaths, name: &str) -> ManagedFile {
