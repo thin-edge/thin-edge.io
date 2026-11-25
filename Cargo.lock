@@ -5809,7 +5809,10 @@ dependencies = [
  "facet-value",
  "tedge_config_engine",
  "tedge_config_engine-impl",
+ "tedge_test_utils",
  "tedge_utils",
+ "tokio",
+ "toml 0.9.12+spec-1.1.0",
  "trybuild",
 ]
 

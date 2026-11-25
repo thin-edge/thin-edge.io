@@ -19,7 +19,10 @@ facet-json = { workspace = true }
 facet-toml = { workspace = true }
 facet-value = { workspace = true }
 tedge_config_engine = { workspace = true }
+tedge_test_utils = { workspace = true }
 tedge_utils = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+toml = { workspace = true }
 trybuild = "1"
 
 [lints]

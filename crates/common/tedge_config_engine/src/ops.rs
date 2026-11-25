@@ -8,6 +8,7 @@ use crate::defaults::RootDependency;
 use crate::defaults::RootResolver;
 use crate::defaults::ValueOrigin;
 use crate::manager::ConfigManager;
+use crate::reflect::list_file_aliases;
 use crate::reflect::ConfigError;
 use crate::reflect::KeyEntry;
 
@@ -176,7 +177,8 @@ where
     async fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError> {
         self.manager.check_read_only(key)?;
         // The DTO only holds schema keys, so saving it would delete any other key in the file
-        let known_keys = self.manager.keys::<T>();
+        let mut known_keys = self.manager.keys::<T>();
+        known_keys.extend(list_file_aliases(T::SHAPE, ""));
         let mut dto = load_dto(&self.file, &self.manager, Some(&known_keys)).await?;
         match action {
             Action::Set(ref value) => self.manager.set(&mut dto, key, value)?,
