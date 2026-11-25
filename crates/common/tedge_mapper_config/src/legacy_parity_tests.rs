@@ -463,6 +463,19 @@ fn auto_log_upload_accepts_same_values_as_tedge_config_auto_log_upload(
     assert_eq!(ours, theirs);
 }
 
+#[rstest]
+fn ip_address_accepts_same_values_as_tedge_config_ip_addr(
+    #[values("127.0.0.1", "0.0.0.0", "::1", "fe80::1", "", "localhost", "1.2.3")] value: &str,
+) {
+    let ours = crate::IpAddress::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = std::net::IpAddr::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
 /// Docs and examples of every `tedge_config` key under `prefix`, with the
 /// whitespace of the doc comment normalised
 fn legacy_docs(prefix: &str) -> BTreeMap<String, (String, Vec<String>)> {

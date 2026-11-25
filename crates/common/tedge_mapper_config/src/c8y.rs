@@ -1,7 +1,6 @@
 //! The schema of a Cumulocity mapper's `mapper.toml`, matching the `c8y`
 //! table of tedge_config
 
-use std::net::IpAddr;
 use tedge_config_engine::*;
 
 use crate::absolute_path::AbsolutePath;
@@ -14,6 +13,7 @@ use crate::connect_url::ConnectUrl;
 use crate::host_port::HostPort;
 use crate::host_port::HTTPS_PORT;
 use crate::host_port::MQTT_TLS_PORT;
+use crate::ip_address::IpAddress;
 use crate::mqtt_payload_limit::MqttPayloadLimit;
 use crate::seconds::SecondsOrHumanTime;
 use crate::software_management_api_flag::SoftwareManagementApiFlag;
@@ -139,7 +139,7 @@ tedge_config_engine_macro::define_config! {
             bind: {
                 /// The IP address local Cumulocity HTTP proxy binds to
                 #[tedge_config(example = "127.0.0.1", default(value = "127.0.0.1"))]
-                address: IpAddr,
+                address: IpAddress,
 
                 /// The port local Cumulocity HTTP proxy binds to
                 #[tedge_config(example = "8001", default(value = "8001"))]
