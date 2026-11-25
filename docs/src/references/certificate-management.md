@@ -32,15 +32,29 @@ And, as of now, this specific is only implemented for Cumulocity.
 
 ## Integration with Cumulocity CA {#cumulocity-certificate-authority}
 
-Firstly, the [Cumulocity Certificate Authority](https://cumulocity.com/docs/device-certificate-authentication/certificate-authority/) feature is currently in the Public Preview phase and hence needs to be enabled for a specific tenant before it can be used. The feature can be enabled from the tenant itself, or from the management tenant.
+The [Cumulocity Certificate Authority](https://cumulocity.com/docs/device-certificate-authentication/certificate-authority/) feature is Generally Available and enabled by default.
+See the Cumulocity documentation for details, including which Cumulocity releases include it.
+
+:::tip
+If you registered devices with the Cumulocity Certificate Authority during its Public Preview,
+you must remove and register those devices again.
+Until then, they can still connect,
+but certificate renewal does not work for them.
+:::
 
 ### Enable Cumulocity Certificate Authority {#enable-cumulocity-certificate-authority}
 
-The following process can be used to enable the certificate-authority feature and to create the Certificate Authority Certificate which will be used to sign all of the device certificates either from the registration process or via the new certificate renewal API:
+The following process can be used to check that the certificate-authority feature is enabled and to create the Certificate Authority Certificate which will be used to sign all of the device certificates either from the registration process or via the new certificate renewal API:
 
-1. Enable the Cumulocity **certificate-authority** feature toggle
+1. Check that the Cumulocity **certificate-authority** feature is enabled
 
-    Feature toggles can be controlled by using the [Cumulocity REST API](https://cumulocity.com/api/core/#tag/Feature-toggles-API), or by using [go-c8y-cli](https://c8y.app/). For convenience, the go-c8y-cli commands are shown below:
+    Feature toggles can be checked by using the [Cumulocity REST API](https://cumulocity.com/api/core/#tag/Feature-toggles-API) (`GET /features/certificate-authority`), or by using [go-c8y-cli](https://c8y.app/):
+
+    ```sh
+    c8y features get --key certificate-authority
+    ```
+
+    If the feature is not enabled, for example on a self-hosted or older Cumulocity release, then enable it from the tenant itself or from the management tenant:
 
     ```sh tab={"label":"From Current Tenant"}
     c8y features enable --key certificate-authority
@@ -51,7 +65,9 @@ The following process can be used to enable the certificate-authority feature an
     ```
 
     :::note
-    If you get a Permission Denied (403) error, then you need to add the "Tenant Manager" role to your user.
+    If you get a Permission Denied (403) error, then your user needs the `ROLE_TENANT_ADMIN` or `ROLE_TENANT_MANAGEMENT_ADMIN` permission,
+    as described in the [Cumulocity Certificate Authority](https://cumulocity.com/docs/device-certificate-authentication/certificate-authority/) documentation.
+    These permissions are typically included in the "Tenant Manager" global role.
     :::
 
 2. Create the Certificate Authority certificate
