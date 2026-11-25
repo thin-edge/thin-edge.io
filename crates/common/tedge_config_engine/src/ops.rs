@@ -123,9 +123,12 @@ where
         let content = facet_toml::to_string(dto).map_err(|e| write_error(e.to_string()))?;
         // facet_toml writes nested groups as inline tables; the toml crate writes
         // `[group]` sections, matching the docs and files written by tedge_config
-        let table: toml::Table = content
+        let mut table: toml::Table = content
             .parse()
             .map_err(|e: toml::de::Error| write_error(e.to_string()))?;
+        // Unsetting the last key of a group leaves the group itself set, but
+        // tedge_config doesn't write empty groups
+        remove_empty_groups(&mut table);
         let content = toml::to_string(&table).map_err(|e| write_error(e.to_string()))?;
         // Like tedge_config, a file that can't be given tedge ownership is still written
         let file = self.file.clone().warn_and_ignore_permission_errors();
@@ -315,4 +318,16 @@ fn collect_unknown_keys(
             _ => unknown.push(key),
         }
     }
+}
+
+/// Removes the tables of `table` that hold no values, including ones that
+/// only hold empty tables
+fn remove_empty_groups(table: &mut toml::Table) {
+    table.retain(|_, value| match value {
+        toml::Value::Table(group) => {
+            remove_empty_groups(group);
+            !group.is_empty()
+        }
+        _ => true,
+    });
 }
