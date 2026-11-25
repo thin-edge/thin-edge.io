@@ -77,5 +77,43 @@ tedge_config_engine_macro::define_config! {
             #[tedge_config(example = "templateId1,templateId2", default(value = "[]"), exposable)]
             templates: TemplatesSet,
         },
+
+        enable: {
+            /// Enable log_upload feature
+            #[tedge_config(example = "true", default(value = "true"), exposable, deprecated_key = "enable.log_management")]
+            log_upload: bool,
+
+            /// Enable config_snapshot feature
+            #[tedge_config(example = "true", default(value = "true"), exposable)]
+            config_snapshot: bool,
+
+            /// Enable config_update feature
+            #[tedge_config(example = "true", default(value = "true"), exposable)]
+            config_update: bool,
+
+            /// Enable firmware_update feature
+            #[tedge_config(example = "true", default(value = "true"), exposable)]
+            firmware_update: bool,
+
+            /// Enable device_profile feature
+            #[tedge_config(example = "true", default(value = "true"), exposable)]
+            device_profile: bool,
+
+            /// Enable device restart feature
+            #[tedge_config(example = "true", default(value = "true"), exposable)]
+            device_restart: bool,
+
+            /// Enable software update feature
+            #[tedge_config(example = "true", default(value = "true"), exposable)]
+            software_update: bool,
+
+            /// Enable shell execute feature
+            #[tedge_config(example = "true", default(value = "true"), exposable)]
+            shell_execute: bool,
+
+            /// Enable service control feature
+            #[tedge_config(example = "true", default(value = "true"), exposable)]
+            service_control: bool,
+        },
     }
 }

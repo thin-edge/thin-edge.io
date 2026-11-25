@@ -125,6 +125,8 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
     "[smartrest]\nuse_operation_id = false\nchild_device.create_with_device_marker = true"
 )]
 #[case::smartrest1_templates("[smartrest1]\ntemplates = \"a,b\"")]
+#[case::enable_flags("[enable]\nlog_upload = false\nshell_execute = false")]
+#[case::enable_log_management("[enable]\nlog_management = false")]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
