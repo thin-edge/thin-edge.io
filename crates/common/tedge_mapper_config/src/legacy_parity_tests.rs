@@ -144,6 +144,48 @@ async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] map
 }
 
 #[rstest]
+#[case::defaults("", true, true)]
+#[case::set_in_the_file(
+    "[entity_store]\nauto_register = false\nclean_start = false",
+    false,
+    false
+)]
+#[tokio::test]
+async fn c8y_entity_store_keys_read_the_mapper_file(
+    #[case] mapper_toml: &str,
+    #[case] auto_register: bool,
+    #[case] clean_start: bool,
+) {
+    use tedge_config::tedge_toml::tedge_config::mapper_config::C8yMapperSpecificConfig;
+
+    let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
+    let fed = federated_config(&dir).await;
+    let legacy = TEdgeConfig::load(dir.path())
+        .await
+        .unwrap()
+        .mapper_config::<C8yMapperSpecificConfig>(&None::<tedge_config::tedge_toml::ProfileName>)
+        .unwrap()
+        .cloud_specific
+        .entity_store;
+
+    let read = |key: &str| {
+        fed.read(&format!("mappers.c8y.entity_store.{key}"))
+            .unwrap()
+    };
+    assert_eq!(
+        (read("auto_register"), read("clean_start")),
+        (
+            Some(legacy.auto_register.to_string()),
+            Some(legacy.clean_start.to_string())
+        )
+    );
+    assert_eq!(
+        (legacy.auto_register, legacy.clean_start),
+        (auto_register, clean_start)
+    );
+}
+
+#[rstest]
 fn absolute_path_accepts_same_values_as_tedge_config_absolute_path(
     #[values("/etc/tedge", "/etc/../tmp/./x", "relative/path", "", "/")] value: &str,
 ) {
@@ -365,10 +407,15 @@ fn write_certificate(dir: &TempTedgeDir, path: &str, common_name: &str) {
     std::fs::write(path, cert.certificate_pem_string().unwrap()).unwrap();
 }
 
+/// The c8y keys whose tedge_config key string reads the c8y table
+///
+/// tedge_config's `c8y.entity_store.*` key strings are deprecated names of
+/// `agent.entity_store.*`, so they never read the `entity_store` table of the
+/// mapper file; [c8y_entity_store_keys_read_the_mapper_file] covers them
 fn c8y_keys() -> Vec<String> {
     c8y_docs()
         .into_keys()
-        .filter(|key| key != "c8y.cloud_type")
+        .filter(|key| key != "c8y.cloud_type" && !key.starts_with("c8y.entity_store."))
         .collect()
 }
 
