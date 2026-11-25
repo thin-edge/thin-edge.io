@@ -10,6 +10,8 @@
 //!   the yamux server). Other protocols are declined, so the client can fall back.
 //! - any other first data from the client, or data sent first by the target (e.g. SSH or VNC
 //!   banners), selects the normal passthrough mode, with no data lost or added latency
+//! - a target which closes or fails without sending data does not decide the mode. The client then
+//!   has [`NEGOTIATION_TIMEOUT`] to send its first data, after which passthrough is selected
 //! - an older plugin forwards the header to the target, and the client falls back to one
 //!   websocket per connection when the protocol is not confirmed
 //!
@@ -41,7 +43,8 @@ pub const YAMUX_PROTOCOL: &str = "/yamux/1.0.0";
 pub const MAX_STREAMS: usize = 64;
 /// Maximum time to wait for the rest of a partially received header
 const HEADER_TIMEOUT: Duration = Duration::from_secs(1);
-/// Maximum time for the client to select a protocol
+/// Maximum time for each step of the client's negotiation: sending its first data once the target
+/// closed without data, and selecting a protocol once multiplexing is requested
 const NEGOTIATION_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, PartialEq, Eq)]
@@ -55,7 +58,12 @@ pub enum Mode {
 /// Decides the mode of a session from the first data of the client or the target.
 ///
 /// `target_has_data` must complete when the target has sent data, without consuming it (e.g. by
-/// peeking). A spurious completion selects passthrough, even if the client requests multiplexing.
+/// peeking). The mode is then decided as follows:
+/// - the target reports data (`Ok(n)` with `n > 0`): passthrough
+/// - the target closes (`Ok(0)`) or fails without data, e.g. a web server dropping idle
+///   connections: the client decides, so it can still request multiplexing
+/// - the client sends nothing within [`NEGOTIATION_TIMEOUT`] after that: passthrough, so a client
+///   waiting for the target to speak first (e.g. SSH) is not kept waiting indefinitely
 pub async fn negotiate<R, F>(ws_reader: &mut R, target_has_data: F) -> io::Result<Mode>
 where
     R: AsyncRead + Unpin,
@@ -64,12 +72,23 @@ where
     let mut received = Vec::new();
     let mut buf = [0u8; 64];
     tokio::pin!(target_has_data);
+    let mut target_done = false;
+    // Each deadline is fixed when it starts, so later loop passes (the target closing, further
+    // partial reads) don't extend it
+    let mut header_deadline = None;
+    let mut first_data_deadline = None;
     loop {
-        let partial_header_timeout = async {
-            if received.is_empty() {
-                std::future::pending::<()>().await
-            } else {
-                tokio::time::sleep(HEADER_TIMEOUT).await
+        if !received.is_empty() {
+            header_deadline.get_or_insert_with(|| tokio::time::Instant::now() + HEADER_TIMEOUT);
+        } else if target_done {
+            first_data_deadline
+                .get_or_insert_with(|| tokio::time::Instant::now() + NEGOTIATION_TIMEOUT);
+        }
+        let deadline = header_deadline.or(first_data_deadline);
+        let deadline = async move {
+            match deadline {
+                Some(deadline) => tokio::time::sleep_until(deadline).await,
+                None => std::future::pending().await,
             }
         };
         tokio::select! {
@@ -86,8 +105,12 @@ where
                     return Ok(Mode::Passthrough(received));
                 }
             }
-            _ = &mut target_has_data => return Ok(Mode::Passthrough(received)),
-            _ = partial_header_timeout => return Ok(Mode::Passthrough(received)),
+            n = &mut target_has_data, if !target_done => match n {
+                Ok(n) if n > 0 => return Ok(Mode::Passthrough(received)),
+                // the target closed or failed without sending data: let the client decide
+                _ => target_done = true,
+            },
+            _ = deadline => return Ok(Mode::Passthrough(received)),
         }
     }
 }
@@ -236,6 +259,152 @@ mod tests {
             .unwrap();
 
         assert_eq!(mode, Mode::Passthrough(Vec::new()));
+    }
+
+    #[tokio::test]
+    async fn client_can_request_multiplexing_after_the_target_closed() {
+        let (mut client, plugin) = tokio::io::duplex(1024);
+        let (target_closed, closed) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            // the header arrives after the target closed its (idle) connection
+            closed.await.expect("target future should be polled");
+            client.write_all(MULTISTREAM_HEADER).await.unwrap();
+            std::future::pending::<()>().await
+        });
+
+        let mut plugin = plugin.compat();
+        let negotiation = negotiate(&mut plugin, async {
+            target_closed.send(()).unwrap();
+            Ok(0)
+        });
+        let mode = tokio::time::timeout(Duration::from_secs(5), negotiation)
+            .await
+            .expect("negotiation should end once the client sent the header")
+            .unwrap();
+
+        assert_eq!(mode, Mode::Multiplex(MULTISTREAM_HEADER.to_vec()));
+    }
+
+    #[tokio::test]
+    async fn client_data_decides_the_mode_once_the_target_failed() {
+        let (mut client, plugin) = tokio::io::duplex(1024);
+        let (target_failed, failed) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            failed.await.expect("target future should be polled");
+            client.write_all(b"GET / HTTP/1.1\r\n").await.unwrap();
+            std::future::pending::<()>().await
+        });
+
+        let mut plugin = plugin.compat();
+        let negotiation = negotiate(&mut plugin, async {
+            target_failed.send(()).unwrap();
+            Err(io::Error::from(io::ErrorKind::ConnectionReset))
+        });
+        let mode = tokio::time::timeout(Duration::from_secs(5), negotiation)
+            .await
+            .expect("negotiation should end once the client sent data")
+            .unwrap();
+
+        assert_eq!(mode, Mode::Passthrough(b"GET / HTTP/1.1\r\n".to_vec()));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn client_has_a_bounded_time_to_send_data_once_the_target_closed() {
+        // e.g. an SSH client waiting for the banner of a target which closed without sending it
+        let (_client, plugin) = tokio::io::duplex(1024);
+        let mut plugin = plugin.compat();
+
+        let started = tokio::time::Instant::now();
+        // bounded, so the test fails rather than hangs if the client could wait forever
+        let negotiation = negotiate(&mut plugin, async { Ok(0) });
+        let mode = tokio::time::timeout(2 * NEGOTIATION_TIMEOUT, negotiation)
+            .await
+            .expect("negotiation should end once the client had enough time")
+            .unwrap();
+
+        assert_eq!(mode, Mode::Passthrough(Vec::new()));
+        assert_eq!(started.elapsed(), NEGOTIATION_TIMEOUT);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn partial_header_after_the_target_closed_waits_only_for_the_rest_of_the_header() {
+        let (mut client, plugin) = tokio::io::duplex(1024);
+        let (target_closed, closed) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            closed.await.expect("target future should be polled");
+            client.write_all(&MULTISTREAM_HEADER[..3]).await.unwrap();
+            std::future::pending::<()>().await
+        });
+
+        let started = tokio::time::Instant::now();
+        let mut plugin = plugin.compat();
+        let negotiation = negotiate(&mut plugin, async {
+            target_closed.send(()).unwrap();
+            Ok(0)
+        });
+        let mode = tokio::time::timeout(2 * NEGOTIATION_TIMEOUT, negotiation)
+            .await
+            .expect("negotiation should end once the header timed out")
+            .unwrap();
+
+        assert_eq!(mode, Mode::Passthrough(MULTISTREAM_HEADER[..3].to_vec()));
+        assert_eq!(started.elapsed(), HEADER_TIMEOUT);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn closing_the_target_does_not_extend_the_partial_header_timeout() {
+        let (mut client, plugin) = tokio::io::duplex(1024);
+        let (prefix, suffix) = MULTISTREAM_HEADER.split_at(3);
+        client.write_all(prefix).await.unwrap();
+
+        let started = tokio::time::Instant::now();
+        tokio::spawn(async move {
+            tokio::time::sleep_until(started + Duration::from_millis(1400)).await;
+            client.write_all(suffix).await.unwrap();
+        });
+
+        let mut plugin = plugin.compat();
+        let mode = negotiate(&mut plugin, async {
+            tokio::time::sleep_until(started + Duration::from_millis(500)).await;
+            Ok(0)
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(mode, Mode::Passthrough(prefix.to_vec()));
+        assert_eq!(started.elapsed(), HEADER_TIMEOUT);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn partial_header_timeout_is_independent_of_when_the_target_closes() {
+        let (prefix, suffix) = MULTISTREAM_HEADER.split_at(3);
+        for close_ms in [200, 500, 800, 2500] {
+            for gap_ms in [400, 750, 1100, 1400, 1700] {
+                let (mut client, plugin) = tokio::io::duplex(1024);
+                client.write_all(prefix).await.unwrap();
+                let gap = Duration::from_millis(gap_ms);
+                tokio::spawn(async move {
+                    tokio::time::sleep(gap).await;
+                    // fails harmlessly once the plugin has already given up on the header
+                    let _ = client.write_all(suffix).await;
+                });
+
+                let mut plugin = plugin.compat();
+                let mode = negotiate(&mut plugin, async {
+                    tokio::time::sleep(Duration::from_millis(close_ms)).await;
+                    Ok(0)
+                })
+                .await
+                .unwrap();
+
+                let expected = if gap < HEADER_TIMEOUT {
+                    Mode::Multiplex(MULTISTREAM_HEADER.to_vec())
+                } else {
+                    Mode::Passthrough(prefix.to_vec())
+                };
+                assert_eq!(mode, expected, "close={close_ms}ms gap={gap_ms}ms");
+            }
+        }
     }
 
     #[tokio::test]
