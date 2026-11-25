@@ -6,6 +6,7 @@ use tedge_utils::paths::ManagedFile;
 use crate::defaults::EnvOverrides;
 use crate::defaults::RootDependency;
 use crate::defaults::RootResolver;
+use crate::defaults::ValueOrigin;
 use crate::manager::ConfigManager;
 use crate::reflect::ConfigError;
 use crate::reflect::KeyEntry;
@@ -145,7 +146,31 @@ where
 {
     fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError> {
         self.check_loaded()?;
-        self.manager.read_with_root(&self.dto, key, root)
+        let Some(resolved) = self.manager.resolve_with_root(&self.dto, key, root)? else {
+            return Ok(None);
+        };
+        if resolved.source_key == key && resolved.origin == ValueOrigin::Explicit {
+            return Ok(Some(resolved.value));
+        }
+        // A default arrives as the string of another key, the root config or
+        // the schema, which can be a different type: `c8y.url = example.com`
+        // is the default of `c8y.http`, a host and port. Parsing it as this
+        // key's type shows it as an explicit value of the key would be shown,
+        // here `example.com:443`
+        let mut rendered = T::default();
+        self.manager
+            .set(&mut rendered, key, &resolved.value)
+            .map_err(|e| ConfigError::InvalidValue {
+                key: key.to_owned(),
+                reason: match e {
+                    ConfigError::ParseError(reason) => reason,
+                    e => e.to_string(),
+                },
+                source_key: resolved.source_key,
+                origin: resolved.origin,
+                value: resolved.value,
+            })?;
+        self.manager.get(&rendered, key)
     }
 
     async fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError> {
