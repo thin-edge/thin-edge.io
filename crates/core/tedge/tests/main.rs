@@ -802,9 +802,9 @@ mod mapper_config_tests {
         ])?
         .assert()
         .success()
-        .stdout(predicate::str::contains(
-            "/etc/tedge/device-certs/tedge-certificate.pem",
-        ));
+        .stdout(predicate::str::contains(format!(
+            "{config_dir}/device-certs/tedge-certificate.pem"
+        )));
 
         Ok(())
     }

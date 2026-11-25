@@ -13,10 +13,11 @@ use tedge_config_engine::RootResolver;
 use tedge_utils::paths::ManagedFile;
 use tedge_utils::paths::TedgePaths;
 
+use crate::root::RootConfig;
+use crate::root::RootConfigDto;
+
 pub use mapper::MapperConfig;
 pub use mapper::MapperConfigDto;
-pub use root_stub::RootStubConfig;
-pub use root_stub::RootStubConfigDto;
 
 pub mod mapper {
     use camino::Utf8PathBuf;
@@ -48,7 +49,7 @@ pub mod mapper {
                 key_path: Utf8PathBuf,
 
                 /// Path to the root certificate
-                #[tedge_config(default(from_root = "device.root_cert_path"))]
+                #[tedge_config(default(value = "/etc/ssl/certs"))]
                 root_cert_path: Utf8PathBuf,
             },
 
@@ -77,29 +78,6 @@ pub mod mapper {
 
             /// Path to a credentials file
             credentials_path: Utf8PathBuf,
-        }
-    }
-}
-
-pub mod root_stub {
-    use camino::Utf8PathBuf;
-    use tedge_config_engine::*;
-
-    tedge_config_engine_macro::define_config! {
-        RootStub {
-            device: {
-                /// Path to the device certificate
-                #[tedge_config(default(value = "/etc/tedge/device-certs/tedge-certificate.pem"))]
-                cert_path: Utf8PathBuf,
-
-                /// Path to the device private key
-                #[tedge_config(default(value = "/etc/tedge/device-certs/tedge-private-key.pem"))]
-                key_path: Utf8PathBuf,
-
-                /// Path to the root certificate
-                #[tedge_config(default(value = "/etc/ssl/certs"))]
-                root_cert_path: Utf8PathBuf,
-            },
         }
     }
 }
@@ -193,12 +171,13 @@ pub(crate) async fn load_federated_config_with_env(
     let config_dir = config_root.root();
     let mut fed = FederatedConfig::new(config_dir.as_std_path());
 
-    let root_mgr = ConfigManager::from_schema::<RootStubConfig>(config_dir.as_std_path());
-    let root_ops = TypedConfigOps::<RootStubConfigDto>::load(
-        root_mgr,
-        managed_file(config_root, "tedge.toml"),
-    )
-    .await;
+    let root_mgr = ConfigManager::from_schema::<RootConfig>(config_dir.as_std_path());
+    let mut root_ops =
+        TypedConfigOps::<RootConfigDto>::load(root_mgr, managed_file(config_root, "tedge.toml"))
+            .await;
+    // Mapper defaults such as c8y.device.id read the root device table, so it
+    // must see the same TEDGE_DEVICE_* overrides tedge_config does
+    root_ops.apply_env_with_prefix("TEDGE_", env);
     fed.mount("", Box::new(root_ops))?;
 
     let mappers: Vec<_> = mapper_dirs(config_root)

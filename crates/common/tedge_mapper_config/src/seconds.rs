@@ -2,8 +2,6 @@ use std::fmt;
 use std::str::FromStr;
 use std::time::Duration;
 
-use tedge_config_engine::AppendRemoveItem;
-
 #[derive(Clone, Debug, PartialEq, Eq, facet::Facet)]
 #[facet(proxy = DeserializeTime)]
 pub struct SecondsOrHumanTime {
@@ -46,18 +44,7 @@ impl SecondsOrHumanTime {
     }
 }
 
-impl AppendRemoveItem for SecondsOrHumanTime {
-    fn append(_current: Option<Self>, new_value: Self) -> Option<Self> {
-        Some(new_value)
-    }
-
-    fn remove(current: Option<Self>, remove_value: Self) -> Option<Self> {
-        match current {
-            Some(v) if v == remove_value => None,
-            other => other,
-        }
-    }
-}
+tedge_config_engine::impl_single_value_append_remove!(SecondsOrHumanTime);
 
 #[derive(Clone, Debug, PartialEq, Eq, facet::Facet)]
 #[repr(u8)]

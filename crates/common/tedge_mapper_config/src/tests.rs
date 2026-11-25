@@ -13,10 +13,10 @@ use tedge_config_engine::ConfigError;
 use tedge_config_engine::ConfigManager;
 use tedge_config_engine::EnvOverrides;
 
+use crate::root::RootConfig;
+use crate::root::RootConfigDto;
 use crate::schema::mapper::MapperConfig;
 use crate::schema::mapper::MapperConfigDto;
-use crate::schema::root_stub::RootStubConfig;
-use crate::schema::root_stub::RootStubConfigDto;
 
 #[test]
 fn auth_method_accepts_same_values_as_auth_method_config() {
@@ -115,7 +115,7 @@ async fn setting_cloud_type_leaves_other_keys_unchanged() {
 }
 
 #[tokio::test]
-async fn from_root_references_resolve_against_root_stub() {
+async fn from_root_references_resolve_against_the_root_config() {
     let dir = config_dir_with_mapper("test", "");
 
     let mut fed = FederatedConfig::new(dir.std_path());
@@ -195,9 +195,9 @@ async fn env_variable_overrides_toml_value() {
 
     let mut fed = FederatedConfig::new(dir.std_path());
 
-    let root_mgr = ConfigManager::from_schema::<RootStubConfig>(dir.std_path());
+    let root_mgr = ConfigManager::from_schema::<RootConfig>(dir.std_path());
     let mut root_ops =
-        TypedConfigOps::<RootStubConfigDto>::load(root_mgr, managed_file(&dir, "tedge.toml")).await;
+        TypedConfigOps::<RootConfigDto>::load(root_mgr, managed_file(&dir, "tedge.toml")).await;
     root_ops.apply_env_excluding(&env, &["mappers."]);
     fed.mount("", Box::new(root_ops)).unwrap();
 
@@ -214,25 +214,6 @@ async fn env_variable_overrides_toml_value() {
     assert_eq!(
         fed.read("mappers.thingsboard.url").unwrap().as_deref(),
         Some("env.example.com:8883")
-    );
-}
-
-#[test]
-fn root_stub_defaults_match_real_tedge_defaults() {
-    let mgr = root_manager();
-    let dto = RootStubConfigDto::default();
-
-    assert_eq!(
-        mgr.read(&dto, "device.cert_path").unwrap().as_deref(),
-        Some("/etc/tedge/device-certs/tedge-certificate.pem")
-    );
-    assert_eq!(
-        mgr.read(&dto, "device.key_path").unwrap().as_deref(),
-        Some("/etc/tedge/device-certs/tedge-private-key.pem")
-    );
-    assert_eq!(
-        mgr.read(&dto, "device.root_cert_path").unwrap().as_deref(),
-        Some("/etc/ssl/certs")
     );
 }
 
@@ -741,7 +722,7 @@ fn mapper_manager() -> ConfigManager {
 }
 
 fn root_manager() -> ConfigManager {
-    ConfigManager::from_schema::<RootStubConfig>(Path::new("/etc/tedge"))
+    ConfigManager::from_schema::<RootConfig>(Path::new("/etc/tedge"))
 }
 
 async fn mapper_source(dir: &TempTedgeDir, name: &str) -> Box<dyn ConfigOps> {
@@ -751,7 +732,7 @@ async fn mapper_source(dir: &TempTedgeDir, name: &str) -> Box<dyn ConfigOps> {
 
 async fn root_source(dir: &TempTedgeDir) -> Box<dyn ConfigOps> {
     let file = managed_file(dir, "tedge.toml");
-    Box::new(TypedConfigOps::<RootStubConfigDto>::load(root_manager(), file).await)
+    Box::new(TypedConfigOps::<RootConfigDto>::load(root_manager(), file).await)
 }
 
 fn config_root(dir: &TempTedgeDir) -> TedgePaths {

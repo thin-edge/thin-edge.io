@@ -1,8 +1,6 @@
 use std::fmt;
 use std::str::FromStr;
 
-use tedge_config_engine::AppendRemoveItem;
-
 /// The built-in cloud integration a mapper uses
 #[derive(Debug, Clone, Copy, PartialEq, Eq, facet::Facet)]
 #[repr(u8)]
@@ -37,15 +35,4 @@ impl FromStr for CloudType {
     }
 }
 
-impl AppendRemoveItem for CloudType {
-    fn append(_current: Option<Self>, new_value: Self) -> Option<Self> {
-        Some(new_value)
-    }
-
-    fn remove(current: Option<Self>, remove_value: Self) -> Option<Self> {
-        match current {
-            Some(v) if v == remove_value => None,
-            other => other,
-        }
-    }
-}
+tedge_config_engine::impl_single_value_append_remove!(CloudType);
