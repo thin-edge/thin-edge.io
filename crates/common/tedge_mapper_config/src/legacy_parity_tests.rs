@@ -84,14 +84,13 @@ async fn explicit_device_id_beats_the_certificate_common_name_unlike_tedge_confi
 }
 
 #[test]
-fn every_c8y_key_but_cloud_type_is_a_tedge_config_c8y_key() {
-    let legacy = legacy_docs("c8y.");
-    let missing: Vec<_> = c8y_docs()
-        .into_keys()
-        .filter(|key| key != "c8y.cloud_type" && !legacy.contains_key(key))
-        .collect();
+fn c8y_schema_has_the_same_keys_as_tedge_config_plus_cloud_type() {
+    let mut legacy: Vec<_> = legacy_docs("c8y.").into_keys().collect();
+    legacy.push("c8y.cloud_type".to_owned());
+    legacy.sort();
+    let ours: Vec<_> = c8y_docs().into_keys().collect();
 
-    assert!(missing.is_empty(), "not tedge_config keys: {missing:?}");
+    assert_eq!(ours, legacy);
 }
 
 #[test]
