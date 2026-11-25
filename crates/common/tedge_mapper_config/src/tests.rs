@@ -641,6 +641,20 @@ async fn single_value_keys_are_replaced_by_add_and_cleared_only_by_removing_thei
 }
 
 #[tokio::test]
+async fn set_items_are_merged_by_add_and_dropped_by_remove() {
+    let dir = config_dir_with_mapper("c8y", "");
+    let mut fed = load_without_env(&dir).await;
+    let key = "mappers.c8y.smartrest.templates";
+
+    fed.mutate(key, Action::Add("a".into())).await.unwrap();
+    fed.mutate(key, Action::Add("b,a".into())).await.unwrap();
+    assert_eq!(fed.read(key).unwrap().as_deref(), Some(r#"["a", "b"]"#));
+
+    fed.mutate(key, Action::Remove("a".into())).await.unwrap();
+    assert_eq!(fed.read(key).unwrap().as_deref(), Some(r#"["b"]"#));
+}
+
+#[tokio::test]
 async fn reading_a_mapper_whose_file_cannot_be_read_names_its_file() {
     let dir = TempTedgeDir::new();
     dir.file("tedge.toml");

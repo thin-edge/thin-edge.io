@@ -55,5 +55,21 @@ tedge_config_engine_macro::define_config! {
             exposable
         )]
         topics: TemplatesSet,
+
+        smartrest: {
+            /// Set of SmartREST template IDs the device should subscribe to
+            #[tedge_config(example = "templateId1,templateId2", default(value = "[]"), exposable)]
+            templates: TemplatesSet,
+
+            /// Switch using 501-503 (without operation ID) or 504-506 (with operation ID) SmartREST messages for operation status update
+            #[tedge_config(example = "true", default(value = "true"))]
+            use_operation_id: bool,
+
+            child_device: {
+                /// Attach the c8y_IsDevice fragment to child devices on creation
+                #[tedge_config(example = "false", default(value = "false"))]
+                create_with_device_marker: bool,
+            },
+        },
     }
 }

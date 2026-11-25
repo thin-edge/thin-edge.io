@@ -120,6 +120,10 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
 #[case::topics_as_array("topics = [\"te/+/+/+/+/m/+\", \"te/+/+/+/+/e/+\"]")]
 #[case::topics_with_empty_items("topics = \"te/+/+/+/+/m/+,, te/+/+/+/+/e/+,\"")]
 #[case::topics_as_comma_separated_string("topics = \"te/+/+/+/+/m/+, te/+/+/+/+/e/+\"")]
+#[case::smartrest_templates("[smartrest]\ntemplates = [\"a\", \"b\"]")]
+#[case::smartrest_flags(
+    "[smartrest]\nuse_operation_id = false\nchild_device.create_with_device_marker = true"
+)]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
