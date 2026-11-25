@@ -1,6 +1,7 @@
 //! The schema of a Cumulocity mapper's `mapper.toml`, matching the `c8y`
 //! table of tedge_config
 
+use std::net::IpAddr;
 use tedge_config_engine::*;
 
 use crate::absolute_path::AbsolutePath;
@@ -123,6 +124,49 @@ tedge_config_engine_macro::define_config! {
                 #[tedge_config(example = "16184", default(value = "16184"), exposable)]
                 max_payload_size: MqttPayloadLimit,
             },
+        },
+
+        proxy: {
+            bind: {
+                /// The IP address local Cumulocity HTTP proxy binds to
+                #[tedge_config(example = "127.0.0.1", default(value = "127.0.0.1"))]
+                address: IpAddr,
+
+                /// The port local Cumulocity HTTP proxy binds to
+                #[tedge_config(example = "8001", default(value = "8001"))]
+                port: u16,
+            },
+
+            client: {
+                /// The address of the host on which the local Cumulocity HTTP Proxy is running, used by the Cumulocity
+                /// mapper.
+                #[tedge_config(
+                    default(value = "127.0.0.1"),
+                    example = "127.0.0.1",
+                    example = "192.168.1.2",
+                    example = "tedge-hostname",
+                    exposable
+                )]
+                host: String,
+
+                /// The port number on the remote host on which the local Cumulocity HTTP Proxy is running, used by the
+                /// Cumulocity mapper.
+                #[tedge_config(example = "8001", default(from_key = "proxy.bind.port"), exposable)]
+                port: u16,
+            },
+
+            /// The file that will be used as the server certificate for the Cumulocity proxy
+            #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_certificate.pem")]
+            cert_path: AbsolutePath,
+
+            /// The file that will be used as the server private key for the Cumulocity proxy
+            #[tedge_config(example = "/etc/tedge/device-certs/c8y_proxy_key.pem")]
+            key_path: AbsolutePath,
+
+            /// Path to a file containing the PEM encoded CA certificates that are
+            /// trusted when checking incoming client certificates for the Cumulocity Proxy
+            #[tedge_config(example = "/etc/ssl/certs")]
+            ca_path: AbsolutePath,
         },
     }
 }

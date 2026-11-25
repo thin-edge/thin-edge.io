@@ -128,6 +128,12 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
 #[case::enable_flags("[enable]\nlog_upload = false\nshell_execute = false")]
 #[case::enable_log_management("[enable]\nlog_management = false")]
 #[case::max_payload_size("[mapper.mqtt]\nmax_payload_size = 1024")]
+#[case::proxy_bind("[proxy.bind]\naddress = \"0.0.0.0\"\nport = 9000")]
+#[case::proxy_client_port_follows_bind_port("[proxy.bind]\nport = 9000")]
+#[case::proxy_client("[proxy.client]\nhost = \"tedge\"\nport = 9001")]
+#[case::proxy_paths(
+    "[proxy]\ncert_path = \"/tmp/cert.pem\"\nkey_path = \"/tmp/key.pem\"\nca_path = \"/tmp/ca\""
+)]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
