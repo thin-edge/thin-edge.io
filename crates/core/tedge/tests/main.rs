@@ -1041,6 +1041,145 @@ mod mapper_config_tests {
         Ok(())
     }
 
+    /// Keys of each type the c8y schema uses, with a value that isn't the default
+    const C8Y_VALUES: &[(&str, &str)] = &[
+        ("url", "example.cumulocity.com"),
+        ("auth_method", "basic"),
+        ("root_cert_path", "/etc/tedge/c8y-root.pem"),
+        ("smartrest.templates", "a,b"),
+        ("enable.log_upload", "false"),
+        ("mapper.mqtt.max_payload_size", "1024"),
+        ("proxy.bind.address", "0.0.0.0"),
+        ("bridge.include.local_cleansession", "true"),
+        ("bridge.keepalive_interval", "2m"),
+        ("software_management.api", "advanced"),
+        ("operations.auto_log_upload", "always"),
+        ("http", "http.example.cumulocity.com:1234"),
+        ("device.key_path", "/etc/tedge/c8y-key.pem"),
+    ];
+
+    #[rstest::rstest]
+    #[case::c8y_to_mappers("c8y.", "mappers.c8y.")]
+    #[case::mappers_to_c8y("mappers.c8y.", "c8y.")]
+    fn a_value_written_through_one_engine_reads_the_same_through_the_other(
+        #[case] write_prefix: &str,
+        #[case] read_prefix: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        setup_mapper(&temp_dir, "c8y", "");
+
+        for (key, value) in C8Y_VALUES {
+            set(&temp_dir, &format!("{write_prefix}{key}"), value)?;
+            assert_eq!(
+                get(&temp_dir, &format!("{read_prefix}{key}"))?,
+                get(&temp_dir, &format!("{write_prefix}{key}"))?,
+                "{key} written through {write_prefix} reads differently through {read_prefix}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn both_engines_write_a_value_to_the_mapper_file_in_the_same_format(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        for (key, value) in C8Y_VALUES {
+            let legacy = written_mapper_file(&format!("c8y.{key}"), value)?;
+            let facet = written_mapper_file(&format!("mappers.c8y.{key}"), value)?;
+            assert_eq!(facet, legacy, "files written for {key}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn unsetting_the_last_key_of_a_group_leaves_no_empty_group(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        for prefix in ["c8y.", "mappers.c8y."] {
+            let temp_dir = tempfile::tempdir()?;
+            setup_mapper(&temp_dir, "c8y", "url = \"example.cumulocity.com\"\n");
+            let key = format!("{prefix}bridge.include.local_cleansession");
+
+            set(&temp_dir, &key, "true")?;
+            unset(&temp_dir, &key)?;
+
+            assert_eq!(
+                mapper_file(&temp_dir)?,
+                toml::toml! { url = "example.cumulocity.com" },
+                "file after unsetting {key}"
+            );
+        }
+        Ok(())
+    }
+
+    #[rstest::rstest]
+    #[case::c8y_then_mappers("c8y.", "mappers.c8y.")]
+    #[case::mappers_then_c8y("mappers.c8y.", "c8y.")]
+    fn a_write_through_one_engine_keeps_keys_written_through_the_other(
+        #[case] first: &str,
+        #[case] second: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        setup_mapper(&temp_dir, "c8y", "");
+
+        set(&temp_dir, &format!("{first}smartrest.templates"), "a,b")?;
+        set(&temp_dir, &format!("{second}url"), "example.cumulocity.com")?;
+
+        let file = mapper_file(&temp_dir)?;
+        assert_eq!(file["url"].as_str(), Some("example.cumulocity.com"));
+        assert_eq!(
+            file["smartrest"]["templates"],
+            toml::Value::from(vec!["a", "b"])
+        );
+        Ok(())
+    }
+
+    /// Writes one key to an empty c8y mapper and returns the file, without the
+    /// `cloud_type` tedge_config adds to every file it writes
+    fn written_mapper_file(
+        key: &str,
+        value: &str,
+    ) -> Result<toml::Table, Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+        setup_mapper(&temp_dir, "c8y", "");
+        set(&temp_dir, key, value)?;
+        mapper_file(&temp_dir)
+    }
+
+    fn mapper_file(
+        temp_dir: &tempfile::TempDir,
+    ) -> Result<toml::Table, Box<dyn std::error::Error>> {
+        let path = temp_dir.path().join("mappers/c8y/mapper.toml");
+        let mut file: toml::Table = std::fs::read_to_string(path)?.parse()?;
+        file.remove("cloud_type");
+        Ok(file)
+    }
+
+    fn set(
+        temp_dir: &tempfile::TempDir,
+        key: &str,
+        value: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        config(temp_dir, &["set", key, value])?.assert().success();
+        Ok(())
+    }
+
+    fn unset(temp_dir: &tempfile::TempDir, key: &str) -> Result<(), Box<dyn std::error::Error>> {
+        config(temp_dir, &["unset", key])?.assert().success();
+        Ok(())
+    }
+
+    fn get(temp_dir: &tempfile::TempDir, key: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let output = config(temp_dir, &["get", key])?.assert().success();
+        Ok(String::from_utf8(output.get_output().stdout.clone())?)
+    }
+
+    fn config(
+        temp_dir: &tempfile::TempDir,
+        args: &[&str],
+    ) -> Result<assert_cmd::Command, Box<dyn std::error::Error>> {
+        let config_dir = temp_dir.path().to_str().unwrap();
+        tedge_command(["--config-dir", config_dir, "config"].iter().chain(args))
+    }
+
     fn setup_mapper(temp_dir: &tempfile::TempDir, name: &str, toml_content: &str) {
         let mapper_dir = temp_dir.path().join("mappers").join(name);
         std::fs::create_dir_all(&mapper_dir).unwrap();
