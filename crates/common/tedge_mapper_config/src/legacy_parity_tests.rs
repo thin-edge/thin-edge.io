@@ -140,6 +140,7 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
 #[case::software_management_capitalised("[software_management]\napi = \"Advanced\"")]
 #[case::auto_log_upload("[operations]\nauto_log_upload = \"always\"")]
 #[case::availability("[availability]\nenable = false\ninterval = \"5m\"")]
+#[case::mqtt_service("[mqtt_service]\nenabled = true\ntopics = [\"incoming/topic\"]")]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));

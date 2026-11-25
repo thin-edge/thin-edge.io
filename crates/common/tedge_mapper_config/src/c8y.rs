@@ -237,5 +237,19 @@ tedge_config_engine_macro::define_config! {
             #[tedge_config(example = "60m", default(value = "60m"))]
             interval: SecondsOrHumanTime,
         },
+
+        mqtt_service: {
+            /// Whether to connect to the MQTT service endpoint or not
+            #[tedge_config(example = "true", default(value = "false"), exposable)]
+            enabled: bool,
+
+            /// Set of MQTT topics the bridge should subscribe to on the Cumulocity MQTT service endpoint
+            #[tedge_config(
+                example = "incoming/topic,another/topic,test/topic",
+                default(value = "[]"),
+                exposable
+            )]
+            topics: TemplatesSet,
+        },
     }
 }
