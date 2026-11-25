@@ -3,6 +3,7 @@
 mod absolute_path;
 mod auth_method;
 mod auto_flag;
+mod auto_log_upload;
 mod c8y;
 mod c8y_auth_method;
 mod cert;
@@ -22,6 +23,7 @@ mod topic_prefix;
 pub use absolute_path::AbsolutePath;
 pub use auth_method::AuthMethod;
 pub use auto_flag::AutoFlag;
+pub use auto_log_upload::AutoLogUpload;
 pub use c8y::C8yMapperConfig;
 pub use c8y::C8yMapperConfigDto;
 pub use c8y_auth_method::C8yAuthMethod;

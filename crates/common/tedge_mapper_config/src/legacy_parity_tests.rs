@@ -138,6 +138,7 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
 #[case::keepalive_in_seconds("[bridge]\nkeepalive_interval = 90")]
 #[case::software_management("[software_management]\napi = \"advanced\"\nwith_types = true")]
 #[case::software_management_capitalised("[software_management]\napi = \"Advanced\"")]
+#[case::auto_log_upload("[operations]\nauto_log_upload = \"always\"")]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
@@ -328,6 +329,19 @@ fn software_management_api_flag_accepts_same_values_as_tedge_config_flag(
         .ok()
         .map(|v| v.to_string());
     let theirs = Theirs::from_str(value).ok().map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[rstest]
+fn auto_log_upload_accepts_same_values_as_tedge_config_auto_log_upload(
+    #[values("never", "always", "on-failure", "on_failure", "", "Always")] value: &str,
+) {
+    let ours = crate::AutoLogUpload::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = tedge_config::models::AutoLogUpload::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
     assert_eq!(ours, theirs);
 }
 

@@ -6,6 +6,7 @@ use tedge_config_engine::*;
 
 use crate::absolute_path::AbsolutePath;
 use crate::auto_flag::AutoFlag;
+use crate::auto_log_upload::AutoLogUpload;
 use crate::c8y_auth_method::C8yAuthMethod;
 use crate::cloud_type::CloudType;
 use crate::connect_url::ConnectUrl;
@@ -211,6 +212,17 @@ tedge_config_engine_macro::define_config! {
             /// Enable publishing c8y_SupportedSoftwareTypes fragment to the c8y inventory API
             #[tedge_config(example = "true", default(value = "false"))]
             with_types: bool,
+        },
+
+        operations: {
+            /// Auto-upload the operation log once it finishes.
+            #[tedge_config(
+                example = "always",
+                example = "never",
+                example = "on-failure",
+                default(value = "on-failure")
+            )]
+            auto_log_upload: AutoLogUpload,
         },
     }
 }
