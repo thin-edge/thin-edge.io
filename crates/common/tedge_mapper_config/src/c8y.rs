@@ -11,6 +11,9 @@ use crate::c8y_auth_method::C8yAuthMethod;
 use crate::cert::certificate_common_name;
 use crate::cloud_type::CloudType;
 use crate::connect_url::ConnectUrl;
+use crate::host_port::HostPort;
+use crate::host_port::HTTPS_PORT;
+use crate::host_port::MQTT_TLS_PORT;
 use crate::mqtt_payload_limit::MqttPayloadLimit;
 use crate::seconds::SecondsOrHumanTime;
 use crate::software_management_api_flag::SoftwareManagementApiFlag;
@@ -307,5 +310,21 @@ tedge_config_engine_macro::define_config! {
             #[tedge_config(example = "123456", example = "my-pin")]
             key_pin: String,
         },
+
+        /// HTTP Endpoint for the Cumulocity tenant, with optional port.
+        #[tedge_config(
+            example = "http.your-tenant.cumulocity.com:1234",
+            default(from_optional_key = "url"),
+            exposable
+        )]
+        http: HostPort<HTTPS_PORT>,
+
+        /// MQTT Endpoint for the Cumulocity tenant, with optional port.
+        #[tedge_config(
+            example = "mqtt.your-tenant.cumulocity.com:1234",
+            default(from_optional_key = "url"),
+            exposable
+        )]
+        mqtt: HostPort<MQTT_TLS_PORT>,
     }
 }

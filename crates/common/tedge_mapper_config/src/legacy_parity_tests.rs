@@ -151,6 +151,7 @@ async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
 #[case::mqtt_service("[mqtt_service]\nenabled = true\ntopics = [\"incoming/topic\"]")]
 #[case::device_paths("[device]\nkey_path = \"/tmp/key.pem\"\ncert_path = \"/tmp/cert.pem\"\ncsr_path = \"/tmp/x.csr\"")]
 #[case::device_pkcs11("[device]\nkey_uri = \"pkcs11:token=t\"\nkey_pin = \"1234\"")]
+#[case::http_and_mqtt("http = \"http.example.com:1234\"\nmqtt = \"mqtt.example.com\"")]
 #[tokio::test]
 async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
     let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
@@ -263,6 +264,47 @@ async fn explicit_c8y_device_id_beats_the_certificate_common_name_unlike_tedge_c
         read_legacy(&dir, &keys).await["c8y.device.id"].as_deref(),
         Some("from-cert")
     );
+}
+
+#[rstest]
+#[case::http("http", "example.cumulocity.com:443")]
+#[case::mqtt("mqtt", "example.cumulocity.com:8883")]
+#[tokio::test]
+async fn c8y_endpoints_default_to_the_url_with_their_own_port(
+    #[case] key: &str,
+    #[case] expected: &str,
+) {
+    let dir = config_dir_with_c8y_mapper("url = \"example.cumulocity.com\"\n");
+
+    let fed = federated_config(&dir).await;
+
+    assert_eq!(
+        fed.read(&format!("mappers.c8y.{key}")).unwrap().as_deref(),
+        Some(expected)
+    );
+}
+
+#[rstest]
+fn host_port_accepts_same_values_as_tedge_config_host_port(
+    #[values(
+        "example.com",
+        "example.com:1234",
+        "127.0.0.1",
+        "[::1]:8080",
+        "example.com:8080:443",
+        ":8080",
+        "example.com:port",
+        ""
+    )]
+    value: &str,
+) {
+    use tedge_config::models::HostPort as Theirs;
+
+    let ours = crate::HostPort::<443>::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = Theirs::<443>::from_str(value).ok().map(|v| v.to_string());
+    assert_eq!(ours, theirs);
 }
 
 #[rstest]

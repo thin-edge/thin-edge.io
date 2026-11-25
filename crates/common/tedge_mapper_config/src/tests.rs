@@ -631,17 +631,19 @@ async fn nested_keys_are_written_as_table_sections() {
 }
 
 #[rstest]
-#[case::cloud_type("cloud_type", "c8y", "az")]
-#[case::tls_enable("bridge.tls.enable", "false", "true")]
+#[case::cloud_type("tb", "cloud_type", "c8y", "az")]
+#[case::tls_enable("tb", "bridge.tls.enable", "false", "true")]
+#[case::host_and_port("c8y", "http", "b.example.com:443", "a.example.com:443")]
 #[tokio::test]
 async fn single_value_keys_are_replaced_by_add_and_cleared_only_by_removing_their_value(
+    #[case] mapper: &str,
     #[case] key: &str,
     #[case] value: &str,
     #[case] other_value: &str,
 ) {
-    let dir = config_dir_with_mapper("tb", "");
+    let dir = config_dir_with_mapper(mapper, "");
     let mut fed = load_without_env(&dir).await;
-    let key = format!("mappers.tb.{key}");
+    let key = format!("mappers.{mapper}.{key}");
 
     fed.mutate(&key, Action::Add(other_value.into()))
         .await
