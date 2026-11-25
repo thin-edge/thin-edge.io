@@ -6046,6 +6046,7 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
+ "url",
 ]
 
 [[package]]

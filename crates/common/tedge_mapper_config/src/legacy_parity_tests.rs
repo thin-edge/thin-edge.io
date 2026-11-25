@@ -9,12 +9,13 @@ use tedge_config::tedge_toml::READABLE_KEYS;
 use tedge_config::TEdgeConfig;
 use tedge_config_engine::federated::FederatedConfig;
 use tedge_config_engine::ConfigManager;
+use tedge_config_engine::ConfigSchema;
 use tedge_config_engine::EnvOverrides;
 use tedge_test_utils::fs::TempTedgeDir;
 use tedge_utils::paths::TedgePaths;
 
+use crate::c8y::C8yMapperConfig;
 use crate::root::RootConfig;
-use crate::root::RootConfigDto;
 
 #[test]
 fn root_device_table_has_the_same_keys_as_tedge_config() {
@@ -82,6 +83,50 @@ async fn explicit_device_id_beats_the_certificate_common_name_unlike_tedge_confi
     );
 }
 
+#[test]
+fn every_c8y_key_but_cloud_type_is_a_tedge_config_c8y_key() {
+    let legacy = legacy_docs("c8y.");
+    let missing: Vec<_> = c8y_docs()
+        .into_keys()
+        .filter(|key| key != "c8y.cloud_type" && !legacy.contains_key(key))
+        .collect();
+
+    assert!(missing.is_empty(), "not tedge_config keys: {missing:?}");
+}
+
+#[test]
+fn c8y_keys_have_the_same_docs_and_examples_as_tedge_config() {
+    let legacy = legacy_docs("c8y.");
+    for (key, docs) in c8y_docs() {
+        if key == "c8y.cloud_type" {
+            continue;
+        }
+        assert_eq!(Some(&docs), legacy.get(&key), "docs of {key}");
+    }
+}
+
+#[tokio::test]
+async fn c8y_keys_have_the_same_defaults_as_tedge_config() {
+    let dir = config_dir_with_c8y_mapper("");
+
+    assert_eq!(read_c8y(&dir).await, read_legacy(&dir, &c8y_keys()).await);
+}
+
+#[rstest]
+#[case::url("url = \"example.cumulocity.com\"")]
+#[case::basic_auth("auth_method = \"basic\"")]
+#[case::auto_auth("auth_method = \"auto\"")]
+#[case::root_cert_path("root_cert_path = \"/etc/tedge/c8y-root.pem\"")]
+#[case::topics_as_array("topics = [\"te/+/+/+/+/m/+\", \"te/+/+/+/+/e/+\"]")]
+#[case::topics_with_empty_items("topics = \"te/+/+/+/+/m/+,, te/+/+/+/+/e/+,\"")]
+#[case::topics_as_comma_separated_string("topics = \"te/+/+/+/+/m/+, te/+/+/+/+/e/+\"")]
+#[tokio::test]
+async fn c8y_values_in_the_mapper_file_read_the_same_as_tedge_config(#[case] mapper_toml: &str) {
+    let dir = config_dir_with_c8y_mapper(&format!("{mapper_toml}\n"));
+
+    assert_eq!(read_c8y(&dir).await, read_legacy(&dir, &c8y_keys()).await);
+}
+
 #[rstest]
 fn absolute_path_accepts_same_values_as_tedge_config_absolute_path(
     #[values("/etc/tedge", "/etc/../tmp/./x", "relative/path", "", "/")] value: &str,
@@ -101,6 +146,63 @@ fn cryptoki_accepts_same_values_as_tedge_config_cryptoki(
 ) {
     let ours = crate::Cryptoki::from_str(value).ok().map(|v| v.to_string());
     let theirs = tedge_config::models::Cryptoki::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[rstest]
+fn connect_url_accepts_same_values_as_tedge_config_connect_url(
+    #[values(
+        "example.cumulocity.com",
+        "example.cumulocity.com:8443",
+        "https://example.cumulocity.com",
+        "127.0.0.1",
+        "",
+        "has space"
+    )]
+    value: &str,
+) {
+    let ours = crate::ConnectUrl::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = tedge_config::models::ConnectUrl::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[rstest]
+fn templates_set_accepts_same_values_as_tedge_config_templates_set(
+    #[values("a", "a,b", "a, b", "", ",", "a,,b")] value: &str,
+) {
+    let ours = crate::TemplatesSet::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = tedge_config::models::TemplatesSet::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    assert_eq!(ours, theirs);
+}
+
+#[rstest]
+fn templates_set_reads_back_the_list_it_shows(
+    #[values(vec![], vec!["a"], vec!["a", "b"], vec!["te/+/+/+/+/m/+", "with \"quote\""])]
+    items: Vec<&str>,
+) {
+    let set = crate::TemplatesSet(items.iter().map(|s| s.to_string()).collect());
+
+    assert_eq!(crate::TemplatesSet::from_str(&set.to_string()), Ok(set));
+}
+
+#[rstest]
+fn c8y_auth_method_accepts_same_values_as_tedge_config_auth_method(
+    #[values("certificate", "basic", "password", "auto", "", "Basic", "token")] value: &str,
+) {
+    let ours = crate::C8yAuthMethod::from_str(value)
+        .ok()
+        .map(|v| v.to_string());
+    let theirs = tedge_config::models::auth_method::AuthMethod::from_str(value)
         .ok()
         .map(|v| v.to_string());
     assert_eq!(ours, theirs);
@@ -128,13 +230,27 @@ fn legacy_docs(prefix: &str) -> BTreeMap<String, (String, Vec<String>)> {
 }
 
 fn root_docs(prefix: &str) -> BTreeMap<String, (String, Vec<String>)> {
-    ConfigManager::from_schema::<RootConfig>(std::path::Path::new("/etc/tedge"))
-        .key_entries::<RootConfigDto>()
+    schema_docs::<RootConfig>("")
         .into_iter()
-        .filter(|e| e.key.starts_with(prefix))
+        .filter(|(key, _)| key.starts_with(prefix))
+        .collect()
+}
+
+/// Docs and examples of every c8y schema key, named as tedge_config names it
+fn c8y_docs() -> BTreeMap<String, (String, Vec<String>)> {
+    schema_docs::<C8yMapperConfig>("c8y.")
+}
+
+fn schema_docs<S: ConfigSchema>(key_prefix: &str) -> BTreeMap<String, (String, Vec<String>)> {
+    ConfigManager::from_schema::<S>(std::path::Path::new("/etc/tedge"))
+        .key_entries::<S::Dto>()
+        .into_iter()
         .map(|e| {
             let examples = e.examples.iter().map(|v| v.to_string()).collect();
-            (e.key, (normalise(&e.doc.join("\n")), examples))
+            (
+                format!("{key_prefix}{}", e.key),
+                (normalise(&e.doc.join("\n")), examples),
+            )
         })
         .collect()
 }
@@ -181,4 +297,33 @@ fn write_certificate(dir: &TempTedgeDir, path: &str, common_name: &str) {
     let path = dir.path().join(path);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, cert.certificate_pem_string().unwrap()).unwrap();
+}
+
+fn c8y_keys() -> Vec<String> {
+    c8y_docs()
+        .into_keys()
+        .filter(|key| key != "c8y.cloud_type")
+        .collect()
+}
+
+/// Reads every c8y key through `mappers.c8y.`, named as tedge_config names it
+async fn read_c8y(dir: &TempTedgeDir) -> BTreeMap<String, Option<String>> {
+    let fed = federated_config(dir).await;
+    c8y_keys()
+        .into_iter()
+        .map(|key| {
+            let value = fed.read(&format!("mappers.{key}")).ok().flatten();
+            (key, value)
+        })
+        .collect()
+}
+
+fn config_dir_with_c8y_mapper(mapper_toml: &str) -> TempTedgeDir {
+    let dir = TempTedgeDir::new();
+    dir.file("tedge.toml");
+    dir.dir("mappers")
+        .dir("c8y")
+        .file("mapper.toml")
+        .with_raw_content(mapper_toml);
+    dir
 }

@@ -98,10 +98,10 @@ mod tests {
     use tedge_test_utils::fs::TempTedgeDir;
 
     #[rstest::rstest]
-    #[case::unknown_key("mappers.c8y.prod.url", "c8y.example.com:8883")]
+    #[case::unknown_key("mappers.c8y.prod.url", "c8y.example.com")]
     #[case::unknown_mapper("mappers.thingsboard.url", "tb.example.com:8883")]
-    #[case::invalid_value("mappers.c8y.bridge.tls.enable", "on")]
-    #[case::invalid_profile_value("mappers.c8y.profiles.prod.bridge.tls.enable", "on")]
+    #[case::invalid_value("mappers.c8y.auth_method", "token")]
+    #[case::invalid_profile_value("mappers.c8y.profiles.prod.auth_method", "token")]
     #[tokio::test]
     async fn a_rejected_write_creates_no_mapper_directory(#[case] key: &str, #[case] value: &str) {
         let dir = TempTedgeDir::new();
@@ -123,8 +123,8 @@ mod tests {
 
         mutate_mapper_key(
             &config_root(&dir),
-            "mappers.c8y.bridge.tls.enable",
-            Action::Set("on".into()),
+            "mappers.c8y.auth_method",
+            Action::Set("token".into()),
         )
         .await
         .unwrap_err();
@@ -139,7 +139,7 @@ mod tests {
         mutate_mapper_key(
             &config_root(&dir),
             "mappers.c8y.url",
-            Action::Set("c8y.example.com:8883".into()),
+            Action::Set("c8y.example.com".into()),
         )
         .await
         .unwrap();
@@ -154,7 +154,7 @@ mod tests {
         mutate_mapper_key(
             &config_root(&dir),
             "mappers.c8y.profiles.prod.url",
-            Action::Set("c8y.example.com:8883".into()),
+            Action::Set("c8y.example.com".into()),
         )
         .await
         .unwrap();

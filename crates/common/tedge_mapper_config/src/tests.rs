@@ -104,7 +104,7 @@ async fn setting_cloud_type_leaves_other_keys_unchanged() {
     let mut fed = load_without_env(&dir).await;
     let keys_before: Vec<String> = fed.all_entries().into_iter().map(|e| e.key).collect();
 
-    fed.mutate("mappers.thingsboard.cloud_type", Action::Set("c8y".into()))
+    fed.mutate("mappers.thingsboard.cloud_type", Action::Set("az".into()))
         .await
         .unwrap();
 
@@ -258,7 +258,7 @@ async fn profile_keys_are_read_and_written_under_profiles() {
 
     fed.mutate(
         "mappers.c8y.profiles.prod.url",
-        Action::Set("prod.example.com:8883".into()),
+        Action::Set("prod.example.com".into()),
     )
     .await
     .unwrap();
@@ -267,29 +267,29 @@ async fn profile_keys_are_read_and_written_under_profiles() {
         fed.read("mappers.c8y.profiles.prod.url")
             .unwrap()
             .as_deref(),
-        Some("prod.example.com:8883")
+        Some("prod.example.com")
     );
     let file: toml::Table = read_mapper_file(&dir, "c8y.prod").parse().unwrap();
-    assert_eq!(file["url"].as_str(), Some("prod.example.com:8883"));
+    assert_eq!(file["url"].as_str(), Some("prod.example.com"));
 }
 
 #[tokio::test]
 async fn group_key_reaches_base_mapper_when_a_profile_is_named_after_the_group() {
-    let dir = config_dir_with_mapper("c8y", "");
-    add_mapper(&dir, "c8y.bridge", "url = \"bridge.example.com:8883\"\n");
+    let dir = config_dir_with_mapper("az", "");
+    add_mapper(&dir, "az.bridge", "url = \"bridge.example.com:8883\"\n");
     let mut fed = load_without_env(&dir).await;
 
     fed.mutate(
-        "mappers.c8y.bridge.clean_session",
+        "mappers.az.bridge.clean_session",
         Action::Set("true".into()),
     )
     .await
     .unwrap();
 
-    let file: toml::Table = read_mapper_file(&dir, "c8y").parse().unwrap();
+    let file: toml::Table = read_mapper_file(&dir, "az").parse().unwrap();
     assert_eq!(file["bridge"]["clean_session"].as_bool(), Some(true));
     assert_eq!(
-        read_mapper_file(&dir, "c8y.bridge"),
+        read_mapper_file(&dir, "az.bridge"),
         "url = \"bridge.example.com:8883\"\n"
     );
 }
@@ -303,7 +303,7 @@ async fn profile_key_without_profiles_is_an_unknown_key_of_the_base_mapper() {
     let err = fed
         .mutate(
             "mappers.c8y.prod.url",
-            Action::Set("prod.example.com:8883".into()),
+            Action::Set("prod.example.com".into()),
         )
         .await
         .unwrap_err();
@@ -337,10 +337,10 @@ fn mapper_schema_has_no_profiles_group() {
 
 #[tokio::test]
 async fn profile_keys_are_overridden_by_env_variables_named_after_the_key() {
-    let dir = config_dir_with_mapper("c8y.prod", "url = \"file.example.com:8883\"\n");
+    let dir = config_dir_with_mapper("c8y.prod", "url = \"file.example.com\"\n");
     let env = EnvOverrides::from_pairs([(
         "TEDGE_MAPPERS_C8Y_PROFILES_PROD_URL".into(),
-        "env.example.com:8883".into(),
+        "env.example.com".into(),
     )]);
 
     let fed = crate::schema::load_federated_config_with_env(&config_root(&dir), &env)
@@ -351,7 +351,7 @@ async fn profile_keys_are_overridden_by_env_variables_named_after_the_key() {
         fed.read("mappers.c8y.profiles.prod.url")
             .unwrap()
             .as_deref(),
-        Some("env.example.com:8883")
+        Some("env.example.com")
     );
 }
 
@@ -377,7 +377,7 @@ async fn custom_mapper_keys_are_overridden_by_env_variables() {
 async fn mapper_directories_with_the_same_env_variable_name_fail_every_read_and_write() {
     let dir = config_dir_with_mapper("thingsboard.eu", "url = \"eu.example.com:8883\"\n");
     add_mapper(&dir, "thingsboard-eu", "url = \"eu.example.com:8883\"\n");
-    add_mapper(&dir, "c8y", "url = \"c8y.example.com:8883\"\n");
+    add_mapper(&dir, "c8y", "url = \"c8y.example.com\"\n");
 
     let mut fed = crate::schema::load_federated_config_with_env(
         &config_root(&dir),
@@ -404,31 +404,34 @@ async fn mapper_directories_with_the_same_env_variable_name_fail_every_read_and_
     }
     assert_eq!(
         fed.read("mappers.c8y.url").unwrap().as_deref(),
-        Some("c8y.example.com:8883")
+        Some("c8y.example.com")
     );
 }
 
 #[tokio::test]
 async fn set_is_refused_when_mapper_file_has_unknown_key() {
-    let original = "url = \"a.example.com:8883\"\n\n[smartrest]\ntemplates = [\"x\"]\n";
-    let dir = config_dir_with_mapper("c8y", original);
+    let original = "url = \"a.example.com:8883\"\n\n[unknown]\nkey = [\"x\"]\n";
+    let dir = config_dir_with_mapper("thingsboard", original);
     let mut fed = load_without_env(&dir).await;
 
     let err = fed
-        .mutate("mappers.c8y.url", Action::Set("b.example.com:8883".into()))
+        .mutate(
+            "mappers.thingsboard.url",
+            Action::Set("b.example.com:8883".into()),
+        )
         .await
         .unwrap_err();
 
     let msg = err.to_string();
     assert!(
-        msg.contains("mappers/c8y/mapper.toml"),
+        msg.contains("mappers/thingsboard/mapper.toml"),
         "error should name the file: {msg}"
     );
     assert!(
-        msg.contains("smartrest.templates"),
+        msg.contains("unknown.key"),
         "error should name the unknown key: {msg}"
     );
-    assert_eq!(read_mapper_file(&dir, "c8y"), original);
+    assert_eq!(read_mapper_file(&dir, "thingsboard"), original);
 }
 
 #[tokio::test]
@@ -456,13 +459,13 @@ async fn set_is_refused_when_a_known_key_holds_a_table() {
 #[tokio::test]
 async fn get_still_works_when_mapper_file_has_unknown_key() {
     let dir = config_dir_with_mapper(
-        "c8y",
-        "url = \"a.example.com:8883\"\n\n[smartrest]\ntemplates = [\"x\"]\n",
+        "thingsboard",
+        "url = \"a.example.com:8883\"\n\n[unknown]\nkey = [\"x\"]\n",
     );
     let fed = load_without_env(&dir).await;
 
     assert_eq!(
-        fed.read("mappers.c8y.url").unwrap().as_deref(),
+        fed.read("mappers.thingsboard.url").unwrap().as_deref(),
         Some("a.example.com:8883")
     );
 }

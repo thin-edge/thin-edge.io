@@ -10,6 +10,7 @@ use tedge_config_engine::EnvOverrides;
 use tedge_config_engine::KeyEntry;
 use tedge_utils::paths::ManagedFile;
 
+use crate::c8y::C8yMapperConfig;
 use crate::schema::MapperConfig;
 use crate::CloudType;
 
@@ -57,9 +58,9 @@ impl CloudSchema {
         env: &EnvOverrides,
     ) -> Box<dyn ConfigOps> {
         match self {
-            // The cloud schemas land one at a time; until then every cloud
-            // reads its file with the generic schema
-            Self::Generic | Self::C8y | Self::Az | Self::Aws => {
+            Self::C8y => load::<C8yMapperConfig>(config_dir, file, env_prefix, env).await,
+            // az and aws read with the generic schema until their own land
+            Self::Generic | Self::Az | Self::Aws => {
                 load::<MapperConfig>(config_dir, file, env_prefix, env).await
             }
         }
@@ -68,19 +69,16 @@ impl CloudSchema {
     /// Starts an empty source under this schema, for a file not written yet
     pub fn empty(self, config_dir: &Utf8Path, file: ManagedFile) -> Box<dyn ConfigOps> {
         match self {
-            Self::Generic | Self::C8y | Self::Az | Self::Aws => Box::new(TypedConfigOps::<
-                <MapperConfig as ConfigSchema>::Dto,
-            >::empty(
-                manager::<MapperConfig>(config_dir),
-                file,
-            )),
+            Self::C8y => empty::<C8yMapperConfig>(config_dir, file),
+            Self::Generic | Self::Az | Self::Aws => empty::<MapperConfig>(config_dir, file),
         }
     }
 
     /// Lists the keys of this schema with their docs and examples
     pub fn entries(self, config_dir: &Utf8Path) -> Vec<KeyEntry> {
         match self {
-            Self::Generic | Self::C8y | Self::Az | Self::Aws => entries::<MapperConfig>(config_dir),
+            Self::C8y => entries::<C8yMapperConfig>(config_dir),
+            Self::Generic | Self::Az | Self::Aws => entries::<MapperConfig>(config_dir),
         }
     }
 }
@@ -114,6 +112,17 @@ where
     let mut ops = TypedConfigOps::<S::Dto>::load(manager::<S>(config_dir), file).await;
     ops.apply_env_with_prefix(env_prefix, env);
     Box::new(ops)
+}
+
+fn empty<S>(config_dir: &Utf8Path, file: ManagedFile) -> Box<dyn ConfigOps>
+where
+    S: ConfigSchema,
+    S::Dto: for<'a> Facet<'a> + Default + Send + Sync + 'static,
+{
+    Box::new(TypedConfigOps::<S::Dto>::empty(
+        manager::<S>(config_dir),
+        file,
+    ))
 }
 
 fn entries<S: ConfigSchema>(config_dir: &Utf8Path) -> Vec<KeyEntry> {
