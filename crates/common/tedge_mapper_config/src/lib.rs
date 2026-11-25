@@ -3,6 +3,7 @@
 mod absolute_path;
 mod auth_method;
 mod cert;
+mod cloud_schema;
 mod cloud_type;
 mod cryptoki;
 mod root;
@@ -13,6 +14,7 @@ mod tls_enable;
 pub use absolute_path::AbsolutePath;
 pub use auth_method::AuthMethod;
 pub use cert::certificate_common_name;
+pub use cloud_schema::CloudSchema;
 pub use cloud_type::CloudType;
 pub use cryptoki::Cryptoki;
 pub use root::RootConfig;

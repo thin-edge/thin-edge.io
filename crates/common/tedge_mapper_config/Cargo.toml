@@ -18,6 +18,7 @@ path-clean = { workspace = true }
 tedge_config_engine = { workspace = true }
 tedge_config_engine-macro = { workspace = true }
 tedge_utils = { workspace = true }
+toml = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]

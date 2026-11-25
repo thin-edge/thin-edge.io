@@ -13,6 +13,7 @@ use tedge_config_engine::RootResolver;
 use tedge_utils::paths::ManagedFile;
 use tedge_utils::paths::TedgePaths;
 
+use crate::cloud_schema::CloudSchema;
 use crate::root::RootConfig;
 use crate::root::RootConfigDto;
 
@@ -91,9 +92,9 @@ pub fn is_builtin_mapper_name(name: &str) -> bool {
 
 /// Generates completion entries for a built-in mapper that has no directory yet
 pub fn builtin_mapper_entries(config_dir: &Utf8Path, name: &str) -> Vec<KeyEntry> {
-    let mgr = ConfigManager::from_schema::<MapperConfig>(config_dir.as_std_path());
     let prefix = format!("mappers.{name}.");
-    mgr.key_entries::<MapperConfigDto>()
+    CloudSchema::from_name(name)
+        .entries(config_dir)
         .into_iter()
         .map(|e| KeyEntry {
             key: format!("{prefix}{}", e.key),
@@ -211,7 +212,8 @@ pub(crate) async fn load_federated_config_with_env(
         ..
     } in &mappers
     {
-        let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(config_dir.as_std_path());
+        let file = mapper_file(config_root, name);
+        let schema = CloudSchema::resolve(name, &file).await;
         let owners = &env_prefix_owners[env_prefix.as_str()];
         if let [first, second, ..] = owners.as_slice() {
             // Either directory could be the one the variables are meant for,
@@ -220,16 +222,14 @@ pub(crate) async fn load_federated_config_with_env(
                 first: first.to_string(),
                 second: second.to_string(),
                 prefix: env_prefix.clone(),
-                manager: mapper_mgr,
+                schema,
+                config_dir: config_dir.to_owned(),
             };
             fed.mount(mount_prefix, Box::new(colliding))?;
             continue;
         }
-        let mut mapper_ops =
-            TypedConfigOps::<MapperConfigDto>::load(mapper_mgr, mapper_file(config_root, name))
-                .await;
-        mapper_ops.apply_env_with_prefix(env_prefix, env);
-        fed.mount(mount_prefix, Box::new(mapper_ops))?;
+        let mapper_ops = schema.load(config_dir, file, env_prefix, env).await;
+        fed.mount(mount_prefix, mapper_ops)?;
     }
 
     Ok(fed)
@@ -249,9 +249,9 @@ pub fn mount_builtin_mapper(
     if fed.mount_prefixes().contains(&prefix) {
         return Ok(());
     }
-    let mgr = ConfigManager::from_schema::<MapperConfig>(config_root.root().as_std_path());
-    let ops = TypedConfigOps::<MapperConfigDto>::empty(mgr, mapper_file(config_root, &name));
-    fed.mount(&prefix, Box::new(ops))
+    let ops =
+        CloudSchema::from_name(&name).empty(config_root.root(), mapper_file(config_root, &name));
+    fed.mount(&prefix, ops)
 }
 
 fn mapper_file(config_root: &TedgePaths, name: &str) -> ManagedFile {
@@ -278,7 +278,8 @@ struct CollidingMapper {
     first: String,
     second: String,
     prefix: String,
-    manager: ConfigManager,
+    schema: CloudSchema,
+    config_dir: camino::Utf8PathBuf,
 }
 
 impl CollidingMapper {
@@ -302,7 +303,7 @@ impl ConfigOps for CollidingMapper {
     }
 
     fn entries(&self) -> Vec<KeyEntry> {
-        self.manager.key_entries::<MapperConfigDto>()
+        self.schema.entries(&self.config_dir)
     }
 
     fn root_dependencies(&self) -> Vec<RootDependency> {

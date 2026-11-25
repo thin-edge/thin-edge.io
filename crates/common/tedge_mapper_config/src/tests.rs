@@ -13,6 +13,7 @@ use tedge_config_engine::ConfigError;
 use tedge_config_engine::ConfigManager;
 use tedge_config_engine::EnvOverrides;
 
+use crate::cloud_schema::CloudSchema;
 use crate::root::RootConfig;
 use crate::root::RootConfigDto;
 use crate::schema::mapper::MapperConfig;
@@ -685,6 +686,29 @@ fn builtin_mapper_without_a_directory_lists_its_keys_under_its_name() {
         keys.iter().all(|k| k.starts_with("mappers.c8y.")),
         "every key should be under mappers.c8y.: {keys:?}"
     );
+}
+
+#[rstest]
+#[case::cloud_type_in_file("thingsboard", "cloud_type = \"c8y\"\n", CloudSchema::C8y)]
+#[case::cloud_type_beats_name("c8y", "cloud_type = \"az\"\n", CloudSchema::Az)]
+#[case::builtin_name("aws", "", CloudSchema::Aws)]
+#[case::builtin_profile_name("c8y.prod", "", CloudSchema::C8y)]
+#[case::builtin_profile_name_with_a_dot("c8y.prod.eu", "", CloudSchema::C8y)]
+#[case::custom_name("thingsboard", "", CloudSchema::Generic)]
+#[case::name_resembling_a_cloud("c8yy", "", CloudSchema::Generic)]
+#[case::builtin_name_with_an_empty_profile("c8y.", "", CloudSchema::Generic)]
+#[case::unreadable_file_uses_name("c8y", "[broken\n", CloudSchema::C8y)]
+#[case::unknown_cloud_type_uses_name("c8y", "cloud_type = \"other\"\n", CloudSchema::C8y)]
+#[tokio::test]
+async fn mapper_schema_is_chosen_by_cloud_type_then_by_directory_name(
+    #[case] name: &str,
+    #[case] mapper_toml: &str,
+    #[case] expected: CloudSchema,
+) {
+    let dir = config_dir_with_mapper(name, mapper_toml);
+    let file = managed_file(&dir, &format!("mappers/{name}/mapper.toml"));
+
+    assert_eq!(CloudSchema::resolve(name, &file).await, expected);
 }
 
 fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> TempTedgeDir {
