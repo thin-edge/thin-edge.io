@@ -34,6 +34,18 @@ Run tedge service for service plugin
     # Unsupported action should return exit code 2
     Execute Command    tedge service invalid name --type dummy    exp_exit_code=2
 
+Run tedge service for the configured service type
+    [Template]    Restart Sleeper With Configured Service Type
+    systemd
+    Systemd
+
+Run tedge service for a service plugin with the same name as the default type
+    Execute Command    rm -f /tmp/dummy-plugin.log
+    Execute Command    cp ${PLUGINS_DIR}/dummy ${PLUGINS_DIR}/service
+    Execute Command    tedge service restart sleeper
+    Execute Command    grep "restart sleeper" /tmp/dummy-plugin.log
+    [Teardown]    Execute Command    rm -f ${PLUGINS_DIR}/service
+
 Run tedge service for a service type with no plugin
     Execute Command    tedge service restart name --type no_such_backend    exp_exit_code=2
 
@@ -82,6 +94,15 @@ tedge service forwards stdout and stderr
 
 
 *** Keywords ***
+Restart Sleeper With Configured Service Type
+    [Arguments]    ${service_type}
+    Execute Command    tedge config set service.type ${service_type}
+    ${before}=    Get Service PID    sleeper
+    Execute Command    tedge service restart sleeper --type ${service_type}
+    ${after}=    Get Service PID    sleeper
+    Should Not Be Equal    ${before}    ${after}
+    [Teardown]    Execute Command    tedge config unset service.type
+
 Custom Suite Setup
     Setup    register=${False}
     Transfer To Device    ${CURDIR}/system.toml    /etc/tedge/system.toml

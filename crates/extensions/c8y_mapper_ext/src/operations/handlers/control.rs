@@ -427,6 +427,67 @@ mod tests {
     }
 
     #[test_case(
+        json!({"@type": "service"}),
+        json!({"command": "restart", "serviceName": "collectd", "serviceType": "Systemd"});
+        "from the operation"
+    )]
+    #[test_case(
+        json!({"@type": "service", "type": "Systemd"}),
+        json!({"command": "restart", "serviceName": "collectd"});
+        "registered"
+    )]
+    #[tokio::test]
+    async fn a_service_type_equal_to_the_configured_service_type_is_not_checked_as_a_plugin_name(
+        registration: serde_json::Value,
+        request: serde_json::Value,
+    ) {
+        let tmp_dir = TempTedgeDir::new();
+        let mut config = c8y_converter_config(&tmp_dir);
+        config.service = TEdgeConfig::load_toml_str("service.type = \"Systemd\"")
+            .service
+            .clone();
+        let (mut converter, _http_proxy) = create_c8y_converter_from_config(config);
+        converter
+            .process_entity_metadata_message(&MqttMessage::new(
+                &Topic::new_unchecked("te/device/main/service/collectd"),
+                registration.to_string(),
+            ))
+            .await
+            .unwrap();
+        converter
+            .convert(&MqttMessage::new(
+                &Topic::new_unchecked(CONTROL_CAPABILITY_TOPIC),
+                r#"{"actions":["restart"]}"#,
+            ))
+            .await;
+
+        assert_messages_matching(
+            &converter
+                .convert(&MqttMessage::new(
+                    &Topic::new_unchecked("c8y/devicecontrol/notifications"),
+                    json!({
+                        "id": OPERATION_ID,
+                        "status": "PENDING",
+                        "c8y_ServiceCommand": request,
+                        "externalSource": {"externalId": SERVICE_XID, "type": "c8y_Serial"},
+                    })
+                    .to_string(),
+                ))
+                .await,
+            [(
+                CONTROL_CMD_TOPIC,
+                json!({
+                    "status": "init",
+                    "action": "restart",
+                    "serviceName": "collectd",
+                    "serviceType": "Systemd",
+                })
+                .into(),
+            )],
+        );
+    }
+
+    #[test_case(
         json!({"@type": "service", "name": "collectd-daemon"}),
         json!({"command": "restart", "serviceName": "collectd"}),
         "collectd";
@@ -603,6 +664,12 @@ mod tests {
         json!({"command": "restart", "serviceName": "collectd", "serviceType": "../../bin/sh"}),
         "Invalid service type";
         "a service type naming no plugin file"
+    )]
+    #[test_case(
+        json!({"@type": "service"}),
+        json!({"command": "restart", "serviceName": "collectd", "serviceType": "Systemd"}),
+        "Invalid service type";
+        "an uppercase service type other than the configured service type"
     )]
     #[test_case(
         json!({"@type": "service", "type": "../../bin/sh"}),

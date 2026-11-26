@@ -173,10 +173,6 @@ impl ServiceType {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-
-    pub fn is_default(&self) -> bool {
-        self.0 == DEFAULT_SERVICE_TYPE
-    }
 }
 
 impl fmt::Display for ServiceType {

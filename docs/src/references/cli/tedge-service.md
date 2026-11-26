@@ -15,7 +15,7 @@ Arguments:
   <ACTION>
           The action to run on the service, e.g. start, stop or restart
           
-          Which actions are supported is decided depending on the service type. Init system for the default service type, a service plugin for any other type.
+          Which actions are supported is decided depending on the service type. The type is handled by the init system or by a service plugin.
 
   <SERVICE_NAME>
           The name of the service to act on
@@ -27,7 +27,7 @@ Options:
       --type <SERVICE_TYPE>
           The type of the service
           
-          The default type is handled by the init system configured in system.toml. Any other type is handled by the service plugin.
+          The type `service` and the type set in `service.type` are handled by the init system configured in system.toml. Any other type is handled by the service plugin. A service plugin with the same name as one of these two types is used instead of the init system.
           
           [default: service]
 

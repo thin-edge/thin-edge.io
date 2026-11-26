@@ -243,12 +243,7 @@ pub fn service_monitor_client_config(
     c8y_config: &mapper_config::C8yMapperConfig,
 ) -> Result<Config, anyhow::Error> {
     let main_device_xid: EntityExternalId = c8y_config.device.id()?.into();
-    let service_type = &tedge_config.service.ty;
-    let service_type = if service_type.is_empty() {
-        "service".to_string()
-    } else {
-        service_type.to_string()
-    };
+    let service_type = tedge_config.service.type_or_default();
 
     // FIXME: this will not work if `mqtt.device_topic_id` is not in default scheme
 
@@ -267,7 +262,7 @@ pub fn service_monitor_client_config(
     let last_will_message = c8y_api::smartrest::inventory::service_creation_message(
         mapper_service_external_id.as_ref(),
         c8y_mapper_name,
-        service_type.as_str(),
+        service_type,
         "down",
         None,
         main_device_xid.as_ref(),
@@ -327,12 +322,7 @@ async fn mqtt_bridge_config(
     }
 
     let main_device_xid: EntityExternalId = c8y_config.device.id()?.into();
-    let service_type = &tedge_config.service.ty;
-    let service_type = if service_type.is_empty() {
-        "service".to_string()
-    } else {
-        service_type.to_string()
-    };
+    let service_type = tedge_config.service.type_or_default();
 
     // FIXME: this will not work if `mqtt.device_topic_id` is not in default scheme
 
@@ -350,14 +340,14 @@ async fn mqtt_bridge_config(
     let last_will_message_mapper = c8y_api::smartrest::inventory::service_creation_message_payload(
         mapper_service_external_id.as_ref(),
         c8y_mapper_name,
-        service_type.as_str(),
+        service_type,
         "down",
     )?
     .into_inner();
     let last_will_message_bridge = c8y_api::smartrest::inventory::service_creation_message_payload(
         mapper_service_external_id.as_ref(),
         &c8y_mapper_config.bridge_service_name,
-        service_type.as_str(),
+        service_type,
         "down",
     )?
     .into_inner();
@@ -365,7 +355,7 @@ async fn mqtt_bridge_config(
     let reconnect_message_mapper = c8y_api::smartrest::inventory::service_creation_message_payload(
         mapper_service_external_id.as_ref(),
         c8y_mapper_name,
-        service_type.as_str(),
+        service_type,
         "up",
     )?
     .into_inner();
