@@ -10,16 +10,21 @@ repository.workspace = true
 [dependencies]
 async-trait = { workspace = true }
 camino = { workspace = true }
+certificate = { workspace = true }
 facet = { workspace = true }
 facet-toml = { workspace = true }
 humantime = { workspace = true }
+path-clean = { workspace = true }
 tedge_config_engine = { workspace = true }
 tedge_config_engine-macro = { workspace = true }
 tedge_utils = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
+toml = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+doku = { workspace = true }
 rstest = { workspace = true }
 tedge_config = { workspace = true }
 tedge_test_utils = { workspace = true }

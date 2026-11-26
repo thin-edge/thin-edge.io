@@ -38,7 +38,8 @@ pub struct ConfigField {
     pub exposable: bool,
     rename: Option<String>,
     pub deprecated_key: Option<String>,
-    pub default: Option<FieldDefault>,
+    /// Where the value comes from when it is not set, tried in order
+    pub default: Vec<FieldDefault>,
     pub examples: Vec<String>,
     ident: syn::Ident,
     pub ty: syn::Type,
@@ -61,6 +62,63 @@ pub enum FieldDefault {
     FromConfigDir(String),
     FromRoot(String),
     FromKeyVia(FromKeyVia),
+}
+
+impl FieldDefault {
+    /// Whether this source always yields a value, so no source after it is
+    /// ever tried
+    pub(crate) fn is_infallible(&self) -> bool {
+        matches!(
+            self,
+            Self::Value(_)
+                | Self::Variable(_)
+                | Self::Function(_)
+                | Self::FromConfigDir(_)
+                | Self::FromKey(_)
+        )
+    }
+
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Value(_) => "value",
+            Self::Variable(_) => "variable",
+            Self::Function(_) => "function",
+            Self::FromKey(_) => "from_key",
+            Self::FromOptionalKey(_) => "from_optional_key",
+            Self::FromConfigDir(_) => "from_config_dir",
+            Self::FromRoot(_) => "from_root",
+            Self::FromKeyVia(_) => "from_key_via",
+        }
+    }
+}
+
+/// The sources listed in `default(...)`, in the order they are tried
+#[derive(Debug)]
+pub struct DefaultSources(Vec<FieldDefault>);
+
+impl FromMeta for DefaultSources {
+    fn from_list(items: &[darling::ast::NestedMeta]) -> darling::Result<Self> {
+        if items.is_empty() {
+            return Err(darling::Error::too_few_items(1));
+        }
+        let sources = items
+            .iter()
+            .map(|item| FieldDefault::from_list(std::slice::from_ref(item)))
+            .collect::<darling::Result<Vec<_>>>()?;
+        if let Some((pos, unreachable_after)) = sources
+            .iter()
+            .enumerate()
+            .find(|(i, source)| source.is_infallible() && *i + 1 < sources.len())
+        {
+            return Err(darling::Error::custom(format!(
+                "`{}` always gives a value, so the default sources after it are never used; \
+                 list it last",
+                unreachable_after.name()
+            ))
+            .with_span(&items[pos]));
+        }
+        Ok(Self(sources))
+    }
 }
 
 /// A default derived from another key's resolved value via a function
@@ -92,7 +150,7 @@ mod field_attributes {
         #[darling(default)]
         pub(super) deprecated_key: Option<String>,
         #[darling(default)]
-        pub(super) default: Option<FieldDefault>,
+        pub(super) default: Option<DefaultSources>,
         #[darling(multiple, rename = "example")]
         pub(super) examples: Vec<String>,
     }
@@ -169,7 +227,7 @@ impl Parse for FieldOrGroup {
                 exposable: options.exposable,
                 rename: options.rename,
                 deprecated_key: options.deprecated_key,
-                default: options.default,
+                default: options.default.map_or_else(Vec::new, |sources| sources.0),
                 examples: options.examples,
                 ident,
                 ty,
@@ -290,7 +348,9 @@ mod tests {
                 match &g.contents[0] {
                     FieldOrGroup::Field(f) => {
                         assert!(f.readonly);
-                        assert!(matches!(&f.default, Some(FieldDefault::Value(v)) if v == "1883"));
+                        assert!(
+                            matches!(f.default.as_slice(), [FieldDefault::Value(v)] if v == "1883")
+                        );
                     }
                     _ => panic!("expected field"),
                 }
@@ -467,7 +527,7 @@ mod tests {
                 match &g.contents[0] {
                     FieldOrGroup::Field(f) => {
                         assert!(
-                            matches!(&f.default, Some(FieldDefault::FromKey(k)) if k == "other.field")
+                            matches!(f.default.as_slice(), [FieldDefault::FromKey(k)] if k == "other.field")
                         );
                     }
                     _ => panic!("expected field"),
@@ -475,7 +535,7 @@ mod tests {
                 match &g.contents[1] {
                     FieldOrGroup::Field(f) => {
                         assert!(
-                            matches!(&f.default, Some(FieldDefault::FromConfigDir(p)) if p == "certs/cert.pem")
+                            matches!(f.default.as_slice(), [FieldDefault::FromConfigDir(p)] if p == "certs/cert.pem")
                         );
                     }
                     _ => panic!("expected field"),
@@ -483,7 +543,7 @@ mod tests {
                 match &g.contents[2] {
                     FieldOrGroup::Field(f) => {
                         assert!(
-                            matches!(&f.default, Some(FieldDefault::FromOptionalKey(k)) if k == "c8y.url")
+                            matches!(f.default.as_slice(), [FieldDefault::FromOptionalKey(k)] if k == "c8y.url")
                         );
                     }
                     _ => panic!("expected field"),
@@ -508,8 +568,8 @@ mod tests {
         );
         match &config.groups[0] {
             FieldOrGroup::Group(g) => match &g.contents[0] {
-                FieldOrGroup::Field(f) => match &f.default {
-                    Some(FieldDefault::FromKeyVia(via)) => {
+                FieldOrGroup::Field(f) => match f.default.as_slice() {
+                    [FieldDefault::FromKeyVia(via)] => {
                         assert_eq!(via.key, "device.cert_path");
                         assert!(via.function.is_ident("device_id_from_cert"));
                     }
@@ -519,6 +579,64 @@ mod tests {
             },
             _ => panic!("expected group"),
         }
+    }
+
+    #[test]
+    fn parse_default_sources_in_order() {
+        let config: Configuration = parse_quote!(Test {
+            #[tedge_config(default(
+                from_key_via(key = "cert_path", function = "common_name"),
+                from_root = "device.id",
+            ))]
+            id: String,
+        });
+        match &config.groups[0] {
+            FieldOrGroup::Field(f) => assert!(
+                matches!(
+                    f.default.as_slice(),
+                    [FieldDefault::FromKeyVia(_), FieldDefault::FromRoot(root)] if root == "device.id"
+                ),
+                "unexpected sources: {:?}",
+                f.default
+            ),
+            _ => panic!("expected field"),
+        }
+    }
+
+    #[test]
+    fn default_source_after_one_that_always_gives_a_value_is_rejected() {
+        for (source, name) in [
+            ("value = \"x\"", "value"),
+            ("variable = \"X\"", "variable"),
+            ("function = \"f\"", "function"),
+            ("from_config_dir = \"x\"", "from_config_dir"),
+            ("from_key = \"a.b\"", "from_key"),
+        ] {
+            let err = syn::parse_str::<Configuration>(&format!(
+                "Test {{
+                    #[tedge_config(default({source}, from_root = \"device.id\"))]
+                    id: String,
+                }}"
+            ))
+            .unwrap_err();
+            assert!(
+                err.to_string().contains(&format!(
+                    "`{name}` always gives a value, so the default sources after it are never used"
+                )),
+                "unexpected error for {source}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_default_without_sources_is_rejected() {
+        syn::parse_str::<Configuration>(
+            "Test {
+                #[tedge_config(default())]
+                id: String,
+            }",
+        )
+        .unwrap_err();
     }
 
     #[test]

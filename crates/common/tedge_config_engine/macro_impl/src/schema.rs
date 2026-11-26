@@ -39,41 +39,16 @@ fn generate_defaults(model: &Model) -> TokenStream {
         .into_iter()
         .filter_map(|f| {
             let key = &f.key;
-            let default = f.field.default.as_ref()?;
-            let spec = match default {
-                // Values are string literals
-                FieldDefault::Value(v) => quote! { DefaultSpec::Value(#v.into()) },
-                // Variables are references to rust identifiers that we convert to values in the expansion
-                FieldDefault::Variable(v) => quote! { DefaultSpec::Value(#v.to_string()) },
-                FieldDefault::Function(func) => quote! { DefaultSpec::Function(#func) },
-                FieldDefault::FromKey(source) => quote! { DefaultSpec::FromKey(#source.into()) },
-                FieldDefault::FromOptionalKey(source) => {
-                    quote! { DefaultSpec::FromOptionalKey(#source.into()) }
-                }
-                FieldDefault::FromConfigDir(rel_path) => quote! {
-                    DefaultSpec::Value(
-                        config_dir.join(#rel_path)
-                            .to_string_lossy()
-                            .into_owned(),
-                    )
-                },
-                FieldDefault::FromRoot(root_key) => quote! { DefaultSpec::FromRoot(#root_key) },
-                FieldDefault::FromKeyVia(via) => {
-                    let source = &via.key;
-                    let function = &via.function;
-                    let ty = &f.field.ty;
-                    // Bind the function to the field's type so a bad
-                    // signature is reported at the caller's attribute.
-                    let adapter = quote_spanned! {function.span()=>
-                        |source: &str| derive_to_string::<#ty>(#function, source)
-                    };
-                    quote! {
-                        DefaultSpec::FromKeyVia {
-                            key: #source.into(),
-                            function: #adapter,
-                        }
-                    }
-                }
+            let specs: Vec<TokenStream> = f
+                .field
+                .default
+                .iter()
+                .map(|default| default_spec(default, &f.field.ty))
+                .collect();
+            let spec = match specs.as_slice() {
+                [] => return None,
+                [spec] => spec.clone(),
+                specs => quote! { DefaultSpec::FirstOf(vec![#(#specs),*]) },
             };
             Some(quote! {
                 FieldDefault {
@@ -89,6 +64,44 @@ fn generate_defaults(model: &Model) -> TokenStream {
     quote! {
         fn defaults(config_dir: &std::path::Path) -> Vec<FieldDefault> {
             #body
+        }
+    }
+}
+
+/// Generates the `DefaultSpec` for one source listed in `default(...)`
+fn default_spec(default: &FieldDefault, ty: &syn::Type) -> TokenStream {
+    match default {
+        // Values are string literals
+        FieldDefault::Value(v) => quote! { DefaultSpec::Value(#v.into()) },
+        // Variables are references to rust identifiers that we convert to values in the expansion
+        FieldDefault::Variable(v) => quote! { DefaultSpec::Value(#v.to_string()) },
+        FieldDefault::Function(func) => quote! { DefaultSpec::Function(#func) },
+        FieldDefault::FromKey(source) => quote! { DefaultSpec::FromKey(#source.into()) },
+        FieldDefault::FromOptionalKey(source) => {
+            quote! { DefaultSpec::FromOptionalKey(#source.into()) }
+        }
+        FieldDefault::FromConfigDir(rel_path) => quote! {
+            DefaultSpec::Value(
+                config_dir.join(#rel_path)
+                    .to_string_lossy()
+                    .into_owned(),
+            )
+        },
+        FieldDefault::FromRoot(root_key) => quote! { DefaultSpec::FromRoot(#root_key) },
+        FieldDefault::FromKeyVia(via) => {
+            let source = &via.key;
+            let function = &via.function;
+            // Bind the function to the field's type so a bad
+            // signature is reported at the caller's attribute.
+            let adapter = quote_spanned! {function.span()=>
+                |source: &str| derive_to_string::<#ty>(#function, source)
+            };
+            quote! {
+                DefaultSpec::FromKeyVia {
+                    key: #source.into(),
+                    function: #adapter,
+                }
+            }
         }
     }
 }

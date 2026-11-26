@@ -1,0 +1,5 @@
+error: `value` always gives a value, so the default sources after it are never used; list it last at default
+ --> tests/compile_fail/default_source_after_an_infallible_one.rs:8:36
+  |
+8 |             #[tedge_config(default(value = "my-device", from_root = "device.id"))]
+  |                                    ^^^^^

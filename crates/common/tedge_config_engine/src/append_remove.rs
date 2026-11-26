@@ -41,10 +41,13 @@ where
     );
 }
 
-macro_rules! impl_single_value {
+/// Implements [AppendRemoveItem] for types that hold a single value: `add`
+/// replaces it, and `remove` clears it only if it equals the given value
+#[macro_export]
+macro_rules! impl_single_value_append_remove {
     ($($ty:ty),* $(,)?) => {
         $(
-            impl AppendRemoveItem for $ty {
+            impl $crate::AppendRemoveItem for $ty {
                 fn append(_current: Option<Self>, new_value: Self) -> Option<Self> {
                     Some(new_value)
                 }
@@ -60,7 +63,7 @@ macro_rules! impl_single_value {
     };
 }
 
-impl_single_value!(
+impl_single_value_append_remove!(
     String,
     u16,
     u32,

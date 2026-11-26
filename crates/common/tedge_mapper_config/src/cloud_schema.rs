@@ -1,0 +1,168 @@
+//! Chooses the schema that governs a mapper's `mapper.toml`
+
+use camino::Utf8Path;
+use facet::Facet;
+use std::fmt;
+use tedge_config_engine::list_file_aliases;
+use tedge_config_engine::ops::ConfigOps;
+use tedge_config_engine::ops::TypedConfigOps;
+use tedge_config_engine::ConfigManager;
+use tedge_config_engine::ConfigSchema;
+use tedge_config_engine::EnvOverrides;
+use tedge_config_engine::KeyEntry;
+use tedge_utils::paths::ManagedFile;
+
+use crate::c8y::C8yMapperConfig;
+use crate::schema::MapperConfig;
+use crate::CloudType;
+
+/// The schema a mapper's `cloud_type` selects
+///
+/// Every operation that depends on the DTO type a mapper is read with is a
+/// method here, so the choice of schema is made in one place
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloudSchema {
+    Generic,
+    C8y,
+    Az,
+    Aws,
+}
+
+impl CloudSchema {
+    /// Returns the schema for the mapper directory `name` whose file is `file`
+    ///
+    /// The file's `cloud_type` decides; a file without one falls back to the
+    /// directory name, so `mappers/c8y.prod/` is a c8y mapper. A file that
+    /// can't be read falls back the same way, and loading it reports why.
+    pub async fn resolve(name: &str, file: &ManagedFile) -> Self {
+        match cloud_type_in_file(file).await {
+            Some(cloud_type) => Self::from(cloud_type),
+            None => Self::from_name(name),
+        }
+    }
+
+    /// Returns the schema a mapper directory without a `cloud_type` uses
+    pub fn from_name(name: &str) -> Self {
+        let base = name.split_once('.').map_or(name, |(base, _)| base);
+        match base.parse::<CloudType>() {
+            Ok(cloud_type) if crate::is_builtin_mapper_name(name) => Self::from(cloud_type),
+            _ => Self::Generic,
+        }
+    }
+
+    /// Loads `file` under this schema, applying the environment variables
+    /// that start with `env_prefix`
+    pub async fn load(
+        self,
+        config_dir: &Utf8Path,
+        file: ManagedFile,
+        env_prefix: &str,
+        env: &EnvOverrides,
+    ) -> Box<dyn ConfigOps> {
+        match self {
+            Self::C8y => load::<C8yMapperConfig>(config_dir, file, env_prefix, env).await,
+            // az and aws read with the generic schema until their own land
+            Self::Generic | Self::Az | Self::Aws => {
+                load::<MapperConfig>(config_dir, file, env_prefix, env).await
+            }
+        }
+    }
+
+    /// Starts an empty source under this schema, for a file not written yet
+    pub fn empty(self, config_dir: &Utf8Path, file: ManagedFile) -> Box<dyn ConfigOps> {
+        match self {
+            Self::C8y => empty::<C8yMapperConfig>(config_dir, file),
+            Self::Generic | Self::Az | Self::Aws => empty::<MapperConfig>(config_dir, file),
+        }
+    }
+
+    /// Lists the keys of this schema with their docs and examples
+    pub fn entries(self, config_dir: &Utf8Path) -> Vec<KeyEntry> {
+        match self {
+            Self::C8y => entries::<C8yMapperConfig>(config_dir),
+            Self::Generic | Self::Az | Self::Aws => entries::<MapperConfig>(config_dir),
+        }
+    }
+
+    /// Whether this schema has the leaf `key` and accepts its value in
+    /// `table`, a file holding only that key
+    pub(crate) fn accepts(self, config_dir: &Utf8Path, key: &str, table: &toml::Table) -> bool {
+        match self {
+            Self::C8y => accepts::<C8yMapperConfig>(config_dir, key, table),
+            Self::Generic | Self::Az | Self::Aws => accepts::<MapperConfig>(config_dir, key, table),
+        }
+    }
+}
+
+impl fmt::Display for CloudSchema {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Generic => f.write_str("generic mapper"),
+            Self::C8y => f.write_str("c8y"),
+            Self::Az => f.write_str("az"),
+            Self::Aws => f.write_str("aws"),
+        }
+    }
+}
+
+impl From<CloudType> for CloudSchema {
+    fn from(cloud_type: CloudType) -> Self {
+        match cloud_type {
+            CloudType::C8y => Self::C8y,
+            CloudType::Az => Self::Az,
+            CloudType::Aws => Self::Aws,
+        }
+    }
+}
+
+async fn cloud_type_in_file(file: &ManagedFile) -> Option<CloudType> {
+    let content = file.read_to_string().await.ok()??;
+    let table: toml::Table = content.parse().ok()?;
+    table.get("cloud_type")?.as_str()?.parse().ok()
+}
+
+async fn load<S>(
+    config_dir: &Utf8Path,
+    file: ManagedFile,
+    env_prefix: &str,
+    env: &EnvOverrides,
+) -> Box<dyn ConfigOps>
+where
+    S: ConfigSchema,
+    S::Dto: for<'a> Facet<'a> + Default + Send + Sync + 'static,
+{
+    let mut ops = TypedConfigOps::<S::Dto>::load(manager::<S>(config_dir), file).await;
+    ops.apply_env_with_prefix(env_prefix, env);
+    Box::new(ops)
+}
+
+fn empty<S>(config_dir: &Utf8Path, file: ManagedFile) -> Box<dyn ConfigOps>
+where
+    S: ConfigSchema,
+    S::Dto: for<'a> Facet<'a> + Default + Send + Sync + 'static,
+{
+    Box::new(TypedConfigOps::<S::Dto>::empty(
+        manager::<S>(config_dir),
+        file,
+    ))
+}
+
+fn entries<S: ConfigSchema>(config_dir: &Utf8Path) -> Vec<KeyEntry> {
+    manager::<S>(config_dir).key_entries::<S::Dto>()
+}
+
+fn accepts<S: ConfigSchema>(config_dir: &Utf8Path, key: &str, table: &toml::Table) -> bool {
+    let manager = manager::<S>(config_dir);
+    let known = manager.keys::<S::Dto>().iter().any(|k| k == key)
+        || list_file_aliases(<S::Dto as Facet>::SHAPE, "")
+            .iter()
+            .any(|k| k == key);
+    known
+        && toml::to_string(table)
+            .ok()
+            .is_some_and(|content| facet_toml::from_str::<S::Dto>(&content).is_ok())
+}
+
+fn manager<S: ConfigSchema>(config_dir: &Utf8Path) -> ConfigManager {
+    ConfigManager::from_schema::<S>(config_dir.as_std_path())
+}

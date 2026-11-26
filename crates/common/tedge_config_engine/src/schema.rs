@@ -45,21 +45,31 @@ pub fn prefix_defaults(prefix: &str, defaults: Vec<FieldDefault>) -> Vec<FieldDe
         .into_iter()
         .map(|d| FieldDefault {
             key: prefix_key(prefix, d.key),
-            spec: match d.spec {
-                DefaultSpec::FromKey(source) => DefaultSpec::FromKey(prefix_key(prefix, source)),
-                DefaultSpec::FromOptionalKey(source) => {
-                    DefaultSpec::FromOptionalKey(prefix_key(prefix, source))
-                }
-                DefaultSpec::FromKeyVia { key, function } => DefaultSpec::FromKeyVia {
-                    key: prefix_key(prefix, key),
-                    function,
-                },
-                spec @ (DefaultSpec::Value(_)
-                | DefaultSpec::Function(_)
-                | DefaultSpec::FromRoot(_)) => spec,
-            },
+            spec: prefix_spec(prefix, d.spec),
         })
         .collect()
+}
+
+fn prefix_spec(prefix: &str, spec: DefaultSpec) -> DefaultSpec {
+    match spec {
+        DefaultSpec::FromKey(source) => DefaultSpec::FromKey(prefix_key(prefix, source)),
+        DefaultSpec::FromOptionalKey(source) => {
+            DefaultSpec::FromOptionalKey(prefix_key(prefix, source))
+        }
+        DefaultSpec::FromKeyVia { key, function } => DefaultSpec::FromKeyVia {
+            key: prefix_key(prefix, key),
+            function,
+        },
+        DefaultSpec::FirstOf(sources) => DefaultSpec::FirstOf(
+            sources
+                .into_iter()
+                .map(|source| prefix_spec(prefix, source))
+                .collect(),
+        ),
+        spec @ (DefaultSpec::Value(_) | DefaultSpec::Function(_) | DefaultSpec::FromRoot(_)) => {
+            spec
+        }
+    }
 }
 
 fn prefix_key(prefix: &str, key: Cow<'static, str>) -> Cow<'static, str> {

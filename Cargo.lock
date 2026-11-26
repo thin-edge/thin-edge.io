@@ -5808,9 +5808,13 @@ dependencies = [
  "facet-json",
  "facet-toml",
  "facet-value",
+ "rustversion",
  "tedge_config_engine",
  "tedge_config_engine-impl",
+ "tedge_test_utils",
  "tedge_utils",
+ "tokio",
+ "toml 0.9.12+spec-1.1.0",
  "trybuild",
 ]
 
@@ -6033,9 +6037,12 @@ dependencies = [
  "assert_matches",
  "async-trait",
  "camino",
+ "certificate",
+ "doku",
  "facet",
  "facet-toml",
  "humantime",
+ "path-clean",
  "rstest",
  "tedge_config",
  "tedge_config_engine",
@@ -6044,6 +6051,7 @@ dependencies = [
  "tedge_utils",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
+ "url",
 ]
 
 [[package]]

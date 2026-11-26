@@ -13,10 +13,11 @@ use tedge_config_engine::ConfigError;
 use tedge_config_engine::ConfigManager;
 use tedge_config_engine::EnvOverrides;
 
+use crate::cloud_schema::CloudSchema;
+use crate::root::RootConfig;
+use crate::root::RootConfigDto;
 use crate::schema::mapper::MapperConfig;
 use crate::schema::mapper::MapperConfigDto;
-use crate::schema::root_stub::RootStubConfig;
-use crate::schema::root_stub::RootStubConfigDto;
 
 #[test]
 fn auth_method_accepts_same_values_as_auth_method_config() {
@@ -103,7 +104,7 @@ async fn setting_cloud_type_leaves_other_keys_unchanged() {
     let mut fed = load_without_env(&dir).await;
     let keys_before: Vec<String> = fed.all_entries().into_iter().map(|e| e.key).collect();
 
-    fed.mutate("mappers.thingsboard.cloud_type", Action::Set("c8y".into()))
+    fed.mutate("mappers.thingsboard.cloud_type", Action::Set("az".into()))
         .await
         .unwrap();
 
@@ -115,7 +116,7 @@ async fn setting_cloud_type_leaves_other_keys_unchanged() {
 }
 
 #[tokio::test]
-async fn from_root_references_resolve_against_root_stub() {
+async fn from_root_references_resolve_against_the_root_config() {
     let dir = config_dir_with_mapper("test", "");
 
     let mut fed = FederatedConfig::new(dir.std_path());
@@ -195,9 +196,9 @@ async fn env_variable_overrides_toml_value() {
 
     let mut fed = FederatedConfig::new(dir.std_path());
 
-    let root_mgr = ConfigManager::from_schema::<RootStubConfig>(dir.std_path());
+    let root_mgr = ConfigManager::from_schema::<RootConfig>(dir.std_path());
     let mut root_ops =
-        TypedConfigOps::<RootStubConfigDto>::load(root_mgr, managed_file(&dir, "tedge.toml")).await;
+        TypedConfigOps::<RootConfigDto>::load(root_mgr, managed_file(&dir, "tedge.toml")).await;
     root_ops.apply_env_excluding(&env, &["mappers."]);
     fed.mount("", Box::new(root_ops)).unwrap();
 
@@ -214,25 +215,6 @@ async fn env_variable_overrides_toml_value() {
     assert_eq!(
         fed.read("mappers.thingsboard.url").unwrap().as_deref(),
         Some("env.example.com:8883")
-    );
-}
-
-#[test]
-fn root_stub_defaults_match_real_tedge_defaults() {
-    let mgr = root_manager();
-    let dto = RootStubConfigDto::default();
-
-    assert_eq!(
-        mgr.read(&dto, "device.cert_path").unwrap().as_deref(),
-        Some("/etc/tedge/device-certs/tedge-certificate.pem")
-    );
-    assert_eq!(
-        mgr.read(&dto, "device.key_path").unwrap().as_deref(),
-        Some("/etc/tedge/device-certs/tedge-private-key.pem")
-    );
-    assert_eq!(
-        mgr.read(&dto, "device.root_cert_path").unwrap().as_deref(),
-        Some("/etc/ssl/certs")
     );
 }
 
@@ -276,7 +258,7 @@ async fn profile_keys_are_read_and_written_under_profiles() {
 
     fed.mutate(
         "mappers.c8y.profiles.prod.url",
-        Action::Set("prod.example.com:8883".into()),
+        Action::Set("prod.example.com".into()),
     )
     .await
     .unwrap();
@@ -285,29 +267,29 @@ async fn profile_keys_are_read_and_written_under_profiles() {
         fed.read("mappers.c8y.profiles.prod.url")
             .unwrap()
             .as_deref(),
-        Some("prod.example.com:8883")
+        Some("prod.example.com")
     );
     let file: toml::Table = read_mapper_file(&dir, "c8y.prod").parse().unwrap();
-    assert_eq!(file["url"].as_str(), Some("prod.example.com:8883"));
+    assert_eq!(file["url"].as_str(), Some("prod.example.com"));
 }
 
 #[tokio::test]
 async fn group_key_reaches_base_mapper_when_a_profile_is_named_after_the_group() {
-    let dir = config_dir_with_mapper("c8y", "");
-    add_mapper(&dir, "c8y.bridge", "url = \"bridge.example.com:8883\"\n");
+    let dir = config_dir_with_mapper("az", "");
+    add_mapper(&dir, "az.bridge", "url = \"bridge.example.com:8883\"\n");
     let mut fed = load_without_env(&dir).await;
 
     fed.mutate(
-        "mappers.c8y.bridge.clean_session",
+        "mappers.az.bridge.clean_session",
         Action::Set("true".into()),
     )
     .await
     .unwrap();
 
-    let file: toml::Table = read_mapper_file(&dir, "c8y").parse().unwrap();
+    let file: toml::Table = read_mapper_file(&dir, "az").parse().unwrap();
     assert_eq!(file["bridge"]["clean_session"].as_bool(), Some(true));
     assert_eq!(
-        read_mapper_file(&dir, "c8y.bridge"),
+        read_mapper_file(&dir, "az.bridge"),
         "url = \"bridge.example.com:8883\"\n"
     );
 }
@@ -321,7 +303,7 @@ async fn profile_key_without_profiles_is_an_unknown_key_of_the_base_mapper() {
     let err = fed
         .mutate(
             "mappers.c8y.prod.url",
-            Action::Set("prod.example.com:8883".into()),
+            Action::Set("prod.example.com".into()),
         )
         .await
         .unwrap_err();
@@ -355,10 +337,10 @@ fn mapper_schema_has_no_profiles_group() {
 
 #[tokio::test]
 async fn profile_keys_are_overridden_by_env_variables_named_after_the_key() {
-    let dir = config_dir_with_mapper("c8y.prod", "url = \"file.example.com:8883\"\n");
+    let dir = config_dir_with_mapper("c8y.prod", "url = \"file.example.com\"\n");
     let env = EnvOverrides::from_pairs([(
         "TEDGE_MAPPERS_C8Y_PROFILES_PROD_URL".into(),
-        "env.example.com:8883".into(),
+        "env.example.com".into(),
     )]);
 
     let fed = crate::schema::load_federated_config_with_env(&config_root(&dir), &env)
@@ -369,7 +351,27 @@ async fn profile_keys_are_overridden_by_env_variables_named_after_the_key() {
         fed.read("mappers.c8y.profiles.prod.url")
             .unwrap()
             .as_deref(),
-        Some("env.example.com:8883")
+        Some("env.example.com")
+    );
+}
+
+#[tokio::test]
+async fn root_device_keys_are_overridden_by_env_variables_and_reach_mapper_defaults() {
+    let dir = config_dir_with_mapper("c8y", "");
+    dir.file("tedge.toml")
+        .with_raw_content("[device]\nid = \"from-file\"\n");
+    let env = EnvOverrides::from_pairs([("TEDGE_DEVICE_ID".into(), "from-env".into())]);
+
+    let fed = crate::schema::load_federated_config_with_env(&config_root(&dir), &env)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        (
+            fed.read("device.id").unwrap(),
+            fed.read("mappers.c8y.device.id").unwrap()
+        ),
+        (Some("from-env".into()), Some("from-env".into()))
     );
 }
 
@@ -395,7 +397,7 @@ async fn custom_mapper_keys_are_overridden_by_env_variables() {
 async fn mapper_directories_with_the_same_env_variable_name_fail_every_read_and_write() {
     let dir = config_dir_with_mapper("thingsboard.eu", "url = \"eu.example.com:8883\"\n");
     add_mapper(&dir, "thingsboard-eu", "url = \"eu.example.com:8883\"\n");
-    add_mapper(&dir, "c8y", "url = \"c8y.example.com:8883\"\n");
+    add_mapper(&dir, "c8y", "url = \"c8y.example.com\"\n");
 
     let mut fed = crate::schema::load_federated_config_with_env(
         &config_root(&dir),
@@ -422,31 +424,34 @@ async fn mapper_directories_with_the_same_env_variable_name_fail_every_read_and_
     }
     assert_eq!(
         fed.read("mappers.c8y.url").unwrap().as_deref(),
-        Some("c8y.example.com:8883")
+        Some("c8y.example.com")
     );
 }
 
 #[tokio::test]
 async fn set_is_refused_when_mapper_file_has_unknown_key() {
-    let original = "url = \"a.example.com:8883\"\n\n[smartrest]\ntemplates = [\"x\"]\n";
-    let dir = config_dir_with_mapper("c8y", original);
+    let original = "url = \"a.example.com:8883\"\n\n[unknown]\nkey = [\"x\"]\n";
+    let dir = config_dir_with_mapper("thingsboard", original);
     let mut fed = load_without_env(&dir).await;
 
     let err = fed
-        .mutate("mappers.c8y.url", Action::Set("b.example.com:8883".into()))
+        .mutate(
+            "mappers.thingsboard.url",
+            Action::Set("b.example.com:8883".into()),
+        )
         .await
         .unwrap_err();
 
     let msg = err.to_string();
     assert!(
-        msg.contains("mappers/c8y/mapper.toml"),
+        msg.contains("mappers/thingsboard/mapper.toml"),
         "error should name the file: {msg}"
     );
     assert!(
-        msg.contains("smartrest.templates"),
+        msg.contains("unknown.key"),
         "error should name the unknown key: {msg}"
     );
-    assert_eq!(read_mapper_file(&dir, "c8y"), original);
+    assert_eq!(read_mapper_file(&dir, "thingsboard"), original);
 }
 
 #[tokio::test]
@@ -474,13 +479,13 @@ async fn set_is_refused_when_a_known_key_holds_a_table() {
 #[tokio::test]
 async fn get_still_works_when_mapper_file_has_unknown_key() {
     let dir = config_dir_with_mapper(
-        "c8y",
-        "url = \"a.example.com:8883\"\n\n[smartrest]\ntemplates = [\"x\"]\n",
+        "thingsboard",
+        "url = \"a.example.com:8883\"\n\n[unknown]\nkey = [\"x\"]\n",
     );
     let fed = load_without_env(&dir).await;
 
     assert_eq!(
-        fed.read("mappers.c8y.url").unwrap().as_deref(),
+        fed.read("mappers.thingsboard.url").unwrap().as_deref(),
         Some("a.example.com:8883")
     );
 }
@@ -626,17 +631,19 @@ async fn nested_keys_are_written_as_table_sections() {
 }
 
 #[rstest]
-#[case::cloud_type("cloud_type", "c8y", "az")]
-#[case::tls_enable("bridge.tls.enable", "false", "true")]
+#[case::cloud_type("tb", "cloud_type", "c8y", "az")]
+#[case::tls_enable("tb", "bridge.tls.enable", "false", "true")]
+#[case::host_and_port("c8y", "http", "b.example.com:443", "a.example.com:443")]
 #[tokio::test]
 async fn single_value_keys_are_replaced_by_add_and_cleared_only_by_removing_their_value(
+    #[case] mapper: &str,
     #[case] key: &str,
     #[case] value: &str,
     #[case] other_value: &str,
 ) {
-    let dir = config_dir_with_mapper("tb", "");
+    let dir = config_dir_with_mapper(mapper, "");
     let mut fed = load_without_env(&dir).await;
-    let key = format!("mappers.tb.{key}");
+    let key = format!("mappers.{mapper}.{key}");
 
     fed.mutate(&key, Action::Add(other_value.into()))
         .await
@@ -653,6 +660,38 @@ async fn single_value_keys_are_replaced_by_add_and_cleared_only_by_removing_thei
         .await
         .unwrap();
     assert_ne!(fed.read(&key).unwrap().as_deref(), Some(value));
+}
+
+#[tokio::test]
+async fn set_items_are_merged_by_add_and_dropped_by_remove() {
+    let dir = config_dir_with_mapper("c8y", "");
+    let mut fed = load_without_env(&dir).await;
+    let key = "mappers.c8y.smartrest.templates";
+
+    fed.mutate(key, Action::Add("a".into())).await.unwrap();
+    fed.mutate(key, Action::Add("b,a".into())).await.unwrap();
+    assert_eq!(fed.read(key).unwrap().as_deref(), Some(r#"["a", "b"]"#));
+
+    fed.mutate(key, Action::Remove("a".into())).await.unwrap();
+    assert_eq!(fed.read(key).unwrap().as_deref(), Some(r#"["b"]"#));
+}
+
+#[tokio::test]
+async fn topic_prefix_is_written_as_set() {
+    let dir = config_dir_with_mapper("c8y", "");
+    let mut fed = load_without_env(&dir).await;
+
+    fed.mutate(
+        "mappers.c8y.bridge.topic_prefix",
+        Action::Set("custom".into()),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        read_mapper_file(&dir, "c8y"),
+        "[bridge]\ntopic_prefix = \"custom\"\n"
+    );
 }
 
 #[tokio::test]
@@ -706,6 +745,247 @@ fn builtin_mapper_without_a_directory_lists_its_keys_under_its_name() {
     );
 }
 
+#[rstest]
+#[case::cloud_type_in_file("thingsboard", "cloud_type = \"c8y\"\n", CloudSchema::C8y)]
+#[case::cloud_type_beats_name("c8y", "cloud_type = \"az\"\n", CloudSchema::Az)]
+#[case::builtin_name("aws", "", CloudSchema::Aws)]
+#[case::builtin_profile_name("c8y.prod", "", CloudSchema::C8y)]
+#[case::builtin_profile_name_with_a_dot("c8y.prod.eu", "", CloudSchema::C8y)]
+#[case::custom_name("thingsboard", "", CloudSchema::Generic)]
+#[case::name_resembling_a_cloud("c8yy", "", CloudSchema::Generic)]
+#[case::builtin_name_with_an_empty_profile("c8y.", "", CloudSchema::Generic)]
+#[case::unreadable_file_uses_name("c8y", "[broken\n", CloudSchema::C8y)]
+#[case::unknown_cloud_type_uses_name("c8y", "cloud_type = \"other\"\n", CloudSchema::C8y)]
+#[tokio::test]
+async fn mapper_schema_is_chosen_by_cloud_type_then_by_directory_name(
+    #[case] name: &str,
+    #[case] mapper_toml: &str,
+    #[case] expected: CloudSchema,
+) {
+    let dir = config_dir_with_mapper(name, mapper_toml);
+    let file = managed_file(&dir, &format!("mappers/{name}/mapper.toml"));
+
+    assert_eq!(CloudSchema::resolve(name, &file).await, expected);
+}
+
+#[tokio::test]
+async fn changing_cloud_type_that_would_delete_keys_is_refused_naming_every_one() {
+    let original = "url = \"tb.example.com:8883\"\n\n[bridge]\nclean_session = true\n";
+    let dir = config_dir_with_mapper("tb", original);
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap_err();
+
+    let msg = err.to_string();
+    for key in [
+        "mappers.tb.url",
+        "mappers.tb.bridge.clean_session",
+        "--force",
+    ] {
+        assert!(msg.contains(key), "error should name '{key}': {msg}");
+    }
+    assert_eq!(read_mapper_file(&dir, "tb"), original);
+}
+
+#[tokio::test]
+async fn changing_cloud_type_keeps_keys_the_new_schema_knows_by_their_old_name() {
+    let dir = config_dir_with_mapper("tb", "[enable]\nlog_management = false\n");
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap();
+
+    let fed = load_without_env(&dir).await;
+    assert_eq!(
+        fed.read("mappers.tb.enable.log_upload").unwrap().as_deref(),
+        Some("false")
+    );
+}
+
+#[tokio::test]
+async fn forced_cloud_type_change_rewrites_the_file_under_the_new_schema() {
+    let dir = config_dir_with_mapper(
+        "tb",
+        "url = \"tb.example.com:8883\"\ncredentials_path = \"/tmp/creds.toml\"\n\n[bridge]\nclean_session = true\n",
+    );
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("c8y".into()),
+        true,
+    )
+    .await
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "tb").parse().unwrap();
+    assert_eq!(
+        file,
+        toml::toml! {
+            cloud_type = "c8y"
+            credentials_path = "/tmp/creds.toml"
+        }
+    );
+    let fed = load_without_env(&dir).await;
+    assert_eq!(
+        fed.read("mappers.tb.smartrest.use_operation_id")
+            .unwrap()
+            .as_deref(),
+        Some("true")
+    );
+}
+
+#[tokio::test]
+async fn changing_cloud_type_that_keeps_every_key_needs_no_force() {
+    let dir = config_dir_with_mapper("tb", "credentials_path = \"/tmp/creds.toml\"\n");
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "tb").parse().unwrap();
+    assert_eq!(file["cloud_type"].as_str(), Some("c8y"));
+    assert_eq!(file["credentials_path"].as_str(), Some("/tmp/creds.toml"));
+}
+
+#[tokio::test]
+async fn unsetting_cloud_type_returns_to_the_schema_of_the_directory_name() {
+    let original = "cloud_type = \"c8y\"\n\n[smartrest]\ntemplates = [\"a\"]\n";
+    let dir = config_dir_with_mapper("tb", original);
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Unset,
+        false,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("mappers.tb.smartrest.templates"),
+        "error should name the key: {err}"
+    );
+    assert_eq!(read_mapper_file(&dir, "tb"), original);
+}
+
+#[tokio::test]
+async fn removing_the_cloud_type_a_mapper_has_returns_to_the_schema_of_the_directory_name() {
+    let original = "cloud_type = \"c8y\"\n\n[smartrest]\ntemplates = [\"a\"]\n";
+    let dir = config_dir_with_mapper("tb", original);
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Remove("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("mappers.tb.smartrest.templates"),
+        "error should name the key: {err}"
+    );
+    assert_eq!(read_mapper_file(&dir, "tb"), original);
+}
+
+#[tokio::test]
+async fn removing_a_cloud_type_the_mapper_does_not_have_keeps_its_schema() {
+    let dir = config_dir_with_mapper(
+        "tb",
+        "cloud_type = \"c8y\"\n\n[smartrest]\ntemplates = [\"a\"]\n",
+    );
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Remove("az".into()),
+        false,
+    )
+    .await
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "tb").parse().unwrap();
+    assert_eq!(file["cloud_type"].as_str(), Some("c8y"));
+    assert_eq!(file["smartrest"]["templates"][0].as_str(), Some("a"));
+}
+
+#[tokio::test]
+async fn changing_the_cloud_type_of_a_profile_names_the_keys_under_the_profile() {
+    let original = "[smartrest]\ntemplates = [\"a\"]\n";
+    let dir = config_dir_with_mapper("c8y.prod", original);
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.c8y.profiles.prod.cloud_type",
+        Action::Set("az".into()),
+        false,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("mappers.c8y.profiles.prod.smartrest.templates"),
+        "error should name the key under the profile: {err}"
+    );
+    assert_eq!(read_mapper_file(&dir, "c8y.prod"), original);
+}
+
+#[tokio::test]
+async fn setting_the_cloud_type_a_mapper_already_has_is_an_ordinary_write() {
+    let dir = config_dir_with_mapper("c8y", "[smartrest]\ntemplates = [\"a\"]\n");
+
+    crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.c8y.cloud_type",
+        Action::Set("c8y".into()),
+        false,
+    )
+    .await
+    .unwrap();
+
+    let file: toml::Table = read_mapper_file(&dir, "c8y").parse().unwrap();
+    assert_eq!(file["cloud_type"].as_str(), Some("c8y"));
+    assert_eq!(file["smartrest"]["templates"][0].as_str(), Some("a"));
+}
+
+#[tokio::test]
+async fn an_invalid_cloud_type_is_rejected_by_the_ordinary_write() {
+    let dir = config_dir_with_mapper("tb", "");
+
+    let err = crate::mutate_mapper_key(
+        &config_root(&dir),
+        "mappers.tb.cloud_type",
+        Action::Set("notacloud".into()),
+        true,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("expected one of: c8y, az, aws"),
+        "error should list the cloud types: {err}"
+    );
+}
+
 fn config_dir_with_mapper(name: &str, mapper_toml: &str) -> TempTedgeDir {
     let dir = TempTedgeDir::new();
     dir.file("tedge.toml");
@@ -741,7 +1021,7 @@ fn mapper_manager() -> ConfigManager {
 }
 
 fn root_manager() -> ConfigManager {
-    ConfigManager::from_schema::<RootStubConfig>(Path::new("/etc/tedge"))
+    ConfigManager::from_schema::<RootConfig>(Path::new("/etc/tedge"))
 }
 
 async fn mapper_source(dir: &TempTedgeDir, name: &str) -> Box<dyn ConfigOps> {
@@ -751,7 +1031,7 @@ async fn mapper_source(dir: &TempTedgeDir, name: &str) -> Box<dyn ConfigOps> {
 
 async fn root_source(dir: &TempTedgeDir) -> Box<dyn ConfigOps> {
     let file = managed_file(dir, "tedge.toml");
-    Box::new(TypedConfigOps::<RootStubConfigDto>::load(root_manager(), file).await)
+    Box::new(TypedConfigOps::<RootConfigDto>::load(root_manager(), file).await)
 }
 
 fn config_root(dir: &TempTedgeDir) -> TedgePaths {

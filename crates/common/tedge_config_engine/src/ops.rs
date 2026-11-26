@@ -6,7 +6,9 @@ use tedge_utils::paths::ManagedFile;
 use crate::defaults::EnvOverrides;
 use crate::defaults::RootDependency;
 use crate::defaults::RootResolver;
+use crate::defaults::ValueOrigin;
 use crate::manager::ConfigManager;
+use crate::reflect::list_file_aliases;
 use crate::reflect::ConfigError;
 use crate::reflect::KeyEntry;
 
@@ -121,9 +123,12 @@ where
         let content = facet_toml::to_string(dto).map_err(|e| write_error(e.to_string()))?;
         // facet_toml writes nested groups as inline tables; the toml crate writes
         // `[group]` sections, matching the docs and files written by tedge_config
-        let table: toml::Table = content
+        let mut table: toml::Table = content
             .parse()
             .map_err(|e: toml::de::Error| write_error(e.to_string()))?;
+        // Unsetting the last key of a group leaves the group itself set, but
+        // tedge_config doesn't write empty groups
+        remove_empty_groups(&mut table);
         let content = toml::to_string(&table).map_err(|e| write_error(e.to_string()))?;
         // Like tedge_config, a file that can't be given tedge ownership is still written
         let file = self.file.clone().warn_and_ignore_permission_errors();
@@ -145,13 +150,38 @@ where
 {
     fn read(&self, key: &str, root: RootResolver<'_>) -> Result<Option<String>, ConfigError> {
         self.check_loaded()?;
-        self.manager.read_with_root(&self.dto, key, root)
+        let Some(resolved) = self.manager.resolve_with_root(&self.dto, key, root)? else {
+            return Ok(None);
+        };
+        if resolved.source_key == key && resolved.origin == ValueOrigin::Explicit {
+            return Ok(Some(resolved.value));
+        }
+        // A default arrives as the string of another key, the root config or
+        // the schema, which can be a different type: `c8y.url = example.com`
+        // is the default of `c8y.http`, a host and port. Parsing it as this
+        // key's type shows it as an explicit value of the key would be shown,
+        // here `example.com:443`
+        let mut rendered = T::default();
+        self.manager
+            .set(&mut rendered, key, &resolved.value)
+            .map_err(|e| ConfigError::InvalidValue {
+                key: key.to_owned(),
+                reason: match e {
+                    ConfigError::ParseError(reason) => reason,
+                    e => e.to_string(),
+                },
+                source_key: resolved.source_key,
+                origin: resolved.origin,
+                value: resolved.value,
+            })?;
+        self.manager.get(&rendered, key)
     }
 
     async fn mutate(&mut self, key: &str, action: Action) -> Result<(), ConfigError> {
         self.manager.check_read_only(key)?;
         // The DTO only holds schema keys, so saving it would delete any other key in the file
-        let known_keys = self.manager.keys::<T>();
+        let mut known_keys = self.manager.keys::<T>();
+        known_keys.extend(list_file_aliases(T::SHAPE, ""));
         let mut dto = load_dto(&self.file, &self.manager, Some(&known_keys)).await?;
         match action {
             Action::Set(ref value) => self.manager.set(&mut dto, key, value)?,
@@ -288,4 +318,16 @@ fn collect_unknown_keys(
             _ => unknown.push(key),
         }
     }
+}
+
+/// Removes the tables of `table` that hold no values, including ones that
+/// only hold empty tables
+fn remove_empty_groups(table: &mut toml::Table) {
+    table.retain(|_, value| match value {
+        toml::Value::Table(group) => {
+            remove_empty_groups(group);
+            !group.is_empty()
+        }
+        _ => true,
+    });
 }

@@ -95,7 +95,18 @@ impl ConfigManager {
         dto: &T,
         key: &str,
     ) -> Result<Option<crate::defaults::ResolvedValue>, ConfigError> {
-        crate::defaults::config_resolve(dto, key, &self.defaults, None)
+        self.resolve_with_root(dto, key, None)
+    }
+
+    /// Returns the effective value for `key` along with where it came from,
+    /// resolving `from_root` defaults through `root_resolver`.
+    pub fn resolve_with_root<T: for<'a> Facet<'a>>(
+        &self,
+        dto: &T,
+        key: &str,
+        root_resolver: crate::defaults::RootResolver<'_>,
+    ) -> Result<Option<crate::defaults::ResolvedValue>, ConfigError> {
+        crate::defaults::config_resolve(dto, key, &self.defaults, root_resolver)
     }
 
     /// Sets `key` to `value` in the DTO (parses and validates).

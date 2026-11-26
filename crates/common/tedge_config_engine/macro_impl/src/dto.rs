@@ -13,7 +13,7 @@ use quote::quote;
 use quote::quote_spanned;
 use syn::spanned::Spanned;
 
-use crate::input::ConfigField;
+use crate::model::FieldModel;
 use crate::model::GroupModel;
 use crate::model::ItemModel;
 use crate::model::Model;
@@ -35,7 +35,7 @@ fn generate_group(group: &GroupModel, kind: GroupKind) -> Vec<TokenStream> {
 
     for item in &group.items {
         match item {
-            ItemModel::Field(f) => fields.push(generate_leaf_field(f.field)),
+            ItemModel::Field(f) => fields.push(generate_leaf_field(f)),
             ItemModel::Group(child) => {
                 let ident = child.ident;
                 let ty = &child.group.dto_ident;
@@ -78,7 +78,8 @@ fn generate_group(group: &GroupModel, kind: GroupKind) -> Vec<TokenStream> {
     structs
 }
 
-fn generate_leaf_field(field: &ConfigField) -> TokenStream {
+fn generate_leaf_field(model: &FieldModel) -> TokenStream {
+    let field = model.field;
     let ident = field.field_ident();
     let ty = &field.ty;
     let doc_attrs = &field.doc_attrs;
@@ -95,6 +96,12 @@ fn generate_leaf_field(field: &ConfigField) -> TokenStream {
     }
     if let Some(deprecated_key) = &field.deprecated_key {
         extra_attrs.push(quote! { #[facet(tedge::deprecated_key = #deprecated_key)] });
+        // A field renamed within its group can still be read from files
+        // written under the old name; one that moved group is only known by
+        // its old name on the command line
+        if let Some(old_name) = renamed_in_same_group(&model.key, deprecated_key) {
+            extra_attrs.push(quote! { #[facet(alias = #old_name)] });
+        }
     }
     for example in &field.examples {
         extra_attrs.push(quote! { #[facet(tedge::example = #example)] });
@@ -108,6 +115,16 @@ fn generate_leaf_field(field: &ConfigField) -> TokenStream {
         #[facet(default, skip_serializing_if = Option::is_none)]
         pub #ident: #field_ty,
     }
+}
+
+/// Returns the old field name if `deprecated_key` names a field of the same
+/// group as `key`
+fn renamed_in_same_group<'k>(key: &str, deprecated_key: &'k str) -> Option<&'k str> {
+    let (old_group, old_name) = deprecated_key
+        .rsplit_once('.')
+        .unwrap_or(("", deprecated_key));
+    let group = key.rsplit_once('.').map_or("", |(group, _)| group);
+    (group == old_group).then_some(old_name)
 }
 
 #[cfg(test)]
@@ -309,6 +326,29 @@ mod tests {
                 #[facet(tedge::deprecated_key = "mqtt.external.port")]
                 #[facet(default, skip_serializing_if = Option::is_none)]
                 pub port: Option<u16>,
+            });
+    }
+
+    #[test]
+    fn fields_renamed_within_their_group_are_read_by_their_old_name() {
+        let input: Configuration = parse_quote!(
+            Test {
+                enable: {
+                    #[tedge_config(deprecated_key = "enable.log_management")]
+                    log_upload: bool,
+                },
+            }
+        );
+        let generated = generate(&input);
+
+        TokenQuery::new(&generated)
+            .find_struct("EnableConfigDto")
+            .find_field("log_upload")
+            .assert_eq(&parse_quote! {
+                #[facet(tedge::deprecated_key = "enable.log_management")]
+                #[facet(alias = "log_management")]
+                #[facet(default, skip_serializing_if = Option::is_none)]
+                pub log_upload: Option<bool>,
             });
     }
 

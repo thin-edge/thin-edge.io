@@ -13,10 +13,14 @@ use tedge_config_engine::RootResolver;
 use tedge_utils::paths::ManagedFile;
 use tedge_utils::paths::TedgePaths;
 
+use crate::cloud_schema::CloudSchema;
+use crate::cloud_type_change::change_cloud_type;
+use crate::cloud_type_change::Change;
+use crate::root::RootConfig;
+use crate::root::RootConfigDto;
+
 pub use mapper::MapperConfig;
 pub use mapper::MapperConfigDto;
-pub use root_stub::RootStubConfig;
-pub use root_stub::RootStubConfigDto;
 
 pub mod mapper {
     use camino::Utf8PathBuf;
@@ -48,7 +52,7 @@ pub mod mapper {
                 key_path: Utf8PathBuf,
 
                 /// Path to the root certificate
-                #[tedge_config(default(from_root = "device.root_cert_path"))]
+                #[tedge_config(default(value = "/etc/ssl/certs"))]
                 root_cert_path: Utf8PathBuf,
             },
 
@@ -81,29 +85,6 @@ pub mod mapper {
     }
 }
 
-pub mod root_stub {
-    use camino::Utf8PathBuf;
-    use tedge_config_engine::*;
-
-    tedge_config_engine_macro::define_config! {
-        RootStub {
-            device: {
-                /// Path to the device certificate
-                #[tedge_config(default(value = "/etc/tedge/device-certs/tedge-certificate.pem"))]
-                cert_path: Utf8PathBuf,
-
-                /// Path to the device private key
-                #[tedge_config(default(value = "/etc/tedge/device-certs/tedge-private-key.pem"))]
-                key_path: Utf8PathBuf,
-
-                /// Path to the root certificate
-                #[tedge_config(default(value = "/etc/ssl/certs"))]
-                root_cert_path: Utf8PathBuf,
-            },
-        }
-    }
-}
-
 /// Returns `true` for built-in mapper names (`c8y`, `az`, `aws`) and profiled
 /// variants like `c8y.prod` or `aws.staging`
 pub fn is_builtin_mapper_name(name: &str) -> bool {
@@ -113,9 +94,9 @@ pub fn is_builtin_mapper_name(name: &str) -> bool {
 
 /// Generates completion entries for a built-in mapper that has no directory yet
 pub fn builtin_mapper_entries(config_dir: &Utf8Path, name: &str) -> Vec<KeyEntry> {
-    let mgr = ConfigManager::from_schema::<MapperConfig>(config_dir.as_std_path());
     let prefix = format!("mappers.{name}.");
-    mgr.key_entries::<MapperConfigDto>()
+    CloudSchema::from_name(name)
+        .entries(config_dir)
         .into_iter()
         .map(|e| KeyEntry {
             key: format!("{prefix}{}", e.key),
@@ -193,12 +174,13 @@ pub(crate) async fn load_federated_config_with_env(
     let config_dir = config_root.root();
     let mut fed = FederatedConfig::new(config_dir.as_std_path());
 
-    let root_mgr = ConfigManager::from_schema::<RootStubConfig>(config_dir.as_std_path());
-    let root_ops = TypedConfigOps::<RootStubConfigDto>::load(
-        root_mgr,
-        managed_file(config_root, "tedge.toml"),
-    )
-    .await;
+    let root_mgr = ConfigManager::from_schema::<RootConfig>(config_dir.as_std_path());
+    let mut root_ops =
+        TypedConfigOps::<RootConfigDto>::load(root_mgr, managed_file(config_root, "tedge.toml"))
+            .await;
+    // Mapper defaults such as c8y.device.id read the root device table, so it
+    // must see the same TEDGE_DEVICE_* overrides tedge_config does
+    root_ops.apply_env_with_prefix("TEDGE_", env);
     fed.mount("", Box::new(root_ops))?;
 
     let mappers: Vec<_> = mapper_dirs(config_root)
@@ -232,7 +214,8 @@ pub(crate) async fn load_federated_config_with_env(
         ..
     } in &mappers
     {
-        let mapper_mgr = ConfigManager::from_schema::<MapperConfig>(config_dir.as_std_path());
+        let file = mapper_file(config_root, name);
+        let schema = CloudSchema::resolve(name, &file).await;
         let owners = &env_prefix_owners[env_prefix.as_str()];
         if let [first, second, ..] = owners.as_slice() {
             // Either directory could be the one the variables are meant for,
@@ -241,16 +224,14 @@ pub(crate) async fn load_federated_config_with_env(
                 first: first.to_string(),
                 second: second.to_string(),
                 prefix: env_prefix.clone(),
-                manager: mapper_mgr,
+                schema,
+                config_dir: config_dir.to_owned(),
             };
             fed.mount(mount_prefix, Box::new(colliding))?;
             continue;
         }
-        let mut mapper_ops =
-            TypedConfigOps::<MapperConfigDto>::load(mapper_mgr, mapper_file(config_root, name))
-                .await;
-        mapper_ops.apply_env_with_prefix(env_prefix, env);
-        fed.mount(mount_prefix, Box::new(mapper_ops))?;
+        let mapper_ops = schema.load(config_dir, file, env_prefix, env).await;
+        fed.mount(mount_prefix, mapper_ops)?;
     }
 
     Ok(fed)
@@ -270,9 +251,45 @@ pub fn mount_builtin_mapper(
     if fed.mount_prefixes().contains(&prefix) {
         return Ok(());
     }
-    let mgr = ConfigManager::from_schema::<MapperConfig>(config_root.root().as_std_path());
-    let ops = TypedConfigOps::<MapperConfigDto>::empty(mgr, mapper_file(config_root, &name));
-    fed.mount(&prefix, Box::new(ops))
+    let ops =
+        CloudSchema::from_name(&name).empty(config_root.root(), mapper_file(config_root, &name));
+    fed.mount(&prefix, ops)
+}
+
+/// Applies `action` to the mapper key `key`, creating the mapper's file if it
+/// is a built-in mapper without one
+///
+/// A change to a mapper's `cloud_type` that changes the schema of its file
+/// rewrites the file under the new schema; one that would delete keys the new
+/// schema doesn't have is refused unless `force` is set.
+pub async fn mutate_mapper_key(
+    config_root: &TedgePaths,
+    key: &str,
+    action: Action,
+    force: bool,
+) -> Result<(), ConfigError> {
+    if let Some(name) = mapper_whose_cloud_type_is(config_root, key).await {
+        let file = mapper_file(config_root, &name);
+        let change =
+            change_cloud_type(config_root.root(), &name, &file, key, &action, force).await?;
+        if let Change::Converted = change {
+            return Ok(());
+        }
+    }
+    let mut fed = load_federated_config(config_root).await?;
+    mount_builtin_mapper(&mut fed, config_root, key)?;
+    fed.mutate(key, action).await
+}
+
+/// The mapper directory `key` is the `cloud_type` of, if it is one
+async fn mapper_whose_cloud_type_is(config_root: &TedgePaths, key: &str) -> Option<String> {
+    let prefix = key.strip_suffix("cloud_type")?;
+    let builtin = extract_builtin_mapper_name(key);
+    mapper_dirs(config_root)
+        .await
+        .into_iter()
+        .chain(builtin)
+        .find(|name| mount_prefix(name) == prefix)
 }
 
 fn mapper_file(config_root: &TedgePaths, name: &str) -> ManagedFile {
@@ -299,7 +316,8 @@ struct CollidingMapper {
     first: String,
     second: String,
     prefix: String,
-    manager: ConfigManager,
+    schema: CloudSchema,
+    config_dir: camino::Utf8PathBuf,
 }
 
 impl CollidingMapper {
@@ -323,7 +341,7 @@ impl ConfigOps for CollidingMapper {
     }
 
     fn entries(&self) -> Vec<KeyEntry> {
-        self.manager.key_entries::<MapperConfigDto>()
+        self.schema.entries(&self.config_dir)
     }
 
     fn root_dependencies(&self) -> Vec<RootDependency> {

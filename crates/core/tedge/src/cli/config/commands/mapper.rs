@@ -2,7 +2,6 @@ use crate::command::Command;
 use crate::log::MaybeFancy;
 use tedge_config::TEdgeConfig;
 use tedge_config_engine::ops::Action;
-use tedge_utils::paths::TedgePaths;
 
 pub struct MapperGetConfigCommand {
     pub key: String,
@@ -32,6 +31,8 @@ impl Command for MapperGetConfigCommand {
 pub struct MapperMutateConfigCommand {
     pub key: String,
     pub action: Action,
+    /// Whether a `cloud_type` change may delete keys the new schema lacks
+    pub force: bool,
 }
 
 impl MapperMutateConfigCommand {
@@ -39,6 +40,7 @@ impl MapperMutateConfigCommand {
         Self {
             key,
             action: Action::Set(value),
+            force: false,
         }
     }
 
@@ -46,6 +48,7 @@ impl MapperMutateConfigCommand {
         Self {
             key,
             action: Action::Unset,
+            force: false,
         }
     }
 
@@ -53,13 +56,19 @@ impl MapperMutateConfigCommand {
         Self {
             key,
             action: Action::Add(value),
+            force: false,
         }
+    }
+
+    pub fn with_force(self, force: bool) -> Self {
+        Self { force, ..self }
     }
 
     pub fn remove(key: String, value: String) -> Self {
         Self {
             key,
             action: Action::Remove(value),
+            force: false,
         }
     }
 }
@@ -76,37 +85,33 @@ impl Command for MapperMutateConfigCommand {
     }
 
     async fn execute(&self, tedge_config: TEdgeConfig) -> Result<(), MaybeFancy<anyhow::Error>> {
-        mutate_mapper_key(&tedge_config.config_root(), &self.key, self.action.clone())
-            .await
-            .map_err(|e| anyhow::Error::new(e).into())
+        tedge_mapper_config::mutate_mapper_key(
+            &tedge_config.config_root(),
+            &self.key,
+            self.action.clone(),
+            self.force,
+        )
+        .await
+        .map_err(|e| anyhow::Error::new(e).into())
     }
-}
-
-async fn mutate_mapper_key(
-    config_root: &TedgePaths,
-    key: &str,
-    action: Action,
-) -> Result<(), tedge_config_engine::ConfigError> {
-    let mut fed = tedge_mapper_config::load_federated_config(config_root).await?;
-    tedge_mapper_config::mount_builtin_mapper(&mut fed, config_root, key)?;
-    fed.mutate(key, action).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tedge_test_utils::fs::TempTedgeDir;
+    use tedge_utils::paths::TedgePaths;
 
     #[rstest::rstest]
-    #[case::unknown_key("mappers.c8y.prod.url", "c8y.example.com:8883")]
+    #[case::unknown_key("mappers.c8y.prod.url", "c8y.example.com")]
     #[case::unknown_mapper("mappers.thingsboard.url", "tb.example.com:8883")]
-    #[case::invalid_value("mappers.c8y.bridge.tls.enable", "on")]
-    #[case::invalid_profile_value("mappers.c8y.profiles.prod.bridge.tls.enable", "on")]
+    #[case::invalid_value("mappers.c8y.auth_method", "token")]
+    #[case::invalid_profile_value("mappers.c8y.profiles.prod.auth_method", "token")]
     #[tokio::test]
     async fn a_rejected_write_creates_no_mapper_directory(#[case] key: &str, #[case] value: &str) {
         let dir = TempTedgeDir::new();
 
-        mutate_mapper_key(&config_root(&dir), key, Action::Set(value.into()))
+        mutate(&dir, key, Action::Set(value.into()))
             .await
             .unwrap_err();
 
@@ -121,13 +126,9 @@ mod tests {
         let dir = TempTedgeDir::new();
         dir.dir("mappers").dir("c8y");
 
-        mutate_mapper_key(
-            &config_root(&dir),
-            "mappers.c8y.bridge.tls.enable",
-            Action::Set("on".into()),
-        )
-        .await
-        .unwrap_err();
+        mutate(&dir, "mappers.c8y.auth_method", Action::Set("token".into()))
+            .await
+            .unwrap_err();
 
         assert!(dir.path().join("mappers/c8y").is_dir());
     }
@@ -136,10 +137,10 @@ mod tests {
     async fn a_write_creates_the_mapper_file() {
         let dir = TempTedgeDir::new();
 
-        mutate_mapper_key(
-            &config_root(&dir),
+        mutate(
+            &dir,
             "mappers.c8y.url",
-            Action::Set("c8y.example.com:8883".into()),
+            Action::Set("c8y.example.com".into()),
         )
         .await
         .unwrap();
@@ -151,16 +152,24 @@ mod tests {
     async fn a_write_to_a_profile_creates_only_the_profiled_mapper_file() {
         let dir = TempTedgeDir::new();
 
-        mutate_mapper_key(
-            &config_root(&dir),
+        mutate(
+            &dir,
             "mappers.c8y.profiles.prod.url",
-            Action::Set("c8y.example.com:8883".into()),
+            Action::Set("c8y.example.com".into()),
         )
         .await
         .unwrap();
 
         assert!(dir.path().join("mappers/c8y.prod/mapper.toml").is_file());
         assert!(!dir.path().join("mappers/c8y").exists());
+    }
+
+    async fn mutate(
+        dir: &TempTedgeDir,
+        key: &str,
+        action: Action,
+    ) -> Result<(), tedge_config_engine::ConfigError> {
+        tedge_mapper_config::mutate_mapper_key(&config_root(dir), key, action, false).await
     }
 
     fn config_root(dir: &TempTedgeDir) -> TedgePaths {

@@ -43,6 +43,12 @@ pub enum ConfigCmd {
         #[clap(long)]
         #[arg(add = ArgValueCandidates::new(profile_completions))]
         profile: Option<ProfileName>,
+
+        /// Allow changing a mapper's `cloud_type` even when that deletes keys
+        /// the new cloud's schema doesn't have
+        #[cfg(feature = "mapper-config")]
+        #[clap(long)]
+        force: bool,
     },
 
     /// Unset the provided configuration key
@@ -59,6 +65,12 @@ pub enum ConfigCmd {
         #[clap(long)]
         #[arg(add = ArgValueCandidates::new(profile_completions))]
         profile: Option<ProfileName>,
+
+        /// Allow changing a mapper's `cloud_type` even when that deletes keys
+        /// the new cloud's schema doesn't have
+        #[cfg(feature = "mapper-config")]
+        #[clap(long)]
+        force: bool,
     },
 
     /// Append or set the provided configuration key with the given value
@@ -78,6 +90,12 @@ pub enum ConfigCmd {
         #[clap(long)]
         #[arg(add = ArgValueCandidates::new(profile_completions))]
         profile: Option<ProfileName>,
+
+        /// Allow changing a mapper's `cloud_type` even when that deletes keys
+        /// the new cloud's schema doesn't have
+        #[cfg(feature = "mapper-config")]
+        #[clap(long)]
+        force: bool,
     },
 
     /// Remove value from the provided configuration key
@@ -97,6 +115,12 @@ pub enum ConfigCmd {
         #[clap(long)]
         #[arg(add = ArgValueCandidates::new(profile_completions))]
         profile: Option<ProfileName>,
+
+        /// Allow changing a mapper's `cloud_type` even when that deletes keys
+        /// the new cloud's schema doesn't have
+        #[cfg(feature = "mapper-config")]
+        #[clap(long)]
+        force: bool,
     },
 
     /// Print the configuration keys and their values
@@ -165,6 +189,8 @@ impl BuildCommand for ConfigCmd {
                 key,
                 value,
                 profile,
+                #[cfg(feature = "mapper-config")]
+                force,
             } => match key {
                 FederatedWritableKey::Core(key) => Ok(SetConfigCommand {
                     key: try_with_profile!(key, profile),
@@ -174,10 +200,17 @@ impl BuildCommand for ConfigCmd {
                 #[cfg(feature = "mapper-config")]
                 FederatedWritableKey::Mapper(key) => {
                     reject_profile_for_mapper_key(&key, &profile)?;
-                    Ok(MapperMutateConfigCommand::set(key, value).into_boxed())
+                    Ok(MapperMutateConfigCommand::set(key, value)
+                        .with_force(force)
+                        .into_boxed())
                 }
             },
-            ConfigCmd::Unset { key, profile } => match key {
+            ConfigCmd::Unset {
+                key,
+                profile,
+                #[cfg(feature = "mapper-config")]
+                force,
+            } => match key {
                 FederatedWritableKey::Core(key) => Ok(UnsetConfigCommand {
                     key: try_with_profile!(key, profile),
                 }
@@ -185,13 +218,17 @@ impl BuildCommand for ConfigCmd {
                 #[cfg(feature = "mapper-config")]
                 FederatedWritableKey::Mapper(key) => {
                     reject_profile_for_mapper_key(&key, &profile)?;
-                    Ok(MapperMutateConfigCommand::unset(key).into_boxed())
+                    Ok(MapperMutateConfigCommand::unset(key)
+                        .with_force(force)
+                        .into_boxed())
                 }
             },
             ConfigCmd::Add {
                 key,
                 value,
                 profile,
+                #[cfg(feature = "mapper-config")]
+                force,
             } => match key {
                 FederatedWritableKey::Core(key) => Ok(AddConfigCommand {
                     key: try_with_profile!(key, profile),
@@ -201,13 +238,17 @@ impl BuildCommand for ConfigCmd {
                 #[cfg(feature = "mapper-config")]
                 FederatedWritableKey::Mapper(key) => {
                     reject_profile_for_mapper_key(&key, &profile)?;
-                    Ok(MapperMutateConfigCommand::add(key, value).into_boxed())
+                    Ok(MapperMutateConfigCommand::add(key, value)
+                        .with_force(force)
+                        .into_boxed())
                 }
             },
             ConfigCmd::Remove {
                 key,
                 value,
                 profile,
+                #[cfg(feature = "mapper-config")]
+                force,
             } => match key {
                 FederatedWritableKey::Core(key) => Ok(RemoveConfigCommand {
                     key: try_with_profile!(key, profile),
@@ -217,7 +258,9 @@ impl BuildCommand for ConfigCmd {
                 #[cfg(feature = "mapper-config")]
                 FederatedWritableKey::Mapper(key) => {
                     reject_profile_for_mapper_key(&key, &profile)?;
-                    Ok(MapperMutateConfigCommand::remove(key, value).into_boxed())
+                    Ok(MapperMutateConfigCommand::remove(key, value)
+                        .with_force(force)
+                        .into_boxed())
                 }
             },
             ConfigCmd::List {

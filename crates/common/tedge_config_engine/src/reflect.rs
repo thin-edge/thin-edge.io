@@ -242,6 +242,30 @@ pub fn list_keys(shape: &'static Shape, prefix: &str) -> Vec<String> {
         .collect()
 }
 
+/// Lists the old names a config file may still use for keys, as dotted keys
+///
+/// These are fields renamed within their group, which keep their old name as
+/// a facet `alias` so files written before the rename still read.
+pub fn list_file_aliases(shape: &'static Shape, prefix: &str) -> Vec<String> {
+    let Some(fields) = get_struct_fields(shape) else {
+        return Vec::new();
+    };
+    let mut aliases = Vec::new();
+    for field in fields {
+        let inner_shape = match field.shape().def {
+            Def::Option(opt_def) => opt_def.t,
+            _ => field.shape(),
+        };
+        if is_config_group(inner_shape) {
+            let group_key = dotted_key(prefix, field_key_name(field));
+            aliases.extend(list_file_aliases(inner_shape, &group_key));
+        } else if let Some(alias) = field.alias {
+            aliases.push(dotted_key(prefix, alias));
+        }
+    }
+    aliases
+}
+
 /// Lists config keys with their help text and example values.
 ///
 /// Examples are read from `tedge::example` facet attributes on each field.
