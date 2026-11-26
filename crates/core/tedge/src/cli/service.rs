@@ -914,12 +914,17 @@ is_active = ["/bin/true", "{}"]
         assert_eq!(types, ["container", "lxc", "service"]);
     }
 
+    #[test_case("systemd", &["service", "systemd"]; "set")]
+    #[test_case("", &["service"]; "empty")]
     #[tokio::test]
-    async fn the_configured_service_type_is_completed() {
+    async fn the_configured_service_type_is_completed_unless_it_is_empty(
+        service_type: &str,
+        expected: &[&str],
+    ) {
         let config_dir = TempTedgeDir::new();
-        config_dir
-            .file("tedge.toml")
-            .with_raw_content("service.type = \"systemd\"\nservice.plugin_paths = []");
+        config_dir.file("tedge.toml").with_raw_content(&format!(
+            "service.type = \"{service_type}\"\nservice.plugin_paths = []"
+        ));
 
         let types: Vec<_> = service_type_completions_for_config_dir(config_dir.path())
             .await
@@ -927,23 +932,7 @@ is_active = ["/bin/true", "{}"]
             .map(|candidate| candidate.get_value().to_string_lossy().into_owned())
             .collect();
 
-        assert_eq!(types, ["service", "systemd"]);
-    }
-
-    #[tokio::test]
-    async fn an_empty_configured_service_type_is_not_completed() {
-        let config_dir = TempTedgeDir::new();
-        config_dir
-            .file("tedge.toml")
-            .with_raw_content("service.type = \"\"\nservice.plugin_paths = []");
-
-        let types: Vec<_> = service_type_completions_for_config_dir(config_dir.path())
-            .await
-            .iter()
-            .map(|candidate| candidate.get_value().to_string_lossy().into_owned())
-            .collect();
-
-        assert_eq!(types, ["service"]);
+        assert_eq!(types, expected);
     }
 
     fn command(action: &str, service_name: &str, service_type: &str) -> ServiceActionCommand {
