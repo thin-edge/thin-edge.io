@@ -33,17 +33,9 @@ The service type selects the backend that runs the action.
 
 | Service type                                                                | Backend                                                                            |
 |-----------------------------------------------------------------------------|--------------------------------------------------------------------------------------|
-| a type `<t>` with a plugin file                                             | The service plugin `<plugin-dir>/<t>`                                              |
-| `service` or the `tedge config` value `service.type`, with no plugin file   | The init system, as configured in [`system.toml`](../init-system-configuration)  |
-
-The plugin directories are the `tedge config` value `service.plugin_paths`,
-a comma-separated list, `/usr/share/tedge/service-plugins` per default.
-A plugin is picked by its exact name, the service type,
-from the first directory that holds one:
-
-```sh
-sudo tedge config set service.plugin_paths /usr/local/share/tedge/service-plugins,/usr/share/tedge/service-plugins
-```
+| `service`, without any matching plugin file                                 | The init system, as configured in [`system.toml`](../init-system-configuration)  |
+| `<t>` = `service.type` in tedge config, without any matching plugin file    | The init system, as configured in [`system.toml`](../init-system-configuration)  |
+| Any type `<t>` with a plugin file matching that name                        | The service plugin `<plugin-dir>/<t>`                                              |
 
 ```sh
 # Handled by the init system, e.g. systemctl restart collectd
@@ -55,6 +47,15 @@ sudo tedge service restart collectd --type systemd
 
 # Handled by /usr/share/tedge/service-plugins/container
 sudo tedge service restart nodered --type container
+```
+
+The plugin directories are the `tedge config` value `service.plugin_paths`,
+a comma-separated list, `/usr/share/tedge/service-plugins` per default.
+A plugin is picked by its exact name, the service type,
+from the first directory that holds one:
+
+```sh
+sudo tedge config set service.plugin_paths /usr/local/share/tedge/service-plugins,/usr/share/tedge/service-plugins
 ```
 
 Acting on a service usually requires root, so the runner is normally called under `sudo`.
@@ -73,7 +74,7 @@ For a plugin, they are whatever the plugin implements.
 * The runner forwards the plugin's stdout and stderr to its own.
 * The runner maps the plugin's exit code to its own:
   `0` stays `0`, `2` stays `2`, any other non-zero code is reported as a failure of that action.
-* A service type with no plugin file, other than `service` and the value of `service.type`,
+* A service type other than `service` or the configured `service.type`, without a corresponding service plugin,
   is reported as not supported, with exit code `2`.
 
 ### Timeout
