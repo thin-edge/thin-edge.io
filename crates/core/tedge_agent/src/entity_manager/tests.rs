@@ -1,3 +1,4 @@
+use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;
 use crate::entity_manager::tests::model::Action;
 use crate::entity_manager::tests::model::Action::AddDevice;
@@ -7,13 +8,18 @@ use crate::entity_manager::tests::model::Commands;
 use crate::entity_manager::tests::model::Protocol::HTTP;
 use crate::entity_manager::tests::model::Protocol::MQTT;
 use proptest::proptest;
+use rstest::rstest;
 use serde_json::json;
+use serde_json::Value;
 use std::collections::HashSet;
+use std::str::FromStr;
 use tedge_actors::test_helpers::MessageReceiverExt;
 use tedge_actors::Sender;
 use tedge_actors::Server;
 use tedge_api::entity::EntityMetadata;
 use tedge_api::entity::EntityType;
+use tedge_api::entity_store::EntityRegistrationMessage;
+use tedge_api::entity_store::EntityTwinMessage;
 use tedge_api::mqtt_topics::EntityTopicId;
 use tedge_mqtt_ext::test_helpers::assert_received_contains_str;
 use tedge_mqtt_ext::MqttMessage;
@@ -83,6 +89,135 @@ async fn twin_fragment_updates_published_to_mqtt() {
     assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/x", "9")]).await;
     assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/y", "true")]).await;
     assert_received_contains_str(&mut mqtt_box, [("te/device/main///twin/z", "foo")]).await;
+}
+
+#[rstest]
+#[case::service(
+    "device/main/service/collectd",
+    json!({"@type": "service"}),
+    json!({"name": "collectd", "type": "systemd"})
+)]
+#[case::service_with_name_and_type(
+    "device/main/service/collectd",
+    json!({"@type": "service", "name": "collectd-daemon", "type": "container"}),
+    json!({"name": "collectd-daemon", "type": "container"})
+)]
+#[case::service_with_a_custom_topic_id(
+    "custom/collectd//",
+    json!({"@type": "service", "@parent": "device/main//"}),
+    json!({"type": "systemd"})
+)]
+#[case::child_device("device/child1//", json!({"@type": "child-device"}), json!({}))]
+#[tokio::test]
+async fn default_twin_values_apply_only_to_services_and_only_to_missing_keys(
+    #[case] topic_id: &str,
+    #[case] registration: Value,
+    #[case] expected_twin: Value,
+) {
+    let mut entity_store = entity::server("device-under-test").entity_store;
+    let topic_id = EntityTopicId::from_str(topic_id).unwrap();
+    let registration =
+        EntityRegistrationMessage::try_from(topic_id.clone(), registration.to_string().as_bytes())
+            .unwrap();
+    entity_store
+        .handle(EntityStoreRequest::Create(registration))
+        .await;
+
+    let EntityStoreResponse::GetTwinFragments(Ok(twin)) = entity_store
+        .handle(EntityStoreRequest::GetTwinFragments(topic_id.clone()))
+        .await
+    else {
+        panic!("expected the twin data");
+    };
+    assert_eq!(Value::Object(twin), expected_twin);
+
+    for key in ["name", "type"] {
+        let EntityStoreResponse::GetTwinFragment(value) = entity_store
+            .handle(EntityStoreRequest::GetTwinFragment(
+                topic_id.clone(),
+                key.to_string(),
+            ))
+            .await
+        else {
+            panic!("expected a twin fragment");
+        };
+        assert_eq!(value.as_ref(), expected_twin.get(key));
+    }
+}
+
+#[tokio::test]
+async fn a_service_of_a_child_device_registered_without_type_has_the_type_service() {
+    let mut entity_store = entity::server("device-under-test").entity_store;
+    for (topic_id, registration) in [
+        ("device/child1//", json!({"@type": "child-device"})),
+        (
+            "device/child1/service/collectd",
+            json!({"@type": "service"}),
+        ),
+    ] {
+        let registration = EntityRegistrationMessage::try_from(
+            EntityTopicId::from_str(topic_id).unwrap(),
+            registration.to_string().as_bytes(),
+        )
+        .unwrap();
+        entity_store
+            .handle(EntityStoreRequest::Create(registration))
+            .await;
+    }
+
+    let EntityStoreResponse::GetTwinFragments(Ok(twin)) = entity_store
+        .handle(EntityStoreRequest::GetTwinFragments(
+            EntityTopicId::from_str("device/child1/service/collectd").unwrap(),
+        ))
+        .await
+    else {
+        panic!("expected the twin data");
+    };
+    assert_eq!(
+        Value::Object(twin),
+        json!({"name": "collectd", "type": "service"})
+    );
+}
+
+#[rstest]
+#[case::service_name("name", json!("collectd"))]
+#[case::service_type("type", json!("systemd"))]
+#[tokio::test]
+async fn a_cleared_twin_value_of_a_service_falls_back_to_its_default_value(
+    #[case] key: &str,
+    #[case] default_value: Value,
+) {
+    let mut entity_store = entity::server("device-under-test").entity_store;
+    let topic_id = EntityTopicId::from_str("device/main/service/collectd").unwrap();
+    let registration = EntityRegistrationMessage::try_from(
+        topic_id.clone(),
+        json!({"@type": "service", "name": "collectd-daemon", "type": "container"})
+            .to_string()
+            .as_bytes(),
+    )
+    .unwrap();
+    entity_store
+        .handle(EntityStoreRequest::Create(registration))
+        .await;
+
+    entity_store
+        .handle(EntityStoreRequest::SetTwinFragment(EntityTwinMessage::new(
+            topic_id.clone(),
+            key.to_string(),
+            Value::Null,
+        )))
+        .await;
+
+    let EntityStoreResponse::GetTwinFragment(value) = entity_store
+        .handle(EntityStoreRequest::GetTwinFragment(
+            topic_id,
+            key.to_string(),
+        ))
+        .await
+    else {
+        panic!("expected a twin fragment");
+    };
+    assert_eq!(value, Some(default_value));
 }
 
 #[tokio::test]
@@ -461,6 +596,7 @@ mod entity {
     use tedge_actors::SimpleMessageBoxBuilder;
     use tedge_api::entity::EntityMetadata;
     use tedge_api::entity::EntityType;
+    use tedge_api::entity::TwinDefaultsConfig;
     use tedge_api::entity_store::EntityRegistrationMessage;
     use tedge_api::mqtt_topics::EntityTopicId;
     use tedge_api::mqtt_topics::MqttSchema;
@@ -551,7 +687,9 @@ mod entity {
         )
         .unwrap();
 
-        let config = EntityStoreServerConfig::new(mqtt_schema.clone(), entity_auto_register);
+        let twin_defaults = TwinDefaultsConfig::new("systemd");
+        let config =
+            EntityStoreServerConfig::new(mqtt_schema.clone(), entity_auto_register, twin_defaults);
 
         let mqtt_actor = SimpleMessageBoxBuilder::new("MQTT", 64);
         let mut actor_builder = TestMqttActorBuilder {

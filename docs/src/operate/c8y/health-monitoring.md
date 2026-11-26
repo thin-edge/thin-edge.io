@@ -64,7 +64,7 @@ c8y/s/us/<device-id>:device:child1
 
 </div>
 
-## Configuring the default service type
+## Configuring the default service type {#configuring-the-default-service-type}
 
 The default service type can be configured using the `tedge` cli.
 
@@ -75,8 +75,11 @@ sudo tedge config set service.type systemd
 ```
 
 :::note
-When the `type` property was not included in the service registration message, then the configured default value
-will be used by the mapper while auto-registering the service.
+When the `type` property is not included in the registration message of a service of the main device,
+then the configured default value will be used by the mapper.
+A service of a child device registered without `type` gets the type `service`.
+After changing `service.type`, restart the %%te%% services,
+such as `tedge-agent` and `tedge-mapper-c8y`, to apply the new value.
 :::
 
 To clear the configured default service type one can use the command below.

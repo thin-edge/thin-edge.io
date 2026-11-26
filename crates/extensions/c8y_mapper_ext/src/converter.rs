@@ -68,6 +68,7 @@ use tedge_api::commands::SoftwareListCommand;
 use tedge_api::control::ActionName;
 use tedge_api::entity::EntityExternalId;
 use tedge_api::entity::EntityType;
+use tedge_api::entity::TwinDefaultsConfig;
 use tedge_api::entity_store::EntityRegistrationMessage;
 use tedge_api::mqtt_topics::Channel;
 use tedge_api::mqtt_topics::EntityTopicId;
@@ -108,7 +109,6 @@ pub struct CumulocityConverter {
     errors_topic: Topic,
     mqtt_publisher: LoggingSender<MqttMessage>,
     pub http_proxy: C8YHttpProxy,
-    pub service_type: String,
     pub mqtt_schema: MqttSchema,
     pub(crate) entity_cache: EntityCache,
 
@@ -134,12 +134,6 @@ impl CumulocityConverter {
     ) -> Result<Self, CumulocityConverterBuildError> {
         let device_id = config.device_id.clone();
 
-        let service_type = if config.service.ty.is_empty() {
-            "service".to_owned()
-        } else {
-            config.service.ty.clone()
-        };
-
         let operation_manager = SupportedOperations::load_all_devices(
             device_id.clone(),
             Arc::clone(&config.ops_dir),
@@ -159,6 +153,7 @@ impl CumulocityConverter {
             Self::map_to_c8y_external_id,
             Self::validate_external_id,
             EARLY_MESSAGE_BUFFER_SIZE,
+            TwinDefaultsConfig::new(&config.service.ty),
         );
 
         let command_id = config.id_generator();
@@ -179,7 +174,6 @@ impl CumulocityConverter {
             supported_operations: operation_manager,
             http_proxy,
             mqtt_publisher,
-            service_type,
             mqtt_schema,
             entity_cache,
             command_id,
@@ -313,12 +307,9 @@ impl CumulocityConverter {
     ) -> Result<Vec<MqttMessage>, ConversionError> {
         let input = EntityRegistrationMessage::try_from(source, message.payload_bytes())?;
 
-        // Parse the optional fields
-        let display_name = input.twin_data.get("name").and_then(|v| v.as_str());
-        let display_type = input.twin_data.get("type").and_then(|v| v.as_str());
-
         let entity_topic_id = &input.topic_id;
-        let external_id = self.entity_cache.try_get_external_id(entity_topic_id)?;
+        let entity = self.entity_cache.try_get(entity_topic_id)?;
+        let external_id = &entity.external_id;
         let mut messages = vec![];
         match input.r#type {
             // Created by `tedge connect c8y`, or when the device first sends data
@@ -326,14 +317,12 @@ impl CumulocityConverter {
             EntityType::ChildDevice => {
                 let parent_xid: Option<&EntityExternalId> =
                     self.entity_cache.parent_external_id(entity_topic_id)?;
-                let display_name = display_name.unwrap_or(external_id.as_ref());
-                let display_type = display_type.unwrap_or("thin-edge.io-child");
 
                 messages.push(
                     child_device_creation_message(
                         external_id.as_ref(),
-                        Some(display_name),
-                        Some(display_type),
+                        Some(entity.display_name()),
+                        Some(entity.display_type()),
                         parent_xid.map(|xid| xid.as_ref()),
                         &self.config.device_id,
                         &self.config.bridge_config.c8y_prefix,
@@ -344,18 +333,12 @@ impl CumulocityConverter {
             }
             EntityType::Service => {
                 let parent_xid = self.entity_cache.parent_external_id(entity_topic_id)?;
-                let display_name = display_name.unwrap_or_else(|| {
-                    entity_topic_id
-                        .default_service_name()
-                        .unwrap_or(external_id.as_ref())
-                });
-                let display_type = display_type.unwrap_or(&self.service_type);
 
                 messages.push(
                     service_creation_message(
                         external_id.as_ref(),
-                        display_name,
-                        display_type,
+                        entity.display_name(),
+                        entity.display_type(),
                         "up",
                         parent_xid.map(|xid| xid.as_ref()),
                         &self.config.device_id,

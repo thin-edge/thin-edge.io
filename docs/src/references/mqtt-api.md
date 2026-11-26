@@ -290,7 +290,7 @@ tedge mqtt pub -r 'te/device/main//' '{
 }'
 ```
 
-#### Register a service of the main device
+#### Register a service of the main device {#register-a-service-of-the-main-device}
 
 ```sh te2mqtt formats=v1
 tedge mqtt pub -r 'te/device/main/service/nodered' '{
@@ -313,6 +313,12 @@ tedge mqtt pub -r 'te/component_namespace/service/nodered/instance-1' '{
   "type": "systemd"
 }'
 ```
+
+The `name` and `type` of a service are twin data, and both are optional.
+When a service of the main device has no `type`, %%te%% uses the tedge config `service.type` setting as its type (defaults to `service`).
+When a service of a child device has no `type`, its type is `service`.
+When a service follows the default topic scheme and has no `name`, %%te%% uses the `<service_id>` of the topic `te/device/<device_id>/service/<service_id>`.
+A service registered with a custom topic scheme, such as `te/component_namespace/service/nodered/instance-1`, has no default `name`.
 
 #### Register a child device
 

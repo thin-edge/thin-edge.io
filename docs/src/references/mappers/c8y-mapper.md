@@ -1647,12 +1647,15 @@ te/device/main/service/collectd/cmd/control/c8y-mapper-<c8y-operation-id>
 - The **action** is the `command` value, unchanged.
 - The **service name** is the first of these that is set:
   1. the `serviceName` of the operation,
-     which is the service name %%te%% published when registering it
+     which the Cumulocity UI fills with the `name` of the service managed object
   2. the `name` field of the [service registration message](../../mqtt-api#entity-registration)
+  3. the service id, when the topic id follows the default topic scheme `device/<device_id>/service/<service_id>`
 - The **service type** is the first of these that is set:
-  1. the `serviceType` of the operation
+  1. the `serviceType` of the operation,
+     which the Cumulocity UI fills with the `serviceType` of the service managed object
   2. the `type` field of the [service registration message](../../mqtt-api#entity-registration)
-  3. the default type `service`
+  3. for a service of the main device, the `service.type` setting, `service` by default;
+     for a service of a child device, `service`
 
 ## Signals
 
