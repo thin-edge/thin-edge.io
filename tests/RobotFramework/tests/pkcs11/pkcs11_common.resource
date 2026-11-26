@@ -136,10 +136,12 @@ Install tedge-p11-server
 
     IF    $version
         VAR    ${package}=    tedge-p11-server=${version}
+        Execute Command    cmd=apt-get install -y --allow-downgrades ${package}
     ELSE
-        VAR    ${package}=    tedge-p11-server
+        # keep the tedge-p11-server built from the tested sources if it is already installed,
+        # instead of upgrading it to the latest published package
+        Execute Command    cmd=apt-get install -y --no-upgrade tedge-p11-server
     END
-    Execute Command    cmd=apt-get install -y --allow-downgrades ${package}
 
     IF    $version
         ${stdout}=    Execute Command    tedge-p11-server -V    strip=True

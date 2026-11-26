@@ -491,9 +491,12 @@ define_tedge_config! {
         #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(function = "default_device_csr"), reader(private))]
         csr_path: AbsolutePath,
 
-        /// A PKCS#11 URI of the private key.
+        /// A PKCS #11 URI of the private key.
         ///
-        /// See RFC #7512.
+        /// If cryptoki is enabled (`cryptoki.mode` isn't `off`) a keypair selected by this option will be used to
+        /// connect to the cloud instead of `device.key_path`.
+        ///
+        /// For more information about PKCS #11 URIs, see RFC7512.
         #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
         key_uri: Arc<str>,
 
@@ -529,15 +532,13 @@ define_tedge_config! {
             #[tedge_config(example = "123456", default(value = "123456"))]
             pin: Arc<str>,
 
-            /// A URI of the token/object to be used by tedge-p11-server.
+            /// A PKCS #11 token allowed to be used for PKCS #11 management commands.
             ///
-            /// If set, tedge-p11-server will by default use this URI to select a key for signing if a client does not
-            /// provide its URI in the request. If the client provides the URI, then the attributes of this server URI
-            /// will be used as a base onto which client-provided URI attributes will be appended, potentially limiting
-            /// the scope of keys or tokens that can be used by the clients.
+            /// If set, management commands like init, create-key, delete-key, change-pin, etc. can only be used with a
+            /// token matching this URI. If unset, management commands can be used with all tokens.
             ///
-            /// For example, if `cryptoki.uri=pkcs11:token=token1` and `device.key_uri=pkcs11:token2;object=key1`,
-            /// `tedge-p11-server` will use URI `pkcs11:token1;object=key1`.
+            /// Other read-only commands like list-keys, list-tokens are unaffected by this option. Which key is used
+            /// for the cloud connection is selected by `device.key_uri` and is also unaffected by this option.
             ///
             /// For more information about PKCS11 URIs, see RFC7512.
 
@@ -658,9 +659,12 @@ define_tedge_config! {
             #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
             csr_path: AbsolutePath,
 
-            /// A PKCS#11 URI of the private key.
+            /// A PKCS #11 URI of the private key.
             ///
-            /// See RFC #7512.
+            /// If cryptoki is enabled (`cryptoki.mode` isn't `off`) a keypair selected by this option will be used to
+            /// connect to the cloud instead of `device.key_path`.
+            ///
+            /// For more information about PKCS #11 URIs, see RFC7512.
             #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
             key_uri: Arc<str>,
 
@@ -937,9 +941,12 @@ define_tedge_config! {
             #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
             csr_path: AbsolutePath,
 
-            /// A PKCS#11 URI of the private key.
+            /// A PKCS #11 URI of the private key.
             ///
-            /// See RFC #7512.
+            /// If cryptoki is enabled (`cryptoki.mode` isn't `off`) a keypair selected by this option will be used to
+            /// connect to the cloud instead of `device.key_path`.
+            ///
+            /// For more information about PKCS #11 URIs, see RFC7512.
             #[tedge_config(example = "pkcs11:token=my-pkcs11-token;object=my-key")]
             key_uri: Arc<str>,
 
@@ -1042,9 +1049,12 @@ define_tedge_config! {
             #[tedge_config(example = "/etc/tedge/device-certs/tedge.csr", default(from_key = "device.csr_path"))]
             csr_path: AbsolutePath,
 
-            /// A PKCS#11 URI of the private key.
+            /// A PKCS #11 URI of the private key.
             ///
-            /// See RFC #7512.
+            /// If cryptoki is enabled (`cryptoki.mode` isn't `off`) a keypair selected by this option will be used to
+            /// connect to the cloud instead of `device.key_path`.
+            ///
+            /// For more information about PKCS #11 URIs, see RFC7512.
             #[tedge_config(example = "pkcs11:model=PKCS%2315%20emulated")]
             key_uri: Arc<str>,
 

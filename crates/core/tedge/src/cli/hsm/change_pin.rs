@@ -98,6 +98,7 @@ impl Command for ChangePinCmd {
         };
 
         let cryptoki = tedge_p11::tedge_p11_service(self.cryptoki_config.clone())?;
+
         let response = cryptoki.change_pin(ChangePinRequest {
             uri: self.uri.clone(),
             new_pin: SecretString::from(new_pin.clone()),

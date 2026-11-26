@@ -105,6 +105,8 @@ impl Command for DeleteKeyCmd {
             }
         }
 
+        let cryptoki = tedge_p11::tedge_p11_service(self.cryptoki_config.clone())?;
+
         // Confirm before the destructive action unless --force was given.
         if !self.force
             && !confirm(&format!(
@@ -115,7 +117,6 @@ impl Command for DeleteKeyCmd {
             return Ok(());
         }
 
-        let cryptoki = tedge_p11::tedge_p11_service(self.cryptoki_config.clone())?;
         let response = cryptoki.delete_key(DeleteKeyRequest {
             uri,
             pin: self.pin.clone().map(SecretString::from),

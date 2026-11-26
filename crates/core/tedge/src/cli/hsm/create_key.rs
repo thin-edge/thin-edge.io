@@ -297,6 +297,7 @@ impl CreateKeyHsmCmd {
                     params,
                     pin: self.pin.clone().map(SecretString::from),
                 })?;
+
                 eprintln!("New keypair was successfully created.");
                 (key.pem, key.uri)
             }
