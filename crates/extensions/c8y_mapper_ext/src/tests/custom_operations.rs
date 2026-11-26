@@ -330,11 +330,7 @@ async fn json_custom_operation_status_multiple_operations_in_one_mqtt_message() 
         smartrest_use_operation_id: true,
         ..test_mapper_config(&ttd)
     };
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_mapper, mut mqtt) = spawn_mapper_with_config(ttd, config).await;
 
     // Simulate c8y_Command SmartREST request
     let operation_1 = json!({

@@ -125,14 +125,10 @@ async fn mapper_maps_c8y_command_to_the_builtin_shell_execute_command() {
     let ttd = TempTedgeDir::new();
     let config = test_mapper_config(&ttd);
 
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (mapper, mut mqtt) = spawn_mapper_with_config(ttd, config).await;
 
     // The built-in operation template has been deployed by the mapper
-    assert!(ttd
+    assert!(mapper
         .path()
         .join("operations/c8y/c8y_Command.template")
         .is_file());
@@ -186,14 +182,10 @@ async fn shell_execute_is_not_mapped_to_c8y_when_disabled() {
     let mut config = test_mapper_config(&ttd);
     config.capabilities.shell_execute = false;
 
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (mapper, mut mqtt) = spawn_mapper_with_config(ttd, config).await;
 
     // No operation template is deployed when the feature is disabled
-    assert!(!ttd
+    assert!(!mapper
         .path()
         .join("operations/c8y/c8y_Command.template")
         .exists());
@@ -228,11 +220,7 @@ async fn c8y_command_is_ignored_when_shell_execute_is_disabled() {
     let mut config = test_mapper_config(&ttd);
     config.capabilities.shell_execute = false;
 
-    let test_handle = spawn_c8y_mapper_actor_with_config(&ttd, config, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let (_mapper, mut mqtt) = spawn_mapper_with_config(ttd, config).await;
 
     let input_message = MqttMessage::new(
         &Topic::new_unchecked("c8y/devicecontrol/notifications"),

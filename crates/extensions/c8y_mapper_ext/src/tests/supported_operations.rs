@@ -8,9 +8,8 @@ async fn mapper_publishes_supported_operations() {
     let ttd = TempTedgeDir::new();
     create_thin_edge_operations(&ttd, vec!["c8y_TestOp1", "c8y_TestOp2"]);
 
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let config = test_mapper_config(&ttd);
+    let (_mapper, mut mqtt) = spawn_mapper_with_config(ttd, config).await;
 
     // Expect smartrest message on `c8y/s/us` with expected payload "114,c8y_TestOp1,c8y_TestOp2"
     assert_received_contains_str(&mut mqtt, [("c8y/s/us", "114,c8y_TestOp1,c8y_TestOp2")]).await;
@@ -455,9 +454,8 @@ async fn mapper_publishes_all_supported_operations_on_signal() {
         .dir("test-device:device:main:service:collectd")
         .file("c8y_ServiceCommand");
 
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, .. } = test_handle;
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let config = test_mapper_config(&ttd);
+    let (_mapper, mut mqtt) = spawn_mapper_with_config(ttd, config).await;
 
     // Register the tedge-mapper-c8y service upfront
     publish(&mut mqtt, "te/device/main/service/tedge-mapper-c8y", r#"{"@parent":"device/main//","@type":"service","name":"tedge-mapper-c8y","type":"service"}"#).await;

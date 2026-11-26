@@ -254,11 +254,8 @@ async fn service_registration_mapping() {
 #[tokio::test]
 async fn mapper_publishes_supported_software_types() {
     let ttd = TempTedgeDir::new();
-    let test_handle = spawn_c8y_mapper_actor(&ttd, true).await;
-    let TestHandle { mqtt, http, .. } = test_handle;
-    spawn_dummy_c8y_http_proxy(http);
-
-    let mut mqtt = mqtt.with_timeout(TEST_TIMEOUT_MS);
+    let config = test_mapper_config(&ttd);
+    let (_mapper, mut mqtt) = spawn_mapper_with_config(ttd, config).await;
 
     // Simulate software_list capability message
     publish(
