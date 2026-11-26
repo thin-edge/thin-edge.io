@@ -573,7 +573,7 @@ impl CumulocityConverter {
                 status: CommandStatus::Init,
                 action: action.to_string(),
                 service_name: service_name.to_string(),
-                service_type: service_type.to_string(),
+                service_type,
             },
         };
 
@@ -587,7 +587,7 @@ impl CumulocityConverter {
         &self,
         target: &CloudEntityMetadata,
         request: &C8yServiceCommand,
-    ) -> Result<(ActionName, ServiceName, ServiceType), String> {
+    ) -> Result<(ActionName, ServiceName, String), String> {
         let xid = target.external_id.as_ref();
         let command = &request.command;
 
@@ -618,12 +618,13 @@ impl CumulocityConverter {
             .filter(|ty| !ty.is_empty())
             .or_else(|| target.twin_str_with_default("type"))
             .unwrap_or(DEFAULT_SERVICE_TYPE);
-        let service_type = self
-            .config
-            .service
-            .service_type(service_type)
-            .map_err(|err| format!("{xid} cannot run the '{action}' action: {err}"))?;
+        // The configured type may break the plugin name rule: it then runs only under the init system
+        if service_type != self.config.service.type_or_default() {
+            service_type
+                .parse::<ServiceType>()
+                .map_err(|err| format!("{xid} cannot run the '{action}' action: {err}"))?;
+        }
 
-        Ok((action, service_name, service_type))
+        Ok((action, service_name, service_type.to_string()))
     }
 }

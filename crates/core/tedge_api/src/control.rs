@@ -132,78 +132,52 @@ pub struct InvalidServiceName {
 /// The type of a service, e.g., `container`.
 ///
 /// A service type names a file in the service plugin directory, so it must be a plain file name.
-/// The non-empty value configured as `service.type` is accepted even when it is not,
-/// but it is then never looked up as a plugin file.
 ///
 /// ```
 /// use tedge_api::control::ServiceType;
 ///
-/// assert!(ServiceType::new("container", "service").is_ok());
-/// assert!(ServiceType::new("Systemd", "Systemd").is_ok());
+/// assert!("container".parse::<ServiceType>().is_ok());
 ///
-/// assert!(ServiceType::new("../../bin/sh", "service").is_err());
-/// assert!(ServiceType::new("Container", "service").is_err());
+/// assert!("../../bin/sh".parse::<ServiceType>().is_err());
+/// assert!("Container".parse::<ServiceType>().is_err());
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ServiceType {
-    name: String,
-    is_init_system_type: bool,
+pub struct ServiceType(String);
+
+impl FromStr for ServiceType {
+    type Err = InvalidServiceType;
+
+    fn from_str(ty: &str) -> Result<Self, Self::Err> {
+        let invalid = |reason: &str| {
+            Err(InvalidServiceType {
+                ty: ty.to_string(),
+                reason: reason.to_string(),
+            })
+        };
+
+        if ty.is_empty() {
+            return invalid("a service type cannot be empty");
+        }
+        if !ty
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
+        {
+            return invalid("a service type must only hold lowercase letters, digits, '_' and '-'");
+        }
+
+        Ok(ServiceType(ty.to_string()))
+    }
 }
 
 impl ServiceType {
-    /// `configured_type` is the `tedge config` value of `service.type`.
-    pub fn new(ty: &str, configured_type: &str) -> Result<Self, InvalidServiceType> {
-        let is_configured = !ty.is_empty() && ty == configured_type;
-        if !is_configured {
-            check_plugin_name(ty)?;
-        }
-        Ok(ServiceType {
-            name: ty.to_string(),
-            is_init_system_type: is_configured || ty == DEFAULT_SERVICE_TYPE,
-        })
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
-
-    /// Returns `true` for `service` and the configured service type,
-    /// which run under the init system when no plugin has their name.
-    pub fn is_init_system_type(&self) -> bool {
-        self.is_init_system_type
-    }
-
-    /// Returns `None` for a configured type that breaks the plugin name rule.
-    /// Build a plugin path only from this name.
-    pub fn checked_plugin_name(&self) -> Option<&str> {
-        Self::is_plugin_name(&self.name).then_some(self.name.as_str())
-    }
-
-    pub fn is_plugin_name(ty: &str) -> bool {
-        check_plugin_name(ty).is_ok()
-    }
-}
-
-fn check_plugin_name(ty: &str) -> Result<(), InvalidServiceType> {
-    let invalid = |reason: &str| {
-        Err(InvalidServiceType {
-            ty: ty.to_string(),
-            reason: reason.to_string(),
-        })
-    };
-
-    if ty.is_empty() {
-        return invalid("a service type cannot be empty");
-    }
-    if !ty
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '-'))
-    {
-        return invalid("a service type must only hold lowercase letters, digits, '_' and '-'");
-    }
-
-    Ok(())
 }
 
 impl fmt::Display for ServiceType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.name.fmt(f)
+        self.0.fmt(f)
     }
 }
 
@@ -305,8 +279,7 @@ mod tests {
     #[test_case("container")]
     #[test_case("my_type-2")]
     fn accepted_service_types(ty: &str) {
-        let service_type = ServiceType::new(ty, "service").unwrap();
-        assert_eq!(service_type.checked_plugin_name(), Some(ty));
+        assert!(ty.parse::<ServiceType>().is_ok(), "{ty}");
     }
 
     #[test_case(""; "empty")]
@@ -315,18 +288,6 @@ mod tests {
     #[test_case("sub/type"; "with a path separator")]
     #[test_case(".."; "parent directory")]
     fn rejected_service_types(ty: &str) {
-        assert!(ServiceType::new(ty, "service").is_err(), "{ty}");
-    }
-
-    #[test_case("Systemd"; "with an uppercase letter")]
-    #[test_case("Systemd Service"; "with a space")]
-    fn the_configured_service_type_is_accepted_but_names_no_plugin(ty: &str) {
-        let service_type = ServiceType::new(ty, ty).unwrap();
-        assert_eq!(service_type.checked_plugin_name(), None);
-    }
-
-    #[test]
-    fn an_empty_configured_service_type_is_rejected() {
-        assert!(ServiceType::new("", "").is_err());
+        assert!(ty.parse::<ServiceType>().is_err(), "{ty}");
     }
 }

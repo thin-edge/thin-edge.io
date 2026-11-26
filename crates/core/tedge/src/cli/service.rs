@@ -10,6 +10,7 @@ use std::path::Path;
 use std::process::Output;
 use std::time::Duration;
 use tedge_api::control::ActionName;
+use tedge_api::control::InvalidServiceType;
 use tedge_api::control::ServiceName;
 use tedge_api::control::ServiceType;
 use tedge_api::control::DEFAULT_SERVICE_TYPE;
@@ -128,22 +129,22 @@ impl Command for ServiceActionCommand {
 
 impl ServiceActionCommand {
     async fn run(&self, config: &TEdgeConfig) -> Result<(), ServiceActionError> {
-        let service_type = config
-            .service
-            .service_type(&self.service_type)
-            .map_err(|err| ServiceActionError::NotSupported(err.to_string()))?;
-        match self.find_plugin(&service_type).await {
-            Some(plugin) => self.run_plugin_action(plugin).await,
-            None if service_type.is_init_system_type() => {
+        let service_type = self.service_type.as_str();
+        match self.find_plugin(service_type).await {
+            Ok(Some(plugin)) => self.run_plugin_action(plugin).await,
+            _ if service_type == DEFAULT_SERVICE_TYPE
+                || service_type == config.service.type_or_default() =>
+            {
                 self.run_init_system_action(config.root_dir()).await
             }
-            None => {
+            Ok(None) => {
                 let dirs: Vec<&str> = self.plugin_paths.iter().map(|dir| dir.as_str()).collect();
                 Err(ServiceActionError::NotSupported(format!(
                     "No service plugin for the service type '{service_type}': no '{service_type}' file in {dirs}",
                     dirs = dirs.join(", ")
                 )))
             }
+            Err(err) => Err(ServiceActionError::NotSupported(err.to_string())),
         }
     }
 
@@ -265,18 +266,21 @@ impl ServiceActionCommand {
     }
 
     /// Returns the first plugin file found in the configured plugin paths for the service type.
-    async fn find_plugin(&self, service_type: &ServiceType) -> Option<Utf8PathBuf> {
-        let plugin_name = service_type.checked_plugin_name()?;
+    async fn find_plugin(
+        &self,
+        service_type: &str,
+    ) -> Result<Option<Utf8PathBuf>, InvalidServiceType> {
+        let plugin_name = service_type.parse::<ServiceType>()?;
         for dir in &self.plugin_paths {
-            let plugin = dir.join(plugin_name);
+            let plugin = dir.join(plugin_name.as_str());
             if tokio::fs::metadata(&plugin)
                 .await
                 .is_ok_and(|metadata| metadata.is_file())
             {
-                return Some(plugin);
+                return Ok(Some(plugin));
             }
         }
-        None
+        Ok(None)
     }
 }
 
@@ -434,7 +438,7 @@ async fn service_type_completions_for_config_dir(
                     .await
                     .is_ok_and(|metadata| metadata.is_file());
                 let name = entry.file_name().to_string_lossy().into_owned();
-                if is_file && ServiceType::is_plugin_name(&name) {
+                if is_file && name.parse::<ServiceType>().is_ok() {
                     types.insert(name);
                 }
             }
@@ -826,9 +830,7 @@ is_active = ["/bin/true", "{}"]
         let mut cmd = command("restart", "nodered", "container");
         cmd.plugin_paths = vec![first.path().to_path_buf(), second.path().to_path_buf()];
 
-        let service_type = ServiceType::new("container", "service").unwrap();
-
-        assert_eq!(cmd.find_plugin(&service_type).await.unwrap(), plugin);
+        assert_eq!(cmd.find_plugin("container").await.unwrap(), Some(plugin));
     }
 
     #[test]
