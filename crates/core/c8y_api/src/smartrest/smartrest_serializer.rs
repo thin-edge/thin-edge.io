@@ -71,6 +71,17 @@ impl OperationReference {
             OperationReference::Name(name) => succeed_operation_with_name(name, result),
         }
     }
+
+    /// Generates a SmartREST message to set the operation to successful, with
+    /// the payload as its only parameter when given
+    pub fn succeeded_with_payload(&self, payload: Option<&str>) -> SmartrestPayload {
+        match self {
+            OperationReference::Id(op_id) => succeed_static_operation_with_id(op_id, payload),
+            OperationReference::Name(name) => {
+                succeed_static_operation(SET_OPERATION_TO_SUCCESSFUL, name, payload)
+            }
+        }
+    }
 }
 
 /// Generates a SmartREST message to set the provided operation to executing
