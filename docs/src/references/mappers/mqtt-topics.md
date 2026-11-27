@@ -82,19 +82,3 @@ The AWS topics are prefixed by `aws/`.
 * `aws/shadow/#` Use this topic to interact with unnamed and named shadows of the device. It's mapped to
   `$aws/things/{device_id}/shadow`.
 
-## Collectd topics
-
-When the [device monitoring feature is enabled](../../start/device-monitoring.md),
-monitoring metrics are emitted by `collectd` on a hierarchy of MQTT topics.
-
-* `collectd/$HOSTNAME/#` - All the metrics collected on the device (which hostname is `$HOSTNAME`).
-* `collectd/$HOSTNAME/$PLUGIN/#` - All the metrics collected by a given collectd plugin, named `$PLUGIN`.
-* `collectd/$HOSTNAME/$PLUGIN/$METRIC` - The topic for a given metric, named `$METRIC`.
-   All the measurements are published as a pair of a Unix timestamp in milliseconds and a numeric value
-   in the format `$TIMESTAMP:$VALUE`. For example, `1623155717:98.6`.
-
-The `collectd-mapper` daemon process ingests these measurements and emits translated messages
-to the measurement topic.
-
-* This process groups the atomic measurements that have been received during the same time-window (currently 200 ms)
-* and produces a single %%te%% JSON for the whole group of measurements.

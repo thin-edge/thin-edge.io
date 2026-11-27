@@ -230,9 +230,9 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		systemctl --system daemon-reload >/dev/null || true
 		if [ -n "$2" ]; then
 			if command -v deb-systemd-invoke >/dev/null 2>&1; then
-				deb-systemd-invoke try-restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service tedge-mapper-collectd.service >/dev/null || true
+				deb-systemd-invoke try-restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service >/dev/null || true
 			else
-				systemctl try-restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service tedge-mapper-collectd.service >/dev/null || true
+				systemctl try-restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service >/dev/null || true
 			fi
 		fi
 	fi
@@ -272,12 +272,6 @@ if command -v systemctl >/dev/null; then
     ### Enable the service if the device is connected to aws cloud
     if [ -f "/etc/tedge/mosquitto-conf/aws-bridge.conf" ]; then
         enable_start_service tedge-mapper-aws.service
-    fi
-    if [ -d /run/systemd/system ]; then
-        ### Enable the service if the collectd is running on the device
-        if systemctl is-active --quiet collectd.service; then
-            enable_start_service tedge-mapper-collectd.service
-        fi
     fi
 fi
 

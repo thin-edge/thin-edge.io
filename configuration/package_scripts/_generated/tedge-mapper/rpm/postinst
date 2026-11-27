@@ -78,7 +78,7 @@ fi
 if [ $1 -eq 2 ]; then
 	if [ -d /run/systemd/system ]; then
 		systemctl --system daemon-reload >/dev/null || true
-		systemctl restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service tedge-mapper-collectd.service >/dev/null || true
+		systemctl restart tedge-mapper-aws.service tedge-mapper-az.service tedge-mapper-c8y.service tedge-mapper-local.service >/dev/null || true
 	fi
 fi
 # End automatically added section
@@ -116,12 +116,6 @@ if command -v systemctl >/dev/null; then
     ### Enable the service if the device is connected to aws cloud
     if [ -f "/etc/tedge/mosquitto-conf/aws-bridge.conf" ]; then
         enable_start_service tedge-mapper-aws.service
-    fi
-    if [ -d /run/systemd/system ]; then
-        ### Enable the service if the collectd is running on the device
-        if systemctl is-active --quiet collectd.service; then
-            enable_start_service tedge-mapper-collectd.service
-        fi
     fi
 fi
 

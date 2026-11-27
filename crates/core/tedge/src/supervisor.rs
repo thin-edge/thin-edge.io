@@ -138,10 +138,10 @@ mod tests {
     #[test]
     fn run_all_logging_considers_the_agent_and_mapper_components() {
         assert_eq!(
-            log_service_names(&[MapperName::Collectd]),
+            log_service_names(&[MapperName::UserDefined(vec!["local".to_string()])]),
             vec![
                 tedge_agent::AGENT_NAME.to_string(),
-                "tedge-mapper-collectd".to_string(),
+                "tedge-mapper".to_string(),
             ]
         );
     }
@@ -149,10 +149,9 @@ mod tests {
     #[test]
     fn run_all_logging_includes_all_mappers() {
         assert_eq!(
-            log_service_names(&[MapperName::Collectd, MapperName::C8y { profile: None }]),
+            log_service_names(&[MapperName::C8y { profile: None }]),
             vec![
                 tedge_agent::AGENT_NAME.to_string(),
-                "tedge-mapper-collectd".to_string(),
                 "tedge-mapper-c8y".to_string(),
             ]
         );

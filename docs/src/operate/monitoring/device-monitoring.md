@@ -1,7 +1,7 @@
 ---
 title: Monitoring
-tags: [Getting Started, Monitoring, Collectd]
-sidebar_position: 8
+tags: [Monitoring, Collectd]
+sidebar_position: 1
 description: Monitoring your device with collectd
 ---
 
@@ -20,7 +20,7 @@ and then into the [cloud-vendor specific format](../understand/tedge-mapper.md).
 
 <BrowserWindow url="https://example.cumulocity.com/apps/devicemanagement/index.html#/device/12345/measurements">
 
-![device monitoring with collectd](images/collectd-metrics.png)
+![device monitoring with collectd](../images/collectd-metrics.png)
 
 </BrowserWindow>
 
@@ -156,7 +156,3 @@ tedge mqtt sub 'c8y/#'
 [c8y/measurement/measurements/create] {"type": "ThinEdgeMeasurement","time":"2021-06-07T15:40:30.155037451+01:00","cpu":{"percent-active": {"value": 0.753768844221106}},"memory":{"percent-used": {"value": 1.16587699972141}},"df-root":{"percent_bytes-used": {"value": 71.3117904663086}}}
 [c8y/measurement/measurements/create] {"type": "ThinEdgeMeasurement","time":"2021-06-07T15:40:31.154898577+01:00","cpu":{"percent-active": {"value": 0.5}},"memory":{"percent-used": {"value": 1.16608109197519}}}
 ```
-
-## Troubleshooting
-
-For troubleshooting tips, check out the [device monitoring](../operate/troubleshooting/device-monitoring.md) section.
