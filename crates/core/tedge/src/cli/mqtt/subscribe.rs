@@ -2,7 +2,6 @@ use crate::command::Command;
 use crate::log::MaybeFancy;
 use base64::prelude::*;
 use mqtt_channel::QoS;
-use mqtt_channel::StreamExt;
 use mqtt_channel::TopicFilter;
 use std::time::Duration;
 use tedge_config::TEdgeConfig;
@@ -10,7 +9,6 @@ use tedge_config::TEdgeMqttClientAuthConfig;
 use tokio::io::AsyncWriteExt;
 use tracing::info;
 
-const DEFAULT_QUEUE_CAPACITY: usize = 10;
 use super::MAX_PACKET_SIZE;
 
 pub struct MqttSubscribeCommand {
@@ -56,7 +54,6 @@ fn build_config(cmd: &MqttSubscribeCommand) -> Result<mqtt_channel::Config, anyh
         .with_clean_session(true)
         .with_subscriptions(topic)
         .with_max_packet_size(MAX_PACKET_SIZE)
-        .with_queue_capacity(DEFAULT_QUEUE_CAPACITY)
         .with_connection_timeout(cmd.connection_timeout);
     config.with_client_auth(cmd.auth_config.clone().try_into()?)?;
     Ok(config)

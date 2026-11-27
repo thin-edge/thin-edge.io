@@ -57,8 +57,8 @@ impl<T> MessageOutputStream<T> {
 ///     assert_eq!(None, input_stream.next().await);
 /// # }
 /// ```
-pub async fn input_stream<T>(items: Vec<T>) -> mpsc::UnboundedReceiver<T> {
-    let (mut sender, receiver) = mpsc::unbounded();
+pub async fn input_stream<T>(items: Vec<T>) -> mpsc::Receiver<T> {
+    let (mut sender, receiver) = mpsc::channel(items.len());
     for item in items {
         let _ = sender.send(item).await;
     }

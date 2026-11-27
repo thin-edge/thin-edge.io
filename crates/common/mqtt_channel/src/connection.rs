@@ -1,9 +1,8 @@
 use crate::Config;
-use crate::ErrChannel;
 use crate::MqttError;
 use crate::MqttMessage;
-use crate::PubChannel;
-use crate::SubChannel;
+use crate::SubChannelReceiver;
+use crate::SubChannelSender;
 use crate::TopicFilter;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
@@ -32,7 +31,7 @@ use tracing::Instrument;
 /// A connection to some MQTT server
 pub struct Connection {
     /// The channel of the input messages received by this connection.
-    pub received: mpsc::UnboundedReceiver<MqttMessage>,
+    pub received: SubChannelReceiver,
 
     /// The channel of the output messages to be published on this connection.
     pub published: mpsc::UnboundedSender<MqttMessage>,
@@ -115,21 +114,6 @@ impl SubscriberOps for SubscriberHandle {
 }
 
 impl Connection {
-    /// The stream of events received from this MQTT connection and forwarded to the client
-    pub fn sub_channel(&self) -> &impl SubChannel {
-        &self.received
-    }
-
-    /// The stream of actions sent by the client to this MQTT connection
-    pub fn pub_channel(&self) -> &impl PubChannel {
-        &self.published
-    }
-
-    /// The stream of errors received from this MQTT connection and forwarded to the client
-    pub fn err_channel(&self) -> &impl ErrChannel {
-        &self.errors
-    }
-
     /// Establish a connection to the MQTT broker defined by the given `config`.
     ///
     /// This connection is associated to an MQTT session with the given `name` and `subscription`.
@@ -161,19 +145,13 @@ impl Connection {
     ///     Connection::new(&config).await
     /// # }
     pub async fn new(config: &Config) -> Result<Connection, MqttError> {
-        let (received_sender, received_receiver) = mpsc::unbounded();
         let (published_sender, published_receiver) = mpsc::unbounded();
         let (error_sender, error_receiver) = mpsc::unbounded();
         let (pub_done_sender, pub_done_receiver) = oneshot::channel();
         let subscriptions = Arc::new(Mutex::new(config.subscriptions.clone()));
-
-        let (mqtt_client, event_loop) = Connection::open(
-            config,
-            received_sender.clone(),
-            error_sender.clone(),
-            subscriptions.clone(),
-        )
-        .await?;
+        let (received_sender, mqtt_client, event_loop) =
+            Connection::open(config, error_sender.clone(), subscriptions.clone()).await?;
+        let received_receiver = received_sender.receiver();
         let permits = Arc::new(Semaphore::new(1));
         let permit = permits.clone().acquire_owned().await.unwrap();
         let pub_count = Arc::new(AtomicUsize::new(0));
@@ -219,10 +197,9 @@ impl Connection {
 
     async fn open(
         config: &Config,
-        mut message_sender: mpsc::UnboundedSender<MqttMessage>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         subscriptions: Arc<Mutex<TopicFilter>>,
-    ) -> Result<(AsyncClient, EventLoop), MqttError> {
+    ) -> Result<(SubChannelSender, AsyncClient, EventLoop), MqttError> {
         const INSECURE_MQTT_PORT: u16 = 1883;
         const SECURE_MQTT_PORT: u16 = 8883;
 
@@ -233,8 +210,13 @@ impl Connection {
             warn!(target: "MQTT", "Connecting on port 8883 for secure MQTT without a CA file");
         }
 
-        let mqtt_options = config.rumqttc_options()?;
+        let mut mqtt_options = config.rumqttc_options()?;
+        mqtt_options.set_manual_acks(true);
+
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
+        let message_sender = SubChannelSender::new(mqtt_client.clone())
+            .with_max_inflight(config.queue_capacity)
+            .with_max_packet_size(config.max_packet_size);
 
         info!(target: "MQTT",
             "Connecting to broker: host={}:{}, session_name={:?}",
@@ -288,13 +270,7 @@ impl Connection {
 
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     // Messages can be received before a sub ack
-                    // Errors on send are ignored: it just means the client has closed the receiving channel.
-                    if msg.payload.len() > config.max_packet_size {
-                        error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
-                            msg.topic, msg.payload.len(), config.max_packet_size);
-                        continue;
-                    }
-                    let _ = message_sender.send(msg.into()).await;
+                    message_sender.send(msg).await;
                 }
 
                 Err(err) => {
@@ -322,7 +298,7 @@ impl Connection {
             }
         }
 
-        Ok((mqtt_client, event_loop))
+        Ok((message_sender, mqtt_client, event_loop))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -330,7 +306,7 @@ impl Connection {
         mqtt_client: AsyncClient,
         config: Config,
         mut event_loop: EventLoop,
-        mut message_sender: mpsc::UnboundedSender<MqttMessage>,
+        message_sender: SubChannelSender,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         done: oneshot::Sender<()>,
         permits: Arc<Semaphore>,
@@ -377,14 +353,7 @@ impl Connection {
 
             match event {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
-                    if msg.payload.len() > config.max_packet_size {
-                        error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
-                            msg.topic, msg.payload.len(), config.max_packet_size);
-                        continue;
-                    }
-                    // Errors on send are ignored: it just means the client has closed the receiving channel.
-                    // One has to continue the loop though, because rumqttc relies on this polling.
-                    let _ = message_sender.send(msg.into()).await;
+                    message_sender.send(msg).await;
                 }
 
                 Ok(Event::Incoming(Packet::ConnAck(ack))) => {
@@ -422,6 +391,7 @@ impl Connection {
 
                 Ok(Event::Incoming(Packet::Disconnect))
                 | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                    message_sender.clear().await;
                     break;
                 }
 
