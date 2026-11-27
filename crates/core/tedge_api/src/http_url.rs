@@ -70,6 +70,11 @@ impl EntityStoreUrls {
             topic_id.as_str()
         )
     }
+
+    /// Builds the URL of the twin fragments of the given entity
+    pub fn for_twin(&self, topic_id: &EntityTopicId) -> String {
+        format!("{}/twin", self.for_entity(topic_id))
+    }
 }
 
 #[cfg(test)]

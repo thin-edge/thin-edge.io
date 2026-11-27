@@ -28,6 +28,8 @@ pub(crate) struct OnDiskCommandStateV1 {
     payload: Value,
     #[serde(default = "crate::workflow::default_entity_type")]
     entity_type: EntityType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    entity_data: Option<Value>,
 }
 
 impl TryFrom<OnDiskCommandBoard> for CommandBoard {
@@ -61,7 +63,8 @@ impl TryFrom<OnDiskCommandBoardV1> for CommandBoard {
                         value: command.unix_timestamp,
                     }
                 })?;
-            let state = GenericCommandState::new(topic, command.status, command.payload);
+            let state = GenericCommandState::new(topic, command.status, command.payload)
+                .with_entity_data_value(command.entity_data);
             commands.insert(
                 topic_name,
                 CommandEntry {
@@ -87,6 +90,7 @@ impl From<CommandBoard> for OnDiskCommandBoardV1 {
                     status: entry.state.status.clone(),
                     payload: entry.state.payload.clone(),
                     entity_type: entry.entity_type,
+                    entity_data: entry.state.entity_data().cloned(),
                 },
             );
         }
@@ -158,6 +162,33 @@ mod tests {
                 .entry("te/device/main///cmd/restart/2")
                 .map(|entry| entry.entity_type),
             Some(EntityType::MainDevice)
+        );
+    }
+
+    #[test]
+    fn a_persisted_board_keeps_the_entity_data_of_each_command() {
+        let mut board = CommandBoard::default();
+        let entity_data = serde_json::json!({
+            "topic_id": "device/main/service/nodered",
+            "type": "service",
+            "twin": { "name": "Node-RED" }
+        });
+        let command = GenericCommandState::new(
+            Topic::new_unchecked("te/device/main/service/nodered/cmd/restart/1"),
+            "executing".to_string(),
+            serde_json::json!({}),
+        )
+        .with_entity_data_value(Some(entity_data.clone()));
+        board.insert(EntityType::Service, command).unwrap();
+
+        let file = serde_json::to_string(&board).unwrap();
+        let reloaded: CommandBoard = serde_json::from_str(&file).unwrap();
+
+        assert_eq!(
+            reloaded
+                .entry("te/device/main/service/nodered/cmd/restart/1")
+                .and_then(|entry| entry.state.entity_data()),
+            Some(&entity_data)
         );
     }
 }

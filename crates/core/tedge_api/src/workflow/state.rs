@@ -1,7 +1,9 @@
+use crate::entity::EntityMetadata;
 use crate::mqtt_topics::Channel;
 use crate::mqtt_topics::EntityTopicId;
 use crate::mqtt_topics::MqttSchema;
 use crate::mqtt_topics::OperationType;
+use crate::substitution::is_entity_path;
 use crate::substitution::Record;
 use crate::workflow::CommandId;
 use crate::workflow::ExitHandlers;
@@ -18,6 +20,7 @@ use mqtt_channel::Topic;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
+use serde_json::Map;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -57,6 +60,7 @@ pub struct GenericCommandState {
     pub status: String,
     pub payload: Value,
     invoking_command_topic: Option<String>,
+    entity_data: Option<Value>,
 }
 
 /// Update for a command state
@@ -83,6 +87,7 @@ impl GenericCommandState {
             status,
             payload,
             invoking_command_topic,
+            entity_data: None,
         }
     }
 
@@ -114,6 +119,7 @@ impl GenericCommandState {
             status,
             payload,
             invoking_command_topic: Some(invoking_command_topic.name),
+            entity_data: None,
         }
     }
 
@@ -136,6 +142,7 @@ impl GenericCommandState {
             status,
             payload,
             invoking_command_topic,
+            entity_data: None,
         })
     }
 
@@ -230,6 +237,36 @@ impl GenericCommandState {
 
     pub fn set_workflow_version(&mut self, version: &str) {
         self.set_key_value(OP_WORKFLOW_VERSION_KEY, version)
+    }
+
+    /// The data of the entity this command is addressed to, if it has been read
+    pub fn entity_data(&self) -> Option<&Value> {
+        self.entity_data.as_ref()
+    }
+
+    /// Attaches the data of the entity this command is addressed to, as `${.entity.*}` reads it
+    pub fn with_entity_data(self, entity: &EntityMetadata, twin: Map<String, Value>) -> Self {
+        let mut data = Map::new();
+        data.insert("topic_id".to_string(), entity.topic_id.to_string().into());
+        data.insert("type".to_string(), entity.r#type.to_string().into());
+        if let Some(parent) = &entity.parent {
+            data.insert("parent".to_string(), parent.to_string().into());
+        }
+        if let Some(external_id) = &entity.external_id {
+            data.insert("id".to_string(), external_id.as_ref().into());
+        }
+        // Not `entity.twin_data`: it holds no default values, and it is empty when the entity is read over HTTP
+        data.insert("twin".to_string(), Value::Object(twin));
+
+        self.with_entity_data_value(Some(Value::Object(data)))
+    }
+
+    /// Attaches entity data built earlier by [`Self::with_entity_data`]
+    pub fn with_entity_data_value(self, entity_data: Option<Value>) -> Self {
+        GenericCommandState {
+            entity_data,
+            ..self
+        }
     }
 
     /// Update the command state with the outcome of a script
@@ -635,6 +672,16 @@ impl StateExcerpt {
             }
         }
     }
+
+    /// Returns `true` when this excerpt uses a `${.entity.*}` expression
+    pub(crate) fn uses_entity_data(&self) -> bool {
+        match self {
+            StateExcerpt::Literal(_) => false,
+            StateExcerpt::PathExpr(path) => is_entity_path(path),
+            StateExcerpt::ExcerptMap(excerpts) => excerpts.values().any(Self::uses_entity_data),
+            StateExcerpt::ExcerptArray(excerpts) => excerpts.iter().any(Self::uses_entity_data),
+        }
+    }
 }
 
 impl TryFrom<Option<Value>> for StateExcerpt {
@@ -716,6 +763,7 @@ mod tests {
                     }
                 }),
                 invoking_command_topic: None,
+                entity_data: None,
             }
         );
 
@@ -733,6 +781,7 @@ mod tests {
                     }
                 }),
                 invoking_command_topic: None,
+                entity_data: None,
             }
         );
 
@@ -751,6 +800,7 @@ mod tests {
                     }
                 }),
                 invoking_command_topic: None,
+                entity_data: None,
             }
         );
     }
@@ -779,6 +829,7 @@ mod tests {
                     }
                 }),
                 invoking_command_topic: Some("te/device/main///cmd/make_it/456".to_string()),
+                entity_data: None,
             }
         );
     }
@@ -811,6 +862,7 @@ mod tests {
                 invoking_command_topic: Some(
                     "te/device/main///cmd/parent/sub:grand-parent:456".to_string()
                 ),
+                entity_data: None,
             }
         );
     }

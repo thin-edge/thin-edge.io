@@ -251,7 +251,7 @@ The following is an overview of the channel categories which are available.
 | signal   | Signals              |
 
 
-## Entity registration
+## Entity registration {#entity-registration}
 
 Since %%te%% doesn't enforce what each entity identification level means,
 an explicit registration is required to register every entity that is going to send data or receive commands.
@@ -551,7 +551,7 @@ Note that:
 - Metadata can be missing. The Cumulocity mapper doesn't mandate units and publishes the *ttl* value even if no units is known.
 - Extra metadata can be added. The Cumulocity mapper only uses the units and ignores all other metadata fields.
 
-## Twin metadata
+## Twin metadata {#twin-metadata}
 
 The `twin` metadata type can be used to store additional information about entities (devices and services).
 Such information could included: operation system name/version, communication statistics, device status, 

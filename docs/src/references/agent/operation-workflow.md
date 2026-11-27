@@ -298,6 +298,8 @@ Data extracted from the command status topic and message payload can be passed a
   - A negative index, as in `${.payload.xs[-1]}`, can be used to access array items starting from the end.
   - `${.payload.some.unknown.path}` is substituted for the empty string `""`,
      the rational being that the *payload* object represents a free-form value.
+  - `${.entity.*}` expressions read the data of the entity the command targets:
+    see [Using the data of the target entity](#workflow-entity-data).
   - When the root object is unknown (*e.g.* `${.unknown-object.some.path}`), the argument is passed unchanged to the script.
   - An argument can contain a combination of path expressions and literals:
     - in a context where the operation instance payload is  `{"x":"X", "y":"Y"}`
@@ -458,6 +460,51 @@ Note that:
 - On timeout, the agent sends `SIGTERM` to the script, which `sudo` passes on to the elevated command.
   `sudo` cannot pass on the final `SIGKILL`, so an elevated command that ignores `SIGTERM` can outlive its step.
 - A command line which starts with `sudo` itself still works, but ignores `sudo.enable`.
+
+### Using the data of the target entity {#workflow-entity-data}
+
+A workflow can read the [registration data](../../mqtt-api#entity-registration) and the [twin data](../../mqtt-api#twin-metadata) of the entity its command targets,
+using path expressions that start with `.entity`.
+These expressions can be used wherever a `${.payload.*}` expression can be used.
+
+| Path expression         | Value                                                     | Registration field |
+|-------------------------|-----------------------------------------------------------|--------------------|
+| `${.entity.topic_id}`   | Topic id of the entity (*e.g.* `device/main/service/foo`) | `@topic-id`        |
+| `${.entity.type}`       | `device`, `child-device` or `service`                     | `@type`            |
+| `${.entity.parent}`     | Topic id of the parent of the entity                      | `@parent`          |
+| `${.entity.id}`         | External id of the entity                                 | `@id`              |
+| `${.entity.twin.<key>}` | Twin fragment `<key>` of the entity (*e.g.* `${.entity.twin.name}`) |          |
+| `${.entity}`            | All the values above, as a JSON object                    |                    |
+
+For instance, the following workflow checks that a service is running,
+using the `name` and `type` of the service twin data:
+
+```toml title="file: /etc/tedge/operations/check-service.toml"
+operation = "check_service"
+type = "service"
+
+[init]
+action = "proceed"
+on_success = "executing"
+
+[executing]
+script = "tedge service is_active ${.entity.twin.name} --type ${.entity.twin.type}"
+sudo = true
+on_success = "successful"
+
+[successful]
+action = "cleanup"
+
+[failed]
+action = "cleanup"
+```
+
+The agent reads the entity data from the entity store once, when it starts to process the command.
+The command keeps these values until it ends, even if the entity data is updated in the meantime.
+
+An expression with no value, such as `${.entity.parent}` on the main device, is replaced by `""`.
+
+The command moves to `failed` when the entity store cannot be read or the entity is not registered.
 
 ### Sub-Operation Execution {#sub-operation-execution}
 

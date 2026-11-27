@@ -6,6 +6,9 @@
 use crate::entity_manager::server::EntityStoreRequest;
 use crate::entity_manager::server::EntityStoreResponse;
 use hyper::StatusCode;
+use serde_json::Map;
+use serde_json::Value;
+use std::future::Future;
 use std::time::Duration;
 use tedge_actors::ChannelError;
 use tedge_actors::ClientMessageBox;
@@ -42,6 +45,9 @@ pub enum EntityStoreClientError {
 
     #[error(transparent)]
     HttpError(#[from] HttpError),
+
+    #[error(transparent)]
+    EntityStoreError(#[from] tedge_api::entity_store::Error),
 
     #[error("Unexpected status {status} returned by the entity store for {url}")]
     UnexpectedStatus { url: String, status: StatusCode },
@@ -103,13 +109,7 @@ impl EntityStoreClient {
         &mut self,
         topic_id: &EntityTopicId,
     ) -> Result<Option<EntityMetadata>, EntityStoreClientError> {
-        match tokio::time::timeout(LOOKUP_TIMEOUT, self.fetch(topic_id)).await {
-            Ok(entity) => entity,
-            Err(_elapsed) => Err(EntityStoreClientError::Timeout {
-                topic_id: topic_id.clone(),
-                timeout: LOOKUP_TIMEOUT,
-            }),
-        }
+        with_lookup_timeout(topic_id, self.fetch(topic_id)).await
     }
 
     async fn fetch(
@@ -139,6 +139,54 @@ impl EntityStoreClient {
                 }
             }
         }
+    }
+
+    pub async fn get_twin(
+        &mut self,
+        topic_id: &EntityTopicId,
+    ) -> Result<Map<String, Value>, EntityStoreClientError> {
+        with_lookup_timeout(topic_id, self.fetch_twin(topic_id)).await
+    }
+
+    async fn fetch_twin(
+        &mut self,
+        topic_id: &EntityTopicId,
+    ) -> Result<Map<String, Value>, EntityStoreClientError> {
+        match self {
+            EntityStoreClient::Local(store) => {
+                let request = EntityStoreRequest::GetTwinFragments(topic_id.clone());
+                match store.await_response(request).await? {
+                    EntityStoreResponse::GetTwinFragments(twin) => Ok(twin?),
+                    _ => Err(EntityStoreClientError::UnexpectedResponse {
+                        topic_id: topic_id.clone(),
+                    }),
+                }
+            }
+
+            EntityStoreClient::Remote { urls, http } => {
+                let url = urls.for_twin(topic_id);
+                let request = HttpRequestBuilder::get(&url).build()?;
+                let response = http.await_response(request).await??;
+
+                match response.status() {
+                    status if status.is_success() => Ok(response.json().await?),
+                    status => Err(EntityStoreClientError::UnexpectedStatus { url, status }),
+                }
+            }
+        }
+    }
+}
+
+async fn with_lookup_timeout<T>(
+    topic_id: &EntityTopicId,
+    request: impl Future<Output = Result<T, EntityStoreClientError>>,
+) -> Result<T, EntityStoreClientError> {
+    match tokio::time::timeout(LOOKUP_TIMEOUT, request).await {
+        Ok(response) => response,
+        Err(_elapsed) => Err(EntityStoreClientError::Timeout {
+            topic_id: topic_id.clone(),
+            timeout: LOOKUP_TIMEOUT,
+        }),
     }
 }
 
