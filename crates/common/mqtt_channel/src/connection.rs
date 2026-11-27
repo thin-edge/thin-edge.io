@@ -146,7 +146,7 @@ impl Connection {
     ///     Connection::new(&config).await
     /// # }
     pub async fn new(config: &Config) -> Result<Connection, MqttError> {
-        let (received_sender, received_receiver) = mpsc::channel(config.queue_capacity);
+        let (received_sender, received_receiver) = mpsc::unbounded();
         let (published_sender, published_receiver) = mpsc::unbounded();
         let (error_sender, error_receiver) = mpsc::unbounded();
         let (pub_done_sender, pub_done_receiver) = oneshot::channel();
@@ -204,7 +204,7 @@ impl Connection {
 
     async fn open(
         config: &Config,
-        message_sender: mpsc::Sender<Publish>,
+        message_sender: mpsc::UnboundedSender<Publish>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         subscriptions: Arc<Mutex<TopicFilter>>,
     ) -> Result<(AsyncClient, EventLoop), MqttError> {
@@ -317,7 +317,7 @@ impl Connection {
         mqtt_client: AsyncClient,
         config: Config,
         mut event_loop: EventLoop,
-        message_sender: mpsc::Sender<Publish>,
+        message_sender: mpsc::UnboundedSender<Publish>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         done: oneshot::Sender<()>,
         permits: Arc<Semaphore>,

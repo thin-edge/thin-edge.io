@@ -31,12 +31,12 @@ impl PubChannel for mpsc::UnboundedSender<MqttMessage> {}
 /// Messages are queued when received from the broker,
 /// and only acknowledged when consumed by the client.
 pub struct SubChannelReceiver {
-    queue: mpsc::Receiver<Publish>,
+    queue: mpsc::UnboundedReceiver<Publish>,
     source: AsyncClient,
 }
 
 impl SubChannelReceiver {
-    pub fn new(queue: mpsc::Receiver<Publish>, source: AsyncClient) -> Self {
+    pub fn new(queue: mpsc::UnboundedReceiver<Publish>, source: AsyncClient) -> Self {
         SubChannelReceiver { queue, source }
     }
 
@@ -62,12 +62,12 @@ impl SubChannel for mpsc::Receiver<MqttMessage> {
 }
 
 pub(crate) struct SubChannelSender {
-    queue: mpsc::Sender<Publish>,
+    queue: mpsc::UnboundedSender<Publish>,
     source: AsyncClient,
 }
 
 impl SubChannelSender {
-    pub fn new(queue: mpsc::Sender<Publish>, source: AsyncClient) -> Self {
+    pub fn new(queue: mpsc::UnboundedSender<Publish>, source: AsyncClient) -> Self {
         SubChannelSender { queue, source }
     }
 
