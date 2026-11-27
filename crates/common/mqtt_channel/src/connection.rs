@@ -218,7 +218,9 @@ impl Connection {
             warn!(target: "MQTT", "Connecting on port 8883 for secure MQTT without a CA file");
         }
 
-        let mqtt_options = config.rumqttc_options()?;
+        let mut mqtt_options = config.rumqttc_options()?;
+        mqtt_options.set_manual_acks(true);
+
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
         let mut message_sender = SubChannelSender::new(message_sender, mqtt_client.clone());
 
