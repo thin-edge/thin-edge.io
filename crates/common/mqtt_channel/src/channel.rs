@@ -5,6 +5,7 @@ use futures::channel::mpsc;
 use futures::SinkExt;
 use rumqttc::AsyncClient;
 use rumqttc::Publish;
+use tracing::error;
 
 #[async_trait]
 pub trait SubChannel {
@@ -62,21 +63,41 @@ impl SubChannel for mpsc::Receiver<MqttMessage> {
 }
 
 pub(crate) struct SubChannelSender {
+    max_packet_size: Option<usize>,
     queue: mpsc::UnboundedSender<Publish>,
     source: AsyncClient,
 }
 
 impl SubChannelSender {
     pub fn new(queue: mpsc::UnboundedSender<Publish>, source: AsyncClient) -> Self {
-        SubChannelSender { queue, source }
+        SubChannelSender {
+            max_packet_size: None,
+            queue,
+            source,
+        }
+    }
+
+    pub fn with_max_packet_size(self, size: usize) -> Self {
+        Self {
+            max_packet_size: Some(size),
+            ..self
+        }
     }
 
     pub async fn send(&mut self, message: Publish) {
-        let _ = self.queue.send(message).await;
+        if self
+            .max_packet_size
+            .is_some_and(|max| max < message.payload.len())
+        {
+            error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
+                message.topic, message.payload.len(), self.max_packet_size.unwrap());
+            let _ = self.source.ack(&message).await;
+        } else {
+            // Errors on send are ignored: it just means the client has closed the receiving channel.
+            let _ = self.queue.send(message).await;
+        }
     }
-    pub async fn drop(&mut self, message: Publish) {
-        let _ = self.source.ack(&message).await;
-    }
+
     pub async fn close(&mut self) {
         let _ = self.queue.close().await;
     }

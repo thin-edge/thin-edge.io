@@ -222,7 +222,8 @@ impl Connection {
         mqtt_options.set_manual_acks(true);
 
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
-        let mut message_sender = SubChannelSender::new(message_sender, mqtt_client.clone());
+        let mut message_sender = SubChannelSender::new(message_sender, mqtt_client.clone())
+            .with_max_packet_size(config.max_packet_size);
 
         info!(target: "MQTT",
             "Connecting to broker: host={}:{}, session_name={:?}",
@@ -276,14 +277,7 @@ impl Connection {
 
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
                     // Messages can be received before a sub ack
-                    // Errors on send are ignored: it just means the client has closed the receiving channel.
-                    if msg.payload.len() > config.max_packet_size {
-                        error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
-                            msg.topic, msg.payload.len(), config.max_packet_size);
-                        message_sender.drop(msg).await;
-                    } else {
-                        message_sender.send(msg).await;
-                    }
+                    message_sender.send(msg).await;
                 }
 
                 Err(err) => {
@@ -329,7 +323,8 @@ impl Connection {
         let mut triggered_disconnect = false;
         let mut disconnect_permit = None;
         let mut awaiting_ack = HashSet::new();
-        let mut message_sender = SubChannelSender::new(message_sender, mqtt_client.clone());
+        let mut message_sender = SubChannelSender::new(message_sender, mqtt_client.clone())
+            .with_max_packet_size(config.max_packet_size);
 
         loop {
             // Check if we are ready to disconnect. Due to ownership of the
@@ -367,13 +362,7 @@ impl Connection {
 
             match event {
                 Ok(Event::Incoming(Packet::Publish(msg))) => {
-                    if msg.payload.len() > config.max_packet_size {
-                        error!(target: "MQTT", "Dropping message received on topic {} with payload size {} that exceeds the maximum packet size of {}",
-                            msg.topic, msg.payload.len(), config.max_packet_size);
-                        message_sender.drop(msg).await;
-                    } else {
-                        message_sender.send(msg).await;
-                    }
+                    message_sender.send(msg).await;
                 }
 
                 Ok(Event::Incoming(Packet::ConnAck(ack))) => {
