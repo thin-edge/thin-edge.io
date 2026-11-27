@@ -13,7 +13,6 @@ use rumqttc::Event;
 use rumqttc::EventLoop;
 use rumqttc::Outgoing;
 use rumqttc::Packet;
-use rumqttc::Publish;
 use rumqttc::SubscribeFilter;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
@@ -146,19 +145,13 @@ impl Connection {
     ///     Connection::new(&config).await
     /// # }
     pub async fn new(config: &Config) -> Result<Connection, MqttError> {
-        let (received_sender, received_receiver) = mpsc::unbounded();
         let (published_sender, published_receiver) = mpsc::unbounded();
         let (error_sender, error_receiver) = mpsc::unbounded();
         let (pub_done_sender, pub_done_receiver) = oneshot::channel();
         let subscriptions = Arc::new(Mutex::new(config.subscriptions.clone()));
-
-        let (mqtt_client, event_loop) = Connection::open(
-            config,
-            received_sender.clone(),
-            error_sender.clone(),
-            subscriptions.clone(),
-        )
-        .await?;
+        let (received_sender, mqtt_client, event_loop) =
+            Connection::open(config, error_sender.clone(), subscriptions.clone()).await?;
+        let received_receiver = received_sender.receiver();
         let permits = Arc::new(Semaphore::new(1));
         let permit = permits.clone().acquire_owned().await.unwrap();
         let pub_count = Arc::new(AtomicUsize::new(0));
@@ -189,7 +182,7 @@ impl Connection {
         );
 
         Ok(Connection {
-            received: SubChannelReceiver::new(received_receiver, mqtt_client.clone()),
+            received: received_receiver,
             published: published_sender,
             errors: error_receiver,
             pub_done: pub_done_receiver,
@@ -204,10 +197,9 @@ impl Connection {
 
     async fn open(
         config: &Config,
-        message_sender: mpsc::UnboundedSender<Publish>,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         subscriptions: Arc<Mutex<TopicFilter>>,
-    ) -> Result<(AsyncClient, EventLoop), MqttError> {
+    ) -> Result<(SubChannelSender, AsyncClient, EventLoop), MqttError> {
         const INSECURE_MQTT_PORT: u16 = 1883;
         const SECURE_MQTT_PORT: u16 = 8883;
 
@@ -222,7 +214,8 @@ impl Connection {
         mqtt_options.set_manual_acks(true);
 
         let (mqtt_client, mut event_loop) = AsyncClient::new(mqtt_options, config.queue_capacity);
-        let mut message_sender = SubChannelSender::new(message_sender, mqtt_client.clone())
+        let message_sender = SubChannelSender::new(mqtt_client.clone())
+            .with_max_inflight(config.queue_capacity)
             .with_max_packet_size(config.max_packet_size);
 
         info!(target: "MQTT",
@@ -305,7 +298,7 @@ impl Connection {
             }
         }
 
-        Ok((mqtt_client, event_loop))
+        Ok((message_sender, mqtt_client, event_loop))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -313,7 +306,7 @@ impl Connection {
         mqtt_client: AsyncClient,
         config: Config,
         mut event_loop: EventLoop,
-        message_sender: mpsc::UnboundedSender<Publish>,
+        message_sender: SubChannelSender,
         mut error_sender: mpsc::UnboundedSender<MqttError>,
         done: oneshot::Sender<()>,
         permits: Arc<Semaphore>,
@@ -323,8 +316,6 @@ impl Connection {
         let mut triggered_disconnect = false;
         let mut disconnect_permit = None;
         let mut awaiting_ack = HashSet::new();
-        let mut message_sender = SubChannelSender::new(message_sender, mqtt_client.clone())
-            .with_max_packet_size(config.max_packet_size);
 
         loop {
             // Check if we are ready to disconnect. Due to ownership of the
@@ -400,6 +391,7 @@ impl Connection {
 
                 Ok(Event::Incoming(Packet::Disconnect))
                 | Ok(Event::Outgoing(Outgoing::Disconnect)) => {
+                    message_sender.clear().await;
                     break;
                 }
 

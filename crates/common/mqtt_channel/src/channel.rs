@@ -5,7 +5,13 @@ use futures::channel::mpsc;
 use futures::SinkExt;
 use rumqttc::AsyncClient;
 use rumqttc::Publish;
+use rumqttc::QoS;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::sync::Notify;
 use tracing::error;
+use tracing::warn;
 
 #[async_trait]
 pub trait SubChannel {
@@ -31,18 +37,16 @@ impl PubChannel for mpsc::UnboundedSender<MqttMessage> {}
 ///
 /// Messages are queued when received from the broker,
 /// and only acknowledged when consumed by the client.
+///
+/// QoS 0 messages are dropped if more than max_inflight messages are pending.
 pub struct SubChannelReceiver {
-    queue: mpsc::UnboundedReceiver<Publish>,
+    queue: Arc<MessageChannel>,
     source: AsyncClient,
 }
 
 impl SubChannelReceiver {
-    pub fn new(queue: mpsc::UnboundedReceiver<Publish>, source: AsyncClient) -> Self {
-        SubChannelReceiver { queue, source }
-    }
-
     pub async fn next(&mut self) -> Option<MqttMessage> {
-        let message = self.queue.recv().await.ok()?;
+        let message = self.queue.recv().await?;
         let _ = self.source.ack(&message).await;
         Some(message.into())
     }
@@ -64,16 +68,30 @@ impl SubChannel for mpsc::Receiver<MqttMessage> {
 
 pub(crate) struct SubChannelSender {
     max_packet_size: Option<usize>,
-    queue: mpsc::UnboundedSender<Publish>,
+    sender: Arc<MessageChannel>,
     source: AsyncClient,
 }
 
 impl SubChannelSender {
-    pub fn new(queue: mpsc::UnboundedSender<Publish>, source: AsyncClient) -> Self {
+    pub fn new(source: AsyncClient) -> Self {
+        let sender = MessageChannel::new();
         SubChannelSender {
             max_packet_size: None,
-            queue,
+            sender: Arc::new(sender),
             source,
+        }
+    }
+
+    pub fn with_max_inflight(self, max_inflight: usize) -> Self {
+        match Arc::try_unwrap(self.sender) {
+            Ok(sender) => Self {
+                sender: Arc::new(sender.with_max_inflight(max_inflight)),
+                ..self
+            },
+            Err(sender) => {
+                warn!(target: "MQTT", "Cannot update input message queue size after connection");
+                Self { sender, ..self }
+            }
         }
     }
 
@@ -84,7 +102,14 @@ impl SubChannelSender {
         }
     }
 
-    pub async fn send(&mut self, message: Publish) {
+    pub fn receiver(&self) -> SubChannelReceiver {
+        SubChannelReceiver {
+            queue: self.sender.clone(),
+            source: self.source.clone(),
+        }
+    }
+
+    pub async fn send(&self, message: Publish) {
         if self
             .max_packet_size
             .is_some_and(|max| max < message.payload.len())
@@ -93,12 +118,99 @@ impl SubChannelSender {
                 message.topic, message.payload.len(), self.max_packet_size.unwrap());
             let _ = self.source.ack(&message).await;
         } else {
-            // Errors on send are ignored: it just means the client has closed the receiving channel.
-            let _ = self.queue.send(message).await;
+            self.sender.send(message).await;
         }
     }
 
-    pub async fn close(&mut self) {
-        let _ = self.queue.close().await;
+    pub async fn clear(&self) {
+        self.sender.clear().await;
+    }
+
+    pub async fn close(&self) {
+        self.sender.close().await;
+    }
+}
+
+struct MessageChannel {
+    max_inflight: usize,
+    queue: Mutex<MessageQueue>,
+    notify: Notify,
+}
+
+struct MessageQueue {
+    is_closed: bool,
+    messages: VecDeque<Publish>,
+}
+
+impl MessageChannel {
+    pub fn new() -> Self {
+        let messages = VecDeque::new();
+        let queue = MessageQueue {
+            messages,
+            is_closed: false,
+        };
+        MessageChannel {
+            max_inflight: 1024,
+            queue: Mutex::new(queue),
+            notify: Notify::new(),
+        }
+    }
+
+    pub fn with_max_inflight(self, max_inflight: usize) -> Self {
+        MessageChannel {
+            max_inflight,
+            ..self
+        }
+    }
+
+    pub async fn send(&self, message: Publish) {
+        let mut queue = self.queue.lock().await;
+        assert!(!queue.is_closed, "Sending messages on a closed channel");
+
+        if queue.messages.len() >= self.max_inflight && message.qos == QoS::AtMostOnce {
+            warn!(target: "MQTT", "Dropping QoS 0 message, exceeding {} inflight message count", self.max_inflight);
+        } else {
+            queue.messages.push_back(message);
+            self.notify.notify_one();
+        }
+    }
+
+    pub async fn recv(&self) -> Option<Publish> {
+        loop {
+            let message = self.queue.lock().await.pop_front()?;
+            if message.is_some() {
+                return message;
+            }
+
+            self.notify.notified().await;
+        }
+    }
+
+    pub async fn clear(&self) {
+        self.queue.lock().await.clear();
+    }
+
+    pub async fn close(&self) {
+        self.queue.lock().await.close();
+    }
+}
+
+impl MessageQueue {
+    /// Return None when the queue has been closed and no more messages are pending
+    /// Return Ok(None) when no message is pending but the queue is still open waiting for more messages
+    /// Return Ok(Some(message)) when there is a pending message
+    pub fn pop_front(&mut self) -> Option<Option<Publish>> {
+        match self.messages.pop_front() {
+            None if self.is_closed => None,
+            maybe_message => Some(maybe_message),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.messages.clear();
+    }
+
+    pub fn close(&mut self) {
+        self.is_closed = true;
     }
 }
